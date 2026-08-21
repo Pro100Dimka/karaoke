@@ -9,6 +9,7 @@ import {
 import { createPortal } from "react-dom";
 
 import Button from "../Button";
+import InputBase from "../InputBase";
 import Popover from "../Popover";
 import Field from "../_internal/Field";
 import cx from "../_internal/cx";
@@ -153,7 +154,8 @@ const Select = forwardRef(
           className={cx("ui-select-root", className)}
           style={mergeSx(sx, style)}
         >
-          <Button
+          <InputBase
+            component={Button}
             ref={mergeRefs(triggerRef, ref)}
             id={controlId}
             type="button"
@@ -209,7 +211,7 @@ const Select = forwardRef(
 
               <ChevronDown className="ui-select-chevron" size={16} />
             </span>
-          </Button>
+          </InputBase>
 
           {open &&
             position &&

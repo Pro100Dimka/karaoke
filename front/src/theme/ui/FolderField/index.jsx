@@ -3,8 +3,8 @@ import { forwardRef } from "react";
 
 import Field from "../_internal/Field";
 import cx from "../_internal/cx";
-import mergeSx from "../_internal/sx";
 import IconButton from "../IconButton";
+import InputBase from "../InputBase";
 
 import "./folder-field.css";
 
@@ -29,11 +29,14 @@ const FolderField = forwardRef(function FolderField(
   ref
 ) {
   const control = (fieldProps = {}) => (
-    <div
+    <InputBase
+      component="div"
+      disableNativeDisabled
       className={cx("ui-folder-field ui-control ui-motion", className)}
-      data-disabled={disabled || undefined}
-      data-error={!!error || undefined}
-      style={mergeSx(sx, style)}
+      disabled={disabled}
+      error={!!error}
+      sx={sx}
+      style={style}
     >
       <input
         ref={ref}
@@ -58,7 +61,7 @@ const FolderField = forwardRef(function FolderField(
       >
         <FolderOpen size={17} aria-hidden="true" />
       </IconButton>
-    </div>
+    </InputBase>
   );
 
   return label || hint || error ? (

@@ -1,9 +1,10 @@
 import { Info } from "lucide-react";
 import { forwardRef, useId } from "react";
 import IconButton from "../IconButton";
+import InputBase from "../InputBase";
+import OutlinedInput from "../OutlinedInput";
 import Tooltip from "../Tooltip";
 import cx from "../_internal/cx";
-import mergeSx from "../_internal/sx";
 import "./text-field.css";
 
 const TextField = forwardRef(({
@@ -40,17 +41,19 @@ const TextField = forwardRef(({
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
   const hasFrame = Boolean(label || hint || error || start || end);
   const Control = multiline ? "textarea" : "input";
+
   const control = (
-    <Control
+    <InputBase
       ref={ref}
+      component={Control}
       id={controlId}
       className={cx(
         "ui-text-field-input ui-control ui-disabled ui-motion",
         inputClassName,
         !hasFrame && className
       )}
-      data-size={size}
-      data-tone={tone}
+      size={size}
+      tone={tone}
       disabled={disabled}
       readOnly={readOnly}
       required={required}
@@ -62,12 +65,35 @@ const TextField = forwardRef(({
       type={multiline ? undefined : type}
       aria-describedby={describedBy}
       aria-invalid={error ? true : undefined}
-      style={!hasFrame ? mergeSx(sx, style) : undefined}
+      sx={!hasFrame ? sx : undefined}
+      style={!hasFrame ? style : undefined}
       {...props}
     />
   );
 
   if (!hasFrame) return control;
+
+  const labelNode = label && (
+    <span className="ui-text-field-label-row">
+      <label className="ui-text-field-label" htmlFor={controlId}>
+        {label}
+        {required && <span aria-hidden="true"> *</span>}
+      </label>
+      {tooltip && (
+        <Tooltip title={tooltip} placement="top">
+          <IconButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Подробнее"
+            onMouseDown={(event) => event.preventDefault()}
+          >
+            <Info size={14} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </span>
+  );
 
   return (
     <div
@@ -75,41 +101,23 @@ const TextField = forwardRef(({
       data-disabled={disabled || undefined}
       data-error={!!error || undefined}
     >
-      <div
-        className={cx("ui-text-field", className)}
-        data-size={size}
-        data-disabled={disabled || undefined}
-        data-error={!!error || undefined}
-        style={mergeSx(sx, style)}
+      <OutlinedInput
+        label={label}
+        labelNode={labelNode}
+        required={required}
+        disabled={disabled}
+        error={!!error}
+        size={size}
+        tone={tone}
+        start={start}
+        end={end}
+        className={className}
+        sx={sx}
+        style={style}
       >
-        {label && (
-          <span className="ui-text-field-label-row">
-            <label className="ui-text-field-label" htmlFor={controlId}>
-              {label}
-              {required && <span aria-hidden="true"> *</span>}
-            </label>
-            {tooltip && (
-              <Tooltip title={tooltip} placement="top">
-                <IconButton
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Подробнее"
-                  onMouseDown={(event) => event.preventDefault()}
-                >
-                  <Info size={14} />
-                </IconButton>
-              </Tooltip>
-            )}
-          </span>
-        )}
-        {start && <span className="ui-text-field-slot">{start}</span>}
         {control}
-        {end && <span className="ui-text-field-slot">{end}</span>}
-        <fieldset className="ui-text-field-outline" aria-hidden="true">
-          <legend><span>{label}{required ? " *" : ""}</span></legend>
-        </fieldset>
-      </div>
+      </OutlinedInput>
+
       {error ? (
         <small id={errorId} className="ui-field-message" data-error>{error}</small>
       ) : hint ? (

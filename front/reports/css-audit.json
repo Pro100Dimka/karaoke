@@ -2,25 +2,25 @@
   "root": ".",
   "summary": {
     "cssFiles": 37,
-    "sourceFiles": 253,
-    "selectors": 1196,
-    "classesDefined": 432,
-    "classesUsed": 263,
-    "unusedClassCandidates": 170,
+    "sourceFiles": 256,
+    "selectors": 1200,
+    "classesDefined": 434,
+    "classesUsed": 262,
+    "unusedClassCandidates": 173,
     "dynamicClassCandidates": 2,
     "duplicateSelectors": 231,
     "repeatedValues": 302,
     "breakpoints": 10,
-    "issues": 916,
+    "issues": 919,
     "errors": 0,
     "warnings": 745,
-    "info": 171
+    "info": 174
   },
   "fileStats": [
     {
       "file": "src/styles/library.css",
-      "lines": 1753,
-      "bytes": 42856
+      "lines": 1775,
+      "bytes": 43305
     },
     {
       "file": "src/styles/karaoke-polish.css",
@@ -104,8 +104,8 @@
     },
     {
       "file": "src/theme/ui/Button/button.css",
-      "lines": 88,
-      "bytes": 2604
+      "lines": 87,
+      "bytes": 2574
     },
     {
       "file": "src/theme/ThemeConfig/theme-adapter.css",
@@ -173,14 +173,14 @@
       "bytes": 469
     },
     {
+      "file": "src/theme/ui/IconButton/icon-button.css",
+      "lines": 15,
+      "bytes": 265
+    },
+    {
       "file": "src/theme/ui/Popover/popover.css",
       "lines": 15,
       "bytes": 347
-    },
-    {
-      "file": "src/theme/ui/IconButton/icon-button.css",
-      "lines": 14,
-      "bytes": 239
     },
     {
       "file": "src/theme/ui/Stack/stack.css",
@@ -210,7 +210,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1748
+          "line": 1770
         }
       ]
     },
@@ -399,14 +399,14 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1098,
+          "line": 1116,
           "column": 1,
           "context": "",
           "selector": ".song-recording-item"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1263,
+          "line": 1281,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".song-recording-item"
@@ -926,21 +926,21 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".app-dialog"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
@@ -1155,63 +1155,63 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
@@ -1335,35 +1335,35 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
@@ -1499,21 +1499,21 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel > .ui-card__content"
@@ -2381,35 +2381,35 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1231,
+          "line": 1249,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button:hover:not(:disabled)"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-off"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-leave"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1243,
+          "line": 1261,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button:disabled"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1308,
+          "line": 1326,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button"
@@ -2926,28 +2926,28 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".processing-modal"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1259,
+          "line": 1277,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".processing-modal"
@@ -3225,42 +3225,42 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1281,
+          "line": 1299,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1335,
+          "line": 1353,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1355,
+          "line": 1373,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock.is-collapsed"
@@ -3300,35 +3300,35 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1547,
+          "line": 1565,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i.is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1554,
+          "line": 1572,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i:nth-child(2).is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1557,
+          "line": 1575,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i:nth-child(3).is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1560,
+          "line": 1578,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i:nth-child(4).is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1633,
+          "line": 1651,
           "column": 1,
           "context": "",
           "selector": ".online-room-person-actions .is-active"
@@ -3678,21 +3678,21 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1160,
+          "line": 1178,
           "column": 1,
           "context": "",
           "selector": ".song-recording-item-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1255,
+          "line": 1273,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".song-recording-item-actions .btn:first-child"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1270,
+          "line": 1288,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".song-recording-item-actions"
@@ -4347,6 +4347,37 @@
       ]
     },
     {
+      "className": "settings-audio-test-button",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1326,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-test-button"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1332,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-test-button .ui-stack"
+        }
+      ]
+    },
+    {
+      "className": "settings-audio-monitor__button",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1326,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor__button"
+        }
+      ]
+    },
+    {
       "className": "ui-stack",
       "locations": [
         {
@@ -4412,84 +4443,84 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 31,
+          "line": 30,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button::before"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 42,
+          "line": 41,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-size=\"sm\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 43,
+          "line": 42,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-size=\"md\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 44,
+          "line": 43,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-size=\"lg\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 46,
+          "line": 45,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-tone=\"secondary\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 51,
+          "line": 50,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-tone=\"danger\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 56,
+          "line": 55,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"soft\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 61,
+          "line": 60,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"ghost\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 66,
+          "line": 65,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"outline\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 71,
+          "line": 70,
           "column": 5,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"outline\"]:hover"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 78,
+          "line": 77,
           "column": 5,
           "context": "@layer ui.components > @media (hover: hover) and (pointer: fine)",
           "selector": ".ui-button:not(:disabled):not([aria-disabled=\"true\"]):hover"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 84,
+          "line": 83,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button:not(:disabled):not([aria-disabled=\"true\"]):active"
@@ -5119,7 +5150,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1091,
+          "line": 1109,
           "column": 1,
           "context": "",
           "selector": ".song-recordings-body"
@@ -5152,7 +5183,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1116,
+          "line": 1134,
           "column": 1,
           "context": "",
           "selector": ".song-recording-meta"
@@ -5207,7 +5238,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1050,
+          "line": 1068,
           "column": 1,
           "context": "",
           "selector": ".processing-modal-identity"
@@ -5219,7 +5250,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1057,
+          "line": 1075,
           "column": 1,
           "context": "",
           "selector": ".processing-modal-art"
@@ -5231,42 +5262,42 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1214,
+          "line": 1232,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-self"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1452,
+          "line": 1470,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1469,
+          "line": 1487,
           "column": 1,
           "context": "",
           "selector": ".online-room-person::before"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1482,
+          "line": 1500,
           "column": 1,
           "context": "",
           "selector": ".online-room-person > *"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1487,
+          "line": 1505,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-speaking"
@@ -5278,7 +5309,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1214,
+          "line": 1232,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-self"
@@ -5290,7 +5321,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-off"
@@ -5302,7 +5333,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1355,
+          "line": 1373,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock.is-collapsed"
@@ -5314,21 +5345,21 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1428,
+          "line": 1446,
           "column": 1,
           "context": "",
           "selector": ".online-room-transfer"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1433,
+          "line": 1451,
           "column": 1,
           "context": "",
           "selector": ".online-room-transfer p"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1437,
+          "line": 1455,
           "column": 1,
           "context": "",
           "selector": ".online-room-transfer progress"
@@ -5340,7 +5371,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1487,
+          "line": 1505,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-speaking"
@@ -5352,17 +5383,29 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1705,
+          "line": 1723,
           "column": 1,
           "context": "",
           "selector": ".library-add-song-field"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1710,
+          "line": 1728,
           "column": 1,
           "context": "",
           "selector": ".library-add-song-field .input"
+        }
+      ]
+    },
+    {
+      "className": "library-add-song-mode",
+      "locations": [
+        {
+          "file": "src/styles/library.css",
+          "line": 1733,
+          "column": 1,
+          "context": "",
+          "selector": ".library-add-song-mode"
         }
       ]
     },
@@ -7081,7 +7124,7 @@
         },
         {
           "file": "src/theme/ui/IconButton/icon-button.css",
-          "line": 8,
+          "line": 9,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-icon-button > svg"
@@ -8381,7 +8424,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".processing-modal"
@@ -9452,7 +9495,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".app-dialog"
@@ -10257,7 +10300,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel"
@@ -10285,7 +10328,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal"
@@ -10530,14 +10573,14 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-heading"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1296,
+          "line": 1314,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-heading"
@@ -10558,14 +10601,14 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-person-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1226,
+          "line": 1244,
           "column": 1,
           "context": "",
           "selector": ".online-room-person-actions"
@@ -11237,7 +11280,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel"
@@ -11265,7 +11308,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
@@ -11706,7 +11749,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
@@ -12042,7 +12085,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1206,
+          "line": 1224,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-people"
@@ -12063,7 +12106,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-leave"
@@ -12084,7 +12127,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1248,
+          "line": 1266,
           "column": 1,
           "context": "",
           "selector": ".online-room-voice-error"
@@ -13386,7 +13429,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1091,
+          "line": 1109,
           "column": 1,
           "context": "",
           "selector": ".song-recordings-body"
@@ -13428,7 +13471,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1138,
+          "line": 1156,
           "column": 1,
           "context": "",
           "selector": ".song-recording-player .performance-player-track"
@@ -13449,7 +13492,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1148,
+          "line": 1166,
           "column": 1,
           "context": "",
           "selector": ".song-recording-player .performance-player-volume"
@@ -13470,7 +13513,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1091,
+          "line": 1109,
           "column": 1,
           "context": "",
           "selector": ".processing-modal-body"
@@ -13505,14 +13548,14 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
@@ -13526,14 +13569,14 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-code"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1194,
+          "line": 1212,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-code"
@@ -13547,14 +13590,14 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1452,
+          "line": 1470,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
@@ -14832,61 +14875,61 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1216,
+          "line": 1234,
           "column": 3,
           "selector": ".online-room-person.is-self"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1472,
+          "line": 1490,
           "column": 3,
           "selector": ".online-room-person::before"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1489,
+          "line": 1507,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1490,
+          "line": 1508,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1491,
+          "line": 1509,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1491,
+          "line": 1509,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1550,
+          "line": 1568,
           "column": 3,
           "selector": ".online-room-speaking-meter i.is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1634,
+          "line": 1652,
           "column": 3,
           "selector": ".online-room-person-actions .is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1659,
+          "line": 1677,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
@@ -15390,43 +15433,43 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1298,
+          "line": 1316,
           "column": 3,
           "selector": ".online-room-dock-heading"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1314,
+          "line": 1332,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1377,
+          "line": 1395,
           "column": 3,
           "selector": ".online-room-restore-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1423,
+          "line": 1441,
           "column": 3,
           "selector": ".online-room-voice-warning"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1455,
+          "line": 1473,
           "column": 3,
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1608,
+          "line": 1626,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1634,
+          "line": 1652,
           "column": 3,
           "selector": ".online-room-person-actions .is-active"
         },
@@ -15954,13 +15997,13 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 69,
+          "line": 68,
           "column": 5,
           "selector": ".ui-button[data-variant=\"outline\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 74,
+          "line": 73,
           "column": 5,
           "selector": ".ui-button[data-variant=\"outline\"]:hover"
         },
@@ -16410,115 +16453,115 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1059,
+          "line": 1077,
           "column": 3,
           "selector": ".processing-modal-art"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1102,
+          "line": 1120,
           "column": 3,
           "selector": ".song-recording-item"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1117,
+          "line": 1135,
           "column": 3,
           "selector": ".song-recording-meta"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1124,
+          "line": 1142,
           "column": 3,
           "selector": ".song-recording-player"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1139,
+          "line": 1157,
           "column": 3,
           "selector": ".song-recording-player .performance-player-track"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1149,
+          "line": 1167,
           "column": 3,
           "selector": ".song-recording-player .performance-player-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1210,
+          "line": 1228,
           "column": 3,
           "selector": ".online-room-dock-people"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1290,
+          "line": 1308,
           "column": 3,
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1309,
+          "line": 1327,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1420,
+          "line": 1438,
           "column": 3,
           "selector": ".online-room-voice-warning"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1429,
+          "line": 1447,
           "column": 3,
           "selector": ".online-room-transfer"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1498,
+          "line": 1516,
           "column": 3,
           "selector": ".online-room-person-name"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1506,
+          "line": 1524,
           "column": 3,
           "selector": ".online-room-person-identity"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1640,
+          "line": 1658,
           "column": 3,
           "selector": ".library-add-song-form"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1651,
+          "line": 1669,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1681,
+          "line": 1699,
           "column": 3,
           "selector": ".library-add-song-file-copy"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1700,
+          "line": 1718,
           "column": 3,
           "selector": ".library-add-song-fields"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1723,
+          "line": 1745,
           "column": 3,
           "selector": ".processing-song-carousel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1734,
+          "line": 1756,
           "column": 3,
           "selector": ".processing-song-carousel > div"
         },
@@ -17028,13 +17071,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
@@ -17358,49 +17401,49 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1054,
+          "line": 1072,
           "column": 3,
           "selector": ".processing-modal-identity"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1119,
+          "line": 1137,
           "column": 3,
           "selector": ".song-recording-meta"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1127,
+          "line": 1145,
           "column": 3,
           "selector": ".song-recording-player"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1140,
+          "line": 1158,
           "column": 3,
           "selector": ".song-recording-player .performance-player-track"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1153,
+          "line": 1171,
           "column": 3,
           "selector": ".song-recording-player .performance-player-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1448,
+          "line": 1466,
           "column": 3,
           "selector": ".online-room-permission-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1499,
+          "line": 1517,
           "column": 3,
           "selector": ".online-room-person-name"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1507,
+          "line": 1525,
           "column": 3,
           "selector": ".online-room-person-identity"
         },
@@ -17760,73 +17803,73 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1052,
+          "line": 1070,
           "column": 3,
           "selector": ".processing-modal-identity"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1099,
+          "line": 1117,
           "column": 3,
           "selector": ".song-recording-item"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1125,
+          "line": 1143,
           "column": 3,
           "selector": ".song-recording-player"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1150,
+          "line": 1168,
           "column": 3,
           "selector": ".song-recording-player .performance-player-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1163,
+          "line": 1181,
           "column": 3,
           "selector": ".song-recording-item-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1183,
+          "line": 1201,
           "column": 3,
           "selector": ".online-room-dock-heading,\n.online-room-dock-code,\n.online-room-person,\n.online-room-person-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1372,
+          "line": 1390,
           "column": 3,
           "selector": ".online-room-restore-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1501,
+          "line": 1519,
           "column": 3,
           "selector": ".online-room-person-name"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1580,
+          "line": 1598,
           "column": 3,
           "selector": ".online-room-person-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1599,
+          "line": 1617,
           "column": 3,
           "selector": ".online-room-person-volume-control"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1646,
+          "line": 1664,
           "column": 3,
           "selector": ".library-add-song-file"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1725,
+          "line": 1747,
           "column": 3,
           "selector": ".processing-song-carousel"
         },
@@ -18276,13 +18319,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1470,
+          "line": 1488,
           "column": 3,
           "selector": ".online-room-person::before"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1602,
+          "line": 1620,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -18384,7 +18427,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 33,
+          "line": 32,
           "column": 5,
           "selector": ".ui-button::before"
         },
@@ -18630,37 +18673,37 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1064,
+          "line": 1082,
           "column": 3,
           "selector": ".processing-modal-art"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1220,
+          "line": 1238,
           "column": 3,
           "selector": ".online-room-person-name b"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1389,
+          "line": 1407,
           "column": 3,
           "selector": ".online-room-restore-button span"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1461,
+          "line": 1479,
           "column": 3,
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1694,
+          "line": 1712,
           "column": 3,
           "selector": ".library-add-song-file-copy strong"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1741,
+          "line": 1763,
           "column": 3,
           "selector": ".processing-song-carousel span"
         },
@@ -18768,7 +18811,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 14,
+          "line": 13,
           "column": 5,
           "selector": ".ui-button"
         },
@@ -19080,49 +19123,49 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1051,
+          "line": 1069,
           "column": 3,
           "selector": ".processing-modal-identity"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1161,
+          "line": 1179,
           "column": 3,
           "selector": ".song-recording-item-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1182,
+          "line": 1200,
           "column": 3,
           "selector": ".online-room-dock-heading,\n.online-room-dock-code,\n.online-room-person,\n.online-room-person-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1371,
+          "line": 1389,
           "column": 3,
           "selector": ".online-room-restore-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1511,
+          "line": 1529,
           "column": 3,
           "selector": ".online-room-speaking-meter"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1579,
+          "line": 1597,
           "column": 3,
           "selector": ".online-room-person-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1645,
+          "line": 1663,
           "column": 3,
           "selector": ".library-add-song-file"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1716,
+          "line": 1738,
           "column": 3,
           "selector": ".library-add-song-actions"
         },
@@ -19770,7 +19813,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1702,
+          "line": 1720,
           "column": 3,
           "selector": ".library-add-song-fields"
         },
@@ -19836,7 +19879,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 44,
+          "line": 43,
           "column": 32,
           "selector": ".ui-button[data-size=\"lg\"]"
         },
@@ -20112,25 +20155,25 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1058,
+          "line": 1076,
           "column": 3,
           "selector": ".processing-modal-art"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1460,
+          "line": 1478,
           "column": 3,
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1483,
+          "line": 1501,
           "column": 3,
           "selector": ".online-room-person > *"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1597,
+          "line": 1615,
           "column": 3,
           "selector": ".online-room-person-volume-control"
         },
@@ -20460,19 +20503,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1145,
+          "line": 1163,
           "column": 3,
           "selector": ".song-recording-player .performance-player-track input"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1157,
+          "line": 1175,
           "column": 3,
           "selector": ".song-recording-player .performance-player-volume input"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1271,
+          "line": 1289,
           "column": 5,
           "selector": ".song-recording-item-actions"
         },
@@ -20610,19 +20653,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1682,
+          "line": 1700,
           "column": 3,
           "selector": ".library-add-song-file-copy"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1706,
+          "line": 1724,
           "column": 3,
           "selector": ".library-add-song-field"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1735,
+          "line": 1757,
           "column": 3,
           "selector": ".processing-song-carousel > div"
         },
@@ -21480,19 +21523,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1359,
+          "line": 1377,
           "column": 3,
           "selector": ".online-room-dock.is-collapsed"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1479,
+          "line": 1497,
           "column": 3,
           "selector": ".online-room-person::before"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1613,
+          "line": 1631,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -21534,7 +21577,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 38,
+          "line": 37,
           "column": 5,
           "selector": ".ui-button::before"
         },
@@ -21762,19 +21805,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1415,
+          "line": 1433,
           "column": 5,
           "selector": "to"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1549,
+          "line": 1567,
           "column": 3,
           "selector": ".online-room-speaking-meter i.is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1622,
+          "line": 1640,
           "column": 3,
           "selector": ".online-room-person-volume-control:hover .online-room-person-volume,\n.online-room-person-volume-control:focus-within .online-room-person-volume"
         },
@@ -21888,7 +21931,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
@@ -22128,7 +22171,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1656,
+          "line": 1053,
+          "column": 3,
+          "selector": ".processing-modal-error__log-link"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1674,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
@@ -22536,13 +22585,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1471,
+          "line": 1489,
           "column": 3,
           "selector": ".online-room-person::before"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 34,
+          "line": 33,
           "column": 5,
           "selector": ".ui-button::before"
         },
@@ -22656,27 +22705,33 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1249,
+          "line": 1267,
           "column": 3,
           "selector": ".online-room-voice-error"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1434,
+          "line": 1452,
           "column": 3,
           "selector": ".online-room-transfer p"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1443,
+          "line": 1461,
           "column": 3,
           "selector": ".online-room-voice-warning .online-room-voice-error"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1707,
+          "line": 1725,
           "column": 3,
           "selector": ".library-add-song-field"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1734,
+          "column": 3,
+          "selector": ".library-add-song-mode"
         },
         {
           "file": "src/styles/melody-editor-v4-v6.css",
@@ -22743,180 +22798,6 @@
           "line": 3,
           "column": 5,
           "selector": ".ui-typography"
-        }
-      ]
-    },
-    {
-      "property": "white-space",
-      "value": "nowrap",
-      "locations": [
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 491,
-          "column": 3,
-          "selector": ".sr-only,\n.visually-hidden"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 935,
-          "column": 3,
-          "selector": ".karaoke-player-meta strong"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 98,
-          "column": 3,
-          "selector": ".karaoke-lyric"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 116,
-          "column": 3,
-          "selector": ".karaoke-lyric-word"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 308,
-          "column": 3,
-          "selector": ".performance-analysis-recording-meta strong,\n.performance-analysis-recording-meta span"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 1011,
-          "column": 3,
-          "selector": ".karaoke-lyric"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 342,
-          "column": 3,
-          "selector": ".app-dropdown-trigger > span"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 935,
-          "column": 3,
-          "selector": ".library-song-card-meta"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1223,
-          "column": 3,
-          "selector": ".online-room-person-name b"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1396,
-          "column": 3,
-          "selector": ".online-room-restore-button span"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1696,
-          "column": 3,
-          "selector": ".library-add-song-file-copy strong"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1745,
-          "column": 3,
-          "selector": ".processing-song-carousel span"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 51,
-          "column": 3,
-          "selector": ".melody-editor-title-block h1"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 192,
-          "column": 3,
-          "selector": ".melody-editor-lyric-fragment > span"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 338,
-          "column": 3,
-          "selector": ".melody-editor-speed"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 28,
-          "column": 3,
-          "selector": ".melody-editor-statusline"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 551,
-          "column": 3,
-          "selector": ".melody-editor-inline-selection span"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 31,
-          "column": 3,
-          "selector": ".melody-editor-eyebrow"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 568,
-          "column": 3,
-          "selector": ".melody-editor-eyebrow"
-        },
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 13,
-          "column": 5,
-          "selector": ".ui-chip"
-        },
-        {
-          "file": "src/theme/ui/FolderField/folder-field.css",
-          "line": 44,
-          "column": 5,
-          "selector": ".ui-folder-field__input"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 74,
-          "column": 5,
-          "selector": ".ui-select-value"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 183,
-          "column": 5,
-          "selector": ".ui-select-option-label"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 194,
-          "column": 5,
-          "selector": ".ui-select-option-description"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 61,
-          "column": 5,
-          "selector": ".ui-tab-label"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 41,
-          "column": 5,
-          "selector": ".ui-text-field-outline legend"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 84,
-          "column": 5,
-          "selector": ".ui-text-field-label"
-        },
-        {
-          "file": "src/theme/ui/Typography/typography.css",
-          "line": 70,
-          "column": 5,
-          "selector": ".ui-typography[data-nowrap=\"true\"]"
         }
       ]
     },
@@ -23039,6 +22920,12 @@
           "selector": ".processing-modal"
         },
         {
+          "file": "src/styles/library.css",
+          "line": 1055,
+          "column": 3,
+          "selector": ".processing-modal-error__log-link"
+        },
+        {
           "file": "src/styles/melody-editor-v4-v6.css",
           "line": 467,
           "column": 3,
@@ -23091,6 +22978,342 @@
           "line": 115,
           "column": 5,
           "selector": ".ui-text-field-input"
+        }
+      ]
+    },
+    {
+      "property": "white-space",
+      "value": "nowrap",
+      "locations": [
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 491,
+          "column": 3,
+          "selector": ".sr-only,\n.visually-hidden"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 935,
+          "column": 3,
+          "selector": ".karaoke-player-meta strong"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 98,
+          "column": 3,
+          "selector": ".karaoke-lyric"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 116,
+          "column": 3,
+          "selector": ".karaoke-lyric-word"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 308,
+          "column": 3,
+          "selector": ".performance-analysis-recording-meta strong,\n.performance-analysis-recording-meta span"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1011,
+          "column": 3,
+          "selector": ".karaoke-lyric"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 342,
+          "column": 3,
+          "selector": ".app-dropdown-trigger > span"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 935,
+          "column": 3,
+          "selector": ".library-song-card-meta"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1241,
+          "column": 3,
+          "selector": ".online-room-person-name b"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1414,
+          "column": 3,
+          "selector": ".online-room-restore-button span"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1714,
+          "column": 3,
+          "selector": ".library-add-song-file-copy strong"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1767,
+          "column": 3,
+          "selector": ".processing-song-carousel span"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 51,
+          "column": 3,
+          "selector": ".melody-editor-title-block h1"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 192,
+          "column": 3,
+          "selector": ".melody-editor-lyric-fragment > span"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 338,
+          "column": 3,
+          "selector": ".melody-editor-speed"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 28,
+          "column": 3,
+          "selector": ".melody-editor-statusline"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 551,
+          "column": 3,
+          "selector": ".melody-editor-inline-selection span"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 31,
+          "column": 3,
+          "selector": ".melody-editor-eyebrow"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 568,
+          "column": 3,
+          "selector": ".melody-editor-eyebrow"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 13,
+          "column": 5,
+          "selector": ".ui-chip"
+        },
+        {
+          "file": "src/theme/ui/FolderField/folder-field.css",
+          "line": 44,
+          "column": 5,
+          "selector": ".ui-folder-field__input"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 74,
+          "column": 5,
+          "selector": ".ui-select-value"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 183,
+          "column": 5,
+          "selector": ".ui-select-option-label"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 194,
+          "column": 5,
+          "selector": ".ui-select-option-description"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 61,
+          "column": 5,
+          "selector": ".ui-tab-label"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 41,
+          "column": 5,
+          "selector": ".ui-text-field-outline legend"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 84,
+          "column": 5,
+          "selector": ".ui-text-field-label"
+        },
+        {
+          "file": "src/theme/ui/Typography/typography.css",
+          "line": 70,
+          "column": 5,
+          "selector": ".ui-typography[data-nowrap=\"true\"]"
+        }
+      ]
+    },
+    {
+      "property": "padding",
+      "value": "0",
+      "locations": [
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 487,
+          "column": 3,
+          "selector": ".sr-only,\n.visually-hidden"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 959,
+          "column": 3,
+          "selector": ".title-bar__button"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 91,
+          "column": 3,
+          "selector": ".karaoke-lyrics"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 258,
+          "column": 3,
+          "selector": ".performance-analysis-modal"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 597,
+          "column": 3,
+          "selector": ".modal-card"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1338,
+          "column": 3,
+          "selector": ".settings-audio-monitor"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 728,
+          "column": 3,
+          "selector": ".karaoke-performance-stage.karaoke-video-stage"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 949,
+          "column": 3,
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 283,
+          "column": 3,
+          "selector": ".settings-field"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 624,
+          "column": 3,
+          "selector": ".library-song-card-progress"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 738,
+          "column": 3,
+          "selector": ".library-song-card-actions .btn-sm"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 904,
+          "column": 3,
+          "selector": ".song-recording-delete"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 983,
+          "column": 3,
+          "selector": ".processing-modal"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1052,
+          "column": 3,
+          "selector": ".processing-modal-error__log-link"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1331,
+          "column": 3,
+          "selector": ".online-room-icon-button"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 465,
+          "column": 3,
+          "selector": ".melody-editor-transport"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 497,
+          "column": 3,
+          "selector": ".melody-editor-compact-tools .melody-editor-tool"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 331,
+          "column": 3,
+          "selector": ".melody-editor-tool"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 418,
+          "column": 3,
+          "selector": ".melody-editor-roll-shell"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 478,
+          "column": 3,
+          "selector": ".melody-editor-roll-shell"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 626,
+          "column": 3,
+          "selector": ".melody-editor-topdeck-v11 .melody-editor-transport"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 45,
+          "column": 5,
+          "selector": ".ui-chip-remove"
+        },
+        {
+          "file": "src/theme/ui/IconButton/icon-button.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-icon-button"
+        },
+        {
+          "file": "src/theme/ui/NumberField/number-field.css",
+          "line": 20,
+          "column": 5,
+          "selector": ".ui-number-field > .ui-text-field-slot:last-child"
+        },
+        {
+          "file": "src/theme/ui/NumberField/number-field.css",
+          "line": 37,
+          "column": 5,
+          "selector": ".ui-number-field-step"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 36,
+          "column": 5,
+          "selector": ".ui-text-field-outline legend"
         }
       ]
     },
@@ -23202,19 +23425,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1060,
+          "line": 1078,
           "column": 3,
           "selector": ".processing-modal-art"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1310,
+          "line": 1328,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1654,
+          "line": 1672,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
@@ -23375,16 +23598,16 @@
           "selector": ".melody-editor-tool"
         },
         {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 12,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
           "file": "src/theme/ui/Chip/chip.css",
           "line": 47,
           "column": 5,
           "selector": ".ui-chip-remove"
+        },
+        {
+          "file": "src/theme/ui/IconButton/icon-button.css",
+          "line": 6,
+          "column": 7,
+          "selector": ".ui-icon-button"
         },
         {
           "file": "src/theme/ui/Slider/slider.css",
@@ -23407,158 +23630,158 @@
       ]
     },
     {
-      "property": "padding",
-      "value": "0",
+      "property": "cursor",
+      "value": "pointer",
       "locations": [
         {
           "file": "src/styles/app-foundation.css",
-          "line": 487,
+          "line": 418,
           "column": 3,
-          "selector": ".sr-only,\n.visually-hidden"
+          "selector": "button"
         },
         {
           "file": "src/styles/app-foundation.css",
-          "line": 959,
+          "line": 536,
           "column": 3,
-          "selector": ".title-bar__button"
+          "selector": ".btn"
         },
         {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 91,
+          "file": "src/styles/app-foundation.css",
+          "line": 780,
           "column": 3,
-          "selector": ".karaoke-lyrics"
+          "selector": ".app-settings-fab"
         },
         {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 258,
+          "file": "src/styles/app-foundation.css",
+          "line": 863,
           "column": 3,
-          "selector": ".performance-analysis-modal"
+          "selector": ".modal-close"
         },
         {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 597,
+          "file": "src/styles/karaoke-base.css",
+          "line": 144,
           "column": 3,
-          "selector": ".modal-card"
+          "selector": ".waveform-timeline input"
         },
         {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 1338,
-          "column": 3,
-          "selector": ".settings-audio-monitor"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 728,
-          "column": 3,
-          "selector": ".karaoke-performance-stage.karaoke-video-stage"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
+          "file": "src/styles/karaoke-base.css",
           "line": 949,
+          "column": 3,
+          "selector": ".waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1155,
+          "column": 3,
+          "selector": ".karaoke-effect-dial"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 773,
+          "column": 3,
+          "selector": ".app-checkbox"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 680,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/library.css",
-          "line": 283,
+          "line": 584,
           "column": 3,
-          "selector": ".settings-field"
+          "selector": ".library-action-card.ui-card"
         },
         {
           "file": "src/styles/library.css",
-          "line": 624,
+          "line": 716,
           "column": 3,
-          "selector": ".library-song-card-progress"
+          "selector": ".library-song-card[role=\"button\"]"
         },
         {
           "file": "src/styles/library.css",
-          "line": 738,
+          "line": 819,
           "column": 3,
-          "selector": ".library-song-card-actions .btn-sm"
+          "selector": ".app-dropdown-trigger"
         },
         {
           "file": "src/styles/library.css",
-          "line": 904,
+          "line": 855,
           "column": 3,
-          "selector": ".song-recording-delete"
+          "selector": ".app-dropdown-option"
         },
         {
           "file": "src/styles/library.css",
-          "line": 983,
+          "line": 1060,
           "column": 3,
-          "selector": ".processing-modal"
+          "selector": ".processing-modal-error__log-link"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1313,
+          "line": 1336,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
         {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 465,
+          "file": "src/styles/library.css",
+          "line": 1402,
           "column": 3,
-          "selector": ".melody-editor-transport"
+          "selector": ".online-room-restore-button"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1678,
+          "column": 3,
+          "selector": ".library-add-song-file-icon"
         },
         {
           "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 497,
+          "line": 611,
           "column": 3,
-          "selector": ".melody-editor-compact-tools .melody-editor-tool"
+          "selector": ".melody-editor-piano-key"
         },
         {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 331,
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 680,
           "column": 3,
-          "selector": ".melody-editor-tool"
+          "selector": ".melody-editor-scroll-track"
         },
         {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 418,
-          "column": 3,
-          "selector": ".melody-editor-roll-shell"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 478,
-          "column": 3,
-          "selector": ".melody-editor-roll-shell"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 626,
-          "column": 3,
-          "selector": ".melody-editor-topdeck-v11 .melody-editor-transport"
+          "file": "src/theme/ui/Button/button.css",
+          "line": 19,
+          "column": 5,
+          "selector": ".ui-button"
         },
         {
           "file": "src/theme/ui/Chip/chip.css",
-          "line": 45,
+          "line": 51,
           "column": 5,
           "selector": ".ui-chip-remove"
         },
         {
-          "file": "src/theme/ui/IconButton/icon-button.css",
-          "line": 4,
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 16,
           "column": 5,
-          "selector": ".ui-icon-button"
+          "selector": ".ui-slider"
         },
         {
-          "file": "src/theme/ui/NumberField/number-field.css",
-          "line": 20,
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 10,
           "column": 5,
-          "selector": ".ui-number-field > .ui-text-field-slot:last-child"
+          "selector": ".ui-switch"
         },
         {
-          "file": "src/theme/ui/NumberField/number-field.css",
-          "line": 37,
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 110,
           "column": 5,
-          "selector": ".ui-number-field-step"
+          "selector": ".ui-switch-label"
         },
         {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 36,
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 21,
           "column": 5,
-          "selector": ".ui-text-field-outline legend"
+          "selector": ".ui-tab"
         }
       ]
     },
@@ -23844,19 +24067,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1093,
+          "line": 1111,
           "column": 3,
           "selector": ".song-recordings-body,\n.processing-modal-body"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1107,
+          "line": 1125,
           "column": 3,
           "selector": ".song-recording-item"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1174,
+          "line": 1192,
           "column": 3,
           "selector": ".online-room-dock > .ui-card__panel,\n.online-room-dock > .ui-card__panel > .ui-card__content"
         },
@@ -23865,156 +24088,6 @@
           "line": 35,
           "column": 5,
           "selector": ".ui-number-field-step"
-        }
-      ]
-    },
-    {
-      "property": "cursor",
-      "value": "pointer",
-      "locations": [
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 418,
-          "column": 3,
-          "selector": "button"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 536,
-          "column": 3,
-          "selector": ".btn"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 780,
-          "column": 3,
-          "selector": ".app-settings-fab"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 863,
-          "column": 3,
-          "selector": ".modal-close"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 144,
-          "column": 3,
-          "selector": ".waveform-timeline input"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 949,
-          "column": 3,
-          "selector": ".waveform-timeline"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1155,
-          "column": 3,
-          "selector": ".karaoke-effect-dial"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 773,
-          "column": 3,
-          "selector": ".app-checkbox"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 680,
-          "column": 3,
-          "selector": ".karaoke-stage-action"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 584,
-          "column": 3,
-          "selector": ".library-action-card.ui-card"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 716,
-          "column": 3,
-          "selector": ".library-song-card[role=\"button\"]"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 819,
-          "column": 3,
-          "selector": ".app-dropdown-trigger"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 855,
-          "column": 3,
-          "selector": ".app-dropdown-option"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1318,
-          "column": 3,
-          "selector": ".online-room-icon-button"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1384,
-          "column": 3,
-          "selector": ".online-room-restore-button"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1660,
-          "column": 3,
-          "selector": ".library-add-song-file-icon"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 611,
-          "column": 3,
-          "selector": ".melody-editor-piano-key"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 680,
-          "column": 3,
-          "selector": ".melody-editor-scroll-track"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 20,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 51,
-          "column": 5,
-          "selector": ".ui-chip-remove"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 16,
-          "column": 5,
-          "selector": ".ui-slider"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 10,
-          "column": 5,
-          "selector": ".ui-switch"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 110,
-          "column": 5,
-          "selector": ".ui-switch-label"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 21,
-          "column": 5,
-          "selector": ".ui-tab"
         }
       ]
     },
@@ -24258,7 +24331,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1659,
+          "line": 1677,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
@@ -24354,7 +24427,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1438,
+          "line": 1456,
           "column": 3,
           "selector": ".online-room-transfer progress"
         },
@@ -24498,7 +24571,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1677,
+          "line": 1695,
           "column": 3,
           "selector": ".library-add-song-file > audio"
         },
@@ -24696,19 +24769,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1357,
+          "line": 1375,
           "column": 3,
           "selector": ".online-room-dock.is-collapsed"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1411,
+          "line": 1429,
           "column": 5,
           "selector": "from"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1611,
+          "line": 1629,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         }
@@ -24822,7 +24895,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 53,
+          "line": 52,
           "column": 5,
           "selector": ".ui-button[data-tone=\"danger\"]"
         },
@@ -24942,13 +25015,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1655,
+          "line": 1673,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
@@ -25038,7 +25111,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1477,
+          "line": 1495,
           "column": 3,
           "selector": ".online-room-person::before"
         },
@@ -25050,7 +25123,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 32,
+          "line": 31,
           "column": 5,
           "selector": ".ui-button::before"
         },
@@ -25182,7 +25255,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1550,
+          "line": 1568,
           "column": 3,
           "selector": ".online-room-speaking-meter i.is-active"
         },
@@ -25266,7 +25339,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1598,
+          "line": 1616,
           "column": 3,
           "selector": ".online-room-person-volume-control"
         },
@@ -25380,25 +25453,25 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1222,
+          "line": 1240,
           "column": 3,
           "selector": ".online-room-person-name b"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1395,
+          "line": 1413,
           "column": 3,
           "selector": ".online-room-restore-button span"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1695,
+          "line": 1713,
           "column": 3,
           "selector": ".library-add-song-file-copy strong"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1744,
+          "line": 1766,
           "column": 3,
           "selector": ".processing-song-carousel span"
         },
@@ -25758,13 +25831,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1094,
+          "line": 1112,
           "column": 3,
           "selector": ".song-recordings-body,\n.processing-modal-body"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1291,
+          "line": 1309,
           "column": 3,
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
@@ -25878,13 +25951,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1356,
+          "line": 1374,
           "column": 3,
           "selector": ".online-room-dock.is-collapsed"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1711,
+          "line": 1729,
           "column": 3,
           "selector": ".library-add-song-field .input"
         },
@@ -26070,7 +26143,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1607,
+          "line": 1625,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -26196,7 +26269,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1207,
+          "line": 1225,
           "column": 3,
           "selector": ".online-room-dock-people"
         },
@@ -26496,7 +26569,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1109,
+          "line": 1127,
           "column": 3,
           "selector": ".song-recording-item"
         },
@@ -26604,7 +26677,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1544,
+          "line": 1562,
           "column": 3,
           "selector": ".online-room-speaking-meter i:nth-child(4)"
         },
@@ -26718,7 +26791,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1718,
+          "line": 1740,
           "column": 3,
           "selector": ".library-add-song-actions"
         },
@@ -26802,7 +26875,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1104,
+          "line": 1122,
           "column": 3,
           "selector": ".song-recording-item"
         },
@@ -27120,13 +27193,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1336,
+          "line": 1354,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1367,
+          "line": 1385,
           "column": 3,
           "selector": ".online-room-restore-button"
         },
@@ -27204,13 +27277,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
@@ -27402,7 +27475,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1216,
+          "line": 1234,
           "column": 3,
           "selector": ".online-room-person.is-self"
         },
@@ -27696,7 +27769,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
@@ -27936,19 +28009,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1581,
+          "line": 1599,
           "column": 3,
           "selector": ".online-room-person-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1607,
+          "line": 1625,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1614,
+          "line": 1632,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -28032,13 +28105,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1324,
+          "line": 1342,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1325,
+          "line": 1343,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
@@ -28278,7 +28351,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1164,
+          "line": 1182,
           "column": 3,
           "selector": ".song-recording-item-actions"
         },
@@ -28314,7 +28387,7 @@
         },
         {
           "file": "src/theme/ui/IconButton/icon-button.css",
-          "line": 11,
+          "line": 12,
           "column": 5,
           "selector": ".ui-icon-button > svg"
         },
@@ -28404,13 +28477,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1513,
+          "line": 1531,
           "column": 3,
           "selector": ".online-room-speaking-meter"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1516,
+          "line": 1534,
           "column": 3,
           "selector": ".online-room-speaking-meter"
         }
@@ -28464,19 +28537,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1458,
+          "line": 1476,
           "column": 3,
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1591,
+          "line": 1609,
           "column": 3,
           "selector": ".online-room-person-volume span"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1628,
+          "line": 1646,
           "column": 3,
           "selector": ".online-room-person-transfer"
         },
@@ -28980,19 +29053,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1100,
+          "line": 1118,
           "column": 3,
           "selector": ".song-recording-item"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1297,
+          "line": 1315,
           "column": 3,
           "selector": ".online-room-dock-heading"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1453,
+          "line": 1471,
           "column": 3,
           "selector": ".online-room-person"
         }
@@ -29070,7 +29143,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1737,
+          "line": 1759,
           "column": 3,
           "selector": ".processing-song-carousel > div"
         }
@@ -29136,7 +29209,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1647,
+          "line": 1665,
           "column": 3,
           "selector": ".library-add-song-file"
         },
@@ -29286,13 +29359,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1167,
+          "line": 1185,
           "column": 3,
           "selector": ".song-recording-item-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1717,
+          "line": 1739,
           "column": 3,
           "selector": ".library-add-song-actions"
         },
@@ -29352,13 +29425,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1256,
+          "line": 1274,
           "column": 5,
           "selector": ".song-recording-item-actions .btn:first-child"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1497,
+          "line": 1515,
           "column": 3,
           "selector": ".online-room-person-name"
         },
@@ -29502,13 +29575,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1260,
+          "line": 1278,
           "column": 5,
           "selector": ".processing-modal"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1346,
+          "line": 1364,
           "column": 3,
           "selector": ".online-room-dock"
         },
@@ -29868,13 +29941,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1652,
+          "line": 1670,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1653,
+          "line": 1671,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         }
@@ -30066,13 +30139,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1152,
+          "line": 1170,
           "column": 3,
           "selector": ".song-recording-player .performance-player-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1279,
+          "line": 1297,
           "column": 5,
           "selector": ".song-recording-player .performance-player-volume"
         },
@@ -30138,13 +30211,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1189,
+          "line": 1207,
           "column": 3,
           "selector": ".online-room-dock-heading > span"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1393,
+          "line": 1411,
           "column": 3,
           "selector": ".online-room-restore-button span"
         }
@@ -30324,7 +30397,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1750,
+          "line": 1772,
           "column": 5,
           "selector": ".library-add-song-fields"
         },
@@ -30384,7 +30457,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1484,
+          "line": 1502,
           "column": 3,
           "selector": ".online-room-person > *"
         },
@@ -30516,7 +30589,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1624,
+          "line": 1642,
           "column": 3,
           "selector": ".online-room-person-volume-control:hover .online-room-person-volume,\n.online-room-person-volume-control:focus-within .online-room-person-volume"
         },
@@ -30660,7 +30733,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1609,
+          "line": 1627,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -30984,13 +31057,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1075,
+          "line": 1093,
           "column": 3,
           "selector": ".processing-modal,\n.online-room-modal,\n.app-dialog"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1076,
+          "line": 1094,
           "column": 3,
           "selector": ".processing-modal,\n.online-room-modal,\n.app-dialog"
         }
@@ -31044,13 +31117,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1077,
+          "line": 1095,
           "column": 3,
           "selector": ".processing-modal,\n.online-room-modal,\n.app-dialog"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1087,
+          "line": 1105,
           "column": 3,
           "selector": ".processing-modal > .ui-card__panel,\n.online-room-modal > .ui-card__panel,\n.app-dialog > .ui-card__panel,\n.processing-modal > .ui-card__panel > .ui-card__content,\n.online-room-modal > .ui-card__panel > .ui-card__content,\n.app-dialog > .ui-card__panel > .ui-card__content"
         }
@@ -31128,43 +31201,43 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1061,
+          "line": 1079,
           "column": 3,
           "selector": ".processing-modal-art"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1062,
+          "line": 1080,
           "column": 3,
           "selector": ".processing-modal-art"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1129,
+          "line": 1147,
           "column": 3,
           "selector": ".song-recording-player"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1133,
+          "line": 1151,
           "column": 3,
           "selector": ".song-recording-player .performance-player-play"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1134,
+          "line": 1152,
           "column": 3,
           "selector": ".song-recording-player .performance-player-play"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1275,
+          "line": 1293,
           "column": 5,
           "selector": ".song-recording-player"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1374,
+          "line": 1392,
           "column": 3,
           "selector": ".online-room-restore-button"
         },
@@ -31344,7 +31417,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
@@ -31458,7 +31531,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1683,
+          "line": 1701,
           "column": 3,
           "selector": ".library-add-song-file-copy"
         },
@@ -31518,13 +31591,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1584,
+          "line": 1602,
           "column": 3,
           "selector": ".online-room-person-volume"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1688,
+          "line": 1706,
           "column": 3,
           "selector": ".library-add-song-file-copy small"
         },
@@ -31686,19 +31759,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1344,
+          "line": 1362,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1345,
+          "line": 1363,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1370,
+          "line": 1388,
           "column": 3,
           "selector": ".online-room-restore-button"
         },
@@ -31794,7 +31867,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
@@ -32262,7 +32335,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1515,
+          "line": 1533,
           "column": 3,
           "selector": ".online-room-speaking-meter"
         },
@@ -32286,7 +32359,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1634,
+          "line": 1652,
           "column": 3,
           "selector": ".online-room-person-actions .is-active"
         },
@@ -32448,7 +32521,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 57,
+          "line": 56,
           "column": 5,
           "selector": ".ui-button[data-variant=\"soft\"]"
         },
@@ -32514,13 +32587,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1244,
+          "line": 1262,
           "column": 3,
           "selector": ".online-room-icon-button:disabled"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1672,
+          "line": 1690,
           "column": 3,
           "selector": ".library-add-song-file-icon:disabled"
         },
@@ -32562,7 +32635,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1305,
+          "line": 1323,
           "column": 3,
           "selector": ".online-room-person-name small"
         },
@@ -32631,6 +32704,54 @@
           "line": 174,
           "column": 5,
           "selector": ".ui-select-option-content"
+        }
+      ]
+    },
+    {
+      "property": "font",
+      "value": "inherit",
+      "locations": [
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 414,
+          "column": 3,
+          "selector": "button,\ninput,\ntextarea,\nselect"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1109,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__value-editor input"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1056,
+          "column": 3,
+          "selector": ".processing-modal-error__log-link"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 50,
+          "column": 5,
+          "selector": ".ui-chip-remove"
+        },
+        {
+          "file": "src/theme/ui/FolderField/folder-field.css",
+          "line": 42,
+          "column": 5,
+          "selector": ".ui-folder-field__input"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 20,
+          "column": 5,
+          "selector": ".ui-tab"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 21,
+          "column": 5,
+          "selector": ".ui-control"
         }
       ]
     },
@@ -32856,7 +32977,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1730,
+          "line": 1752,
           "column": 3,
           "selector": ".processing-song-carousel"
         },
@@ -32958,7 +33079,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 15,
+          "line": 14,
           "column": 5,
           "selector": ".ui-button"
         },
@@ -33342,7 +33463,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1641,
+          "line": 1659,
           "column": 3,
           "selector": ".library-add-song-form"
         },
@@ -33432,7 +33553,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1430,
+          "line": 1448,
           "column": 3,
           "selector": ".online-room-transfer"
         },
@@ -33576,13 +33697,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1521,
+          "line": 1539,
           "column": 3,
           "selector": ".online-room-speaking-meter i"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1522,
+          "line": 1540,
           "column": 3,
           "selector": ".online-room-speaking-meter i"
         },
@@ -33744,7 +33865,7 @@
       "locations": [
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 43,
+          "line": 42,
           "column": 32,
           "selector": ".ui-button[data-size=\"md\"]"
         },
@@ -33810,7 +33931,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
@@ -33858,13 +33979,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1191,
+          "line": 1209,
           "column": 3,
           "selector": ".online-room-dock-heading > span"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1690,
+          "line": 1708,
           "column": 3,
           "selector": ".library-add-song-file-copy small"
         }
@@ -33900,57 +34021,15 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1078,
+          "line": 1096,
           "column": 3,
           "selector": ".processing-modal,\n.online-room-modal,\n.app-dialog"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1088,
+          "line": 1106,
           "column": 3,
           "selector": ".processing-modal > .ui-card__panel,\n.online-room-modal > .ui-card__panel,\n.app-dialog > .ui-card__panel,\n.processing-modal > .ui-card__panel > .ui-card__content,\n.online-room-modal > .ui-card__panel > .ui-card__content,\n.app-dialog > .ui-card__panel > .ui-card__content"
-        }
-      ]
-    },
-    {
-      "property": "font",
-      "value": "inherit",
-      "locations": [
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 414,
-          "column": 3,
-          "selector": "button,\ninput,\ntextarea,\nselect"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1109,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__value-editor input"
-        },
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 50,
-          "column": 5,
-          "selector": ".ui-chip-remove"
-        },
-        {
-          "file": "src/theme/ui/FolderField/folder-field.css",
-          "line": 42,
-          "column": 5,
-          "selector": ".ui-folder-field__input"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 20,
-          "column": 5,
-          "selector": ".ui-tab"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 21,
-          "column": 5,
-          "selector": ".ui-control"
         }
       ]
     },
@@ -33978,7 +34057,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
@@ -34236,13 +34315,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1491,
+          "line": 1509,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1514,
+          "line": 1532,
           "column": 3,
           "selector": ".online-room-speaking-meter"
         }
@@ -34278,7 +34357,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1279,
+          "line": 1297,
           "column": 5,
           "selector": ".song-recording-player .performance-player-volume"
         },
@@ -34356,7 +34435,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1488,
+          "line": 1506,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         },
@@ -34452,7 +34531,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1653,
+          "line": 1671,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         }
@@ -34536,7 +34615,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1202,
+          "line": 1220,
           "column": 3,
           "selector": ".online-room-dock-code strong"
         }
@@ -34620,7 +34699,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1264,
+          "line": 1282,
           "column": 5,
           "selector": ".song-recording-item"
         }
@@ -35142,7 +35221,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1724,
+          "line": 1746,
           "column": 3,
           "selector": ".processing-song-carousel"
         },
@@ -35184,13 +35263,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1075,
+          "line": 1093,
           "column": 3,
           "selector": ".processing-modal,\n.online-room-modal,\n.app-dialog"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1076,
+          "line": 1094,
           "column": 3,
           "selector": ".processing-modal,\n.online-room-modal,\n.app-dialog"
         }
@@ -35214,19 +35293,19 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1314,
+          "line": 1332,
           "column": 3,
           "selector": ".online-room-icon-button"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1455,
+          "line": 1473,
           "column": 3,
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1608,
+          "line": 1626,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         }
@@ -35286,7 +35365,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1339,
+          "line": 1357,
           "column": 3,
           "selector": ".online-room-dock"
         },
@@ -35328,7 +35407,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1605,
+          "line": 1623,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -35406,7 +35485,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1491,
+          "line": 1509,
           "column": 3,
           "selector": ".online-room-person.is-speaking"
         }
@@ -35430,13 +35509,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1347,
+          "line": 1365,
           "column": 3,
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1587,
+          "line": 1605,
           "column": 3,
           "selector": ".online-room-person-volume input"
         },
@@ -35496,7 +35575,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1604,
+          "line": 1622,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         },
@@ -35838,7 +35917,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1606,
+          "line": 1624,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         }
@@ -35898,7 +35977,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1719,
+          "line": 1741,
           "column": 3,
           "selector": ".library-add-song-actions"
         },
@@ -35940,7 +36019,7 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 21,
+          "line": 20,
           "column": 5,
           "selector": ".ui-button"
         },
@@ -36048,7 +36127,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1394,
+          "line": 1412,
           "column": 3,
           "selector": ".online-room-restore-button span"
         },
@@ -36186,7 +36265,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1272,
+          "line": 1290,
           "column": 5,
           "selector": ".song-recording-item-actions"
         },
@@ -36372,7 +36451,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1279,
+          "line": 1297,
           "column": 5,
           "selector": ".song-recording-player .performance-player-volume"
         },
@@ -36402,7 +36481,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1402,
+          "line": 1420,
           "column": 3,
           "selector": ".online-room-restore-button:hover"
         },
@@ -36534,7 +36613,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1352,
+          "line": 1370,
           "column": 3,
           "selector": ".online-room-dock"
         },
@@ -36570,7 +36649,7 @@
       "locations": [
         {
           "file": "src/styles/library.css",
-          "line": 1657,
+          "line": 1675,
           "column": 3,
           "selector": ".library-add-song-file-icon"
         },
@@ -36942,7 +37021,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1673,
+          "line": 1691,
           "column": 3,
           "selector": ".library-add-song-file-icon:disabled"
         },
@@ -37362,7 +37441,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1208,
+          "line": 1226,
           "column": 3,
           "selector": ".online-room-dock-people"
         },
@@ -37446,7 +37525,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1581,
+          "line": 1599,
           "column": 3,
           "selector": ".online-room-person-volume"
         },
@@ -37758,7 +37837,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1375,
+          "line": 1393,
           "column": 3,
           "selector": ".online-room-restore-button"
         }
@@ -37782,13 +37861,13 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1358,
+          "line": 1376,
           "column": 3,
           "selector": ".online-room-dock.is-collapsed"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1612,
+          "line": 1630,
           "column": 3,
           "selector": ".online-room-person-volume-control .online-room-person-volume"
         }
@@ -37998,7 +38077,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1569,
+          "line": 1587,
           "column": 5,
           "selector": "to"
         }
@@ -39164,7 +39243,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel"
@@ -39188,7 +39267,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
@@ -39264,7 +39343,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal"
@@ -39892,7 +39971,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".app-dialog"
@@ -40242,14 +40321,14 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-heading"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1296,
+          "line": 1314,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-heading"
@@ -40273,7 +40352,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1206,
+          "line": 1224,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-people"
@@ -40297,14 +40376,14 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-person-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1226,
+          "line": 1244,
           "column": 1,
           "context": "",
           "selector": ".online-room-person-actions"
@@ -40328,7 +40407,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-leave"
@@ -40352,7 +40431,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1248,
+          "line": 1266,
           "column": 1,
           "context": "",
           "selector": ".online-room-voice-error"
@@ -41080,7 +41159,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".processing-modal"
@@ -46356,7 +46435,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel"
@@ -46387,7 +46466,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
@@ -46442,7 +46521,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1091,
+          "line": 1109,
           "column": 1,
           "context": "",
           "selector": ".song-recordings-body"
@@ -46490,7 +46569,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1138,
+          "line": 1156,
           "column": 1,
           "context": "",
           "selector": ".song-recording-player .performance-player-track"
@@ -46514,7 +46593,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1148,
+          "line": 1166,
           "column": 1,
           "context": "",
           "selector": ".song-recording-player .performance-player-volume"
@@ -46538,7 +46617,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1091,
+          "line": 1109,
           "column": 1,
           "context": "",
           "selector": ".processing-modal-body"
@@ -46574,19 +46653,19 @@
       "severity": "warning",
       "message": "Селектор объявлен 2 раз.",
       "file": "src/styles/library.css",
-      "line": 1172,
+      "line": 1190,
       "selector": ".online-room-dock > .ui-card__panel > .ui-card__content",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
@@ -46598,19 +46677,19 @@
       "severity": "warning",
       "message": "Селектор объявлен 2 раз.",
       "file": "src/styles/library.css",
-      "line": 1178,
+      "line": 1196,
       "selector": ".online-room-dock-code",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-code"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1194,
+          "line": 1212,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock-code"
@@ -46622,19 +46701,19 @@
       "severity": "warning",
       "message": "Селектор объявлен 2 раз.",
       "file": "src/styles/library.css",
-      "line": 1178,
+      "line": 1196,
       "selector": ".online-room-person",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1452,
+          "line": 1470,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
@@ -46646,7 +46725,7 @@
       "severity": "warning",
       "message": "Нестандартный z-index: 95.",
       "file": "src/styles/library.css",
-      "line": 1343,
+      "line": 1361,
       "selector": ".online-room-dock",
       "property": "z-index",
       "value": "95"
@@ -46656,7 +46735,7 @@
       "severity": "warning",
       "message": "Нестандартный z-index: 96.",
       "file": "src/styles/library.css",
-      "line": 1368,
+      "line": 1386,
       "selector": ".online-room-restore-button",
       "property": "z-index",
       "value": "96"
@@ -46666,7 +46745,7 @@
       "severity": "warning",
       "message": "Нестандартный z-index: 4.",
       "file": "src/styles/library.css",
-      "line": 1605,
+      "line": 1623,
       "selector": ".online-room-person-volume-control .online-room-person-volume",
       "property": "z-index",
       "value": "4"
@@ -46676,7 +46755,7 @@
       "severity": "warning",
       "message": "Использован нестандартный breakpoint 640px.",
       "file": "src/styles/library.css",
-      "line": 1748,
+      "line": 1770,
       "value": "640px"
     },
     {
@@ -50644,7 +50723,7 @@
       "severity": "warning",
       "message": "Высокая специфичность селектора: 60.",
       "file": "src/theme/ui/Button/button.css",
-      "line": 78,
+      "line": 77,
       "selector": ".ui-button:not(:disabled):not([aria-disabled=\"true\"]):hover",
       "details": {
         "ids": 0,
@@ -50658,7 +50737,7 @@
       "severity": "warning",
       "message": "Высокая специфичность селектора: 60.",
       "file": "src/theme/ui/Button/button.css",
-      "line": 84,
+      "line": 83,
       "selector": ".ui-button:not(:disabled):not([aria-disabled=\"true\"]):active",
       "details": {
         "ids": 0,
@@ -51109,14 +51188,14 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1098,
+          "line": 1116,
           "column": 1,
           "context": "",
           "selector": ".song-recording-item"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1263,
+          "line": 1281,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".song-recording-item"
@@ -51666,21 +51745,21 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".app-dialog"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
@@ -51900,63 +51979,63 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
@@ -52085,35 +52164,35 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".app-dialog > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
@@ -52259,21 +52338,21 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".online-room-modal > .ui-card__panel > .ui-card__content"
@@ -53289,35 +53368,35 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1231,
+          "line": 1249,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button:hover:not(:disabled)"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-off"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-leave"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1243,
+          "line": 1261,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button:disabled"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1308,
+          "line": 1326,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button"
@@ -53889,28 +53968,28 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1072,
+          "line": 1090,
           "column": 1,
           "context": "",
           "selector": ".processing-modal"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1081,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".processing-modal > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1259,
+          "line": 1277,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".processing-modal"
@@ -54228,42 +54307,42 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1172,
+          "line": 1190,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1281,
+          "line": 1299,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1289,
+          "line": 1307,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock > .ui-card__panel > .ui-card__content"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1335,
+          "line": 1353,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1355,
+          "line": 1373,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock.is-collapsed"
@@ -54308,35 +54387,35 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1547,
+          "line": 1565,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i.is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1554,
+          "line": 1572,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i:nth-child(2).is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1557,
+          "line": 1575,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i:nth-child(3).is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1560,
+          "line": 1578,
           "column": 1,
           "context": "",
           "selector": ".online-room-speaking-meter i:nth-child(4).is-active"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1633,
+          "line": 1651,
           "column": 1,
           "context": "",
           "selector": ".online-room-person-actions .is-active"
@@ -54721,21 +54800,21 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1160,
+          "line": 1178,
           "column": 1,
           "context": "",
           "selector": ".song-recording-item-actions"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1255,
+          "line": 1273,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".song-recording-item-actions .btn:first-child"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1270,
+          "line": 1288,
           "column": 3,
           "context": "@media (max-width: 36rem)",
           "selector": ".song-recording-item-actions"
@@ -55472,6 +55551,47 @@
     {
       "rule": "unused-class-candidate",
       "severity": "info",
+      "message": "Класс .settings-audio-test-button не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1326,
+      "selector": ".settings-audio-test-button",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1326,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-test-button"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1332,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-test-button .ui-stack"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-audio-monitor__button не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1326,
+      "selector": ".settings-audio-monitor__button",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1326,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor__button"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
       "message": "Класс .ui-stack не найден в статическом исходном коде.",
       "file": "src/styles/karaoke-polish.css",
       "line": 1332,
@@ -55545,84 +55665,84 @@
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 31,
+          "line": 30,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button::before"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 42,
+          "line": 41,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-size=\"sm\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 43,
+          "line": 42,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-size=\"md\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 44,
+          "line": 43,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-size=\"lg\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 46,
+          "line": 45,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-tone=\"secondary\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 51,
+          "line": 50,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-tone=\"danger\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 56,
+          "line": 55,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"soft\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 61,
+          "line": 60,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"ghost\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 66,
+          "line": 65,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"outline\"]"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 71,
+          "line": 70,
           "column": 5,
           "context": "@layer ui.components",
           "selector": ".ui-button[data-variant=\"outline\"]:hover"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 78,
+          "line": 77,
           "column": 5,
           "context": "@layer ui.components > @media (hover: hover) and (pointer: fine)",
           "selector": ".ui-button:not(:disabled):not([aria-disabled=\"true\"]):hover"
         },
         {
           "file": "src/theme/ui/Button/button.css",
-          "line": 84,
+          "line": 83,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-button:not(:disabled):not([aria-disabled=\"true\"]):active"
@@ -56357,7 +56477,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1091,
+          "line": 1109,
           "column": 1,
           "context": "",
           "selector": ".song-recordings-body"
@@ -56395,7 +56515,7 @@
         },
         {
           "file": "src/styles/library.css",
-          "line": 1116,
+          "line": 1134,
           "column": 1,
           "context": "",
           "selector": ".song-recording-meta"
@@ -56465,12 +56585,12 @@
       "severity": "info",
       "message": "Класс .processing-modal-identity не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1050,
+      "line": 1068,
       "selector": ".processing-modal-identity",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1050,
+          "line": 1068,
           "column": 1,
           "context": "",
           "selector": ".processing-modal-identity"
@@ -56482,12 +56602,12 @@
       "severity": "info",
       "message": "Класс .processing-modal-art не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1057,
+      "line": 1075,
       "selector": ".processing-modal-art",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1057,
+          "line": 1075,
           "column": 1,
           "context": "",
           "selector": ".processing-modal-art"
@@ -56499,47 +56619,47 @@
       "severity": "info",
       "message": "Класс .online-room-person не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1178,
+      "line": 1196,
       "selector": ".online-room-person",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1178,
+          "line": 1196,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1214,
+          "line": 1232,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-self"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1452,
+          "line": 1470,
           "column": 1,
           "context": "",
           "selector": ".online-room-person"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1469,
+          "line": 1487,
           "column": 1,
           "context": "",
           "selector": ".online-room-person::before"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1482,
+          "line": 1500,
           "column": 1,
           "context": "",
           "selector": ".online-room-person > *"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1487,
+          "line": 1505,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-speaking"
@@ -56551,12 +56671,12 @@
       "severity": "info",
       "message": "Класс .is-self не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1214,
+      "line": 1232,
       "selector": ".is-self",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1214,
+          "line": 1232,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-self"
@@ -56568,12 +56688,12 @@
       "severity": "info",
       "message": "Класс .is-off не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1238,
+      "line": 1256,
       "selector": ".is-off",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1238,
+          "line": 1256,
           "column": 1,
           "context": "",
           "selector": ".online-room-icon-button.is-off"
@@ -56585,12 +56705,12 @@
       "severity": "info",
       "message": "Класс .is-collapsed не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1355,
+      "line": 1373,
       "selector": ".is-collapsed",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1355,
+          "line": 1373,
           "column": 1,
           "context": "",
           "selector": ".online-room-dock.is-collapsed"
@@ -56602,26 +56722,26 @@
       "severity": "info",
       "message": "Класс .online-room-transfer не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1428,
+      "line": 1446,
       "selector": ".online-room-transfer",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1428,
+          "line": 1446,
           "column": 1,
           "context": "",
           "selector": ".online-room-transfer"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1433,
+          "line": 1451,
           "column": 1,
           "context": "",
           "selector": ".online-room-transfer p"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1437,
+          "line": 1455,
           "column": 1,
           "context": "",
           "selector": ".online-room-transfer progress"
@@ -56633,12 +56753,12 @@
       "severity": "info",
       "message": "Класс .is-speaking не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1487,
+      "line": 1505,
       "selector": ".is-speaking",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1487,
+          "line": 1505,
           "column": 1,
           "context": "",
           "selector": ".online-room-person.is-speaking"
@@ -56650,22 +56770,39 @@
       "severity": "info",
       "message": "Класс .library-add-song-field не найден в статическом исходном коде.",
       "file": "src/styles/library.css",
-      "line": 1705,
+      "line": 1723,
       "selector": ".library-add-song-field",
       "details": [
         {
           "file": "src/styles/library.css",
-          "line": 1705,
+          "line": 1723,
           "column": 1,
           "context": "",
           "selector": ".library-add-song-field"
         },
         {
           "file": "src/styles/library.css",
-          "line": 1710,
+          "line": 1728,
           "column": 1,
           "context": "",
           "selector": ".library-add-song-field .input"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .library-add-song-mode не найден в статическом исходном коде.",
+      "file": "src/styles/library.css",
+      "line": 1733,
+      "selector": ".library-add-song-mode",
+      "details": [
+        {
+          "file": "src/styles/library.css",
+          "line": 1733,
+          "column": 1,
+          "context": "",
+          "selector": ".library-add-song-mode"
         }
       ]
     },
@@ -58713,7 +58850,7 @@
         },
         {
           "file": "src/theme/ui/IconButton/icon-button.css",
-          "line": 8,
+          "line": 9,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-icon-button > svg"
