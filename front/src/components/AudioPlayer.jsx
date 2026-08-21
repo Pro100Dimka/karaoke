@@ -63,7 +63,13 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   };
 
   return (
-    <Stack direction="row" align="center" gap={0.5} justify="space-between">
+    <Stack
+      direction="row"
+      align="center"
+      gap={0.5}
+      justify="space-between"
+      className={`performance-player ${className}`.trim()}
+    >
       <audio
         ref={audioRef}
         preload="metadata"

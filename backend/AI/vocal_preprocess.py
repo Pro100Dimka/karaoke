@@ -27,7 +27,11 @@ def validate_vocal_reference(path: str | Path):
     return info
 
 
-def _dereverberate_chunk(audio: np.ndarray, sample_rate: int) -> np.ndarray:
+def _dereverberate_chunk(
+    audio: np.ndarray,
+    sample_rate: int,
+    iterations: int = _WPE_ITERATIONS,
+) -> np.ndarray:
     if audio.size < max(512, sample_rate // 4) or float(np.max(np.abs(audio))) < 1e-7:
         return audio.astype(np.float32, copy=True)
     try:
@@ -44,7 +48,7 @@ def _dereverberate_chunk(audio: np.ndarray, sample_rate: int) -> np.ndarray:
         observation,
         taps=_WPE_TAPS,
         delay=_WPE_DELAY,
-        iterations=_WPE_ITERATIONS,
+        iterations=max(1, int(iterations)),
         psd_context=1,
     )
     result = istft(cleaned[:, 0, :].T, size=size, shift=shift)[: audio.size]
@@ -55,7 +59,12 @@ def _dereverberate_chunk(audio: np.ndarray, sample_rate: int) -> np.ndarray:
     return result.astype(np.float32, copy=False)
 
 
-def _dereverberate_mono(source: Path, target: Path) -> Path:
+def _dereverberate_mono(
+    source: Path,
+    target: Path,
+    *,
+    iterations: int = _WPE_ITERATIONS,
+) -> Path:
     audio, sample_rate = sf.read(source, dtype="float32", always_2d=False)
     if audio.ndim != 1 or audio.size == 0:
         raise AICoreError("Dereverberation input must be non-empty mono audio")
@@ -68,7 +77,9 @@ def _dereverberate_mono(source: Path, target: Path) -> Path:
     with profile_operation("vocal_reference.wpe", byte_count=audio.nbytes):
         for start in range(0, audio.size, step):
             end = min(audio.size, start + chunk_size)
-            cleaned = _dereverberate_chunk(audio[start:end], sample_rate)
+            cleaned = _dereverberate_chunk(
+                audio[start:end], sample_rate, iterations=iterations
+            )
             blend = np.ones(cleaned.size, dtype=np.float32)
             fade = min(overlap, cleaned.size)
             if start > 0 and fade: blend[:fade] = np.linspace(0.0, 1.0, fade, dtype=np.float32)
@@ -118,7 +129,12 @@ def _autotune_mono(source: Path, target: Path) -> Path:
     return target
 
 
-def prepare_vocal_reference(source: str | Path, target: str | Path) -> Path:
+def prepare_vocal_reference(
+    source: str | Path,
+    target: str | Path,
+    *,
+    wpe_iterations: int = _WPE_ITERATIONS,
+) -> Path:
     """Create the mono, time-preserving vocal used by every downstream stage.
 
     Downmix is completed before WPE removes predictable late reflections.
@@ -157,7 +173,9 @@ def prepare_vocal_reference(source: str | Path, target: str | Path) -> Path:
             validate=validate_vocal_reference,
             profile_name="vocal_reference.mono",
         )
-        _dereverberate_mono(mono, dereverberated)
+        _dereverberate_mono(
+            mono, dereverberated, iterations=max(1, int(wpe_iterations))
+        )
         _autotune_mono(dereverberated, tuned)
         return render_wav_atomic(
             tuned,

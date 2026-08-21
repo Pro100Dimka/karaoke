@@ -18,16 +18,8 @@ export const SETTINGS_RENDERERS = {
           {t("settings.audio.test")}
         </Typography>
 
-        <Button
-          {...buttonProps(props)}
-          className="settings-audio-test-button"
-          variant="solid"
-          onClick={() => field.run?.(context)}
-        >
-          <Stack direction="row" align="center" justify="center" gap={0.5}>
-            <Volume2 size={17} />
-            <span>{pending ? field.pendingText : (field.idleText ?? field.label)}</span>
-          </Stack>
+        <Button startIcon={Volume2} onClick={() => field.run?.(context)}>
+          {pending ? field.pendingText : (field.idleText ?? field.label)}
         </Button>
       </Stack>
     );
@@ -44,13 +36,7 @@ export const SETTINGS_RENDERERS = {
           </Typography>
         </Stack>
 
-        <Button
-          {...buttonProps(props)}
-          className="settings-audio-monitor__button"
-          variant={value ? "outline" : "solid"}
-          tone={value ? "danger" : "primary"}
-          onClick={() => field.run?.(context)}
-        >
+        <Button {...buttonProps(props)} onClick={() => field.run?.(context)}>
           {t(value ? "settings.audio.monitorOff" : "settings.audio.hearVoice")}
         </Button>
 

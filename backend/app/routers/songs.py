@@ -286,14 +286,20 @@ def remove_song(song: SongDependency, db: Session = Depends(get_db)):
 
 
 @router.post("/{song_id}/process", response_model=schemas.ProcessingStatusOut, status_code=202)
-def process_song(song: SongDependency, db: Session = Depends(get_db)):
+def process_song(
+    song: SongDependency,
+    db: Session = Depends(get_db),
+    request: schemas.ProcessingRequest | None = None,
+):
     if recording_service.has_active_recording(song.id): raise HTTPException(status_code=409, detail="Нельзя обрабатывать песню во время записи")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Обработка уже запущена")
 
     _queue_song_job(
         db,
         song,
-        pipeline_service.start_processing,
+        lambda song_id: pipeline_service.start_processing(
+            song_id, request.mode if request is not None else "auto"
+        ),
         status=models.SongStatus.QUEUED,
         error_message=None,
     )

@@ -13,7 +13,7 @@ test("keeps generated coverage consolidated under one canonical directory", () =
   expect(exists("coverage")).toBe(false);
 });
 test("keeps required production entry files in their canonical locations", () => {
-  same([exists("src/components/Table.jsx"), true], [exists("src/runtime-config.js"), true], [exists("src/pages/Karaoke/performance-analysis-modal.jsx"), true], [exists("src/pages/MelodyEditor.jsx"), true]);
+  same([exists("src/components/Table.jsx"), true], [exists("src/runtime-config.js"), true], [exists("src/pages/Karaoke/performance-analysis-modal.jsx"), true], [exists("src/pages/MelodyEditor/index.jsx"), true]);
 });
 test("release gate executes unit verification and pins a supported Node runtime", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));

@@ -1712,6 +1712,10 @@
   font-size: 0.95rem;
 }
 
+.library-add-song-mode {
+  margin: 0;
+}
+
 .library-add-song-actions {
   display: flex;
   justify-content: flex-end;

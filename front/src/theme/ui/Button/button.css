@@ -9,8 +9,7 @@
     min-block-size: var(--control-size, var(--control-md));
     padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
     border: 0;
-    border-radius: 50%;
-    /* border-radius: var(--shape-md); */
+    border-radius: var(--shape-md);
     overflow: hidden;
     isolation: isolate;
     background: var(--_button-bg);

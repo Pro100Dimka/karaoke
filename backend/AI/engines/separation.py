@@ -18,6 +18,7 @@ import numpy as np
 import soundfile as sf
 
 from ..errors import AICoreError, EngineUnavailableError
+from ..processing_modes import ProcessingProfile
 from ..profiler import profile_operation, record_operation
 from ..runtime import _cpu_thread_settings as _runtime_cpu_thread_settings
 from ..runtime import selected_backend
@@ -117,7 +118,14 @@ def _run_persistent_msst_worker(
             except Empty:
                 break
             if request is None: break
-            job_id, args.input_folder, args.store_dir = request
+            job_id, args.input_folder, args.store_dir, *options = request
+            tuning = options[0] if options else {}
+            inference = getattr(config, "inference", None)
+            if inference is not None:
+                inference.num_overlap = max(
+                    1.0, float(tuning.get("num_overlap", 2.0))
+                )
+                inference.batch_size = int(tuning.get("batch_size", 4))
             started = time.perf_counter()
             try:
                 if device != "cpu":
@@ -241,7 +249,12 @@ class MSSTMelRoformerSeparator(Separator):
             if path is None or not path.is_file()
         ]
 
-    def _run_engine(self, input_dir: Path, output_dir: Path) -> None:
+    def _run_engine(
+        self,
+        input_dir: Path,
+        output_dir: Path,
+        profile: ProcessingProfile | None = None,
+    ) -> None:
         if not self.engine_dir or not self.config or not self.checkpoint: raise EngineUnavailableError("Mel-Band RoFormer resources are not configured")
         arguments = {
             "model_type": "mel_band_roformer",
@@ -252,7 +265,15 @@ class MSSTMelRoformerSeparator(Separator):
         }
         self._ensure_worker(arguments)
         process, job_id = self._process, uuid.uuid4().hex
-        self._request_queue.put((job_id, str(input_dir), str(output_dir)))
+        tuning = (
+            {
+                "num_overlap": profile.separation_overlap,
+                "batch_size": profile.separation_batch_size,
+            }
+            if profile is not None
+            else {}
+        )
+        self._request_queue.put((job_id, str(input_dir), str(output_dir), tuning))
         started_at, total_timeout_sec = time.monotonic(), self._total_timeout_sec()
         while process.is_alive() and time.monotonic() - started_at < total_timeout_sec:
             try:
@@ -314,7 +335,7 @@ class MSSTMelRoformerSeparator(Separator):
             process.terminate()
             process.join(timeout=10)
 
-    def separate(self, mix, vocals, instrumental):
+    def separate(self, mix, vocals, instrumental, *, profile=None):
         if not self.available():
             raise EngineUnavailableError(
                 "Mel-Band RoFormer resources are missing: " + "; ".join(self.missing_resources())
@@ -338,7 +359,7 @@ class MSSTMelRoformerSeparator(Separator):
                 ):
                     shutil.copy2(mix, linked_mix)
 
-            self._run_engine(input_dir, output_dir)
+            self._run_engine(input_dir, output_dir, profile)
 
             all_wavs = sorted(output_dir.rglob("*.wav"))
             vocal_candidates = [
@@ -379,7 +400,7 @@ class MSSTMelRoformerSeparator(Separator):
 class CenterChannelFallbackSeparator(Separator):
     name = "center-channel-fallback"
 
-    def separate(self, mix, vocals, instrumental):
+    def separate(self, mix, vocals, instrumental, *, profile=None):
         audio, sample_rate = sf.read(mix, dtype="float32", always_2d=True)
         if audio.shape[1] == 1:
             vocal = audio.copy()

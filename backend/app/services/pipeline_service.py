@@ -413,7 +413,10 @@ def _start_background_job(song_id: str, target) -> bool:
         return True
 
 
-def start_processing(song_id: str) -> bool: return _start_background_job(song_id, _run_job)
+def start_processing(song_id: str, processing_mode: str = "auto") -> bool:
+    return _start_background_job(
+        song_id, lambda current_song_id: _run_job(current_song_id, processing_mode)
+    )
 
 
 def start_reprocessing(song_id: str) -> bool: return _start_background_job(song_id, _run_reprocessing)
@@ -584,7 +587,19 @@ def _release_processing_slot(song_id: str) -> None:
         _processing_condition.notify_all()
 
 
-def _run_job(song_id: str) -> None:
+def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
+    try:
+        if not _is_cancelled(song_id):
+            with song_service.library_write_lock(): _finalize_success(song_id, out_dir)
+    except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
+        _update_progress(
+            song_id,
+            status=models.SongStatus.ERROR,
+            error_message=f"Could not finalize processing results: {_format_processing_error(exc)}",
+        )
+
+
+def _run_job(song_id: str, processing_mode: str = "auto") -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
     source_path, out_dir = paths
@@ -625,6 +640,7 @@ def _run_job(song_id: str) -> None:
             key_override=key_override, progress=_create_ai_progress_callback(
                 song_id, capture),
             cancelled=lambda: _is_cancelled(song_id),
+            processing_mode=processing_mode,
         )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
@@ -657,14 +673,7 @@ def _run_job(song_id: str) -> None:
                 _release_processing_slot(song_id)
 
     try:
-        if not _is_cancelled(song_id):
-            with song_service.library_write_lock(): _finalize_success(song_id, out_dir)
-    except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
-        _update_progress(
-            song_id,
-            status=models.SongStatus.ERROR,
-            error_message=f"Could not finalize processing results: {_format_processing_error(exc)}",
-        )
+        _finalize_processed_job(song_id, out_dir)
     finally:
         if slot_acquired: _release_processing_slot(song_id)
 

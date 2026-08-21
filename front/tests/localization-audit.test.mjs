@@ -22,10 +22,13 @@ describe("localization audit", () => {
   it("accepts direct, wrapped and exclusively translated messages", () => {
     expect(
       inspect(`
+        import { translateSaved as t } from "./i18n/runtime";
         const FALLBACK = "Ошибка";
         const formatError = (message, error) =>
           translateSaved(message, { 0: getErrorMessage(error, translateSaved(FALLBACK)) });
         translateSaved("Прямой перевод");
+        t(\`Шаблонный перевод ${"${value}"}\`);
+        t(value ? "Первый вариант" : "Второй вариант");
         formatError("Ошибка: {0}", error);
       `)
     ).toEqual([]);

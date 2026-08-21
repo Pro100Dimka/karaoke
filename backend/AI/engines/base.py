@@ -4,12 +4,20 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from ..models import PitchFrame, Word
+from ..processing_modes import ProcessingProfile
 
 
 class Separator(ABC):
     name='separator'
     @abstractmethod
-    def separate(self, mix: Path, vocals: Path, instrumental: Path): ...
+    def separate(
+        self,
+        mix: Path,
+        vocals: Path,
+        instrumental: Path,
+        *,
+        profile: ProcessingProfile | None = None,
+    ): ...
 
 class PitchEstimator(ABC):
     name='pitch'

@@ -144,9 +144,11 @@ def test_ai_service_facade(monkeypatch):
     patch_attrs(monkeypatch, service, KaraokePipeline=lambda _: pipeline, stabilize_pitch=lambda frames: [*frames, 'stable'])
     config = SimpleNamespace(allow_fallback=True)
     core = service.AICoreService(config)
-    assert core.process_song("in", "out", language="uk", bpm_override=120) == "done"
+    assert core.process_song(
+        "in", "out", language="uk", bpm_override=120, processing_mode="fast"
+    ) == "done"
     request = pipeline.run.call_args.args[0]
-    assert (request.source_path == 'in' and request.language == 'uk' and (request.bpm_override == 120)) and (core.analyze_pitch('voice') == ['raw', 'stable'])
+    assert (request.source_path == 'in' and request.language == 'uk' and (request.bpm_override == 120) and request.processing_mode == "fast") and (core.analyze_pitch('voice') == ['raw', 'stable'])
     health = core.health()
     assert (health['ctc_ru_configured'] is True) and (health['ctc_uk_configured'] is False) and (health['separation_configured'] is False)
     pipeline.close = Mock()

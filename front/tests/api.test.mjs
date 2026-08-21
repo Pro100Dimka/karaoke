@@ -460,7 +460,7 @@ describe("API domains", () => {
     for (const [invoke, path, method, body] of [
       [() => songsApi.updateSong(id, { title: "x" }), "/songs/a%2Fb", "PATCH", { title: "x" }],
       [() => songsApi.deleteSong(id), "/songs/a%2Fb", "DELETE"],
-      [() => songsApi.processSong(id), "/songs/a%2Fb/process", "POST"],
+      [() => songsApi.processSong(id), "/songs/a%2Fb/process", "POST", { mode: "auto" }],
       [() => songsApi.reprocessMelody(id), "/songs/a%2Fb/reprocess", "POST"],
       [() => songsApi.cancelProcessing(id), "/songs/a%2Fb/cancel", "POST"],
       [() => songsApi.getStatus(id), "/songs/a%2Fb/status"],

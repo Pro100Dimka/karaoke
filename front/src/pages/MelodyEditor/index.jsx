@@ -182,7 +182,6 @@ export default function MelodyEditor() {
     startMarquee,
     updateMarquee
   } = editing;
-  const selectedNote = notes.find((note) => note._id === selected[0]);
   const onClose = () => navigate("/");
   if (!song)
     return (
@@ -229,7 +228,6 @@ export default function MelodyEditor() {
               saving={saving}
               seek={seek}
               selected={selected}
-              selectedNote={selectedNote}
               setPlaybackRate={setPlaybackRate}
               setVolumes={setVolumes}
               song={song}

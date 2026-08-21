@@ -5,6 +5,7 @@ import { FieldInput } from "../../../components/fields";
 import Modal from "../../../components/modal";
 import { translateSaved } from "../../../i18n/runtime";
 import { Stack } from "../../../theme/ui";
+import { getProcessingModeOptions } from "../processing-modes";
 
 export function SelectedFilePreview({ file }) {
   const audioRef = useRef(null);
@@ -101,6 +102,20 @@ export default function AddSongsModal({ review, onCancel, onConfirm, onUpdate })
               onChange={(title) => onUpdate({ title })}
             />
           </Stack>
+          <FieldInput
+            field={{
+              name: "processingMode",
+              type: "select",
+              label: translateSaved("Режим обработки"),
+              hint: translateSaved(
+                "Авто подбирает быстрые настройки по процессору, видеокарте и памяти"
+              ),
+              options: getProcessingModeOptions(),
+              wrapperClassName: "library-add-song-mode"
+            }}
+            value={item.processingMode}
+            onChange={(processingMode) => onUpdate({ processingMode })}
+          />
           <div className="library-add-song-file">
             <SelectedFilePreview file={item.file} />
             <span className="library-add-song-file-copy">

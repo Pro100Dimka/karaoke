@@ -27,6 +27,7 @@ class AICoreService:
         cancelled=None,
         bpm_override=None,
         key_override=None,
+        processing_mode="auto",
     ) -> PipelineResult:
         with self._inference_lock:
             return self.pipeline.run(
@@ -38,6 +39,7 @@ class AICoreService:
                     title=title,
                     bpm_override=bpm_override,
                     key_override=key_override,
+                    processing_mode=processing_mode,
                     progress=progress,
                     cancelled=cancelled,
                 )

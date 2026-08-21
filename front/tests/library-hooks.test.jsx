@@ -6,6 +6,7 @@ import useLibraryFileImport from "../src/pages/Library/hooks/useFileImport.js";
 import useLibraryRoomSync from "../src/pages/Library/hooks/useRoomSync.js";
 import useLibrarySongActions from "../src/pages/Library/hooks/useSongActions.js";
 import { notCalled, calledTimes, calledWith, verify } from "./helpers/assertions.mjs";
+
 const api = vi.hoisted(() => ({
   addSong: vi.fn(),
   inspectSongIdentity: vi.fn(),
@@ -50,7 +51,7 @@ describe("library file import", () => {
     });
     calledWith(
       [api.addSong, [input.files[0], "track", ""]],
-      [api.processSong, ["song"]],
+      [api.processSong, ["song", "auto"]],
       [onStarted, [expect.objectContaining({ id: "song" })]]
     );
     expect(notify).not.toHaveBeenCalled();
@@ -84,7 +85,8 @@ describe("library file import", () => {
     verify(
       [api.addSong, "toHaveBeenCalledWith", file, "archive.tar", ""],
       [firstStarted, "not.toHaveBeenCalled"],
-      [secondStarted, "toHaveBeenCalledWith", { id: "song" }]
+      [secondStarted, "toHaveBeenCalledWith", { id: "song" }],
+      [api.processSong, "toHaveBeenCalledWith", "song", "auto"]
     );
   });
   test("prefills title and artist from the same backend metadata parser", async () => {

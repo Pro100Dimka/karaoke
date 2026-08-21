@@ -26,7 +26,8 @@ test("song confirmation presents metadata in a compact two-field layout", async 
             file: new File(["audio"], "Artist - Track.flac"),
             coverUrl: "data:image/png;base64,cover",
             title: "Track",
-            artist: "Artist"
+            artist: "Artist",
+            processingMode: "auto"
           }
         ]
       }}
@@ -44,6 +45,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
     2
   );
   expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(2);
+  expect(view.getByText(/Авто ·/)).not.toBeNull();
   const title = view.getByDisplayValue("Track");
   const artist = view.getByDisplayValue("Artist");
   const preview = view.container.querySelector(".library-add-song-file-icon");
@@ -76,6 +78,9 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   expect(onUpdate).toHaveBeenCalledWith({ title: "New title" });
   fireEvent.change(artist, { target: { value: "New artist" } });
   expect(onUpdate).toHaveBeenCalledWith({ artist: "New artist" });
+  fireEvent.click(view.getByText(/Авто ·/));
+  fireEvent.click(await view.findByRole("option", { name: /Быстрый|Швидкий/ }));
+  expect(onUpdate).toHaveBeenCalledWith({ processingMode: "fast" });
   fireEvent.submit(view.container.querySelector("form"));
   expect(onConfirm).toHaveBeenCalledOnce();
   fireEvent.click(view.getByText("Пропустить"));

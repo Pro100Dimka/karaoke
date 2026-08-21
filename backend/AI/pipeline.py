@@ -42,6 +42,7 @@ from .pitch_post import (
     refine_pitch_confidence,
     stabilize_pitch,
 )
+from .processing_modes import resolve_processing_profile
 from .profiler import RuntimeTelemetry
 from .syllables import align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
@@ -110,6 +111,7 @@ class PipelineRequest:
     cancelled: CancelCallback | None = None
     bpm_override: float | None = None
     key_override: str | None = None
+    processing_mode: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -270,6 +272,7 @@ class KaraokePipeline:
         reports: list[StageReport] = []
         alignment_debug_raw: dict[str, object] = {}
         warnings: list[str] = []
+        processing_profile = resolve_processing_profile(request.processing_mode)
         source_hash, song_wav = cache.file_hash(source), output / "song.wav"
         vocals, instrumental = output / "vocals.flac", output / "instrumental.flac"
 
@@ -343,7 +346,17 @@ class KaraokePipeline:
                     if getattr(self.engines.separator, "engine_dir", None)
                     else None
                 ),
+                "demix_code": cache.optional_file_hash(
+                    (
+                        Path(getattr(self.engines.separator, "engine_dir", ""))
+                        / "utils"
+                        / "model_utils.py"
+                    )
+                    if getattr(self.engines.separator, "engine_dir", None)
+                    else None
+                ),
                 "vocal_reference": VOCAL_REFERENCE_PREPROCESS_VERSION,
+                "processing_profile": processing_profile.fingerprint(),
             },
         )
         separation_cached = self._cache_hit(
@@ -364,14 +377,21 @@ class KaraokePipeline:
                     "separation",
                     self.engines.separator,
                     lambda engine: engine.separate(
-                        song_wav, temporary_vocals, temporary_instrumental
+                        song_wav,
+                        temporary_vocals,
+                        temporary_instrumental,
+                        profile=processing_profile,
                     ),
                     reports,
                     warnings,
                 )
                 validate_audio(temporary_vocals)
                 validate_audio(temporary_instrumental)
-                prepare_vocal_reference(temporary_vocals, cleaned_vocals)
+                prepare_vocal_reference(
+                    temporary_vocals,
+                    cleaned_vocals,
+                    wpe_iterations=processing_profile.wpe_iterations,
+                )
                 validate_vocal_reference(cleaned_vocals)
                 encoded_vocals = Path(temp_dir) / "vocals.flac"
                 encoded_instrumental = Path(temp_dir) / "instrumental.flac"

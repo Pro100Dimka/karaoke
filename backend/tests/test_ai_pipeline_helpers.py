@@ -273,7 +273,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         def invalidate(*_args, **_kwargs):
             return None
 
-    patch_attrs(monkeypatch, pipeline, StageCache=Cache, decode_audio=lambda _source, target, _rate: target.write_bytes(b'wav') or target, prepare_vocal_reference=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, validate_vocal_reference=lambda *_: SimpleNamespace(channels=1), encode_flac=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, duration=lambda _: 5.0)
+    patch_attrs(monkeypatch, pipeline, StageCache=Cache, decode_audio=lambda _source, target, _rate: target.write_bytes(b'wav') or target, prepare_vocal_reference=lambda source, target, **_kwargs: target.write_bytes(Path(source).read_bytes()) or target, validate_vocal_reference=lambda *_: SimpleNamespace(channels=1), encode_flac=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, duration=lambda _: 5.0)
     for name in (
         "validate_audio",
         "validate_pitch",
@@ -286,7 +286,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
     ):
         monkeypatch.setattr(pipeline, name, lambda *_args, **_kwargs: None)
     patch_attrs(monkeypatch, pipeline, discover_lyrics=lambda *_args, **_kwargs: SimpleNamespace(text=lyric_text if trusted_lyrics else '', segments=supplied_segments, source='trusted', query='query'))
-    separator, raw_pitch = SimpleNamespace(name='separator', config=None, checkpoint=None, engine_dir=None, separate=lambda _mix, vocals, instrumental: (vocals.write_bytes(b'vocals'), instrumental.write_bytes(b'instrumental'))), [PitchFrame(0, 220, 0.8, True, 0.1), PitchFrame(0.01, 220, 0.8, True, 0.1), PitchFrame(0.02, 220, 0.8, True, 0.1)]
+    separator, raw_pitch = SimpleNamespace(name='separator', config=None, checkpoint=None, engine_dir=None, separate=lambda _mix, vocals, instrumental, **_kwargs: (vocals.write_bytes(b'vocals'), instrumental.write_bytes(b'instrumental'))), [PitchFrame(0, 220, 0.8, True, 0.1), PitchFrame(0.01, 220, 0.8, True, 0.1), PitchFrame(0.02, 220, 0.8, True, 0.1)]
     pitch_engine, aligner, transcriber, melody = SimpleNamespace(name='pitch', fingerprint=lambda: {'model': 'x'}, estimate=lambda _: raw_pitch), SimpleNamespace(name='aligner', model_name='aligner-model', last_alignment_diagnostics={'word_sources': ['ctc', 'qwen'], 'word_candidates': [{}, {}], 'score': 1}, align=lambda *_: word_rows((0, 1, 'hello', 0.8), (1, 2, 'world', 0.8)), align_segments=lambda *_: word_rows((0, 1, 'hello', 0.8), (1, 2, 'world', 0.8)), align_long_text=lambda *_: [Word(index * 0.05, (index + 1) * 0.05, token, 0.8, index) for index, token in enumerate(lyric_text.split())], set_global_asr_segments=Mock()), SimpleNamespace(name='transcriber', model_name='transcriber-model', last_language='en', last_segments=[(0, 2, 'hello world')], set_pitch_activity=Mock(), transcribe=(lambda *_: (_ for _ in ()).throw(RuntimeError('anchor unavailable'))) if mode == 'anchor-fail' else lambda *_: ('hello world', []), release=Mock()), None
     if mode == "omnizart":
         melody = SimpleNamespace(

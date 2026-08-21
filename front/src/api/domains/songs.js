@@ -20,7 +20,11 @@ export const songsApi = {
   updateSong: (id, patch) =>
     request(`/songs/${encodePathSegment(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteSong: (id) => request(`/songs/${encodePathSegment(id)}`, { method: "DELETE" }),
-  processSong: (id) => request(`/songs/${encodePathSegment(id)}/process`, { method: "POST" }),
+  processSong: (id, mode = "auto") =>
+    request(`/songs/${encodePathSegment(id)}/process`, {
+      method: "POST",
+      body: JSON.stringify({ mode })
+    }),
   reprocessMelody: (id) => request(`/songs/${encodePathSegment(id)}/reprocess`, { method: "POST" }),
   cancelProcessing: (id) => request(`/songs/${encodePathSegment(id)}/cancel`, { method: "POST" }),
   getStatus: (id) => request(`/songs/${encodePathSegment(id)}/status`),

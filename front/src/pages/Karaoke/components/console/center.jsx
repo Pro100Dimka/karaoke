@@ -158,27 +158,27 @@ function PerformanceControls({
   const controls = [
     {
       key: "tempo",
-      label: "Темп",
+      label: t("Темп"),
       value: `${currentTempo} BPM`,
       onDecrease: () => onTempoChange(-1),
       onIncrease: () => onTempoChange(1),
-      decreaseLabel: "Уменьшить темп на 1 BPM",
-      increaseLabel: "Увеличить темп на 1 BPM"
+      decreaseLabel: t("Уменьшить темп на 1 BPM"),
+      increaseLabel: t("Увеличить темп на 1 BPM")
     },
     {
       key: "key",
-      label: "Тональность",
+      label: t("Тональность"),
       value: compactKey,
       leftIcon: ChevronLeft,
       rightIcon: ChevronRight,
       onDecrease: () => onKeyShiftChange(clamp(keyShift - 1, -12, 12)),
       onIncrease: () => onKeyShiftChange(clamp(keyShift + 1, -12, 12)),
-      decreaseLabel: "Понизить тональность",
-      increaseLabel: "Повысить тональность"
+      decreaseLabel: t("Понизить тональность"),
+      increaseLabel: t("Повысить тональность")
     },
     {
       key: "range",
-      label: "Диапазон",
+      label: t("Диапазон"),
       value: `${song.note_range_min || "C2"} – ${song.note_range_max || "C5"}`
     }
   ];
@@ -189,10 +189,10 @@ function PerformanceControls({
         <PerformanceCard
           key={key}
           {...props}
-          label={t(label)}
+          label={label}
           accent={CONTROL_ACCENTS[key]}
-          decreaseLabel={decreaseLabel && t(decreaseLabel)}
-          increaseLabel={increaseLabel && t(increaseLabel)}
+          decreaseLabel={decreaseLabel}
+          increaseLabel={increaseLabel}
         />
       ))}
     </Stack>
@@ -236,9 +236,9 @@ function TransportButton({ icon, label, onClick }) {
 
 function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
   const buttons = [
-    [SkipBack, "Назад на 5 секунд", () => onSkip(-5)],
-    [Square, "Остановить", onStop],
-    [SkipForward, "Вперёд на 5 секунд", () => onSkip(5)]
+    [SkipBack, t("Назад на 5 секунд"), () => onSkip(-5)],
+    [Square, t("Остановить"), onStop],
+    [SkipForward, t("Вперёд на 5 секунд"), () => onSkip(5)]
   ];
 
   return (
@@ -249,12 +249,12 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
       gap={0.75}
       aria-label={t("Управление воспроизведением")}
     >
-      <TransportButton icon={buttons[0][0]} label={t(buttons[0][1])} onClick={buttons[0][2]} />
+      <TransportButton icon={buttons[0][0]} label={buttons[0][1]} onClick={buttons[0][2]} />
 
       <PlayButton isPlaying={isPlaying} onClick={onTogglePlay} />
 
       {buttons.slice(1).map(([icon, label, onClick]) => (
-        <TransportButton key={label} icon={icon} label={t(label)} onClick={onClick} />
+        <TransportButton key={label} icon={icon} label={label} onClick={onClick} />
       ))}
     </Stack>
   );

@@ -9,6 +9,7 @@ import soundfile as sf
 
 from AI.engines import separation
 from AI.errors import AICoreError, EngineUnavailableError
+from AI.processing_modes import ProcessingProfile
 from tests._shared import patch_attrs, raises
 
 
@@ -31,6 +32,7 @@ def test_persistent_worker_loads_once_and_moves_model_off_gpu(monkeypatch, tmp_p
     engine = tmp_path / "engine"
     (engine / "models").mkdir(parents=True)
     moves, runs, results = [], [], []
+    inference = SimpleNamespace(num_overlap=2, batch_size=4)
     model, torch = SimpleNamespace(eval=lambda: model, to=lambda device: moves.append(device) or model), SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True, empty_cache=lambda: moves.append('empty')), backends=SimpleNamespace(cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)), cudnn=SimpleNamespace(allow_tf32=False, benchmark=False), mps=SimpleNamespace(is_available=lambda: False)), set_float32_matmul_precision=lambda _: None, load=lambda *_args, **_kwargs: object())
     module_values = {
         "torch": torch,
@@ -39,11 +41,18 @@ def test_persistent_worker_loads_once_and_moves_model_off_gpu(monkeypatch, tmp_p
         ),
         "get_model_from_config": lambda *_: (
             model,
-            SimpleNamespace(training={"instruments": ["vocals"]}),
+            SimpleNamespace(
+                training={"instruments": ["vocals"]}, inference=inference
+            ),
         ),
         "load_start_checkpoint": lambda *_args, **_kwargs: None,
         "run_folder": lambda _model, args, *_args, **_kwargs: runs.append(
-            (args.input_folder, args.store_dir)
+            (
+                args.input_folder,
+                args.store_dir,
+                inference.num_overlap,
+                inference.batch_size,
+            )
         ),
     }
 
@@ -51,14 +60,33 @@ def test_persistent_worker_loads_once_and_moves_model_off_gpu(monkeypatch, tmp_p
         for name, value in module_values.items(): setattr(module, name, value)
 
     patch_attrs(monkeypatch, separation.importlib.util, spec_from_file_location=lambda *_: SimpleNamespace(loader=SimpleNamespace(exec_module=load)), module_from_spec=lambda _: ModuleType('worker'))
-    requests, output = SimpleNamespace(get=Mock(side_effect=[('job', 'in', 'out'), None])), SimpleNamespace(put=results.append)
+    requests = SimpleNamespace(
+        get=Mock(
+            side_effect=[
+                (
+                    "fast",
+                    "in-fast",
+                    "out-fast",
+                    {"num_overlap": 1.0526315789473684, "batch_size": 2},
+                ),
+                ("quality", "in-quality", "out-quality", {"num_overlap": 2, "batch_size": 4}),
+                None,
+            ]
+        )
+    )
+    output = SimpleNamespace(put=results.append)
     separation._run_persistent_msst_worker(
         str(engine),
         {"model_type": "mel_band_roformer", "config_path": "c", "start_check_point": "p"},
         requests,
         output,
     )
-    assert (results[0][0] == 'ready' and results[1][0] == 'job') and (runs == [('in', 'out')] and moves == ['cuda:0', 'cpu', 'empty'])
+    assert [result[0] for result in results] == ["ready", "fast", "quality"]
+    assert runs == [
+        ("in-fast", "out-fast", 1.0526315789473684, 2),
+        ("in-quality", "out-quality", 2, 4),
+    ]
+    assert moves == ["cuda:0", "cpu", "empty", "cuda:0", "cpu", "empty"]
 
 
 def test_persistent_worker_retries_cuda_inference_once_on_cpu(monkeypatch, tmp_path):
@@ -215,7 +243,13 @@ def test_run_engine_success_empty_queue_and_errors(monkeypatch, tmp_path):
     separator._request_queue = ResultQueue()
     separator._result_queue = ResultQueue(("job", 2.0, None))
     monkeypatch.setattr(separator, "_ensure_worker", lambda _: None)
-    separator._run_engine(tmp_path, tmp_path)
+    separator._run_engine(
+        tmp_path, tmp_path, ProcessingProfile("fast", 1.0526315789473684, 2, 2)
+    )
+    assert separator._request_queue.value[3] == {
+        "num_overlap": 1.0526315789473684,
+        "batch_size": 2,
+    }
     process = Process(exitcode=2)
     separator._process = process
     raises(AICoreError, lambda: separator._run_engine(tmp_path, tmp_path), match='code 2')
@@ -310,7 +344,7 @@ def test_separate_with_and_without_instrumental(monkeypatch, tmp_path):
     engine, config, checkpoint = resources(tmp_path)
     separator = separation.MSSTMelRoformerSeparator(str(engine), str(config), str(checkpoint))
 
-    def run(_input, output): write(output / 'vocals.wav', [[0.2]] * 5)
+    def run(_input, output, _profile=None): write(output / 'vocals.wav', [[0.2]] * 5)
 
     monkeypatch.setattr(separator, "_run_engine", run)
     vocals, instrumental = tmp_path / "out" / "v.wav", tmp_path / "out" / "i.wav"
@@ -322,7 +356,7 @@ def test_separate_with_and_without_instrumental(monkeypatch, tmp_path):
     copy.assert_called_once()
     assert (sf.info(vocals).channels == 2 and sf.info(vocals).frames == 10) and (sf.info(instrumental).frames == 10)
 
-    def both(_input, output):
+    def both(_input, output, _profile=None):
         write(output / "vocals.wav", [[0.2, 0.2]] * 10)
         write(output / "instrumental.wav", [[0.3, 0.3]] * 10)
 
@@ -338,12 +372,12 @@ def test_separate_rejects_missing_or_mismatched_stems(monkeypatch, tmp_path):
     monkeypatch.setattr(separator, "_run_engine", lambda *_: None)
     raises(AICoreError, lambda: separator.separate(mix, tmp_path / 'v', tmp_path / 'i'), match='vocals stem')
 
-    def wrong_vocal(_input, output): write(output / 'vocals.wav', [[0, 0]], 16000)
+    def wrong_vocal(_input, output, _profile=None): write(output / 'vocals.wav', [[0, 0]], 16000)
 
     monkeypatch.setattr(separator, "_run_engine", wrong_vocal)
     raises(AICoreError, lambda: separator.separate(mix, tmp_path / 'v', tmp_path / 'i'), match='vocals sample-rate')
 
-    def wrong_inst(_input, output):
+    def wrong_inst(_input, output, _profile=None):
         write(output / "vocals.wav", [[0, 0]], 8000)
         write(output / "instrumental.wav", [[0, 0]], 16000)
 

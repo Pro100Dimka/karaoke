@@ -17,9 +17,16 @@ def test_process_song_forwards_the_request(monkeypatch, tmp_path):
     service.process_song.return_value = "result"
     monkeypatch.setattr(bridge, "get_ai_service", lambda: service)
     assert bridge.process_song(
-        "source", tmp_path, language="ru", title="Song", bpm_override=120, key_override="C"
+        "source",
+        tmp_path,
+        language="ru",
+        title="Song",
+        bpm_override=120,
+        key_override="C",
+        processing_mode="fast",
     ) == "result"
     assert service.process_song.call_args.kwargs["source_path"] == "source"
+    assert service.process_song.call_args.kwargs["processing_mode"] == "fast"
 
 
 @pytest.mark.parametrize(

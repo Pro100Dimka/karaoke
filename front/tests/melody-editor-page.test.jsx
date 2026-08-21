@@ -3,24 +3,45 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
+  getAudioTrackBlob: vi.fn(),
   listSongs: vi.fn(),
   navigate: vi.fn(),
-  params: { songId: "song" }
+  params: { songId: "song" },
+  updateUiPreferences: vi.fn(() => Promise.resolve())
 }));
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mocks.navigate,
   useParams: () => mocks.params
 }));
-vi.mock("../src/api/client", () => ({ api: { listSongs: mocks.listSongs } }));
-vi.mock("../src/pages/Library/modals/song-settings/melody-editor", () => ({
-  default: ({ song, onClose }) => (
-    <button type="button" data-testid="editor" onClick={onClose}>
+vi.mock("../src/contexts/AppDialog", () => ({
+  useAppDialog: () => ({ alert: vi.fn(), confirm: vi.fn() })
+}));
+vi.mock("../src/api/client", () => ({
+  api: {
+    getAudioTrackBlob: mocks.getAudioTrackBlob,
+    listSongs: mocks.listSongs,
+    updateUiPreferences: mocks.updateUiPreferences
+  }
+}));
+vi.mock("../src/pages/MelodyEditor/melody-editor-controls", () => ({
+  default: ({ song, onBack }) => (
+    <button type="button" data-testid="editor" onClick={onBack}>
       {song.id}:{song.title}
     </button>
   )
 }));
-import MelodyEditorPage from "../src/pages/MelodyEditor.jsx";
+vi.mock("../src/pages/MelodyEditor/useMelodyEditorDocument", () => ({
+  default: () => ({
+    loading: false,
+    payload: { duration: 1, words: [] },
+    restoreAi: vi.fn(),
+    save: vi.fn(),
+    saving: false
+  })
+}));
+import MelodyEditorPage from "../src/pages/MelodyEditor";
 beforeEach(() => {
+  mocks.getAudioTrackBlob.mockRejectedValue(new Error("audio unavailable"));
   mocks.navigate.mockReset();
   mocks.listSongs.mockReset();
   mocks.params = { songId: "song" };

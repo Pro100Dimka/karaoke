@@ -174,7 +174,6 @@ export default function MelodyEditorControls({
   saving,
   seek,
   selected,
-  selectedNote,
   setPlaybackRate,
   setVolumes,
   song,
@@ -184,9 +183,9 @@ export default function MelodyEditorControls({
   volumes
 }) {
   const dials = [
-    ["vocals", "Вокал"],
-    ["melody", "Мелодия", "secondary"],
-    ["instrumental", "Минус"]
+    ["vocals", t("Вокал")],
+    ["melody", t("Мелодия"), "secondary"],
+    ["instrumental", t("Минус")]
   ];
   const setVolume = (key) => (value) =>
     setVolumes((current) => ({ ...current, [key]: Number(value) }));
@@ -217,7 +216,7 @@ export default function MelodyEditorControls({
         {dials.map(([key, label, accent]) => (
           <RotaryKnob
             key={key}
-            label={t(label)}
+            label={label}
             value={volumes[key]}
             accent={accent}
             onChange={setVolume(key)}

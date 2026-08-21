@@ -7,7 +7,7 @@ Pydantic-схемы: тела запросов/ответов API.
 """
 
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -27,6 +27,10 @@ class ProcessingState(BaseModel):
     progress_step: str | None = None
     progress_percent: float
     error_message: str | None = None
+
+
+class ProcessingRequest(BaseModel):
+    mode: Literal["auto", "fast", "quality"] = "auto"
 
 
 class SongOut(ORMModel, ProcessingState):

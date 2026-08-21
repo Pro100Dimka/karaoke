@@ -19,7 +19,9 @@ export function getProcessingFailureInfo(message) {
   const type = separator > 0 ? raw.slice(0, separator).trim() : "ProcessingError";
   const reason = separator > 0 ? raw.slice(separator + 1).trim() : raw;
   const normalized = raw.toLowerCase();
-  let hint = translateSaved("Повторите обработку. Если ошибка повторится, откройте журнал приложения.");
+  let hint = translateSaved(
+    "Повторите обработку. Если ошибка повторится, откройте журнал приложения."
+  );
   if (normalized.includes("ctc") || normalized.includes("model unavailable")) {
     hint = translateSaved(
       "Модель синхронизации недоступна. Проверьте установку AI-моделей и повторите обработку."

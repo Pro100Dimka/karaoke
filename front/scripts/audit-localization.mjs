@@ -25,15 +25,35 @@ const sourceFiles = (directory) =>
 
 export const violationsFor = (file) => {
   const ast = parse(fs.readFileSync(file, "utf8"), { sourceType: "module", plugins: ["jsx"] });
+  const translationIdentifiers = new Set(["translateSaved"]);
+  traverse(ast, {
+    ImportSpecifier(importPath) {
+      const declaration = importPath.parentPath;
+      if (
+        declaration.isImportDeclaration() &&
+        declaration.node.source.value.endsWith("i18n/runtime") &&
+        importPath.node.imported.type === "Identifier" &&
+        importPath.node.imported.name === "translateSaved"
+      ) {
+        translationIdentifiers.add(importPath.node.local.name);
+      }
+    }
+  });
   const translatedParameters = new Map();
   const directlyTranslated = (nodePath) => {
-    const callPath = nodePath.parentPath;
-    return (
-      callPath.isCallExpression() &&
-      callPath.node.callee.type === "Identifier" &&
-      callPath.node.callee.name === "translateSaved" &&
-      callPath.node.arguments[0] === nodePath.node
-    );
+    let messagePath = nodePath;
+    while (messagePath.parentPath) {
+      const parent = messagePath.parentPath;
+      if (parent.isCallExpression()) {
+        return (
+          parent.node.callee.type === "Identifier" &&
+          translationIdentifiers.has(parent.node.callee.name) &&
+          parent.node.arguments[0] === messagePath.node
+        );
+      }
+      messagePath = parent;
+    }
+    return false;
   };
   traverse(ast, {
     Function(functionPath) {
@@ -73,7 +93,11 @@ export const violationsFor = (file) => {
       if (translatedArgument(literalPath) || translatedConstant(literalPath)) return;
       record(literalPath.node, literalPath.node.value);
     },
-    TemplateElement: ({ node }) => record(node, node.value.raw),
+    TemplateElement(templateElementPath) {
+      const templatePath = templateElementPath.parentPath;
+      if (templatePath.isTemplateLiteral() && translatedArgument(templatePath)) return;
+      record(templateElementPath.node, templateElementPath.node.value.raw);
+    },
     JSXText: ({ node }) => record(node, node.value)
   });
   return violations;

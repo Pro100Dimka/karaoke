@@ -73,6 +73,11 @@ export default function RecordingsModal({
           {translateSaved("Для этой песни пока нет записанных исполнений.")}
         </div>
       )}
+      {error && (
+        <p className="field-error" role="alert">
+          {error instanceof Error ? error.message : String(error)}
+        </p>
+      )}
     </Modal>
   );
 }

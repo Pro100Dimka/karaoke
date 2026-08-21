@@ -4,6 +4,7 @@ import { isAmbiguousTransportError } from "../../../api/core";
 import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
+import { DEFAULT_PROCESSING_MODE, normalizeProcessingMode } from "../processing-modes";
 
 function suggestedIdentity(file, detected = {}) {
   const stem = file.name
@@ -15,7 +16,8 @@ function suggestedIdentity(file, detected = {}) {
     file,
     coverUrl: detected.cover_data_url || "",
     artist: detected.artist || (parts.length === 2 ? parts[0] : ""),
-    title: detected.title || (parts.length === 2 ? parts[1] : stem)
+    title: detected.title || (parts.length === 2 ? parts[1] : stem),
+    processingMode: DEFAULT_PROCESSING_MODE
   };
 }
 
@@ -43,7 +45,7 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
             continue;
           }
           try {
-            await api.processSong(song.id);
+            await api.processSong(song.id, normalizeProcessingMode(item.processingMode));
             onStarted(song);
           } catch (error) {
             if (isAmbiguousTransportError(error)) {

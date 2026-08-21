@@ -179,7 +179,14 @@ def test_process_reprocess_status_and_cancel(monkeypatch):
     songs.pipeline_service.is_processing.return_value = False
     queue = Mock()
     monkeypatch.setattr(songs, "_queue_song_job", queue)
-    assert songs.process_song(current, database).song_id == "song"
+    assert songs.process_song(
+        current, database, schemas.ProcessingRequest(mode="fast")
+    ).song_id == "song"
+    start_job = queue.call_args.args[2]
+    start_processing = Mock(return_value=True)
+    monkeypatch.setattr(songs.pipeline_service, "start_processing", start_processing)
+    assert start_job("song") is True
+    start_processing.assert_called_once_with("song", "fast")
 
     raises(HTTPException, lambda: songs.reprocess_melody(current, database))
     current.output_dir = "output"

@@ -3,6 +3,7 @@
     inline-size: var(--control-size, var(--control-md));
     padding: 0;
     aspect-ratio: 1;
+      border-radius: 50%;
   }
 
   .ui-icon-button > svg {
