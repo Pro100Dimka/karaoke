@@ -377,6 +377,38 @@ def test_audio_register_corrects_low_octave_from_independent_spectrum(monkeypatc
     assert result[1].midi_note == 62
 
 
+def test_audio_register_does_not_pull_a_short_attack_below_learned_register(monkeypatch):
+    np = pytest.importorskip("numpy")
+    source = [
+        note(0, 0.2, 55),
+        note(0.21, 0.32, 52),
+        note(0.33, 0.55, 57),
+        note(0.56, 0.8, 59),
+        note(0.81, 1.05, 75),
+    ]
+    frames = [frame(i * 0.01) for i in range(110)]
+    profile = notes._note_timing_profile(frames, source, min_note_hint=0.04)
+    low_hz = 440 * 2 ** ((38 - 69) / 12)
+    fake = SimpleNamespace(
+        yin=lambda *_a, **_k: np.full(100, low_hz),
+        stft=lambda *_a, **_k: np.ones((1025, 100), dtype=complex),
+        onset=SimpleNamespace(onset_strength=lambda **_: np.zeros(100)),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake)
+    patch_attrs(
+        monkeypatch,
+        notes,
+        load_mono=lambda *_: (np.ones(16000), 16000),
+        _audio_harmonic_salience=lambda _m, _i, midi, **_: 30 - abs(midi - 38) * 3,
+    )
+
+    result = notes._audio_verify_note_register(
+        source, "audio.wav", profile, fmin_hz=50, fmax_hz=500
+    )
+
+    assert result[1].midi_note == 52
+
+
 def test_build_vocal_notes_orchestrates_all_stages(monkeypatch):
     frames, syllables, base = [frame(0), frame(0.01)], [syllable(0, 0.2)], [note(0, 0.2)]
     patch_attrs(monkeypatch, notes, _decode_pitch_only=Mock(return_value=base), _filter_to_lyric_phrases=Mock(side_effect=lambda value, *_a, **_k: value), _attach_soft_lyric_labels=Mock(side_effect=lambda value, *_: value), _make_monophonic=Mock(side_effect=lambda value, *_: value), _audio_verify_note_register=Mock(side_effect=lambda value, *_a, **_k: value))
@@ -396,8 +428,8 @@ def test_build_vocal_notes_orchestrates_all_stages(monkeypatch):
 
 
 def test_word_pitch_evidence_keeps_only_confirmed_frames_inside_the_word():
-    words = [Word(1.0, 1.04, "voiced", index=0), Word(2.0, 2.04, "silent", index=1)]
-    frames = [frame(1.01, 67), frame(1.02, 67), frame(2.01, 72)]
+    words = [Word(1.0, 1.08, "voiced", index=0), Word(2.0, 2.08, "silent", index=1)]
+    frames = [*(frame(1.01 + index * 0.01, 67) for index in range(5)), frame(2.01, 72)]
 
     result, retained = notes._retain_word_pitch_evidence(
         [],
@@ -410,6 +442,7 @@ def test_word_pitch_evidence_keeps_only_confirmed_frames_inside_the_word():
 
     assert retained == 1
     assert [(item.midi_note, item.word_index) for item in result] == [(67, 0)]
+    assert result[0].end - result[0].start == pytest.approx(0.05)
 
 
 def test_word_pitch_evidence_does_not_duplicate_an_existing_acoustic_note():
@@ -436,7 +469,10 @@ def test_word_pitch_evidence_fills_only_a_real_uncovered_pitch_run():
         frame(1.15, 60),
         frame(1.2, 60),
         frame(1.5, 64),
-        frame(1.51, 64),
+        frame(1.51, 65),
+        frame(1.52, 64),
+        frame(1.53, 64),
+        frame(1.54, 65),
     ]
 
     result, retained = notes._retain_word_pitch_evidence(
@@ -451,5 +487,42 @@ def test_word_pitch_evidence_fills_only_a_real_uncovered_pitch_run():
     assert retained == 1
     assert [(item.midi_note, item.start, item.end) for item in result] == [
         (60, 1.1, 1.3),
-        (64, 1.495, 1.515),
+        (64, pytest.approx(1.495), pytest.approx(1.545)),
     ]
+
+
+def test_word_pitch_evidence_rejects_two_frame_noise():
+    result, retained = notes._retain_word_pitch_evidence(
+        [],
+        [frame(1.01, 38), frame(1.02, 38)],
+        [Word(1.0, 1.5, "breath", index=0)],
+        min_confidence=0.38,
+        max_gap=0.05,
+        frame_step=0.01,
+    )
+
+    assert result == []
+    assert retained == 0
+
+
+def test_unstable_low_attack_is_discarded_without_inventing_a_pitch():
+    melody = [
+        note(0.0, 0.3, 55, word=0),
+        note(0.4, 0.52, 38, word=1),
+        note(0.54, 0.84, 54, word=1),
+        note(1.0, 1.3, 57, word=2),
+        note(1.5, 1.8, 59, word=3),
+    ]
+    frames = [
+        *(frame(0.01 + index * 0.02, 55, confidence=0.9) for index in range(15)),
+        *(frame(0.41 + index * 0.02, 38, confidence=0.5) for index in range(6)),
+        *(frame(0.55 + index * 0.02, 54, confidence=0.9) for index in range(15)),
+        *(frame(1.01 + index * 0.02, 57, confidence=0.9) for index in range(15)),
+        *(frame(1.51 + index * 0.02, 59, confidence=0.9) for index in range(15)),
+    ]
+    profile = notes._note_timing_profile(frames, melody, min_note_hint=0.07)
+
+    result, discarded = notes._discard_unstable_low_attacks(melody, frames, profile)
+
+    assert discarded == 1
+    assert [item.midi_note for item in result] == [55, 54, 57, 59]

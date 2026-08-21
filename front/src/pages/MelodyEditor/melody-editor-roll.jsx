@@ -1,6 +1,6 @@
 import { MoveHorizontal, MoveVertical } from "lucide-react";
-import PianoKeyboard, { isBlackPianoKey } from "../../../../components/piano-keyboard";
-import { translateSaved } from "../../../../i18n/runtime";
+import PianoKeyboard, { isBlackPianoKey } from "../../components/piano-keyboard";
+import { translateSaved } from "../../i18n/runtime";
 import { clamp, noteName } from "./melody-editor-state";
 
 const thumbSize = (viewport, content) => Math.max(7, (viewport / Math.max(1, content)) * 100);

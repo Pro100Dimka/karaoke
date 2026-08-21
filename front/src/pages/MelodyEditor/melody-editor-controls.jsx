@@ -10,11 +10,10 @@ import {
   Trash2,
   Undo2
 } from "lucide-react";
-import { RotaryKnob } from "../../../../components/fields";
-import { translateSaved as t } from "../../../../i18n/runtime";
-import { Stack } from "../../../../theme/ui";
-import SongStrip from "../../../Karaoke/components/console/song-strip";
-import { noteName } from "./melody-editor-state";
+import { RotaryKnob } from "../../components/fields";
+import { translateSaved as t } from "../../i18n/runtime";
+import { Stack } from "../../theme/ui";
+import SongStrip from "../Karaoke/components/console/song-strip";
 import MelodyEditorToolbarButton from "./melody-editor-toolbar";
 
 const PLAYBACK_RATES = [0.5, 0.65, 0.75, 0.85, 1];
@@ -112,19 +111,29 @@ function EditorActions({
   ];
 
   return (
-    <div
-      className="melody-editor-action-groups"
+    <Stack
       role="toolbar"
+      direction="row"
+      gap={0.5}
+      align="center"
+      sx={{ width: "auto" }}
       aria-label={t("Инструменты редактора")}
     >
       {groups.map(([group, buttons]) => (
-        <div key={group} className={`melody-editor-tool-group is-${group}`}>
+        <Stack
+          key={group}
+          direction="row"
+          gap={0.5}
+          align="center"
+          sx={{ width: "auto" }}
+          className={`melody-editor-tool-group is-${group}`}
+        >
           {buttons.map((button) => (
             <MelodyEditorToolbarButton key={button.label} {...button} />
           ))}
-        </div>
+        </Stack>
       ))}
-    </div>
+    </Stack>
   );
 }
 
@@ -144,55 +153,6 @@ function PlaybackRate({ playbackRate, setPlaybackRate }) {
         ))}
       </select>
     </label>
-  );
-}
-
-function VolumeDials({ setVolumes, volumes }) {
-  const dials = [
-    ["vocals", "Вокал"],
-    ["melody", "Мелодия", "secondary"],
-    ["instrumental", "Минус"]
-  ];
-  const setVolume = (key) => (value) =>
-    setVolumes((current) => ({ ...current, [key]: Number(value) }));
-  return (
-    <div className="melody-editor-compact-dials">
-      {dials.map(([key, label, accent]) => (
-        <RotaryKnob
-          key={key}
-          label={t(label)}
-          value={volumes[key]}
-          accent={accent}
-          onChange={setVolume(key)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function SelectionSummary({ selected, selectedNote }) {
-  const count = selected.length;
-  return (
-    <div className={`melody-editor-inline-selection ${count ? "is-active" : ""}`}>
-      {selectedNote ? (
-        <>
-          <strong>{noteName(selectedNote.note)}</strong>
-
-          <span>
-            {count > 1
-              ? t("{0} нот", { 0: count })
-              : t("{0}–{1}с", {
-                  0: selectedNote.start.toFixed(2),
-                  1: selectedNote.end.toFixed(2)
-                })}
-          </span>
-
-          <span>{selectedNote.word_text}</span>
-        </>
-      ) : (
-        <span>{t("Выберите ноту")}</span>
-      )}
-    </div>
   );
 }
 
@@ -223,6 +183,13 @@ export default function MelodyEditorControls({
   undo,
   volumes
 }) {
+  const dials = [
+    ["vocals", "Вокал"],
+    ["melody", "Мелодия", "secondary"],
+    ["instrumental", "Минус"]
+  ];
+  const setVolume = (key) => (value) =>
+    setVolumes((current) => ({ ...current, [key]: Number(value) }));
   return (
     <Stack direction="row" gap={1} align="center" justify="space-between">
       <EditorActions
@@ -246,11 +213,20 @@ export default function MelodyEditorControls({
         selectedCount={selected.length}
       />
       <PlaybackRate {...{ playbackRate, setPlaybackRate }} />
-      <VolumeDials {...{ setVolumes, volumes }} />
-      <div className="melody-editor-transport melody-editor-waveform-only">
-        <SongStrip song={song} currentTime={time} duration={duration} onSeek={seek} />
-      </div>
-      <SelectionSummary {...{ selected, selectedNote }} />
+      <Stack direction="row" gap="3rem" sx={{ width: "auto", transform: "scale(0.7)" }}>
+        {dials.map(([key, label, accent]) => (
+          <RotaryKnob
+            key={key}
+            label={t(label)}
+            value={volumes[key]}
+            accent={accent}
+            onChange={setVolume(key)}
+          />
+        ))}
+      </Stack>
+      <Stack sx={{ width: "auto" }}>
+        <SongStrip song={song} currentTime={time} duration={duration} onSeek={seek} disablelabel />
+      </Stack>
     </Stack>
   );
 }

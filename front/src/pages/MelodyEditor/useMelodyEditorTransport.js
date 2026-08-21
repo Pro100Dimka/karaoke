@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { translateSaved } from "../../../../i18n/runtime";
-import { getErrorMessage } from "../../../../utils/errors";
+import { translateSaved } from "../../i18n/runtime";
+import { getErrorMessage } from "../../utils/errors";
 import { autoFollowScrollLeft } from "./melody-editor-geometry";
 import { clamp } from "./melody-editor-state";
 import useMelodyEditorAudio from "./useMelodyEditorAudio";

@@ -12,6 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 test("production CSP allows the online room WebSocket", () => {
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.ok(index.includes(DEFAULT_SIGNALING_URL));
+  assert.ok(!index.includes("http://[::1]:*"));
 });
 test("song transfer reports progress and waits for receiver import", async () => {
   const sender = new OnlineVoiceMesh({ send: () => true });

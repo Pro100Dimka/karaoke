@@ -1,4 +1,4 @@
-import { translateSaved } from "../../../../i18n/runtime";
+import { translateSaved } from "../../i18n/runtime";
 
 export default function MelodyEditorHeader({ duration, selectedCount, songTitle, time }) {
   return (

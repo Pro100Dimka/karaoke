@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../../../../api/client";
-import { useAppDialog } from "../../../../contexts/AppDialog";
-import { translateSaved } from "../../../../i18n/runtime";
+import { api } from "../../api/client";
+import { useAppDialog } from "../../contexts/AppDialog";
+import { translateSaved } from "../../i18n/runtime";
 import MelodyEditorControls from "./melody-editor-controls";
 import MelodyEditorHeader from "./melody-editor-header";
 import { canMergeSelectedNotes } from "./melody-editor-operations";

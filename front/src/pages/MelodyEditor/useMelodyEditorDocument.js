@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../../../../api/client";
-import { translateSaved } from "../../../../i18n/runtime";
-import { getErrorMessage } from "../../../../utils/errors";
-import { flattenLyricsNotes } from "../../../../utils/lyrics-sync";
+import { api } from "../../api/client";
+import { translateSaved } from "../../i18n/runtime";
+import { getErrorMessage } from "../../utils/errors";
+import { flattenLyricsNotes } from "../../utils/lyrics-sync";
 
 export default function useMelodyEditorDocument({
   confirmDialog,

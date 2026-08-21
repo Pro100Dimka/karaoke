@@ -1,5 +1,5 @@
-import { IconButton } from "../../../../theme/ui";
-import cx from "../../../../utils/cx";
+import { IconButton } from "../../theme/ui";
+import cx from "../../utils/cx";
 
 export default function MelodyEditorToolbarButton({
   icon,

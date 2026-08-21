@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { api } from "../../../../api/client";
-import { persistUiPreferences } from "../../../../utils/ui-preferences";
+import { api } from "../../api/client";
+import { persistUiPreferences } from "../../utils/ui-preferences";
 import { editorPreferences } from "./melody-editor-state";
 
 export default function useMelodyEditorPreferences() {

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { buildWhitePianoKeyGeometry } from "../../../../components/piano-keyboard";
+import { buildWhitePianoKeyGeometry } from "../../components/piano-keyboard";
 import { canonicalLyricProjection } from "./melody-editor-operations";
 
 export default function useMelodyEditorLayout({ notes, payload, verticalZoom, zoom }) {

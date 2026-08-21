@@ -14,7 +14,7 @@ from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
 from .utils.numeric import energy_attack_strength
 
-NOTE_DECODER_VERSION = "acoustic-notes-v36-independent-upward-register"
+NOTE_DECODER_VERSION = "acoustic-notes-v37-sustained-gap-evidence"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
 
 
@@ -763,8 +763,17 @@ def _audio_verify_note_register(
                     proposed > int(note.midi_note)
                     and emission_margin >= required_margin + 0.75
                 )
+                downward_rewrite_stays_in_register = (
+                    proposed < int(note.midi_note)
+                    and proposed >= float(q10) - 4.0
+                )
                 accept = (
-                    yin_supports_rewrite and emission_margin >= required_margin
+                    yin_supports_rewrite
+                    and emission_margin >= required_margin
+                    and (
+                        proposed > int(note.midi_note)
+                        or downward_rewrite_stays_in_register
+                    )
                 ) or spectral_supports_upward_rewrite
             else:
                 accept = emission_margin >= required_margin and (
@@ -913,8 +922,10 @@ def build_vocal_notes(
         max_gap=max_gap,
         frame_step=timing.frame_step,
     )
+    notes, discarded_unstable_attacks = _discard_unstable_low_attacks(notes, frames, timing)
     diag = dict(_NOTE_DIAGNOSTICS.get() or {})
     diag["retained_word_pitch_notes"] = retained_word_notes
+    diag["discarded_unstable_low_attacks"] = discarded_unstable_attacks
     diag["timing_profile"] = {
         "frame_step": timing.frame_step,
         "note_scale": timing.note_scale,
@@ -936,7 +947,7 @@ def _retain_word_pitch_evidence(
     max_gap: float,
     frame_step: float,
 ) -> tuple[list[VocalNote], int]:
-    """Keep stable FLAC pitch that the global minimum-duration filter removed."""
+    """Keep sustained FLAC pitch that the global decoder did not cover."""
     if not frames or not words:
         return list(notes), 0
 
@@ -955,36 +966,86 @@ def _retain_word_pitch_evidence(
                 for note in output
             )
         ]
-        runs: list[list[PitchFrame]] = []
+        connected: list[list[PitchFrame]] = []
         for frame in candidates:
-            midi = int(round(hz_to_midi(frame.frequency)))
             if (
-                not runs
-                or frame.time - runs[-1][-1].time > max(max_gap, step * 1.5)
-                or int(round(hz_to_midi(runs[-1][-1].frequency))) != midi
+                not connected
+                or frame.time - connected[-1][-1].time > max(max_gap, step * 1.5)
             ):
-                runs.append([frame])
+                connected.append([frame])
             else:
-                runs[-1].append(frame)
-        for run in runs:
-            if len(run) < 2:
-                continue
-            start = max(float(word.start), float(run[0].time) - step / 2.0)
-            end = min(float(word.end), float(run[-1].time) + step / 2.0)
-            if end <= start:
-                continue
-            confidence = sum(frame.confidence for frame in run) / len(run)
-            output.append(
-                VocalNote(
-                    start,
-                    end,
-                    int(round(statistics.median(hz_to_midi(frame.frequency) for frame in run))),
-                    max(42, min(118, int(round(62 + confidence * 48)))),
-                    word_index,
-                )
-            )
-            retained += 1
+                connected[-1].append(frame)
+
+        confirmation = max(step * 4.0, min(max_gap, step * 8.0))
+        for run in connected:
+            for segment in _sustained_pitch_segments(
+                run,
+                split_semitones=0.78,
+                min_note=confirmation,
+            ):
+                note = _note_from_segment(segment, None, min_note=confirmation)
+                if note is None:
+                    continue
+                start = max(float(word.start), note.start - step / 2.0)
+                end = min(float(word.end), note.end - step / 2.0)
+                if end - start + 1e-9 < confirmation:
+                    continue
+                output.append(replace(note, start=start, end=end, word_index=word_index))
+                retained += 1
     return sorted(output, key=lambda note: (note.start, note.end, note.midi_note)), retained
+
+
+def _discard_unstable_low_attacks(
+    notes: list[VocalNote],
+    frames: list[PitchFrame],
+    profile: _NoteTimingProfile,
+) -> tuple[list[VocalNote], int]:
+    """Drop brief low non-vocal attacks; never replace them with a neighbouring pitch."""
+    if len(notes) < 4 or not frames:
+        return list(notes), 0
+
+    sustained_limit = max(profile.note_scale * 0.7, profile.frame_step * 10.0)
+    sustained = [note for note in notes if note.end - note.start >= sustained_limit]
+    if len(sustained) < 4:
+        return list(notes), 0
+    register_floor = float(np.percentile([note.midi_note for note in sustained], 15))
+    transient_limit = max(profile.note_scale * 1.25, profile.frame_step * 12.0)
+
+    def confidence(note: VocalNote) -> float:
+        values = [
+            frame.confidence
+            for frame in frames
+            if note.start <= frame.time < note.end and frame.voiced and frame.frequency > 0
+        ]
+        return float(statistics.median(values)) if values else 0.0
+
+    discarded: set[int] = set()
+    for index, note in enumerate(notes):
+        if note.end - note.start > transient_limit or note.midi_note >= register_floor - 4.0:
+            continue
+        following = [
+            candidate
+            for candidate in notes[index + 1 : index + 4]
+            if candidate.start - note.end <= profile.neighbour_radius
+            and candidate.word_index == note.word_index
+            and candidate.midi_note - note.midi_note >= 7
+        ]
+        if not following:
+            continue
+        nearby_low_support = any(
+            candidate is not note
+            and abs(candidate.midi_note - note.midi_note) <= 2
+            and min(abs(candidate.end - note.start), abs(candidate.start - note.end))
+            <= profile.neighbour_radius
+            for candidate in notes[max(0, index - 3) : index + 4]
+        )
+        if nearby_low_support:
+            continue
+        reference_confidence = max(confidence(candidate) for candidate in following)
+        if confidence(note) < min(0.86, reference_confidence + 0.08):
+            discarded.add(index)
+
+    return [note for index, note in enumerate(notes) if index not in discarded], len(discarded)
 
 
 def _discard_unconfirmed_micro_notes(

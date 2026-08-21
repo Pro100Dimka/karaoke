@@ -585,16 +585,9 @@
   min-width: max-content;
 }
 .melody-editor-tool-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   padding: 4px 6px;
   border: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.045),
-    0 5px 14px rgba(0, 0, 0, 0.16);
 }
 .melody-editor-tool-group.is-nav {
   border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
