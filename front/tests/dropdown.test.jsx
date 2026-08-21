@@ -1,120 +1,41 @@
 /* @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import Dropdown from "../src/components/fields/Dropdown.jsx";
-import { same, verify } from "./helpers/assertions.mjs";
-afterEach(() => { cleanup(); document.body.replaceChildren(); });
-const options = [ { value: "a", label: "Alpha" }, { value: "b", label: "Beta" } ];
-describe("dropdown", () => {
-  test("selects a value and restores trigger focus", () => {
+import Select from "../src/theme/ui/Select/index.jsx";
+
+afterEach(cleanup);
+const options = [
+  { value: "a", label: "Alpha" },
+  { value: "b", label: "Beta" }
+];
+
+describe("theme select", () => {
+  test("uses the same outlined floating-label frame as text fields", () => {
+    render(<Select id="choice" label="Choice" value="a" options={options} onChange={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: /Choice/ });
+    expect(trigger.closest(".ui-text-field")).not.toBeNull();
+    expect(trigger.closest(".ui-text-field").dataset.filled).toBe("true");
+    expect(document.querySelector(".ui-text-field-outline legend").textContent).toBe("Choice");
+  });
+
+  test("selects values, supports keyboard navigation and restores focus", () => {
     const change = vi.fn();
-    render(
-      <Dropdown
-        id="choice"
-        value="a"
-        options={options}
-        onChange={change}
-        className="extra"
-        ariaInvalid="true"
-        ariaDescribedBy="hint"
-      />
-    );
+    render(<Select id="choice" value="a" options={options} onChange={change} />);
     const trigger = screen.getByRole("button", { name: /Alpha/ });
-    same([trigger.id, "choice"], [trigger.getAttribute("aria-describedby"), "hint"]);
-    fireEvent.click(trigger);
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
     expect(screen.getByRole("listbox")).not.toBeNull();
-    fireEvent.pointerDown(trigger);
-    verify([screen.getByRole("option", { name: /Alpha/ }).className, 'toContain', "is-selected"]);
     fireEvent.click(screen.getByRole("option", { name: /Beta/ }));
-    verify([change, 'toHaveBeenCalledWith', "b"], [screen.queryByRole("listbox"), 'toBeNull'], [document.activeElement, 'toBe', trigger]);
-  });
-  test("opens from the keyboard and closes on Escape or outside pointer", () => {
-    const keyDown = vi.fn();
-    render(
-      <Dropdown
-        value="missing"
-        placeholder="Choose"
-        options={options}
-        onChange={vi.fn()}
-        onKeyDown={keyDown}
-      />
-    );
-    const trigger = screen.getByRole("button", { name: /Choose/ });
-    fireEvent.keyDown(trigger, { key: "A" });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    expect(screen.getByRole("listbox")).not.toBeNull();
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    fireEvent.keyDown(document, { key: "A" });
-    fireEvent.keyDown(document, { key: "Escape" });
-    verify([screen.queryByRole("listbox"), 'toBeNull'], [document.activeElement, 'toBe', trigger]);
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    fireEvent.pointerDown(document.body);
-    verify([screen.queryByRole("listbox"), 'toBeNull'], [keyDown, 'toHaveBeenCalledTimes', 4]);
-  });
-  test("supports option Escape and trigger toggle", () => {
-    render(<Dropdown value="a" options={options} onChange={vi.fn()} />);
-    const trigger = screen.getByRole("button", { name: /Alpha/ });
-    fireEvent.blur(trigger);
-    fireEvent.click(trigger);
-    const option = screen.getByRole("option", { name: /Beta/ });
-    fireEvent.keyDown(option, { key: "A" });
-    fireEvent.keyDown(option, { key: "Escape" });
-    expect(document.activeElement).toBe(trigger);
-    fireEvent.click(trigger);
-    fireEvent.click(trigger);
+    expect(change).toHaveBeenCalledWith("b", expect.anything());
     expect(screen.queryByRole("listbox")).toBeNull();
   });
-  test("closes when disabled or another dropdown opens", () => {
-    const view = render(
-      <>
-        <Dropdown id="one" options={options} onChange={vi.fn()} />
-        <Dropdown id="two" options={options} onChange={vi.fn()} />
-      </>
-    );
-    fireEvent.click(document.getElementById("one"));
-    expect(screen.getAllByRole("listbox")).toHaveLength(1);
-    fireEvent.click(document.getElementById("two"));
-    verify([screen.getAllByRole("listbox"), 'toHaveLength', 1], [screen.getByRole("listbox").id, 'toBe', "two-menu"]);
-    view.rerender( <Dropdown id="two" disabled options={options} onChange={vi.fn()} />
-    );
-    verify([screen.queryByRole("listbox"), 'toBeNull'], [screen.getByRole("button").disabled, 'toBe', true]);
-    fireEvent.keyDown(screen.getByRole("button"), { key: " " });
-    expect(screen.queryByRole("listbox")).toBeNull();
-  });
-  test("commits blur only after focus leaves both trigger and menu", async () => {
-    const blur = vi.fn();
-    render(<Dropdown options={options} onChange={vi.fn()} onBlur={blur} />);
-    const trigger = screen.getByRole("button");
-    fireEvent.click(trigger);
-    const option = screen.getByRole("option", { name: /Alpha/ });
-    option.focus();
-    fireEvent.blur(trigger);
-    await act(async () => Promise.resolve());
-    expect(blur).not.toHaveBeenCalled();
-    const outside = document.createElement("button");
-    document.body.append(outside);
-    outside.focus();
-    fireEvent.blur(trigger);
-    await act(async () => Promise.resolve());
-    expect(blur).toHaveBeenCalledOnce();
-  });
-  test("positions a long menu above and updates on viewport changes", () => {
-    render(
-      <Dropdown
-        id="positioned"
-        options={Array.from({ length: 10 }, (_, index) => ({
-          value: index,
-          label: `Item ${index}`
-        }))}
-        onChange={vi.fn()}
-      />
-    );
-    const root = document.querySelector(".app-dropdown");
-    root.getBoundingClientRect = () => ({ left: 10, top: 700, bottom: 740, width: 250 });
+
+  test("closes outside and remains inert while disabled", () => {
+    const view = render(<Select options={options} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole("button"));
-    const menu = screen.getByRole("listbox");
-    verify([menu.style.bottom, 'not.toBe', "auto"], [menu.style.width, 'toBe', "250px"]);
-    fireEvent.resize(window);
-    fireEvent.scroll(window);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("listbox")).toBeNull();
+    view.rerender(<Select disabled options={options} onChange={vi.fn()} />);
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 });

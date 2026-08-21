@@ -10,9 +10,8 @@ import {
   Trash2,
   Undo2
 } from "lucide-react";
-import { RotaryKnob } from "../../components/fields";
 import { translateSaved as t } from "../../i18n/runtime";
-import { Stack } from "../../theme/ui";
+import { RotaryKnob, Select, Stack } from "../../theme/ui";
 import SongStrip from "../Karaoke/components/console/song-strip";
 import MelodyEditorToolbarButton from "./melody-editor-toolbar";
 
@@ -139,20 +138,14 @@ function EditorActions({
 
 function PlaybackRate({ playbackRate, setPlaybackRate }) {
   return (
-    <label className="melody-editor-speed" htmlFor="melody-editor-playback-rate">
-      <span>{t("Скорость")}</span>
-      <select
-        id="melody-editor-playback-rate"
-        value={playbackRate}
-        onChange={({ target }) => setPlaybackRate(Number(target.value))}
-      >
-        {PLAYBACK_RATES.map((rate) => (
-          <option key={rate} value={rate}>
-            {rate * 100}%
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      id="melody-editor-playback-rate"
+      className="melody-editor-speed"
+      label={t("Скорость")}
+      value={playbackRate}
+      options={PLAYBACK_RATES.map((rate) => ({ value: rate, label: `${rate * 100}%` }))}
+      onChange={(value) => setPlaybackRate(Number(value))}
+    />
   );
 }
 

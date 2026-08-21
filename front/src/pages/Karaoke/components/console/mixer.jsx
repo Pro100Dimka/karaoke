@@ -1,7 +1,6 @@
 import { Mic } from "lucide-react";
-import { RotaryKnob } from "../../../../components/fields";
 import { translateSaved as t } from "../../../../i18n/runtime";
-import { Stack, Typography } from "../../../../theme/ui";
+import { RangeInput, RotaryKnob, Stack, Typography } from "../../../../theme/ui";
 import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
 import { clamp } from "./utils";
 
@@ -39,7 +38,6 @@ const LABEL_STYLE = { fontWeight: 800, lineHeight: 1 };
 function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
   const percent = Math.round(value * 100);
   const fill = Math.min(100, Math.max(0, (value / max) * 100));
-  const readValue = ({ currentTarget }) => Number(currentTarget.value);
   return (
     <Stack gap={0.45} sx={{ userSelect: "none", width: "auto" }}>
       <Typography
@@ -61,17 +59,15 @@ function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
             boxShadow: `0 0 0.7rem ${color}`
           }}
         />
-        <input
-          type="range"
+        <RangeInput
           min={0}
           max={max}
           step={0.05}
           value={value}
           aria-label={label}
           aria-valuetext={`${percent}%`}
-          onChange={(event) => onChange?.(readValue(event))}
-          onPointerUp={(event) => onCommit?.(readValue(event))}
-          onKeyUp={(event) => onCommit?.(readValue(event))}
+          onChange={onChange}
+          onCommit={onCommit}
           style={INPUT_STYLE}
         />
         <div

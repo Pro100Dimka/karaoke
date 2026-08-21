@@ -1,4 +1,4 @@
-import { clamp } from "../../utils/math";
+import { clamp } from "../../../utils/math";
 
 export function getRotaryDragValue({ value, lastY, clientY, min, max, fine = false }) {
   const sensitivity = fine ? 900 : 180;

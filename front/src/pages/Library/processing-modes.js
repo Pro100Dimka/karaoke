@@ -9,8 +9,20 @@ export function normalizeProcessingMode(value) {
 
 export function getProcessingModeOptions() {
   return [
-    { value: "auto", label: translateSaved("Авто · быстро для этого компьютера") },
-    { value: "fast", label: translateSaved("Быстрый · минимальное время") },
-    { value: "quality", label: translateSaved("Качество · точнее разделение") }
+    {
+      value: "auto",
+      label: translateSaved("Авто · баланс"),
+      description: translateSaved("Средняя скорость и качество с учётом вашего железа")
+    },
+    {
+      value: "fast",
+      label: translateSaved("Быстрый · минимальное время"),
+      description: translateSaved("Минимальный overlap и один проход очистки вокала")
+    },
+    {
+      value: "quality",
+      label: translateSaved("Качество · точное разделение"),
+      description: translateSaved("Четырёхкратный overlap и усиленная очистка вокала")
+    }
   ];
 }

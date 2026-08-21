@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { clamp } from "../../utils/math";
+import { clamp } from "../../../utils/math";
 import {
   getRotaryDragValue,
   getRotaryPointerValue,
   getRotaryWheelValue
-} from "./rotary-knob-utils";
+} from "./utils";
 
 const normalizeId = (id) => id.replace(/:/g, "");
 

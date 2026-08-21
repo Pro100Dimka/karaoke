@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useI18n } from "../i18n";
-import { IconButton, Stack } from "../theme/ui";
+import { IconButton, RangeInput, Stack } from "../theme/ui";
 import cx from "../utils/cx";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
@@ -59,13 +59,12 @@ function AppFloatingControls({ onOpenSettings }) {
 
         <div className="app-radio-volume" aria-label={t("radio.volume")}>
           <Volume2 size={15} />
-          <input
-            type="range"
+          <RangeInput
             min="0"
             max="1"
             step="0.01"
             value={volume}
-            onChange={({ target }) => setVolume(target.value)}
+            onChange={(value) => setVolume(value)}
           />
           <span>{Math.round(volume * 100)}%</span>
         </div>

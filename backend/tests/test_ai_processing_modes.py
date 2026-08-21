@@ -26,10 +26,15 @@ def test_processing_modes_have_distinct_workloads():
         "mode": "fast",
         "separation_overlap": 1.0526315789473684,
         "separation_batch_size": 4,
-        "wpe_iterations": 2,
+        "wpe_iterations": 1,
     }
-    assert automatic.wpe_iterations == 3
-    assert quality.separation_overlap == 2 and quality.wpe_iterations == 5
+    assert automatic.separation_overlap == 2 and automatic.wpe_iterations == 3
+    assert quality.separation_overlap == 4 and quality.wpe_iterations == 6
+    assert (
+        fast.separation_overlap
+        < automatic.separation_overlap
+        < quality.separation_overlap
+    )
 
 
 @pytest.mark.parametrize(

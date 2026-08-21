@@ -52,7 +52,7 @@ def resolve_processing_profile(
     runtime = plan or get_runtime_plan()
     batch_size = _adaptive_batch_size(runtime)
     if selected == "fast":
-        return ProcessingProfile(selected, 1.0526315789473684, batch_size, 2)
+        return ProcessingProfile(selected, 1.0526315789473684, batch_size, 1)
     if selected == "quality":
-        return ProcessingProfile(selected, 2, min(batch_size, 4), 5)
-    return ProcessingProfile(selected, 1.0526315789473684, batch_size, 3)
+        return ProcessingProfile(selected, 4, min(batch_size, 4), 6)
+    return ProcessingProfile(selected, 2, batch_size, 3)

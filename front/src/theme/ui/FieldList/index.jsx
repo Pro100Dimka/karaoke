@@ -1,4 +1,4 @@
-import FieldInput from "./field-input";
+import FieldInput from "../FieldInput";
 
 export default function FieldList({ fields, values, onChange, onBlur, className = "" }) {
   return (

@@ -13,14 +13,12 @@
 
     inline-size: 100%;
     min-inline-size: 0;
-    min-block-size: var(--control-md);
-
-    padding-inline: var(--control-pad-md);
-
-    border: 1px solid var(--ui-border);
-    border-radius: var(--shape-md);
-
-    background: var(--ui-surface);
+    min-block-size: var(--control-size, var(--control-md));
+    padding-inline: var(--control-pad, var(--control-pad-md));
+    border: 0;
+    border-radius: inherit;
+    outline: 0;
+    background: transparent;
     color: var(--ui-text);
 
     box-shadow: none;
@@ -29,15 +27,10 @@
     text-align: start;
   }
 
-  .ui-select-trigger:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--ui-primary) 55%, var(--ui-border));
-  }
-
   .ui-select-trigger:focus-visible,
   .ui-select-trigger[data-open] {
     outline: 0;
-    border-color: var(--ui-focus);
-    box-shadow: var(--focus-shadow);
+    box-shadow: none;
   }
 
   .ui-select-trigger[data-open] .ui-select-chevron {

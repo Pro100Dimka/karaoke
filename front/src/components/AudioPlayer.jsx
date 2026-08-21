@@ -1,7 +1,7 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { IconButton, Stack } from "../theme/ui";
+import { IconButton, RangeInput, Stack } from "../theme/ui";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -9,7 +9,6 @@ import {
   normalizeAudioVolume,
   toggleAudioPlayback
 } from "./audio-player-utils";
-import { RangeInput } from "./fields";
 
 export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const { t } = useI18n();

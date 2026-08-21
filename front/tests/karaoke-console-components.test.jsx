@@ -3,9 +3,14 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { sameDeep, called, calledWith, verify } from "./helpers/assertions.mjs";
 import { passthrough } from "./helpers/mocks.mjs";
-vi.mock("../src/components/fields", () => ({
-  RangeInput: ({ onChange, ...props }) => (
-    <input {...props} type="range" onChange={(e) => onChange(e.target.value)} />
+vi.mock("../src/theme/ui", () => ({
+  RangeInput: ({ onChange, onCommit, ...props }) => (
+    <input
+      {...props}
+      type="range"
+      onChange={(event) => onChange?.(Number(event.target.value))}
+      onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
+    />
   ),
   RotaryKnob: ({ label, value, onChange }) => (
     <label className="karaoke-effect-dial">
@@ -17,9 +22,7 @@ vi.mock("../src/components/fields", () => ({
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
-  )
-}));
-vi.mock("../src/theme/ui", () => ({
+  ),
   Stack: passthrough("div"),
   Grid: passthrough("div"),
   Typography: passthrough("span"),
@@ -34,12 +37,12 @@ vi.mock("../src/theme/ui", () => ({
 vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({
   default: ({ onChange }) => <button data-testid="timeline" onClick={() => onChange(3)} />
 }));
-import RotaryKnob from "../src/components/fields/rotary-knob.jsx";
+import RotaryKnob from "../src/theme/ui/RotaryKnob/index.jsx";
 import {
   getRotaryDragValue,
   getRotaryPointerValue,
   getRotaryWheelValue
-} from "../src/components/fields/rotary-knob-utils.js";
+} from "../src/theme/ui/RotaryKnob/utils.js";
 import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";

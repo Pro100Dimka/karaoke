@@ -5,8 +5,8 @@ import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
 import { normalizeRoomId } from "../services/onlineRoom";
+import { Button, FieldInput } from "../theme/ui";
 import { getErrorMessage } from "../utils/errors";
-import { Button, FieldInput } from "./fields";
 import Modal from "./modal";
 
 export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {

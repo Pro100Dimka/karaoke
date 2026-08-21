@@ -1,9 +1,7 @@
-import { Info } from "lucide-react";
 import { forwardRef, useId } from "react";
-import IconButton from "../IconButton";
 import InputBase from "../InputBase";
 import OutlinedInput from "../OutlinedInput";
-import Tooltip from "../Tooltip";
+import FloatingLabel from "../_internal/FloatingLabel";
 import cx from "../_internal/cx";
 import "./text-field.css";
 
@@ -73,26 +71,8 @@ const TextField = forwardRef(({
 
   if (!hasFrame) return control;
 
-  const labelNode = label && (
-    <span className="ui-text-field-label-row">
-      <label className="ui-text-field-label" htmlFor={controlId}>
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
-      </label>
-      {tooltip && (
-        <Tooltip title={tooltip} placement="top">
-          <IconButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Подробнее"
-            onMouseDown={(event) => event.preventDefault()}
-          >
-            <Info size={14} />
-          </IconButton>
-        </Tooltip>
-      )}
-    </span>
+  const labelNode = (
+    <FloatingLabel id={controlId} label={label} required={required} tooltip={tooltip} />
   );
 
   return (

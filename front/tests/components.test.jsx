@@ -10,10 +10,9 @@ vi.mock("../src/i18n", async (importOriginal) => {
 });
 import { AudioPlayer } from "../src/components/AudioPlayer.jsx";
 import Button from "../src/components/fields/button.jsx";
-import Field, { FieldRow } from "../src/components/fields/field.jsx";
-import FieldInput from "../src/components/fields/field-input.jsx";
-import FieldList from "../src/components/fields/field-list.jsx";
-import RangeInput from "../src/components/fields/range-input.jsx";
+import FieldInput from "../src/theme/ui/FieldInput/index.jsx";
+import FieldList from "../src/theme/ui/FieldList/index.jsx";
+import RangeInput from "../src/theme/ui/RangeInput/index.jsx";
 import Table from "../src/components/Table.jsx";
 import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
 import StatusBadge from "../src/components/ui/StatusBadge.jsx";
@@ -41,29 +40,17 @@ describe("primitive UI components", () => {
         <Button unstyled>Bare</Button>
         <IconButton icon={Icon} label="Icon action" title="Custom" />
         <IconButton icon={Icon} label="Raw icon" unstyled />
-        <Field
-          id="field"
-          label="Label"
-          hint="Hint"
-          error="Error"
-          variant="wide"
-        >
-          <input id="field" />
-        </Field>
-        <Field inline>
-          <input />
-        </Field>
-        <FieldRow className="extra">Row</FieldRow>
       </>
     );
     fireEvent.click(screen.getByText("Save"));
     expect(clicked).toHaveBeenCalledOnce();
-    expect(document.querySelector("#field").closest("label")?.className).toContain(
-      "settings-field--wide"
+    verify(
+      [screen.getByText("Save").className, "toContain", "btn-primary"],
+      [screen.getByText("Raw").className, "toBe", "raw"],
+      [screen.getByText("Bare").getAttribute("class"), "toBeNull"],
+      [screen.getByLabelText("Icon action").title, "toBe", "Custom"],
+      [screen.getByLabelText("Raw icon").getAttribute("class"), "toBeNull"]
     );
-    expect(document.querySelector("#field").closest("label")?.textContent).toContain("Hint");
-    expect(document.querySelector(".settings-toggle input")).not.toBeNull();
-    verify([screen.getByText("Save").className, 'toContain', "btn-primary"], [screen.getByText("Raw").className, 'toBe', "raw"], [screen.getByText("Bare").getAttribute("class"), 'toBeNull'], [screen.getByLabelText("Icon action").title, 'toBe', "Custom"], [screen.getByLabelText("Raw icon").getAttribute("class"), 'toBeNull'], [screen.getByText("Error").className, 'toBe', "field-error"], [screen.getByText("Row").className, 'toContain', "extra"]);
   });
   test("renders statuses and tables", () => {
     const { rerender } = render(<StatusBadge status="done" />);
@@ -73,15 +60,9 @@ describe("primitive UI components", () => {
     rerender(<StatusBadge />);
     expect(screen.getByText("status.unknown")).not.toBeNull();
     rerender(
-      <Table
-        columns={[["name", "Name"]]}
-        data={[]}
-        renderRow={() => []}
-        getRowKey={() => "x"}
-      />
+      <Table columns={[["name", "Name"]]} data={[]} renderRow={() => []} getRowKey={() => "x"} />
     );
-    rerender( <Table columns={[]} data={null} renderRow={() => []} getRowKey={() => 0} />
-    );
+    rerender(<Table columns={[]} data={null} renderRow={() => []} getRowKey={() => 0} />);
     expect(screen.getByText("common.noData")).not.toBeNull();
     rerender(
       <Table
@@ -128,19 +109,30 @@ describe("primitive UI components", () => {
     const card = document.querySelector(".ui-card");
     card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
     fireEvent.pointerMove(card, { clientX: 75, clientY: 25 });
-    same([card.style.getPropertyValue("--card-mx"), "75%"], [card.style.getPropertyValue("--tilt-y"), "2.5deg"]);
+    same(
+      [card.style.getPropertyValue("--card-mx"), "75%"],
+      [card.style.getPropertyValue("--tilt-y"), "2.5deg"]
+    );
     fireEvent.pointerLeave(card);
     expect(card.style.getPropertyValue("--card-mx")).toBe("");
     expect(moved).toHaveBeenCalledOnce();
     expect(left).toHaveBeenCalledOnce();
     expect(document.querySelector(".panel .content")).not.toBeNull();
-    rerender( <Card as="article" variant="neon" tilt={false}> Flat </Card>
+    rerender(
+      <Card as="article" variant="neon" tilt={false}>
+        {" "}
+        Flat{" "}
+      </Card>
     );
     const flat = document.querySelector("article");
     fireEvent.pointerMove(flat, { clientX: 1, clientY: 1 });
     fireEvent.pointerLeave(flat);
     expect(flat.className).toContain("no-tilt");
-    rerender( <Card variant="glass" overlay={<i>Layer</i>}> Plain </Card>
+    rerender(
+      <Card variant="glass" overlay={<i>Layer</i>}>
+        {" "}
+        Plain{" "}
+      </Card>
     );
     fireEvent.pointerMove(document.querySelector(".ui-card"));
     fireEvent.pointerLeave(document.querySelector(".ui-card"));
@@ -221,8 +213,7 @@ describe("field controls", () => {
     fireEvent.blur(select);
     await act(async () => Promise.resolve());
     expect(blur).toHaveBeenLastCalledWith("a");
-    rerender( <FieldInput field={{ name: "bad", type: "missing" }} onChange={change} />
-    );
+    rerender(<FieldInput field={{ name: "bad", type: "missing" }} onChange={change} />);
     expect(document.body.textContent).toBe("");
   });
   test("accepts the default blur handler", () => {
@@ -250,18 +241,13 @@ describe("field controls", () => {
     fireEvent.change(screen.getByLabelText("X"), { target: { value: "b" } });
     fireEvent.blur(screen.getByLabelText("X"));
     expect(change).toHaveBeenCalledWith("x", "b");
-    verify([blur, 'toHaveBeenCalledWith', "x", "a", expect.objectContaining({ name: "x" })]);
+    verify([blur, "toHaveBeenCalledWith", "x", "a", expect.objectContaining({ name: "x" })]);
     rerender(
-      <FieldList
-        fields={[{ name: "y", label: "Y" }]}
-        values={{ y: "c" }}
-        onChange={change}
-      />
+      <FieldList fields={[{ name: "y", label: "Y" }]} values={{ y: "c" }} onChange={change} />
     );
     expect(() => fireEvent.blur(screen.getByLabelText("Y"))).not.toThrow();
     const commit = vi.fn();
-    rerender( <RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />
-    );
+    rerender(<RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />);
     const range = screen.getByLabelText("Range");
     fireEvent.change(range, { target: { value: "2" } });
     fireEvent.pointerUp(range, { target: { value: "2" } });
@@ -274,8 +260,7 @@ describe("field controls", () => {
 });
 describe("AudioPlayer and error boundary", () => {
   test("handles playback, media events, seeking and volume", async () => {
-    render( <AudioPlayer src="one.wav" initialDuration={10} className="extra" />
-    );
+    render(<AudioPlayer src="one.wav" initialDuration={10} className="extra" />);
     const audio = document.querySelector("audio");
     const buttons = screen.getAllByRole("button");
     fireEvent.click(buttons[0]);
@@ -293,7 +278,7 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.click(buttons[1]);
     fireEvent.ended(audio);
     expect(audio.currentTime).toBe(0);
-    verify([document.querySelector(".performance-player").className, 'toContain', "extra"]);
+    verify([document.querySelector(".performance-player").className, "toContain", "extra"]);
   });
   test("ignores browser media property assignment failures", () => {
     render(<AudioPlayer src="one.wav" initialDuration={10} />);
@@ -305,14 +290,14 @@ describe("AudioPlayer and error boundary", () => {
         throw new Error("seek blocked");
       }
     });
-    verify([() => fireEvent.change(sliders[0], { target: { value: "5" } }), 'not.toThrow']);
+    verify([() => fireEvent.change(sliders[0], { target: { value: "5" } }), "not.toThrow"]);
     Object.defineProperty(audio, "volume", {
       configurable: true,
       set: () => {
         throw new Error("volume blocked");
       }
     });
-    verify([() => fireEvent.change(sliders[1], { target: { value: "0.5" } }), 'not.toThrow']);
+    verify([() => fireEvent.change(sliders[1], { target: { value: "0.5" } }), "not.toThrow"]);
   });
   test("keeps zero duration when media metadata is invalid", () => {
     render(<AudioPlayer src="empty.wav" />);
@@ -331,9 +316,17 @@ describe("AudioPlayer and error boundary", () => {
     const Crash = () => {
       throw new Error("boom");
     };
-    render( <ErrorBoundary> <Crash /> </ErrorBoundary>
+    render(
+      <ErrorBoundary>
+        {" "}
+        <Crash />{" "}
+      </ErrorBoundary>
     );
-    verify([screen.getByRole("alert"), 'not.toBeNull'], [screen.getByText("boom"), 'not.toBeNull'], [log, 'toHaveBeenCalled']);
+    verify(
+      [screen.getByRole("alert"), "not.toBeNull"],
+      [screen.getByText("boom"), "not.toBeNull"],
+      [log, "toHaveBeenCalled"]
+    );
     restore();
     fireEvent.click(screen.getByRole("button"));
   });

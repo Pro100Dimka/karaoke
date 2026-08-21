@@ -1,6 +1,7 @@
 import { MoveHorizontal, MoveVertical } from "lucide-react";
 import PianoKeyboard, { isBlackPianoKey } from "../../components/piano-keyboard";
 import { translateSaved } from "../../i18n/runtime";
+import { RangeInput } from "../../theme/ui";
 import { clamp, noteName } from "./melody-editor-state";
 
 const thumbSize = (viewport, content) => Math.max(7, (viewport / Math.max(1, content)) * 100);
@@ -152,14 +153,13 @@ function ZoomControl({ axis, setZoom, value }) {
       }
     >
       {horizontal ? <MoveHorizontal size={12} /> : <MoveVertical size={12} />}
-      <input
+      <RangeInput
         id={id}
-        type="range"
         min={horizontal ? 36 : 10}
         max={horizontal ? 600 : 36}
         step="1"
         value={value}
-        onChange={(event) => setZoom(Number(event.target.value))}
+        onChange={setZoom}
       />
     </label>
   );

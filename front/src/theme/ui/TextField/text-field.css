@@ -91,6 +91,7 @@
   }
 
   .ui-text-field:focus-within .ui-text-field-label-row,
+  .ui-text-field[data-filled] .ui-text-field-label-row,
   .ui-text-field:has(.ui-text-field-input:not(:placeholder-shown)) .ui-text-field-label-row {
     inset-block-start: 0;
     color: var(--gradient-primary);
@@ -98,6 +99,7 @@
   }
 
   .ui-text-field:focus-within .ui-text-field-outline legend,
+  .ui-text-field[data-filled] .ui-text-field-outline legend,
   .ui-text-field:has(.ui-text-field-input:not(:placeholder-shown)) .ui-text-field-outline legend {
     max-inline-size: 100%;
   }

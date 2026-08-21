@@ -44,7 +44,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   expect(view.container.querySelectorAll(".library-add-song-field > .ui-text-field")).toHaveLength(
     2
   );
-  expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(2);
+  expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(3);
   expect(view.getByText(/Авто ·/)).not.toBeNull();
   const title = view.getByDisplayValue("Track");
   const artist = view.getByDisplayValue("Artist");

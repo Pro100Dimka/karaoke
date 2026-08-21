@@ -1,6 +1,6 @@
 import { useId } from "react";
-import { RangeInput } from "../../../components/fields";
 import { translateSaved } from "../../../i18n/runtime";
+import { RangeInput } from "../../../theme/ui";
 import { getSeekTime, getTimelineProgress } from "../utils/timeline";
 
 const BAR_COUNT = 220;

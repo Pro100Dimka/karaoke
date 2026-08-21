@@ -1,6 +1,6 @@
 import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useI18n } from "../i18n";
-import { IconButton } from "../theme/ui";
+import { IconButton, RangeInput } from "../theme/ui";
 
 const SPEAKING_THRESHOLDS = [0.18, 0.38, 0.6, 0.82];
 
@@ -105,14 +105,13 @@ export default function OnlineRoomParticipant({
                 className="online-room-person-volume"
                 title={t("room.person.volume", { name: person.name })}
               >
-                <input
-                  type="range"
+                <RangeInput
                   min="0"
                   max="1"
                   step="0.05"
                   value={participantVolume}
                   aria-label={t("room.person.volume", { name: person.name })}
-                  onChange={(event) => onSetParticipantVolume(person.id, event.target.value)}
+                  onChange={(value) => onSetParticipantVolume(person.id, value)}
                 />
                 <span>{Math.round(participantVolume * 100)}%</span>
               </div>

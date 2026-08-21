@@ -8,9 +8,21 @@ import {
 describe("song processing modes", () => {
   test("exposes every supported mode with a distinct user-facing label", () => {
     expect(getProcessingModeOptions()).toEqual([
-      { value: "auto", label: "Авто · быстро для этого компьютера" },
-      { value: "fast", label: "Быстрый · минимальное время" },
-      { value: "quality", label: "Качество · точнее разделение" }
+      {
+        value: "auto",
+        label: "Авто · баланс",
+        description: "Средняя скорость и качество с учётом вашего железа"
+      },
+      {
+        value: "fast",
+        label: "Быстрый · минимальное время",
+        description: "Минимальный overlap и один проход очистки вокала"
+      },
+      {
+        value: "quality",
+        label: "Качество · точное разделение",
+        description: "Четырёхкратный overlap и усиленная очистка вокала"
+      }
     ]);
   });
 

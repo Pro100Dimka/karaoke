@@ -10,8 +10,9 @@ import { createPortal } from "react-dom";
 
 import Button from "../Button";
 import InputBase from "../InputBase";
+import OutlinedInput from "../OutlinedInput";
 import Popover from "../Popover";
-import Field from "../_internal/Field";
+import FloatingLabel from "../_internal/FloatingLabel";
 import cx from "../_internal/cx";
 import mergeRefs from "../_internal/mergeRefs";
 import { optionItem } from "../_internal/option";
@@ -65,7 +66,10 @@ const Select = forwardRef(
       (item) => String(item.value) === String(current)
     );
 
-    const listboxId = `${id || `ui-select-${uid}`}-listbox`;
+    const controlId = id || `ui-select-${uid}`;
+    const listboxId = `${controlId}-listbox`;
+    const hintId = hint ? `${controlId}-hint` : undefined;
+    const errorId = error ? `${controlId}-error` : undefined;
 
     const updatePosition = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
@@ -150,24 +154,39 @@ const Select = forwardRef(
       const { id: controlId, ...ariaProps } = fieldProps;
 
       return (
-        <div
-          className={cx("ui-select-root", className)}
-          style={mergeSx(sx, style)}
-        >
-          <InputBase
-            component={Button}
-            ref={mergeRefs(triggerRef, ref)}
-            id={controlId}
-            type="button"
-            variant="outline"
-            className="ui-select-trigger"
-            data-open={open || undefined}
+        <div className="ui-select-root">
+          <OutlinedInput
+            label={label}
+            labelNode={
+              <FloatingLabel
+                id={controlId}
+                label={label}
+                required={required}
+                tooltip={tooltip}
+              />
+            }
+            required={required}
             disabled={disabled}
-            aria-haspopup="listbox"
-            aria-expanded={open}
-            aria-controls={open ? listboxId : undefined}
-            onClick={toggle}
-            onKeyDown={(event) => {
+            error={!!error}
+            className={cx("ui-select-field", className)}
+            data-filled={Boolean(selected) || undefined}
+            sx={sx}
+            style={style}
+          >
+            <InputBase
+              component={Button}
+              ref={mergeRefs(triggerRef, ref)}
+              id={controlId}
+              type="button"
+              variant="ghost"
+              className="ui-select-trigger ui-text-field-input"
+              data-open={open || undefined}
+              disabled={disabled}
+              aria-haspopup="listbox"
+              aria-expanded={open}
+              aria-controls={open ? listboxId : undefined}
+              onClick={toggle}
+              onKeyDown={(event) => {
               if (disabled) return;
 
               if (
@@ -185,15 +204,15 @@ const Select = forwardRef(
               } else if (event.key === "Escape") {
                 close();
               }
-            }}
-            {...ariaProps}
-            {...props}
-          >
-            {startIcon && (
-              <span className="ui-select-start-icon" aria-hidden="true">
-                {startIcon}
-              </span>
-            )}
+              }}
+              {...ariaProps}
+              {...props}
+            >
+              {startIcon && (
+                <span className="ui-select-start-icon" aria-hidden="true">
+                  {startIcon}
+                </span>
+              )}
 
             <span
               className="ui-select-value"
@@ -211,7 +230,8 @@ const Select = forwardRef(
 
               <ChevronDown className="ui-select-chevron" size={16} />
             </span>
-          </InputBase>
+            </InputBase>
+          </OutlinedInput>
 
           {open &&
             position &&
@@ -316,23 +336,23 @@ const Select = forwardRef(
       );
     };
 
-    return label || hint || error ? (
-      <Field
-        id={id}
-        label={label}
-        tooltip={tooltip}
-        hint={hint}
-        error={error}
-        required={required}
-        disabled={disabled}
-        className={fieldClassName}
-        sx={fieldSx}
-        style={fieldStyle}
+    const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
+    const rendered = control({ id: controlId, "aria-describedby": describedBy });
+    if (!label && !hint && !error) return rendered;
+    return (
+      <div
+        className={cx("ui-field", fieldClassName)}
+        data-disabled={disabled || undefined}
+        data-error={!!error || undefined}
+        style={mergeSx(fieldSx, fieldStyle)}
       >
-        {control}
-      </Field>
-    ) : (
-      control({ id })
+        {rendered}
+        {error ? (
+          <small id={errorId} className="ui-field-message" data-error>{error}</small>
+        ) : hint ? (
+          <small id={hintId} className="ui-field-message">{hint}</small>
+        ) : null}
+      </div>
     );
   }
 );

@@ -1,10 +1,9 @@
 import { Music2, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toggleAudioPlayback } from "../../../components/audio-player-utils";
-import { FieldInput } from "../../../components/fields";
 import Modal from "../../../components/modal";
 import { translateSaved } from "../../../i18n/runtime";
-import { Stack } from "../../../theme/ui";
+import { FieldInput, Stack } from "../../../theme/ui";
 import { getProcessingModeOptions } from "../processing-modes";
 
 export function SelectedFilePreview({ file }) {
@@ -108,7 +107,7 @@ export default function AddSongsModal({ review, onCancel, onConfirm, onUpdate })
               type: "select",
               label: translateSaved("Режим обработки"),
               hint: translateSaved(
-                "Авто подбирает быстрые настройки по процессору, видеокарте и памяти"
+                "Режимы действительно меняют объём вычислений; авто выбирает сбалансированный профиль"
               ),
               options: getProcessingModeOptions(),
               wrapperClassName: "library-add-song-mode"

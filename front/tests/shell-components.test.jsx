@@ -93,7 +93,7 @@ describe("application shell", () => {
     fireEvent.change(container.querySelector(".app-radio-volume input"), {
       target: { value: "0.7" }
     });
-    expect(mocks.radio.setVolume).toHaveBeenCalledWith("0.7");
+    expect(mocks.radio.setVolume).toHaveBeenCalledWith(0.7);
     fireEvent.click(getByTestId("route-settings"));
     await waitFor(() => expect(getByTestId("settings")).not.toBeNull());
     fireEvent.click(getByTestId("settings"));
