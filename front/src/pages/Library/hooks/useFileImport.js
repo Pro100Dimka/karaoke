@@ -2,11 +2,11 @@ import { useCallback, useState } from "react";
 import { api } from "../../../api/client";
 import { isAmbiguousTransportError } from "../../../api/core";
 import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 import { DEFAULT_PROCESSING_MODE, normalizeProcessingMode } from "../processing-modes";
 
-function suggestedIdentity(file, detected = {}) {
+export const suggestedIdentity = (file, metadata = {}) => {
   const stem = file.name
     .replace(/\.[^.]+$/, "")
     .replace(/\s*\(\d+\)\s*$/, "")
@@ -14,55 +14,46 @@ function suggestedIdentity(file, detected = {}) {
   const parts = stem.split(/\s+[-–—]\s+/, 2).map((part) => part.trim());
   return {
     file,
-    coverUrl: detected.cover_data_url || "",
-    artist: detected.artist || (parts.length === 2 ? parts[0] : ""),
-    title: detected.title || (parts.length === 2 ? parts[1] : stem),
+    coverUrl: metadata.cover_data_url || "",
+    artist: metadata.artist || (parts.length === 2 ? parts[0] : ""),
+    title: metadata.title || (parts.length === 2 ? parts[1] : stem),
     processingMode: DEFAULT_PROCESSING_MODE
   };
-}
+};
 
 export default function useLibraryFileImport({ fileInputRef, notify, onStarted }) {
   const { pending, run } = useExclusiveAsyncAction();
   const [review, setReview] = useState(null);
-
-  const openFilePicker = useCallback(() => {
-    if (!pending && !review) fileInputRef.current?.click();
-  }, [fileInputRef, pending, review]);
-
-  const processApproved = useCallback(
-    (approved) =>
+  const process = useCallback(
+    (items) =>
       run(async () => {
-        for (const item of approved) {
+        for (const item of items) {
           let song;
           try {
             song = await api.addSong(item.file, item.title, item.artist);
-          } catch (error) {
-            await notify(
-              translateSaved("Не удалось добавить песню: {0}", {
-                0: `${item.file.name}: ${getErrorMessage(error)}`
-              })
-            );
-            continue;
-          }
-          try {
             await api.processSong(song.id, normalizeProcessingMode(item.processingMode));
             onStarted(song);
           } catch (error) {
-            if (isAmbiguousTransportError(error)) {
+            if (song && isAmbiguousTransportError(error)) {
               onStarted(song);
               await notify(
-                translateSaved("Песня добавлена, но backend не подтвердил запуск обработки: {0}", {
+                tr("Песня добавлена, но backend не подтвердил запуск обработки: {0}", {
                   0: getErrorMessage(error)
                 })
               );
-              continue;
+            } else {
+              if (song) await api.deleteSong(song.id).catch(() => {});
+              await notify(
+                tr(
+                  song
+                    ? "Не удалось запустить обработку песни: {0}"
+                    : "Не удалось добавить песню: {0}",
+                  {
+                    0: `${item.file.name}: ${getErrorMessage(error)}`
+                  }
+                )
+              );
             }
-            await api.deleteSong(song.id).catch(() => {});
-            await notify(
-              translateSaved("Не удалось запустить обработку песни: {0}", {
-                0: `${item.file.name}: ${getErrorMessage(error)}`
-              })
-            );
           }
         }
       }),
@@ -70,35 +61,33 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
   );
 
   const advance = useCallback(
-    (approved) => {
+    (approved) =>
       setReview((current) => {
         if (!current) return null;
         const index = current.index + 1;
         if (index < current.items.length) return { ...current, index, approved };
-        queueMicrotask(() => processApproved(approved));
+        queueMicrotask(() => process(approved));
         return null;
-      });
-    },
-    [processApproved]
+      }),
+    [process]
   );
 
   const importFile = useCallback(
     (event) => {
       const input = event.currentTarget;
-      const files = Array.from(input.files || []);
+      const files = [...(input.files || [])];
       input.value = "";
       if (!files.length) return undefined;
       return run(async () => {
         const items = [];
         for (const file of files) {
-          let detected = {};
+          let metadata = {};
           try {
-            detected = await api.inspectSongIdentity(file);
+            metadata = await api.inspectSongIdentity(file);
           } catch {
-            // A missing/corrupt tag must not block a valid audio import. The
-            // same filename parser remains the deterministic fallback.
+            /* filename fallback */
           }
-          items.push(suggestedIdentity(file, detected));
+          items.push(suggestedIdentity(file, metadata));
         }
         setReview({ items, index: 0, approved: [] });
       });
@@ -106,36 +95,38 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
     [run]
   );
 
-  const updateDraft = useCallback((patch) => {
-    setReview((current) => {
-      if (!current) return null;
-      const items = [...current.items];
-      items[current.index] = { ...items[current.index], ...patch };
-      return { ...current, items };
-    });
-  }, []);
+  const updateDraft = useCallback(
+    (patch) =>
+      setReview((current) => {
+        if (!current) return null;
+        const items = current.items.map((item, index) =>
+          index === current.index ? { ...item, ...patch } : item
+        );
+        return { ...current, items };
+      }),
+    []
+  );
 
   const confirmDraft = useCallback(() => {
-    if (!review) return;
-    const current = review.items[review.index];
-    if (!current.title.trim()) return;
+    const item = review?.items[review.index];
+    if (!item?.title.trim()) return;
     advance([
       ...review.approved,
-      { ...current, title: current.title.trim(), artist: current.artist.trim() }
+      {
+        ...item,
+        title: item.title.trim(),
+        artist: item.artist.trim()
+      }
     ]);
   }, [advance, review]);
 
-  const cancelDraft = useCallback(() => {
-    if (review) advance(review.approved);
-  }, [advance, review]);
-
   return {
-    cancelDraft,
-    confirmDraft,
-    importFile,
-    importing: pending || Boolean(review),
-    openFilePicker,
     review,
-    updateDraft
+    importing: pending || Boolean(review),
+    importFile,
+    updateDraft,
+    confirmDraft,
+    cancelDraft: () => review && advance(review.approved),
+    openFilePicker: () => !pending && !review && fileInputRef.current?.click()
   };
 }

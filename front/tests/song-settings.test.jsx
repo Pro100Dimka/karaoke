@@ -26,12 +26,12 @@ vi.mock("../src/components/modal", () => ({
   )
 }));
 vi.mock("../src/components/fields/button", () => ({
-  default: ({ children, icon: _icon, ...props }) => (
-    <button {...props}>{children}</button>
-  )
+  default: ({ children, icon: _icon, ...props }) => <button {...props}>{children}</button>
 }));
 vi.mock("../src/theme/ui", () => ({
+  Button: ({ children, startIcon: _icon, ...props }) => <button {...props}>{children}</button>,
   Stack: passthrough("div"),
+  Typography: passthrough("p"),
   NumberField: ({ value, onChange, placeholder }) => (
     <input
       aria-label={placeholder}
@@ -39,18 +39,18 @@ vi.mock("../src/theme/ui", () => ({
       onChange={(event) => onChange(event.target.value)}
     />
   ),
-  ConfigForm: ({ context, renderers }) => (
+  ConfigForm: ({ context, fields }) => (
     <div data-testid="form">
       <input
         aria-label="title"
         value={context.form.title}
         onChange={(event) => context.onChange("title", event.target.value)}
       />
-      {renderers.noteRange({ field: { label: "Range" }, context })}
+      {fields.find(({ name }) => name === "note_range").render({ context })}
     </div>
   )
 }));
-import SongSettings from "../src/pages/Library/modals/song-settings/index.jsx";
+import SongSettings from "../src/pages/Library/song-settings.jsx";
 const song = {
   id: "song",
   title: "Title",
@@ -79,11 +79,15 @@ describe("song settings", () => {
     fireEvent.change(numericFields[1], { target: { value: "72" } });
     fireEvent.change(numericFields[0], { target: { value: "" } });
     fireEvent.change(numericFields[0], { target: { value: "48" } });
-    const save = result.container.querySelector(".modal-title-action");
+    const save = result.getByRole("button", { name: /Сохранить|Зберегти/ });
     fireEvent.click(save);
     await waitFor(() => expect(mocks.updateSong).toHaveBeenCalled());
     expect(mocks.updateSong.mock.calls[0][0]).toBe("song");
-    verify([mocks.updateSong.mock.calls[0][1], 'toMatchObject', { title: "New title", note_range_min: 48, note_range_max: 72 }]);
+    verify([
+      mocks.updateSong.mock.calls[0][1],
+      "toMatchObject",
+      { title: "New title", note_range_min: 48, note_range_max: 72 }
+    ]);
     expect(mocks.refresh).toHaveBeenCalled();
   });
   test("opens melody editor after closing settings", async () => {
@@ -91,11 +95,10 @@ describe("song settings", () => {
     const result = render(<SongSettings songId="song" onClose={close} />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
     const editor = [...result.container.querySelectorAll("button")].find(
-      (button) =>
-        button !== result.container.querySelector(".modal-title-action")
+      (button) => button !== result.getByRole("button", { name: /Сохранить|Зберегти/ })
     );
     fireEvent.click(editor);
-    verify([close, 'toHaveBeenCalled'], [mocks.navigate, 'toHaveBeenCalledWith', "/editor/song"]);
+    verify([close, "toHaveBeenCalled"], [mocks.navigate, "toHaveBeenCalledWith", "/editor/song"]);
   });
   test("renders loading, missing and request-error states", () => {
     mocks.poll = { data: null, error: null };
@@ -104,7 +107,7 @@ describe("song settings", () => {
     cleanup();
     mocks.poll = { data: [], error: null };
     const missing = render(<SongSettings songId="song" />);
-    expect(missing.container.querySelector(".field-error")).not.toBeNull();
+    expect(missing.getByRole("alert")).not.toBeNull();
     cleanup();
     mocks.poll = { data: null, error: new Error("offline") };
     const failed = render(<SongSettings songId="song" />);
@@ -116,26 +119,25 @@ describe("song settings", () => {
     const result = render(<SongSettings songId="song" />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
     fireEvent.change(result.getByLabelText("title"), { target: { value: "" } });
-    fireEvent.click(result.container.querySelector(".modal-title-action"));
+    fireEvent.click(result.getByRole("button", { name: /Сохранить|Зберегти/ }));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
     mocks.updateSong.mockRejectedValueOnce(new Error("save failed"));
     fireEvent.change(result.getByLabelText("title"), { target: { value: "Valid" } });
-    fireEvent.click(result.container.querySelector(".modal-title-action"));
-    await waitFor(() => expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed")
-    );
+    fireEvent.click(result.getByRole("button", { name: /Сохранить|Зберегти/ }));
+    await waitFor(() => expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed"));
   });
   test("accepts a successful save without a response payload", async () => {
     mocks.poll = { data: [{ ...song, note_range_max: null }], error: null };
     mocks.updateSong.mockResolvedValueOnce(null);
     const result = render(<SongSettings songId="song" />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
-    fireEvent.click(result.container.querySelector(".modal-title-action"));
+    fireEvent.click(result.getByRole("button", { name: /Сохранить|Зберегти/ }));
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
   });
   test("tracks a song appearing after the polling result changes", async () => {
     mocks.poll = { data: [], error: null };
     const result = render(<SongSettings songId="song" />);
-    expect(result.container.querySelector(".field-error")).not.toBeNull();
+    expect(result.getByRole("alert")).not.toBeNull();
     mocks.poll = { data: [song], error: null };
     await act(() => result.rerender(<SongSettings songId="song" />));
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());

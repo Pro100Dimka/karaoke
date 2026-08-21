@@ -1,5 +1,6 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --app-icon-image: url("../assets/icons/dark.png");
 
   --color-bg: #050001;
   --color-bg-deep: #000000;
@@ -225,6 +226,7 @@
 }
 
 :root[data-theme="light"] {
+  --app-icon-image: url("../assets/icons/light.png");
   color-scheme: light;
 
   --color-bg: #fffaf7;
@@ -437,6 +439,7 @@
 }
 
 :root[data-theme="green"] {
+  --app-icon-image: url("../assets/icons/green.png");
   color-scheme: dark;
 
   --color-bg: #020904;
@@ -599,6 +602,7 @@
 }
 
 :root[data-theme="violet"] {
+  --app-icon-image: url("../assets/icons/violet.png");
   color-scheme: dark;
 
   --color-bg: #06020f;

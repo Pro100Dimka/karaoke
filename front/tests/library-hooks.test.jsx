@@ -304,7 +304,7 @@ describe("library song actions", () => {
     await act(() => hook.result.current.processSong(null));
     await act(() => hook.result.current.reprocessSong(null));
     notCalled(api.processSong, api.reprocessMelody);
-    expect(props.confirmDialog).toHaveBeenCalledTimes(3);
+    expect(props.confirmDialog).toHaveBeenCalledTimes(2);
     verify([
       props.confirmDialog,
       "toHaveBeenLastCalledWith",

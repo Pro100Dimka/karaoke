@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import AddSongsModal, { SelectedFilePreview } from "../src/pages/Library/modals/add-songs.jsx";
+import { AddSongsModal, SelectedFilePreview } from "../src/pages/Library/modals.jsx";
 
 beforeEach(() => {
   URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
@@ -37,19 +37,16 @@ test("song confirmation presents metadata in a compact two-field layout", async 
     />
   );
 
-  expect(view.container.querySelector(".library-add-song-fields")).not.toBeNull();
+  expect(view.getAllByRole("textbox")).toHaveLength(2);
   expect(view.container.querySelector(".modal-title__image")?.src).toContain(
     "data:image/png;base64,cover"
-  );
-  expect(view.container.querySelectorAll(".library-add-song-field > .ui-text-field")).toHaveLength(
-    2
   );
   expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(3);
   expect(view.getByText(/Авто ·/)).not.toBeNull();
   const title = view.getByDisplayValue("Track");
   const artist = view.getByDisplayValue("Artist");
-  const preview = view.container.querySelector(".library-add-song-file-icon");
-  const audio = view.container.querySelector(".library-add-song-file audio");
+  const preview = view.getByRole("button", { name: /Прослушать|Прослухати/ });
+  const audio = view.container.querySelector("audio");
   expect(preview.disabled).toBe(false);
   expect(preview.getAttribute("aria-label")).toMatch(/Прослушать|Прослухати/);
   expect(audio.src).toContain("blob:Artist - Track.flac");

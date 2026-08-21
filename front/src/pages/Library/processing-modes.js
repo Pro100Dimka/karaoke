@@ -1,28 +1,18 @@
-import { translateSaved } from "../../i18n/runtime";
+import { translateSaved as tr } from "../../i18n/runtime";
 
 export const DEFAULT_PROCESSING_MODE = "auto";
-const PROCESSING_MODES = new Set(["auto", "fast", "quality"]);
+const MODES = new Set([DEFAULT_PROCESSING_MODE, "fast", "quality"]);
 
-export function normalizeProcessingMode(value) {
-  return PROCESSING_MODES.has(value) ? value : DEFAULT_PROCESSING_MODE;
-}
+export const normalizeProcessingMode = (value) =>
+  MODES.has(value) ? value : DEFAULT_PROCESSING_MODE;
 
-export function getProcessingModeOptions() {
-  return [
-    {
-      value: "auto",
-      label: translateSaved("Авто · баланс"),
-      description: translateSaved("Средняя скорость и качество с учётом вашего железа")
-    },
-    {
-      value: "fast",
-      label: translateSaved("Быстрый · минимальное время"),
-      description: translateSaved("Минимальный overlap и один проход очистки вокала")
-    },
-    {
-      value: "quality",
-      label: translateSaved("Качество · точное разделение"),
-      description: translateSaved("Четырёхкратный overlap и усиленная очистка вокала")
-    }
-  ];
-}
+export const getProcessingModeOptions = () =>
+  [
+    ["auto", "Авто · баланс", "Средняя скорость и качество с учётом вашего железа"],
+    ["fast", "Быстрый · минимальное время", "Минимальный overlap и один проход очистки вокала"],
+    ["quality", "Качество · точное разделение", "Четырёхкратный overlap и усиленная очистка вокала"]
+  ].map(([value, label, description]) => ({
+    value,
+    label: tr(label),
+    description: tr(description)
+  }));

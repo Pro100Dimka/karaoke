@@ -3,22 +3,10 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { called, same, verify } from "./helpers/assertions.mjs";
-import { passthrough } from "./helpers/mocks.mjs";
 
 const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: false }));
-vi.mock("../src/contexts/radio", () => ({ useRadio: () => ({ isPlaying: mocks.isPlaying }) }));
 vi.mock("../src/hooks/useAppSettings", () => ({
   default: () => (mocks.noSettings ? null : { settings: { theme: mocks.theme } })
-}));
-vi.mock("../src/theme/ui", () => ({
-  Box: passthrough("div"),
-  Stack: passthrough("div"),
-  Typography: passthrough("span"),
-  Card: ({ as: Comp = "div", children, cardPanel: _panel, cardContent: _content, ...props }) => (
-    <Comp {...props}>{children}</Comp>
-  ),
-  Button: passthrough("button"),
-  IconButton: passthrough("button")
 }));
 vi.mock("../src/components/ui/StatusBadge", () => ({
   default: ({ status }) => <span data-testid="status">{status}</span>
@@ -59,14 +47,17 @@ vi.mock("../src/api/client", () => ({
     getSongCoverUrl: (id) => `cover/${id}`
   }
 }));
-import LibraryActions from "../src/pages/Library/components/hero/actions.jsx";
-import LibraryHero from "../src/pages/Library/components/hero/hero.jsx";
-import ProcessingSignal from "../src/pages/Library/components/song-card/processing-signal.jsx";
-import SongCardArtwork from "../src/pages/Library/components/song-card/song-card-artwork.jsx";
-import ProcessingModal, {
-  getProcessingFailureInfo
-} from "../src/pages/Library/modals/processing.jsx";
-import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
+import {
+  LibraryActions,
+  LibraryHero,
+  ProcessingSignal,
+  SongCoverArt
+} from "../src/pages/Library/components.jsx";
+import {
+  getProcessingFailureInfo,
+  ProcessingModal,
+  RecordingsModal
+} from "../src/pages/Library/modals.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
@@ -90,13 +81,11 @@ test("library actions cover search, room, adding and file selection", () => {
       setQuery={setQuery}
     />
   );
-  const { container } = view;
-  fireEvent.change(container.querySelector(".library-search-input"), { target: { value: "song" } });
-  const buttons = container.querySelectorAll("button");
-  fireEvent.click(buttons[0]);
-  fireEvent.click(buttons[1]);
-  fireEvent.change(container.querySelector("input[type=file]"));
-  expect(setQuery).toHaveBeenCalledWith("song");
+  fireEvent.change(view.getByRole("textbox", { name: "Поиск" }), { target: { value: "song" } });
+  fireEvent.click(view.getByRole("button", { name: /Петь вместе|Співати разом/ }));
+  fireEvent.click(view.getByRole("button", { name: /Добавить песню|Додати пісню/ }));
+  fireEvent.change(view.container.querySelector("input[type=file]"));
+  expect(setQuery).toHaveBeenCalledWith("song", expect.any(Object));
   called(onRoom, onAdd, onFile);
   view.rerender(
     <LibraryActions
@@ -109,22 +98,25 @@ test("library actions cover search, room, adding and file selection", () => {
     />
   );
 });
-test("hero and artwork reflect saved theme, counts and radio activity", () => {
+test("hero and cover reflect saved theme and song counts", () => {
   mocks.theme = "unknown";
   mocks.isPlaying = true;
   const { container, getByText } = render(
     <>
       <LibraryHero songCount={3} readyCount={2} />
-      <SongCardArtwork cardIndex={2} />
+      <SongCoverArt song={{ id: "song" }} />
     </>
   );
-  verify([getByText("3"), "not.toBeNull"], [getByText("2"), "not.toBeNull"]);
-  verify([
-    container.querySelector(".library-song-card-art").classList.contains("is-radio-reactive"),
-    "toBe",
-    true
-  ]);
-  verify([container.querySelectorAll(".library-song-card-wave i"), "toHaveLength", 18]);
+  verify(
+    [getByText("3"), "not.toBeNull"],
+    [getByText("2"), "not.toBeNull"],
+    [getByText(/всего песен|всього пісень/i), "not.toBeNull"],
+    [getByText(/готово к караоке|готове до караоке/i), "not.toBeNull"]
+  );
+  expect(container.querySelector('img[src="cover/song"]')).not.toBeNull();
+  fireEvent.error(container.querySelector('img[src="cover/song"]'));
+  expect(container.querySelector('img[src="cover/song"]')).toBeNull();
+  expect(container.querySelector(".lucide-music2")).not.toBeNull();
   mocks.noSettings = true;
   verify([() => render(<LibraryHero songCount={0} readyCount={0} />), "not.toThrow"]);
 });
@@ -139,11 +131,7 @@ test("processing songs keep the active job before the stable queue", () => {
   const done = { id: "done", status: "done" };
   const active = { id: "active", status: "processing" };
   const queuedB = { id: "b", status: "queued" };
-  expect(getProcessingSongs([queuedA, done, active, queuedB])).toEqual([
-    active,
-    queuedA,
-    queuedB
-  ]);
+  expect(getProcessingSongs([queuedA, done, active, queuedB])).toEqual([active, queuedA, queuedB]);
   const cancelling = { id: "cancel", status: "cancelling" };
   expect(getProcessingSongs([queuedA, cancelling, active])).toEqual([active, cancelling, queuedA]);
   expect(getProcessingSongs(null)).toEqual([]);
@@ -244,20 +232,22 @@ test("processing modal carousel changes only the viewed queued song", () => {
     />
   );
   expect(view.getByRole("heading").textContent).toBe("Active");
-  expect(view.getByTestId("status").textContent).toBe("processing");
-  const arrows = view.container.querySelectorAll(".processing-song-carousel button");
-  expect(arrows).toHaveLength(2);
-  expect(arrows[0].disabled).toBe(true);
-  fireEvent.click(arrows[1]);
+  expect(view.container.textContent).toMatch(/Обрабатывается|Обробляється/);
+  const previous = view.getByRole("button", { name: /Предыдущая песня|Попередня пісня/ });
+  const next = view.getByRole("button", { name: /Следующая песня|Наступна пісня/ });
+  expect(previous.disabled).toBe(true);
+  fireEvent.click(next);
   expect(select).toHaveBeenCalledWith(songs[1]);
 });
 test("recordings modal renders empty, error and recording actions", () => {
   const analyze = vi.fn();
   const remove = vi.fn();
   const result = render(<RecordingsModal song={{ title: "Song" }} recordings={[]} />);
-  verify([result.container.querySelector(".song-recordings-empty"), "not.toBeNull"]);
+  expect(result.container.textContent).toMatch(
+    /пока нет записанных|ще немає записаних|немає записаних/
+  );
   result.rerender(<RecordingsModal song={{ title: "Song" }} error={new Error("offline")} />);
-  verify([result.container.querySelector(".field-error").textContent, "toContain", "offline"]);
+  verify([result.getByRole("alert").textContent, "toContain", "offline"]);
   result.rerender(
     <RecordingsModal
       song={{ title: "Song" }}

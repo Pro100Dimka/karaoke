@@ -28,7 +28,7 @@ const Card = forwardRef(
     },
     ref
   ) => {
-    const isNeon = variant === "neon" || variant === "animation";
+    const isNeon = ["neon", "animation", "aurora", "laser"].includes(variant);
     const { handlePointerMove, handlePointerLeave } = useCardTilt({
       isNeon,
       tilt,

@@ -1,39 +1,40 @@
 import { useCallback, useRef } from "react";
 import { api } from "../../../api/client";
 import { isAmbiguousTransportError } from "../../../api/core";
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 
-function getFolderPayload({ output_dir, slug, title, id }) {
-  return { path: output_dir ?? "", slug: slug ?? "", title: title ?? "", id: id ?? "" };
-}
-export default function useLibrarySongActions(props) {
-  const {
-    confirmDialog,
-    notify,
-    onChanged,
-    processingSongId,
-    recordingsSongId,
-    setHiddenSongIds,
-    setProcessingSong,
-    setRecordingsSong
-  } = props;
-  const deletingSongIdsRef = useRef(new Set());
-  const processingSongIdsRef = useRef(new Set());
-  const runProcessingAction = useCallback(
-    async (song, action, errorMessage) => {
-      if (!song?.id || processingSongIdsRef.current.has(song.id)) return;
-      processingSongIdsRef.current.add(song.id);
+const removeFromSet = (setter, id) =>
+  setter((ids) => {
+    const next = new Set(ids);
+    next.delete(id);
+    return next;
+  });
+
+export default function useLibrarySongActions({
+  confirmDialog,
+  notify,
+  onChanged,
+  processingSongId,
+  recordingsSongId,
+  setHiddenSongIds,
+  setProcessingSong,
+  setRecordingsSong
+}) {
+  const busy = useRef({ delete: new Set(), process: new Set() });
+  const process = useCallback(
+    async (song, request, message) => {
+      if (!song?.id || busy.current.process.has(song.id)) return;
+      busy.current.process.add(song.id);
       try {
         try {
-          await action(song.id);
+          await request(song.id);
         } catch (error) {
-          const message = isAmbiguousTransportError(error)
-            ? translateSaved("Backend не подтвердил результат операции: {0}", {
-                0: getErrorMessage(error)
-              })
-            : `${errorMessage}: ${getErrorMessage(error)}`;
-          await notify(message);
+          await notify(
+            isAmbiguousTransportError(error)
+              ? tr("Backend не подтвердил результат операции: {0}", { 0: getErrorMessage(error) })
+              : `${message}: ${getErrorMessage(error)}`
+          );
           if (!isAmbiguousTransportError(error)) return;
         }
         setProcessingSong(song);
@@ -41,32 +42,71 @@ export default function useLibrarySongActions(props) {
           await onChanged?.();
         } catch (error) {
           await notify(
-            translateSaved("Операция выполнена, но список не обновился: {0}", {
+            tr("Операция выполнена, но список не обновился: {0}", {
               0: getErrorMessage(error)
             })
           );
         }
       } finally {
-        processingSongIdsRef.current.delete(song.id);
+        busy.current.process.delete(song.id);
       }
     },
     [notify, onChanged, setProcessingSong]
   );
+
+  const confirmReprocess = useCallback(
+    (song, text) =>
+      confirmDialog(
+        tr(text, { 0: song?.title || tr("Без названия") }),
+        tr("Обработать песню заново?")
+      ),
+    [confirmDialog]
+  );
+
+  const processSong = useCallback(
+    async (song) => {
+      if (!song?.id) return;
+      if (
+        song?.status !== "pending" &&
+        !(await confirmReprocess(
+          song,
+          "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены."
+        ))
+      )
+        return;
+      await process(song, api.processSong, tr("Не удалось запустить обработку"));
+    },
+    [confirmReprocess, process]
+  );
+
+  const reprocessSong = useCallback(
+    async (song) => {
+      if (!song?.id) return;
+      if (
+        !(await confirmReprocess(
+          song,
+          "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы."
+        ))
+      )
+        return;
+      await process(song, api.reprocessMelody, tr("Не удалось переобработать мелодию"));
+    },
+    [confirmReprocess, process]
+  );
+
   const deleteSong = useCallback(
     async (song) => {
-      if (!song?.id || deletingSongIdsRef.current.has(song.id)) return;
-      deletingSongIdsRef.current.add(song.id);
+      if (!song?.id || busy.current.delete.has(song.id)) return;
+      busy.current.delete.add(song.id);
       try {
         let confirmed;
         try {
           confirmed = await confirmDialog(
-            translateSaved("Удалить «{0}»? Это удалит все файлы песни.", { 0: song.title }),
-            translateSaved("Удалить песню?")
+            tr("Удалить «{0}»? Это удалит все файлы песни.", { 0: song.title }),
+            tr("Удалить песню?")
           );
         } catch (error) {
-          await notify(
-            translateSaved("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) })
-          );
+          await notify(tr("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) }));
           return;
         }
         if (!confirmed) return;
@@ -76,43 +116,35 @@ export default function useLibrarySongActions(props) {
         try {
           await api.deleteSong(song.id);
         } catch (error) {
-          if (isAmbiguousTransportError(error)) {
-            await notify(
-              translateSaved("Backend не подтвердил удаление; проверяем состояние: {0}", {
-                0: getErrorMessage(error)
-              })
-            );
-            try {
-              await onChanged?.();
-              setHiddenSongIds((ids) => {
-                const next = new Set(ids);
-                next.delete(song.id);
-                return next;
-              });
-            } catch {
-              /* refresh failure is already reported by state recovery */
-            }
+          if (!isAmbiguousTransportError(error)) {
+            removeFromSet(setHiddenSongIds, song.id);
+            await notify(tr("Не удалось удалить: {0}", { 0: getErrorMessage(error) }));
             return;
           }
-          setHiddenSongIds((ids) => {
-            const next = new Set(ids);
-            next.delete(song.id);
-            return next;
-          });
-          await notify(translateSaved("Не удалось удалить: {0}", { 0: getErrorMessage(error) }));
+          await notify(
+            tr("Backend не подтвердил удаление; проверяем состояние: {0}", {
+              0: getErrorMessage(error)
+            })
+          );
+          try {
+            await onChanged?.();
+            removeFromSet(setHiddenSongIds, song.id);
+          } catch {
+            return;
+          }
           return;
         }
         try {
           await onChanged?.();
         } catch (error) {
           await notify(
-            translateSaved("Песня удалена, но список не обновился: {0}", {
+            tr("Песня удалена, но список не обновился: {0}", {
               0: getErrorMessage(error)
             })
           );
         }
       } finally {
-        deletingSongIdsRef.current.delete(song.id);
+        busy.current.delete.delete(song.id);
       }
     },
     [
@@ -126,64 +158,30 @@ export default function useLibrarySongActions(props) {
       setRecordingsSong
     ]
   );
-  const processSong = useCallback(
-    async (song) => {
-      const status = String(song?.status || "pending").toLowerCase();
-      const isFirstProcessing = status === "pending";
-      if (!isFirstProcessing) {
-        const confirmed = await confirmDialog(
-          translateSaved(
-            "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
-            { 0: song.title || translateSaved("Без названия") }
-          ),
-          translateSaved("Обработать песню заново?")
-        );
-        if (!confirmed) return;
-      }
-      await runProcessingAction(
-        song,
-        api.processSong,
-        translateSaved("Не удалось запустить обработку")
-      );
-    },
-    [confirmDialog, runProcessingAction]
-  );
-  const reprocessSong = useCallback(
-    async (song) => {
-      const confirmed = await confirmDialog(
-        translateSaved(
-          "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
-          { 0: song?.title || translateSaved("Без названия") }
-        ),
-        translateSaved("Обработать песню заново?")
-      );
-      if (!confirmed) return;
-      await runProcessingAction(
-        song,
-        api.reprocessMelody,
-        translateSaved("Не удалось переобработать мелодию")
-      );
-    },
-    [confirmDialog, runProcessingAction]
-  );
+
   const openSongFolder = useCallback(
     async (song) => {
-      const openFolder = window.electronAPI?.openSongFolder;
-      if (!openFolder) {
-        await notify(translateSaved("Открытие папки доступно только в установленном приложении."));
+      if (!globalThis.electronAPI?.openSongFolder) {
+        await notify(tr("Открытие папки доступно только в установленном приложении."));
         return;
       }
       try {
-        const errorMessage = await openFolder(getFolderPayload(song));
-        if (errorMessage) await notify(errorMessage, translateSaved("Не удалось открыть папку"));
+        const error = await globalThis.electronAPI.openSongFolder({
+          path: song.output_dir ?? "",
+          slug: song.slug ?? "",
+          title: song.title ?? "",
+          id: song.id ?? ""
+        });
+        if (error) await notify(error, tr("Не удалось открыть папку"));
       } catch (error) {
         await notify(
-          translateSaved("Не удалось открыть папку: {0}", { 0: getErrorMessage(error) }),
-          translateSaved("Не удалось открыть папку")
+          tr("Не удалось открыть папку: {0}", { 0: getErrorMessage(error) }),
+          tr("Не удалось открыть папку")
         );
       }
     },
     [notify]
   );
+
   return { deleteSong, openSongFolder, processSong, reprocessSong };
 }

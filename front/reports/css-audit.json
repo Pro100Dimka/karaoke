@@ -2,19 +2,19 @@
   "root": ".",
   "summary": {
     "cssFiles": 37,
-    "sourceFiles": 261,
+    "sourceFiles": 248,
     "selectors": 1202,
     "classesDefined": 441,
-    "classesUsed": 259,
-    "unusedClassCandidates": 184,
+    "classesUsed": 233,
+    "unusedClassCandidates": 210,
     "dynamicClassCandidates": 0,
     "duplicateSelectors": 231,
     "repeatedValues": 309,
     "breakpoints": 10,
-    "issues": 931,
+    "issues": 957,
     "errors": 0,
     "warnings": 746,
-    "info": 185
+    "info": 211
   },
   "fileStats": [
     {
@@ -4420,6 +4420,119 @@
       ]
     },
     {
+      "className": "settings-service-screen",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1056,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1056,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen > *"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1092,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1097,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen > :not(.settings-service-back)"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1147,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 21,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        }
+      ]
+    },
+    {
+      "className": "settings-neon-card",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1061,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon .ui-card__glow"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1066,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon .ui-card__glow-mid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1071,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1076,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow-mid"
+        }
+      ]
+    },
+    {
+      "className": "settings-diagnostic-row",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1081,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1085,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1165,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1178,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row:first-child"
+        }
+      ]
+    },
+    {
       "className": "settings-service-back",
       "locations": [
         {
@@ -4428,6 +4541,58 @@
           "column": 1,
           "context": "",
           "selector": ".settings-service-screen > :not(.settings-service-back)"
+        }
+      ]
+    },
+    {
+      "className": "settings-diagnostics-screen",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1101,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-screen"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-screen"
+        }
+      ]
+    },
+    {
+      "className": "settings-diagnostics-grid",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1106,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-grid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1139,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-diagnostics-grid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1160,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-grid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1298,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-diagnostics-grid"
         }
       ]
     },
@@ -4480,6 +4645,152 @@
           "column": 1,
           "context": "",
           "selector": ".settings-table-card .data-table"
+        }
+      ]
+    },
+    {
+      "className": "settings-screen-section",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-screen-section"
+        }
+      ]
+    },
+    {
+      "className": "settings-memory-screen",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-memory-screen"
+        }
+      ]
+    },
+    {
+      "className": "settings-table-screen",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-screen"
+        }
+      ]
+    },
+    {
+      "className": "settings-about-screen",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-screen"
+        }
+      ]
+    },
+    {
+      "className": "settings-version-list",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1183,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-version-list"
+        }
+      ]
+    },
+    {
+      "className": "settings-error-list",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1183,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-error-list"
+        }
+      ]
+    },
+    {
+      "className": "settings-version-row",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1190,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-version-row"
+        }
+      ]
+    },
+    {
+      "className": "settings-error-row",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1190,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-error-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1197,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-error-row"
+        }
+      ]
+    },
+    {
+      "className": "settings-empty-line",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1201,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-empty-line"
+        }
+      ]
+    },
+    {
+      "className": "settings-metric-grid",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1206,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-metric-grid"
+        }
+      ]
+    },
+    {
+      "className": "settings-metric-item",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1211,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-metric-item"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1222,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-metric-item .ui-typography[data-variant=\"h3\"]"
         }
       ]
     },
@@ -4587,6 +4898,134 @@
       ]
     },
     {
+      "className": "settings-memory-actions",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1226,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-memory-actions"
+        }
+      ]
+    },
+    {
+      "className": "settings-optimize-section",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1230,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-optimize-section"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1307,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-optimize-section .ui-grid"
+        }
+      ]
+    },
+    {
+      "className": "settings-table-wrap",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1236,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1245,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1250,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table th"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1255,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table tbody tr"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1259,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table tbody tr:hover"
+        }
+      ]
+    },
+    {
+      "className": "settings-about-icon",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1263,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-icon"
+        }
+      ]
+    },
+    {
+      "className": "settings-about-info",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1281,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-info"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1298,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-about-info"
+        }
+      ]
+    },
+    {
+      "className": "settings-about-info-item",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1287,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-info-item"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1293,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-info-item:nth-child(odd)"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1303,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-about-info-item:nth-child(odd)"
+        }
+      ]
+    },
+    {
       "className": "ui-grid",
       "locations": [
         {
@@ -4649,6 +5088,46 @@
           "column": 3,
           "context": "@media (max-width: 48rem)",
           "selector": ".settings-audio-action"
+        }
+      ]
+    },
+    {
+      "className": "settings-audio-monitor",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1316,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1336,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1345,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor > .ui-stack:first-child"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1350,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor > .ui-stack:first-child svg"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1375,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-audio-monitor"
         }
       ]
     },
@@ -4720,6 +5199,44 @@
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-stack"
+        }
+      ]
+    },
+    {
+      "className": "settings-audio-monitor__level",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1354,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor__level"
+        }
+      ]
+    },
+    {
+      "className": "settings-audio-advanced-toggle",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1359,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-advanced-toggle"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1364,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-advanced-toggle .ui-button"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1370,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-advanced-toggle .ui-button:hover"
         }
       ]
     },
@@ -7307,6 +7824,32 @@
           "column": 1,
           "context": "",
           "selector": ".melody-editor-waveform-only .waveform-timeline"
+        }
+      ]
+    },
+    {
+      "className": "settings-service-link",
+      "locations": [
+        {
+          "file": "src/styles/settings.css",
+          "line": 4,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-link"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 12,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-link span"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 17,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-link b"
         }
       ]
     },
@@ -56216,6 +56759,134 @@
     {
       "rule": "unused-class-candidate",
       "severity": "info",
+      "message": "Класс .settings-service-screen не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1056,
+      "selector": ".settings-service-screen",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1056,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1056,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen > *"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1092,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1097,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen > :not(.settings-service-back)"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1147,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 21,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-screen"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-neon-card не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1061,
+      "selector": ".settings-neon-card",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1061,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon .ui-card__glow"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1066,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon .ui-card__glow-mid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1071,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1076,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow-mid"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-diagnostic-row не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1081,
+      "selector": ".settings-diagnostic-row",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1081,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1085,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1165,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1178,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostic-row:first-child"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
       "message": "Класс .settings-service-back не найден в статическом исходном коде.",
       "file": "src/styles/karaoke-polish.css",
       "line": 1097,
@@ -56227,6 +56898,68 @@
           "column": 1,
           "context": "",
           "selector": ".settings-service-screen > :not(.settings-service-back)"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-diagnostics-screen не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1101,
+      "selector": ".settings-diagnostics-screen",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1101,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-screen"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-screen"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-diagnostics-grid не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1106,
+      "selector": ".settings-diagnostics-grid",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1106,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-grid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1139,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-diagnostics-grid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1160,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-diagnostics-grid"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1298,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-diagnostics-grid"
         }
       ]
     },
@@ -56289,6 +57022,207 @@
           "column": 1,
           "context": "",
           "selector": ".settings-table-card .data-table"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-screen-section не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1152,
+      "selector": ".settings-screen-section",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-screen-section"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-memory-screen не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1152,
+      "selector": ".settings-memory-screen",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-memory-screen"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-table-screen не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1152,
+      "selector": ".settings-table-screen",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-screen"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-about-screen не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1152,
+      "selector": ".settings-about-screen",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1152,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-screen"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-version-list не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1183,
+      "selector": ".settings-version-list",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1183,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-version-list"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-error-list не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1183,
+      "selector": ".settings-error-list",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1183,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-error-list"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-version-row не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1190,
+      "selector": ".settings-version-row",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1190,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-version-row"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-error-row не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1190,
+      "selector": ".settings-error-row",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1190,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-error-row"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1197,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-error-row"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-empty-line не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1201,
+      "selector": ".settings-empty-line",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1201,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-empty-line"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-metric-grid не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1206,
+      "selector": ".settings-metric-grid",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1206,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-metric-grid"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-metric-item не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1211,
+      "selector": ".settings-metric-item",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1211,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-metric-item"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1222,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-metric-item .ui-typography[data-variant=\"h3\"]"
         }
       ]
     },
@@ -56403,6 +57337,164 @@
     {
       "rule": "unused-class-candidate",
       "severity": "info",
+      "message": "Класс .settings-memory-actions не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1226,
+      "selector": ".settings-memory-actions",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1226,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-memory-actions"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-optimize-section не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1230,
+      "selector": ".settings-optimize-section",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1230,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-optimize-section"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1307,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-optimize-section .ui-grid"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-table-wrap не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1236,
+      "selector": ".settings-table-wrap",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1236,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1245,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1250,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table th"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1255,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table tbody tr"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1259,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-table-wrap .data-table tbody tr:hover"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-about-icon не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1263,
+      "selector": ".settings-about-icon",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1263,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-icon"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-about-info не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1281,
+      "selector": ".settings-about-info",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1281,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-info"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1298,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-about-info"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-about-info-item не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1287,
+      "selector": ".settings-about-info-item",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1287,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-info-item"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1293,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-about-info-item:nth-child(odd)"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1303,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-about-info-item:nth-child(odd)"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
       "message": "Класс .ui-grid не найден в статическом исходном коде.",
       "file": "src/styles/karaoke-polish.css",
       "line": 1307,
@@ -56473,6 +57565,51 @@
           "column": 3,
           "context": "@media (max-width: 48rem)",
           "selector": ".settings-audio-action"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-audio-monitor не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1316,
+      "selector": ".settings-audio-monitor",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1316,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1336,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1345,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor > .ui-stack:first-child"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1350,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor > .ui-stack:first-child svg"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1375,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".settings-audio-monitor"
         }
       ]
     },
@@ -56559,6 +57696,54 @@
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-stack"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-audio-monitor__level не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1354,
+      "selector": ".settings-audio-monitor__level",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1354,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-monitor__level"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-audio-advanced-toggle не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-polish.css",
+      "line": 1359,
+      "selector": ".settings-audio-advanced-toggle",
+      "details": [
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1359,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-advanced-toggle"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1364,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-advanced-toggle .ui-button"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1370,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-audio-advanced-toggle .ui-button:hover"
         }
       ]
     },
@@ -59486,6 +60671,37 @@
           "column": 1,
           "context": "",
           "selector": ".melody-editor-waveform-only .waveform-timeline"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .settings-service-link не найден в статическом исходном коде.",
+      "file": "src/styles/settings.css",
+      "line": 4,
+      "selector": ".settings-service-link",
+      "details": [
+        {
+          "file": "src/styles/settings.css",
+          "line": 4,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-link"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 12,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-link span"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 17,
+          "column": 1,
+          "context": "",
+          "selector": ".settings-service-link b"
         }
       ]
     },

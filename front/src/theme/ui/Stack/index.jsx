@@ -24,8 +24,8 @@ export default function Stack({
       style={{
         "--stack-direction": direction,
         "--stack-gap": unit(gap),
-        "--stack-align": align,
-        "--stack-justify": justify,
+        "--stack-align": align ?? "stretch",
+        "--stack-justify": justify ?? "flex-start",
         "--stack-wrap": wrap ? "wrap" : "nowrap",
         ...style
       }}

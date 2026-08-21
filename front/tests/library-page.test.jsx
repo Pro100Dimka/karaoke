@@ -84,45 +84,50 @@ vi.mock("../src/pages/Library/hooks/useRoomSync", () => ({
   }
 }));
 vi.mock("../src/theme/ui", () => ({
+  Box: ({ sx, ...props }) => <div style={sx} {...props} />,
   Stack: passthrough("div"),
   Grid: passthrough("div")
 }));
-vi.mock("../src/pages/Library/components/backdrop", () => ({
-  default: () => <div data-testid="backdrop" />
-}));
-vi.mock("../src/pages/Library/components/hero", () => ({
-  default: (props) => (
+vi.mock("../src/pages/Library/components", () => ({
+  LibraryBackdrop: () => <div data-testid="backdrop" />,
+  LibraryHero: (props) => (
     <div data-testid="hero">
       <span>{props.songCount}</span>
       <button type="button" data-testid="open-room" onClick={props.onOpenRoom} />
     </div>
-  )
-}));
-vi.mock("../src/pages/Library/components/song-card", () => ({
-  default: ({ song, onOpenKaraoke, onOpenProcessing, onOpenRecordings, onOpenSettings }) => (
-    <div data-testid={`song-${song.id}`}>
-      <button type="button" data-testid="karaoke" onClick={() => onOpenKaraoke(song)} />
-      <button type="button" data-testid="processing" onClick={() => onOpenProcessing(song)} />
-      <button type="button" data-testid="recordings" onClick={() => onOpenRecordings(song)} />
-      <button type="button" data-testid="song-settings" onClick={() => onOpenSettings(song.id)} />
-    </div>
-  )
+  ),
+  LibraryResults: ({ error, songs, children }) =>
+    error ? (
+      <p role="alert">{error.message}</p>
+    ) : songs.length ? (
+      children
+    ) : (
+      <p data-testid="empty-library">empty</p>
+    ),
+  SongGrid: ({ songs, onOpenKaraoke, onOpenProcessing, onOpenRecordings, onOpenSettings }) =>
+    songs.map((song) => (
+      <div key={song.id} data-testid={`song-${song.id}`}>
+        <button type="button" data-testid="karaoke" onClick={() => onOpenKaraoke(song)} />
+        <button type="button" data-testid="processing" onClick={() => onOpenProcessing(song)} />
+        <button type="button" data-testid="recordings" onClick={() => onOpenRecordings(song)} />
+        <button type="button" data-testid="song-settings" onClick={() => onOpenSettings(song.id)} />
+      </div>
+    ))
 }));
 vi.mock("../src/components/OnlineRoomModal", () => ({
   OnlineRoomModal: ({ onClose }) => <button data-testid="room-modal" onClick={onClose} />
 }));
-vi.mock("../src/pages/Library/modals/processing", () => ({
-  default: ({ song, onCancel, onClose, onOpenKaraoke }) =>
+vi.mock("../src/pages/Library/modals", () => ({
+  AddSongsModal: () => null,
+  ProcessingModal: ({ song, onCancel, onClose, onOpenKaraoke }) =>
     song ? (
       <div data-testid="processing-modal">
         <button data-testid="cancel-processing" onClick={onCancel} />
         <button data-testid="close-processing" onClick={onClose} />
         <button data-testid="open-processed" onClick={() => onOpenKaraoke(song.id)} />
       </div>
-    ) : null
-}));
-vi.mock("../src/pages/Library/modals/recordings", () => ({
-  default: ({ song, onAnalyze, onDelete, onClose }) =>
+    ) : null,
+  RecordingsModal: ({ song, onAnalyze, onDelete, onClose }) =>
     song ? (
       <div data-testid="recordings-modal">
         <button data-testid="analyze" onClick={() => onAnalyze({ id: "rec" })} />
@@ -131,7 +136,7 @@ vi.mock("../src/pages/Library/modals/recordings", () => ({
       </div>
     ) : null
 }));
-vi.mock("../src/pages/Library/modals/song-settings", () => ({
+vi.mock("../src/pages/Library/song-settings", () => ({
   default: ({ songId, onClose }) => (
     <button data-testid="song-settings-modal" onClick={onClose}>
       {songId}
@@ -272,21 +277,17 @@ describe("library page", () => {
     mocks.polls = [{ data: [], error: new Error("offline") }, { data: [] }, { data: null }];
     mocks.pollIndex = 0;
     const result = render(<Library />);
-    verify([result.container.querySelector(".field-error").textContent, "toContain", "offline"]);
+    verify([result.getByRole("alert").textContent, "toContain", "offline"]);
     expect(result.getByTestId("analysis")).not.toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(120));
-    verify([
-      result.container.querySelector(".library-route-blackout").classList.contains("is-visible"),
-      "toBe",
-      false
-    ]);
+    verify([result.container.querySelector('[aria-hidden="true"]').style.opacity, "toBe", "0"]);
     cleanup();
     vi.useRealTimers();
     mocks.location = { state: null };
     mocks.polls = [{ data: [] }, { data: [] }, { data: null }];
     mocks.pollIndex = 0;
     const empty = render(<Library />);
-    expect(empty.container.querySelector(".library-card-empty")).not.toBeNull();
+    expect(empty.getByTestId("empty-library")).not.toBeNull();
   });
   test("connects import and action hooks to page state", async () => {
     const result = render(<Library />);
@@ -335,11 +336,7 @@ describe("library page", () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("karaoke")[0]);
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
-    verify([
-      result.container.querySelector(".library-route-blackout").classList.contains("is-visible"),
-      "toBe",
-      false
-    ]);
+    verify([result.container.querySelector('[aria-hidden="true"]').style.opacity, "toBe", "0"]);
     fireEvent.click(result.getAllByTestId("recordings")[0]);
     fireEvent.click(result.getByTestId("analyze"));
     fireEvent.click(result.getByTestId("analysis-done"));

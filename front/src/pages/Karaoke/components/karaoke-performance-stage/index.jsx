@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { translateSaved } from "../../../../i18n/runtime";
-import SongCoverArt from "../../../Library/components/song-card/song-cover-art";
+import { SongCoverArt } from "../../../Library/components";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
 import KaraokeLyrics from "./karaoke-lyrics";

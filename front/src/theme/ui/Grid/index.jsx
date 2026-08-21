@@ -11,6 +11,7 @@ export default function Grid({
   rowGap,
   columnGap,
   minItemWidth = "min(100%, 16rem)",
+  collapseEmpty = true,
   align,
   justify,
   className,
@@ -25,6 +26,7 @@ export default function Grid({
       as={as}
       className={cx("ui-grid", className)}
       data-adaptive={adaptive || undefined}
+      data-collapse-empty={adaptive && collapseEmpty ? "true" : "false"}
       sx={sx}
       style={{
         "--grid-columns": columns ?? 1,
@@ -33,8 +35,8 @@ export default function Grid({
         "--grid-column-gap": unit(columnGap ?? gap),
         "--grid-min-item-width":
           typeof minItemWidth === "number" ? `${minItemWidth}px` : minItemWidth,
-        "--grid-align": align,
-        "--grid-justify": justify,
+        "--grid-align": align ?? "stretch",
+        "--grid-justify": justify ?? "stretch",
         ...style
       }}
       {...props}

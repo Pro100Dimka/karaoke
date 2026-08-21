@@ -21,17 +21,33 @@ vi.mock("../src/i18n/runtime", () => ({ translateSaved: (value) => value }));
 let schema;
 beforeEach(async () => {
   vi.resetModules();
-  schema = await import("../src/pages/Library/modals/song-settings/config.jsx");
+  schema = await import("../src/pages/Library/song-settings.jsx");
 });
 afterEach(cleanup);
 test("song settings schema describes every persisted field exactly", () => {
   const { DIFFICULTY_OPTIONS, FULL, HALF, SONG_FIELDS, THIRD } = schema;
   expect([HALF, THIRD, FULL]).toEqual([6, 4, 12]);
-  verify([DIFFICULTY_OPTIONS, 'toEqual', [ { value: "", label: "Авто (по AI)" }, { value: "Лёгкий", label: "Лёгкий" }, { value: "Средний", label: "Средний" }, { value: "Сложный", label: "Сложный" }, { value: "Эксперт", label: "Эксперт" } ]]);
-  expect( SONG_FIELDS.map(({ getValue, setValue, render, ...field }) => field)
-  ).toEqual([
+  verify([
+    DIFFICULTY_OPTIONS,
+    "toEqual",
+    [
+      { value: "", label: "Авто (по AI)" },
+      { value: "Лёгкий", label: "Лёгкий" },
+      { value: "Средний", label: "Средний" },
+      { value: "Сложный", label: "Сложный" },
+      { value: "Эксперт", label: "Эксперт" }
+    ]
+  ]);
+  expect(SONG_FIELDS.map(({ getValue, setValue, render, ...field }) => field)).toEqual([
     { name: "artist", span: 6, type: "text", label: "Исполнитель", placeholder: "Muse" },
-    { name: "title", span: 6, type: "text", label: "Название песни", placeholder: "Название песни" },
+    {
+      name: "title",
+      span: 6,
+      type: "text",
+      label: "Название песни",
+      placeholder: "Название песни",
+      required: true
+    },
     {
       name: "tempo_override",
       span: 4,
@@ -62,7 +78,10 @@ test("song settings schema describes every persisted field exactly", () => {
   ]);
   const change = vi.fn();
   for (const field of SONG_FIELDS.filter(({ getValue }) => getValue)) {
-    verify([field.getValue({ form: { [field.name]: "saved" } }), 'toBe', "saved"], [field.getValue({ form: null }), 'toBeUndefined']);
+    verify(
+      [field.getValue({ form: { [field.name]: "saved" } }), "toBe", "saved"],
+      [field.getValue({ form: null }), "toBeUndefined"]
+    );
     field.setValue({ onChange: change }, "next");
     expect(change).toHaveBeenLastCalledWith(field.name, "next");
   }
@@ -71,21 +90,48 @@ test("note range renderer preserves its accessible contract and normalizes value
   const range = schema.SONG_FIELDS.find(({ name }) => name === "note_range");
   const change = vi.fn();
   const { container, getByLabelText } = render(
-    range.render({ context: { form: { note_range_min: 40, note_range_max: 80 }, onChange: change } })
+    range.render({
+      context: { form: { note_range_min: 40, note_range_max: 80 }, onChange: change }
+    })
   );
-  verify([getByLabelText("Диапазон нот").getAttribute("aria-label"), 'toBe', "Диапазон нот"]);
+  verify([getByLabelText("Диапазон нот").getAttribute("aria-label"), "toBe", "Диапазон нот"]);
   const [minimum, maximum] = container.querySelectorAll("input");
-  verify([minimum, 'toMatchObject', { id: "range-min", value: "40", min: "0", max: "127", placeholder: "От" }]);
+  verify([
+    minimum,
+    "toMatchObject",
+    { id: "range-min", value: "40", min: "0", max: "127", placeholder: "От" }
+  ]);
   expect(minimum.getAttribute("aria-label")).toBe("Нижняя нота");
-  verify([maximum, 'toMatchObject', { id: "range-max", value: "80", min: "0", max: "127", placeholder: "До" }]);
-  same([maximum.getAttribute("aria-label"), "Верхняя нота"], [minimum.parentElement.getAttribute("direction"), "row"], [minimum.parentElement.getAttribute("gap"), "1"], [minimum.parentElement.getAttribute("data-width"), "100%"]);
+  verify([
+    maximum,
+    "toMatchObject",
+    { id: "range-max", value: "80", min: "0", max: "127", placeholder: "До" }
+  ]);
+  same(
+    [maximum.getAttribute("aria-label"), "Верхняя нота"],
+    [minimum.parentElement.getAttribute("direction"), "row"],
+    [minimum.parentElement.getAttribute("gap"), "1"],
+    [minimum.parentElement.getAttribute("data-width"), "100%"]
+  );
   fireEvent.change(minimum, { target: { value: "" } });
   fireEvent.change(maximum, { target: { value: "90" } });
   fireEvent.change(minimum, { target: { value: "41" } });
   fireEvent.change(maximum, { target: { value: "" } });
-  verify([change.mock.calls, 'toEqual', [ ["note_range_min", null], ["note_range_max", 90], ["note_range_min", 41], ["note_range_max", null] ]]);
+  verify([
+    change.mock.calls,
+    "toEqual",
+    [
+      ["note_range_min", null],
+      ["note_range_max", 90],
+      ["note_range_min", 41],
+      ["note_range_max", null]
+    ]
+  ]);
   cleanup();
-  const empty = render( range.render({ context: { form: null, onChange: change } })
-  );
-  verify([[...empty.container.querySelectorAll("input")].map(({ value }) => value), 'toEqual', ["", ""]]);
+  const empty = render(range.render({ context: { form: null, onChange: change } }));
+  verify([
+    [...empty.container.querySelectorAll("input")].map(({ value }) => value),
+    "toEqual",
+    ["", ""]
+  ]);
 });

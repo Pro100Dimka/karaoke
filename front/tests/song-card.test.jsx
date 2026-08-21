@@ -2,25 +2,12 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
-import { mockUseI18nWithFallback, passthrough } from "./helpers/mocks.mjs";
+import { mockUseI18nWithFallback } from "./helpers/mocks.mjs";
 vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, useI18n: mockUseI18nWithFallback };
 });
-vi.mock("../src/theme/ui", () => ({
-  Button: passthrough("button"),
-  Card: passthrough("div"),
-  IconButton: passthrough("button"),
-  Stack: passthrough("div"),
-  Typography: passthrough("span")
-}));
-vi.mock("../src/pages/Library/components/song-card/processing-signal", () => ({
-  default: ({ progress }) => <span data-testid="progress">{progress}</span>
-}));
-vi.mock("../src/pages/Library/components/song-card/song-card-artwork", () => ({
-  default: ({ cardIndex }) => <span data-testid="artwork">{cardIndex}</span>
-}));
-import LibrarySongCard from "../src/pages/Library/components/song-card/index.jsx";
+import { LibrarySongCard } from "../src/pages/Library/components.jsx";
 afterEach(cleanup);
 const handlers = () => ({
   onDelete: vi.fn(),
@@ -43,30 +30,29 @@ test("ready song opens from card click and keyboard but not nested actions", () 
     tempo_override: 120,
     difficulty_override: "easy"
   };
-  const { container } = render(
-    <LibrarySongCard cardIndex={1} song={song} canManageLibrary {...actions} />
-  );
-  const card = container.querySelector(".library-song-card");
+  const view = render(<LibrarySongCard cardIndex={1} song={song} canManageLibrary {...actions} />);
+  const card = view.getByRole("button", { name: /Открыть Title|Відкрити Title/ });
   expect(card.getAttribute("role")).toBe("button");
   fireEvent.click(card);
   fireEvent.keyDown(card, { key: "Enter" });
   fireEvent.keyDown(card, { key: " " });
   fireEvent.keyDown(card, { key: "Escape" });
   expect(actions.onOpenKaraoke).toHaveBeenCalledTimes(3);
-  const nested = container.querySelector(".library-song-card-actions button");
+  const nested = view.getByRole("button", { name: /Прослушать записи|Прослухати записи/ });
   fireEvent.click(nested);
-  verify([actions.onOpenKaraoke, 'toHaveBeenCalledTimes', 3], [container.textContent, 'toContain', "120 BPM"]);
+  verify(
+    [actions.onOpenKaraoke, "toHaveBeenCalledTimes", 3],
+    [view.container.textContent, "toContain", "120 BPM"]
+  );
 });
 test("working song shows progress and opens its processing modal", () => {
   const actions = handlers();
   const song = { id: "song", title: "Title", status: "processing", progress_percent: 42 };
-  const { container, getByTestId } = render(
-    <LibrarySongCard cardIndex={0} song={song} canManageLibrary {...actions} />
-  );
-  expect(getByTestId("progress").textContent).toBe("42");
-  fireEvent.click(container.querySelector(".library-song-card-progress"));
+  const view = render(<LibrarySongCard cardIndex={0} song={song} canManageLibrary {...actions} />);
+  expect(view.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("42");
+  fireEvent.click(view.getByRole("progressbar").closest("button"));
   expect(actions.onOpenProcessing).toHaveBeenCalledWith(song);
-  verify([container.querySelector(".library-song-card").getAttribute("role"), 'toBeNull']);
+  expect(view.queryByRole("button", { name: /Открыть Title|Відкрити Title/ })).toBeNull();
 });
 test("unknown song status uses safe badge fallback", () => {
   const actions = handlers();
@@ -77,7 +63,7 @@ test("unknown song status uses safe badge fallback", () => {
       {...actions}
     />
   );
-  expect(container.querySelector(".badge").textContent).toContain("custom");
+  expect(container.textContent).toContain("custom");
   const empty = render(
     <LibrarySongCard
       cardIndex={0}
@@ -85,5 +71,5 @@ test("unknown song status uses safe badge fallback", () => {
       {...actions}
     />
   );
-  expect(empty.container.querySelector(".badge").textContent).not.toBe("");
+  expect(empty.container.textContent).toMatch(/Ожидает обработки|Очікує обробки/);
 });

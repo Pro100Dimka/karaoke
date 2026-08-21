@@ -17,6 +17,13 @@
     );
   }
 
+  .ui-grid[data-adaptive][data-collapse-empty="false"] {
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(min(100%, var(--grid-min-item-width)), 1fr)
+    );
+  }
+
   .ui-grid > * {
     min-inline-size: 0;
   }
