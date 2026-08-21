@@ -232,7 +232,7 @@ def configure_ai_resource_environment(*, force: bool = False) -> None:
             configured = os.environ.get(model.env_var)
             if configured and Path(configured).expanduser().resolve() == path.resolve(): os.environ.pop(model.env_var, None)
 
-    os.environ.setdefault("KARAOKE_AI_REQUIRE_CTC", "1")
+    os.environ.setdefault("KARAOKE_AI_REQUIRE_CTC", "0")
     set_resource("MSST_ENGINE_DIR", msst, directory=True)
     if msst_config.is_file(): set_resource("MSST_CONFIG", msst_config)
 

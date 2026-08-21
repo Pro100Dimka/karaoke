@@ -61,6 +61,7 @@ export default function Library({ onOpenSongSettings }) {
   const [analysisRecordingId, setAnalysisRecordingId] = useState(
     () => location.state?.analysisRecordingId || null
   );
+  const [analysisRecordings, setAnalysisRecordings] = useState([]);
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
   const returningFromKaraoke = Boolean(location.state?.fromKaraokeFade);
@@ -71,6 +72,10 @@ export default function Library({ onOpenSongSettings }) {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
+  const closeAnalysis = () => {
+    setAnalysisRecordingId(null);
+    setAnalysisRecordings([]);
+  };
   const sharedRoom = useOnlineRoom();
   const activeRoom = sharedRoom?.room;
   const openKaraokeInRoom = sharedRoom?.openKaraoke;
@@ -389,6 +394,7 @@ export default function Library({ onOpenSongSettings }) {
         error={recordingsError}
         onClose={() => setRecordingsSong(null)}
         onAnalyze={(recording) => {
+          setAnalysisRecordings(songRecordings || []);
           setRecordingsSong(null);
           setAnalysisRecordingId(recording.id);
         }}
@@ -403,9 +409,10 @@ export default function Library({ onOpenSongSettings }) {
       {analysisRecordingId && (
         <PerformanceAnalysisModal
           recordingId={analysisRecordingId}
-          onClose={() => setAnalysisRecordingId(null)}
-          onDone={() => setAnalysisRecordingId(null)}
-          onDeleted={() => setAnalysisRecordingId(null)}
+          recordings={analysisRecordings}
+          onClose={closeAnalysis}
+          onDone={closeAnalysis}
+          onDeleted={closeAnalysis}
         />
       )}
       <ProcessingModal

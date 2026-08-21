@@ -2,7 +2,10 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import PerformanceAnalysisModal from "../src/pages/Karaoke/performance-analysis-modal.jsx";
+import PerformanceAnalysisModal, {
+  formatRecordingDate,
+  getRecordingList
+} from "../src/pages/Karaoke/performance-analysis-modal.jsx";
 const mocks = vi.hoisted(() => ({
   runAnalysis: vi.fn(),
   deleteRecording: vi.fn(),
@@ -66,6 +69,77 @@ test("analysis modal renders normalized result and deletes recording", async () 
   fireEvent.click(result.container.querySelector(".performance-analysis-actions button"));
   await waitFor(() => expect(mocks.deleteRecording).toHaveBeenCalledWith("rec"));
   expect(deleted).toHaveBeenCalled();
+});
+test("analysis recording carousel starts on the active recording without restarting analysis", async () => {
+  mocks.runAnalysis.mockResolvedValue({ accuracy_percent: 75 });
+  const view = render(
+    <PerformanceAnalysisModal
+      recordingId="second"
+      recordings={[
+        { id: "first", created_at: "2026-08-20T10:00:00Z" },
+        { id: "second", created_at: "2026-08-21T10:00:00Z" },
+        { id: "third", created_at: "2026-08-22T10:00:00Z" }
+      ]}
+      onClose={vi.fn()}
+    />
+  );
+  await waitFor(() =>
+    expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/second")
+  );
+  expect(mocks.runAnalysis).toHaveBeenCalledTimes(1);
+  expect(mocks.runAnalysis).toHaveBeenCalledWith("second");
+  const previous = view.getByLabelText(/Предыдущая|Попередня/);
+  const next = view.getByLabelText(/Следующая|Наступна/);
+  expect(previous.disabled).toBe(false);
+  expect(next.disabled).toBe(false);
+  expect(view.container.textContent).toMatch(/Запись 2 из 3|Запис 2 з 3/);
+  expect(view.container.textContent).toMatch(/анализируется|аналізується/);
+  fireEvent.click(previous);
+  expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/first");
+  expect(previous.disabled).toBe(true);
+  expect(view.container.textContent).toMatch(/продолжает выполняться|продовжує виконуватися/);
+  expect(view.container.querySelector(".performance-analysis-score")).toBeNull();
+  expect(mocks.runAnalysis).toHaveBeenCalledTimes(1);
+  fireEvent.click(next);
+  expect(view.container.querySelector(".performance-analysis-score")).not.toBeNull();
+  fireEvent.click(next);
+  expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/third");
+  expect(next.disabled).toBe(true);
+  expect(mocks.runAnalysis).toHaveBeenCalledTimes(1);
+});
+test("analysis recording list keeps one canonical active entry", () => {
+  expect(getRecordingList(null, "active")).toEqual([{ id: "active" }]);
+  expect(
+    getRecordingList([{ id: "first" }, null, { id: "first", created_at: "new" }], "active")
+  ).toEqual([{ id: "first", created_at: "new" }, { id: "active" }]);
+  expect(getRecordingList([{ id: "active", created_at: "kept" }], "active")).toEqual([
+    { id: "active", created_at: "kept" }
+  ]);
+  expect(formatRecordingDate()).toMatch(/Запись исполнения|Запис виконання/);
+  expect(formatRecordingDate("invalid")).toMatch(/Запись исполнения|Запис виконання/);
+  expect(formatRecordingDate("2026-08-21T10:00:00Z")).not.toMatch(
+    /Запись исполнения|Запис виконання/
+  );
+});
+test("analysis carousel resets its view when a new recording starts analysis", async () => {
+  mocks.runAnalysis.mockResolvedValue({ accuracy_percent: 80 });
+  const recordings = [{ id: "first" }, { id: "second" }, { id: "third" }];
+  const view = render(
+    <PerformanceAnalysisModal recordingId="second" recordings={recordings} onClose={vi.fn()} />
+  );
+  await waitFor(() =>
+    expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/second")
+  );
+  fireEvent.click(view.getByLabelText(/Предыдущая|Попередня/));
+  expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/first");
+  view.rerender(
+    <PerformanceAnalysisModal recordingId="third" recordings={recordings} onClose={vi.fn()} />
+  );
+  await waitFor(() => expect(mocks.runAnalysis).toHaveBeenLastCalledWith("third"));
+  await waitFor(() =>
+    expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/third")
+  );
+  expect(mocks.runAnalysis).toHaveBeenCalledTimes(2);
 });
 test("analysis modal reports analysis and deletion failures", async () => {
   const close = vi.fn();

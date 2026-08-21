@@ -134,7 +134,7 @@ def test_ai_resource_environment_uses_existing_downloads(monkeypatch, tmp_path):
 
     config.configure_ai_resource_environment()
 
-    assert (config.os.environ['TEST_PITCH'] == str(checkpoint)) and (config.os.environ['TEST_ASR'] == str(snapshot)) and (config.os.environ['MSST_ENGINE_DIR'] == str(engine_dir)) and (config.os.environ['MSST_CONFIG'] == str(config_file)) and (config.os.environ['KARAOKE_AI_REQUIRE_CTC'] == '1')
+    assert (config.os.environ['TEST_PITCH'] == str(checkpoint)) and (config.os.environ['TEST_ASR'] == str(snapshot)) and (config.os.environ['MSST_ENGINE_DIR'] == str(engine_dir)) and (config.os.environ['MSST_CONFIG'] == str(config_file)) and (config.os.environ['KARAOKE_AI_REQUIRE_CTC'] == '0')
 
     alternate = tmp_path / "alternate.pt"
     alternate.write_bytes(b"old")

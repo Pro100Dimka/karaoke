@@ -220,7 +220,7 @@ def test_write_environment_and_verify_all(monkeypatch, tmp_path):
     env = tmp_path / "env" / "models.bat"
     install.write_environment(tmp_path, tmp_path / "models", tmp_path / "msst", env)
     text = env.read_text()
-    assert ('KARAOKE_AI_REQUIRE_CTC=1' in text and 'FILE_MODEL=' in text) and ('KARAOKE_AI_FCPE_ONNX=' not in text)
+    assert ('KARAOKE_AI_REQUIRE_CTC=0' in text and 'FILE_MODEL=' in text) and ('KARAOKE_AI_FCPE_ONNX=' not in text)
 
     optimized = tmp_path / "models" / "optimized" / "fcpe" / "fcpe-core.onnx"
     optimized.parent.mkdir(parents=True)

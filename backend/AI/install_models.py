@@ -278,7 +278,7 @@ def write_environment(downloads: Path, models_root: Path, msst: Path, env_file: 
         "HF_HOME": downloads / "cache" / "huggingface",
         "HF_HUB_CACHE": downloads / "cache" / "huggingface" / "hub",
         "KARAOKE_AI_ALLOW_FALLBACK": "false",
-        "KARAOKE_AI_REQUIRE_CTC": "1",
+        "KARAOKE_AI_REQUIRE_CTC": "0",
         "MSST_ENGINE_DIR": msst,
         "MSST_CONFIG": msst
         / "configs"

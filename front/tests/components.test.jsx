@@ -58,6 +58,11 @@ describe("primitive UI components", () => {
     );
     fireEvent.click(screen.getByText("Save"));
     expect(clicked).toHaveBeenCalledOnce();
+    expect(document.querySelector("#field").closest("label")?.className).toContain(
+      "settings-field--wide"
+    );
+    expect(document.querySelector("#field").closest("label")?.textContent).toContain("Hint");
+    expect(document.querySelector(".settings-toggle input")).not.toBeNull();
     verify([screen.getByText("Save").className, 'toContain', "btn-primary"], [screen.getByText("Raw").className, 'toBe', "raw"], [screen.getByText("Bare").getAttribute("class"), 'toBeNull'], [screen.getByLabelText("Icon action").title, 'toBe', "Custom"], [screen.getByLabelText("Raw icon").getAttribute("class"), 'toBeNull'], [screen.getByText("Error").className, 'toBe', "field-error"], [screen.getByText("Row").className, 'toContain', "extra"]);
   });
   test("renders statuses and tables", () => {

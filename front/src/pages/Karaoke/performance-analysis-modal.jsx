@@ -1,5 +1,5 @@
-import { BarChart3, Trash2, Trophy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { BarChart3, ChevronLeft, ChevronRight, Trash2, Trophy } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
 import { Button } from "../../components/fields";
@@ -73,13 +73,48 @@ function AnalysisSummary({ result }) {
     </>
   );
 }
-export default function PerformanceAnalysisModal({ recordingId, onClose, onDone, onDeleted }) {
+export function getRecordingList(recordings, recordingId) {
+  const unique = new Map(
+    (Array.isArray(recordings) ? recordings : [])
+      .filter((recording) => recording?.id)
+      .map((recording) => [String(recording.id), recording])
+  );
+  const activeId = String(recordingId);
+  if (!unique.has(activeId)) unique.set(activeId, { id: recordingId });
+  return [...unique.values()];
+}
+
+export function formatRecordingDate(value) {
+  if (!value) return translateSaved("Запись исполнения");
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? translateSaved("Запись исполнения") : date.toLocaleString();
+}
+
+export default function PerformanceAnalysisModal({
+  recordingId,
+  recordings = [],
+  onClose,
+  onDone,
+  onDeleted
+}) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [viewedRecordingId, setViewedRecordingId] = useState(recordingId);
   const analysisRequestRef = useRef({ recordingId: null, promise: null });
   const mountedRef = useMountedRef();
   const { confirm: confirmDialog } = useAppDialog();
   const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
+  const recordingList = useMemo(
+    () => getRecordingList(recordings, recordingId),
+    [recordings, recordingId]
+  );
+  const viewedIndex = Math.max(
+    0,
+    recordingList.findIndex((recording) => String(recording.id) === String(viewedRecordingId))
+  );
+  const viewedRecording = recordingList[viewedIndex];
+  const viewingActive = String(viewedRecording.id) === String(recordingId);
+  useEffect(() => setViewedRecordingId(recordingId), [recordingId]);
   useEffect(() => {
     let active = true;
     setResult(null);
@@ -150,21 +185,62 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
     >
       <VictoryScene />
       <div className="performance-analysis-body modal-scroll">
-        {!result && !error && (
+        {recordingList.length > 1 && (
+          <div
+            className="performance-analysis-carousel"
+            aria-label={translateSaved("Записи исполнения")}
+          >
+            <Button
+              icon={ChevronLeft}
+              variant="ghost"
+              aria-label={translateSaved("Предыдущая запись")}
+              disabled={viewedIndex === 0}
+              onClick={() => setViewedRecordingId(recordingList[viewedIndex - 1].id)}
+            />
+            <div className="performance-analysis-recording-meta" aria-live="polite">
+              <strong>{formatRecordingDate(viewedRecording.created_at)}</strong>
+              <span>
+                {translateSaved("Запись {0} из {1}", {
+                  0: viewedIndex + 1,
+                  1: recordingList.length
+                })}
+                {viewingActive ? ` · ${translateSaved("анализируется")}` : ""}
+              </span>
+            </div>
+            <Button
+              icon={ChevronRight}
+              variant="ghost"
+              aria-label={translateSaved("Следующая запись")}
+              disabled={viewedIndex === recordingList.length - 1}
+              onClick={() => setViewedRecordingId(recordingList[viewedIndex + 1].id)}
+            />
+          </div>
+        )}
+
+        <AudioPlayer src={api.getPerformanceFileUrl(viewedRecording.id)} />
+
+        {!viewingActive && (
+          <p className="text-muted">
+            {translateSaved(
+              "Вы просматриваете другую запись. Текущий анализ продолжает выполняться без переключения."
+            )}
+          </p>
+        )}
+
+        {viewingActive && !result && !error && (
           <p className="text-muted">{translateSaved("Анализируем ноты и ритм исполнения…")}</p>
         )}
 
-        {error && (
+        {viewingActive && error && (
           <p className="song-lyrics-error">
             {translateSaved("Не удалось выполнить анализ:")}
             {error}
           </p>
         )}
 
-        {result && (
+        {viewingActive && result && (
           <>
             <AnalysisSummary result={result} />
-            <AudioPlayer src={api.getPerformanceFileUrl(recordingId)} />
             <div className="performance-analysis-actions performance-analysis-actions--secondary">
               <Button
                 icon={Trash2}

@@ -24,13 +24,26 @@ vi.mock("../src/components/ui/StatusBadge", () => ({
   default: ({ status }) => <span data-testid="status">{status}</span>
 }));
 vi.mock("../src/components/modal", () => ({
-  default: ({ children, titleProps }) => (
-    <section>
-      <h1>{titleProps?.title}</h1>
-      {titleProps?.actions}
-      {children}
-    </section>
-  )
+  default: ({ children, titleProps }) => {
+    const Icon = titleProps?.icon;
+    return (
+      <section>
+        {titleProps?.image ? (
+          <img
+            className="modal-title__image"
+            src={titleProps.image}
+            alt=""
+            onError={titleProps.onImageError}
+          />
+        ) : (
+          Icon && <Icon />
+        )}
+        <h1>{titleProps?.title}</h1>
+        <div className="modal-title__actions">{titleProps?.actions}</div>
+        {children}
+      </section>
+    );
+  }
 }));
 vi.mock("../src/components/fields/button", () => ({
   default: ({ children, icon: _icon, iconProps: _iconProps, ...props }) => (
@@ -133,10 +146,13 @@ test("processing modal covers active, complete, error and absent songs", () => {
   );
   fireEvent.click(active.container.querySelector("button"));
   expect(cancel).toHaveBeenCalled();
-  const art = active.container.querySelector(".processing-modal-art");
-  expect(art.querySelector("img").src).toContain("cover/song");
-  fireEvent.error(art.querySelector("img"));
-  verify([art.querySelector("img"), "toBeNull"], [art.querySelector("svg"), "not.toBeNull"]);
+  const cover = active.container.querySelector(".modal-title__image");
+  expect(cover.src).toContain("cover/song");
+  fireEvent.error(cover);
+  verify(
+    [active.container.querySelector(".modal-title__image"), "toBeNull"],
+    [active.container.querySelector(".lucide-circle-dot"), "not.toBeNull"]
+  );
   active.rerender(
     <ProcessingModal
       song={{ id: "song", title: "Song", status: "done" }}
@@ -146,6 +162,7 @@ test("processing modal covers active, complete, error and absent songs", () => {
       onOpenKaraoke={open}
     />
   );
+  expect(active.container.querySelector(".modal-title__image").src).toContain("cover/song");
   const buttons = active.container.querySelectorAll("button");
   fireEvent.click(buttons[0]);
   fireEvent.click(buttons[1]);

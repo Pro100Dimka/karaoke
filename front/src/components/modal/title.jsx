@@ -1,15 +1,27 @@
 import { Box, Stack } from "../../theme/ui";
 
-export default function ModalTitle({ icon: Icon, image, eyebrow, title, description, actions }) {
+export default function ModalTitle({
+  icon: Icon,
+  image,
+  onImageError,
+  eyebrow,
+  title,
+  description,
+  actions
+}) {
   return (
     <Stack direction="row" align="center" justify="space-between" p="2rem" gap="2rem">
-      {Icon && (
+      {(Icon || image) && (
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: `1.2rem`,
+            flex: "0 0 auto",
+            width: image ? "4.8rem" : undefined,
+            height: image ? "4.8rem" : undefined,
+            padding: image ? 0 : "1.2rem",
+            overflow: "hidden",
             border: `var(--hairline) solid var(--color-border-strong)`,
             borderRadius: `var(--radius-lg)`,
             color: `var(--color-primary-hover)`,
@@ -26,12 +38,15 @@ export default function ModalTitle({ icon: Icon, image, eyebrow, title, descript
         >
           {image ? (
             <img
+              className="modal-title__image"
               src={image}
               alt=""
-              style={{ width: "4.8rem", height: "4.8rem", objectFit: "cover" }}
+              decoding="async"
+              onError={onImageError}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           ) : (
-            <Icon size={24} />
+            Icon && <Icon size={24} />
           )}
         </Box>
       )}

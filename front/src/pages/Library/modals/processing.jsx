@@ -4,6 +4,7 @@ import Modal from "../../../components/modal";
 import StatusBadge from "../../../components/ui/StatusBadge";
 import { translateSaved } from "../../../i18n/runtime";
 import ProcessingSignal from "../components/song-card/processing-signal";
+import useSongCover from "../hooks/useSongCover";
 import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
 
 function getVisibleProgress(progress, active, done) {
@@ -12,8 +13,9 @@ function getVisibleProgress(progress, active, done) {
 }
 
 export default function ProcessingModal({ song, status, onCancel, onClose, onOpenKaraoke }) {
+  const currentStatus = status?.status ?? song?.status;
+  const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, currentStatus);
   if (!song) return null;
-  const currentStatus = status?.status ?? song.status;
   const progress = getProcessingProgress(status, song);
   const active = isProcessingActive(currentStatus);
   const isDone = currentStatus === "done";
@@ -43,6 +45,8 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
         icon: CircleDot,
         eyebrow: translateSaved("ОБРАБОТКА ПЕСНИ"),
         title: song.title,
+        image: hasCover ? coverUrl : undefined,
+        onImageError: handleCoverError,
         description: translateSaved("Следите за этапами подготовки и управляйте обработкой песни."),
         actions: actions.map(([Icon, text, variant, onClick, iconProps]) => (
           <Button
@@ -59,10 +63,8 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
       }}
     >
       <div className="processing-modal-body modal-scroll">
-        <div className="processing-modal-summary u-row-between">
-          <div className="processing-modal-identity">
-            <StatusBadge status={currentStatus} />
-          </div>
+        <div>
+          <StatusBadge status={currentStatus} />
         </div>
         <ProcessingSignal progress={visibleProgress} />
         <div className="processing-modal-stage u-between-3">

@@ -283,6 +283,36 @@
   overflow: auto;
 }
 
+.performance-analysis-carousel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-soft) 78%, transparent);
+}
+
+.performance-analysis-recording-meta {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-1);
+  text-align: center;
+}
+
+.performance-analysis-recording-meta strong,
+.performance-analysis-recording-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-analysis-recording-meta span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 .performance-analysis-grade {
   align-self: center;
   max-inline-size: 100%;

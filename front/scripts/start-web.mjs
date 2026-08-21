@@ -70,13 +70,13 @@ const vite = spawn(process.execPath, viteArguments, {
 
 const shutdown = (signal) => {
   if (vite.exitCode == null) vite.kill(signal);
-  if (backendProcess?.exitCode == null) backendProcess.kill(signal);
+  if (backendProcess?.exitCode == null) backendProcess?.kill(signal);
 };
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => shutdown(signal));
 }
 
 vite.on("exit", (code) => {
-  if (backendProcess?.exitCode == null) backendProcess.kill();
+  if (backendProcess?.exitCode == null) backendProcess?.kill();
   process.exitCode = code ?? 0;
 });

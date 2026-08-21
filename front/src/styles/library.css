@@ -1597,9 +1597,28 @@
   block-size: 2.65rem;
   place-items: center;
   border-radius: 0.75rem;
+  border: 0;
   color: white;
   background: linear-gradient(145deg, var(--color-primary), var(--color-rose));
   box-shadow: 0 0.55rem 1.3rem color-mix(in srgb, var(--color-primary) 24%, transparent);
+  cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    filter var(--transition-fast);
+}
+
+.library-add-song-file-icon:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+.library-add-song-file-icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.library-add-song-file > audio {
+  display: none;
 }
 
 .library-add-song-file-copy {
