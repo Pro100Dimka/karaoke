@@ -87,6 +87,8 @@ for %%F in (
     "%ENGINE%\models\bs_roformer\mel_band_roformer.py"
     "%ENGINE%\configs\KimberleyJensen\config_vocals_mel_band_roformer_kj.yaml"
 ) do if not exist "%%~F" exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch-msst-engine.ps1" -Engine "%ENGINE%" >nul 2>&1
+if errorlevel 1 exit /b 1
 exit /b 0
 
 :fail

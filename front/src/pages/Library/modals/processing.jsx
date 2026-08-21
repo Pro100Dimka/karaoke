@@ -20,7 +20,7 @@ export function getProcessingFailureInfo(message) {
   const reason = separator > 0 ? raw.slice(separator + 1).trim() : raw;
   const normalized = raw.toLowerCase();
   let hint = translateSaved(
-    "Повторите обработку. Если ошибка повторится, откройте журнал приложения."
+    "Повторите обработку. Если ошибка повторится, откройте журнал выполнения ниже."
   );
   if (normalized.includes("ctc") || normalized.includes("model unavailable")) {
     hint = translateSaved(
@@ -143,7 +143,13 @@ export default function ProcessingModal({
               </div>
             </dl>
             <p className="processing-modal-error__hint">{failure.hint}</p>
-            <small>{translateSaved("Технические подробности сохранены в application.log")}</small>
+            <button
+              type="button"
+              className="processing-modal-error__log-link"
+              onClick={() => globalThis.electronAPI?.openApplicationLog?.()}
+            >
+              {translateSaved("Открыть журнал выполнения")}
+            </button>
           </section>
         ) : (
           <div className="processing-modal-stage u-between-3">

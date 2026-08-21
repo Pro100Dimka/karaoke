@@ -1047,6 +1047,24 @@
   color: var(--color-text-secondary);
 }
 
+.processing-modal-error__log-link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  color: var(--color-accent);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.processing-modal-error__log-link:hover,
+.processing-modal-error__log-link:focus-visible {
+  color: var(--color-text-primary);
+}
+
 .processing-modal-identity {
   display: flex;
   align-items: center;

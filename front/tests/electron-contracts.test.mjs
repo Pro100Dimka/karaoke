@@ -225,8 +225,8 @@ describe("preload bridge", () => {
     ]);
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     same([exposeInMainWorld.mock.calls[0][0], "electronAPI"], [api.initialTheme, "violet"], [api.backendUrl, "http://127.0.0.1:8123"], [api.isElectron, true], [api.getSceneVideoUrl(), "karaoke-media://scene/main"]);
-    sameDeep([api.minimize(), ["window:minimize"]], [api.maximize(), ["window:maximize"]], [api.close(), ["window:close"]], [api.openSongFolder({ id: "42" }), ["shell:openSongFolder", { id: "42" }]], [api.selectFolder("D:/songs"), ["dialog:selectFolder", "D:/songs"]], [api.copyText("room-code"), ["clipboard:writeText", "room-code"]], [api.setIconTheme("dark"), ["window:setIconTheme", "dark"]]);
-    expect(invoke).toHaveBeenCalledTimes(7);
+    sameDeep([api.minimize(), ["window:minimize"]], [api.maximize(), ["window:maximize"]], [api.close(), ["window:close"]], [api.openSongFolder({ id: "42" }), ["shell:openSongFolder", { id: "42" }]], [api.openApplicationLog(), ["shell:openApplicationLog"]], [api.selectFolder("D:/songs"), ["dialog:selectFolder", "D:/songs"]], [api.copyText("room-code"), ["clipboard:writeText", "room-code"]], [api.setIconTheme("dark"), ["window:setIconTheme", "dark"]]);
+    expect(invoke).toHaveBeenCalledTimes(8);
   });
   test("leaves runtime arguments undefined when Electron did not inject them", () => {
     expect(runPreload().api).toMatchObject({ initialTheme: undefined, backendUrl: undefined });

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   openSongFolder: (song) => ipcRenderer.invoke("shell:openSongFolder", song),
+  openApplicationLog: () => ipcRenderer.invoke("shell:openApplicationLog"),
 
   selectFolder: (currentPath) => ipcRenderer.invoke("dialog:selectFolder", currentPath),
 

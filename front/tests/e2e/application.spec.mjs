@@ -10,6 +10,13 @@ test.afterEach(async ({}, testInfo) => {
   expect(testInfo.errorsInPage).toEqual([]);
 });
 
+async function closeProcessingModal(page) {
+  const modal = page.locator(".processing-modal");
+  await expect(modal).toBeVisible();
+  await modal.locator(".app-modal-close").click();
+  await expect(modal).toBeHidden();
+}
+
 test("library boots and remains interactive", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".app-shell")).toBeVisible();
@@ -40,6 +47,7 @@ test("song import enters the visible processing flow", async ({ page }) => {
 test("room creation reaches a usable dock even without microphone access", async ({ page }) => {
   await page.routeWebSocket(/karaoke-studio-online/, () => {});
   await page.goto("/");
+  await closeProcessingModal(page);
   await page.locator(".library-action-card").first().click();
   const modal = page.locator(".online-room-modal");
   await expect(modal).toBeVisible();
@@ -50,12 +58,15 @@ test("room creation reaches a usable dock even without microphone access", async
 
 test("settings load persisted values and remain navigable", async ({ page }) => {
   await page.goto("/");
+  await closeProcessingModal(page);
   await page.locator(".app-floating-controls > .app-settings-fab").click();
   const dialog = page.locator('[role="dialog"]');
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('[role="tab"]')).toHaveCount(3);
+  await expect(dialog.locator(".settings-neon-card").first()).toBeVisible();
   await dialog.locator('[role="tab"]').last().click();
-  await expect(dialog.locator(".settings-neon-card")).toBeVisible();
+  await expect(dialog.locator('[role="tab"]').last()).toHaveAttribute("aria-selected", "true");
+  await expect(dialog.getByRole("spinbutton")).toBeVisible();
 });
 
 test("ready song opens the complete karaoke workspace", async ({ page }) => {

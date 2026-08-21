@@ -1,3 +1,4 @@
+import { Check, ChevronDown } from "lucide-react";
 import {
   forwardRef,
   useEffect,
@@ -5,7 +6,6 @@ import {
   useRef,
   useState
 } from "react";
-import { Check, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import Button from "../Button";
@@ -29,25 +29,19 @@ const Select = forwardRef(
       error,
       required = false,
       disabled = false,
-
       options = [],
-
       value,
       defaultValue,
       onChange,
-
       placeholder = "Выберите значение",
       startIcon,
       endIcon,
-
       className = "",
       fieldClassName = "",
-
       sx,
       fieldSx,
       style,
       fieldStyle,
-
       ...props
     },
     ref

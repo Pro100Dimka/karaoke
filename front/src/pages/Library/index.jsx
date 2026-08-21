@@ -421,15 +421,17 @@ export default function Library() {
           onDeleted={closeAnalysis}
         />
       )}
-      <ProcessingModal
-        song={processingSong}
-        songs={processingSongs}
-        status={processingStatus?.song_id === processingSong?.id ? processingStatus : null}
-        onSelectSong={trackProcessingSong}
-        onClose={() => setProcessingSong(null)}
-        onCancel={cancelProcessing}
-        onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}
-      />
+      {!review && (
+        <ProcessingModal
+          song={processingSong}
+          songs={processingSongs}
+          status={processingStatus?.song_id === processingSong?.id ? processingStatus : null}
+          onSelectSong={trackProcessingSong}
+          onClose={() => setProcessingSong(null)}
+          onCancel={cancelProcessing}
+          onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}
+        />
+      )}
     </Stack>
   );
 }

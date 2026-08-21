@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => ({
   pollOptions: [],
   deleteRecording: vi.fn(),
   cancelProcessing: vi.fn(),
-  setProcessingLoadActive: vi.fn()
+  setProcessingLoadActive: vi.fn(),
+  review: null
 }));
 vi.mock("react-router-dom", () => ({
   useLocation: () => mocks.location,
@@ -58,7 +59,12 @@ vi.mock("../src/api/client", () => ({
 vi.mock("../src/pages/Library/hooks/useFileImport", () => ({
   default: (options) => {
     mocks.importOptions = options;
-    return { importing: false, importFile: vi.fn(), openFilePicker: vi.fn() };
+    return {
+      importing: false,
+      importFile: vi.fn(),
+      openFilePicker: vi.fn(),
+      review: mocks.review
+    };
   }
 }));
 vi.mock("../src/pages/Library/hooks/useSongActions", () => ({
@@ -160,6 +166,7 @@ beforeEach(() => {
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.cancelProcessing.mockReset().mockResolvedValue(undefined);
   mocks.setProcessingLoadActive.mockReset();
+  mocks.review = null;
   mocks.pollIndex = 0;
   mocks.pollOptions = [];
   mocks.refreshes = [];
@@ -241,6 +248,12 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("open-processed"));
     expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", { state: { songId: "one" } });
     fireEvent.click(result.getByTestId("close-processing"));
+    expect(result.queryByTestId("processing-modal")).toBeNull();
+  });
+  test("does not stack processing over the import review", () => {
+    mocks.review = { title: "New song" };
+    mocks.polls = [{ data: [{ ...songs[1], status: "processing" }] }, { data: [] }, { data: null }];
+    const result = render(<Library />);
     expect(result.queryByTestId("processing-modal")).toBeNull();
   });
   test("opens recordings, deletes with confirmation and enters analysis", async () => {

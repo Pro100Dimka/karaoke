@@ -215,11 +215,16 @@ test("processing modal covers active, complete, error and absent songs", () => {
       onOpenKaraoke={open}
     />
   );
+  const openApplicationLog = vi.fn();
+  globalThis.electronAPI = { openApplicationLog };
   expect(active.queryByRole("progressbar")).toBeNull();
   expect(active.getByRole("alert").textContent).toContain("Full-song aligner");
   expect(active.getByRole("alert").textContent).toContain("InvalidArtifactError");
   expect(active.getByRole("alert").textContent).toContain("Синхронизация текста");
   expect(active.getByRole("alert").textContent).toContain("77%");
+  fireEvent.click(active.getByRole("button", { name: "Открыть журнал выполнения" }));
+  expect(openApplicationLog).toHaveBeenCalledOnce();
+  delete globalThis.electronAPI;
 });
 test("processing modal carousel changes only the viewed queued song", () => {
   const select = vi.fn();

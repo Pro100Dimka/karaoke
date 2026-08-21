@@ -610,6 +610,14 @@ handleTrustedIpc("window:toggleFullscreen", () => {
   mainWindow.setFullScreen(!mainWindow.isFullScreen());
   return mainWindow.isFullScreen();
 });
+handleTrustedIpc("shell:openApplicationLog", async () => {
+  const logDirectory = isDev
+    ? path.resolve(__dirname, "..", "..", "generated", "logs")
+    : INSTALL_LOG_DIR;
+  const logPath = path.join(logDirectory, "application.log");
+  if (!fs.existsSync(logPath)) return "Журнал приложения пока не создан.";
+  return shell.openPath(logPath);
+});
 handleTrustedIpc("shell:openSongFolder", async (target) => {
   const request = typeof target === "string" ? { path: target } : target || {};
   const songsDir = await resolveSongOutputDir();

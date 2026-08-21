@@ -9,8 +9,17 @@ import {
   mockSongEditor,
   mockSongs
 } from "./fixtures";
+import { MOCK_SILENT_AUDIO_URL } from "./media";
 
 const clone = globalThis.structuredClone;
+
+function decodeDataUrl(url) {
+  const separator = url.indexOf(",");
+  const mimeType = url.slice(5, separator).split(";")[0];
+  const binary = globalThis.atob(url.slice(separator + 1));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new Blob([bytes], { type: mimeType });
+}
 
 const STATIC_RESPONSES = Object.freeze({
   "/audio/devices": [],
@@ -186,6 +195,9 @@ export async function mockRequest(path, options = {}) {
 export async function mockBlobRequest(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const { pathname } = new URL(path, "http://mock.local");
+  if (method === "GET" && /^\/songs\/[^/]+\/audio\/[^/]+$/.test(pathname)) {
+    return decodeDataUrl(MOCK_SILENT_AUDIO_URL);
+  }
   if (method === "GET" && /^\/songs\/[^/]+\/package$/.test(pathname)) {
     return new Blob(["mock karaoke package"], { type: "application/zip" });
   }

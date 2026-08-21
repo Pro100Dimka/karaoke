@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 import soundfile as sf
+from ml_collections import ConfigDict
 
 from AI.engines import separation
 from AI.errors import AICoreError, EngineUnavailableError
@@ -32,7 +33,7 @@ def test_persistent_worker_loads_once_and_moves_model_off_gpu(monkeypatch, tmp_p
     engine = tmp_path / "engine"
     (engine / "models").mkdir(parents=True)
     moves, runs, results = [], [], []
-    inference = SimpleNamespace(num_overlap=2, batch_size=4)
+    inference = ConfigDict({"num_overlap": 2, "batch_size": 4})
     model, torch = SimpleNamespace(eval=lambda: model, to=lambda device: moves.append(device) or model), SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True, empty_cache=lambda: moves.append('empty')), backends=SimpleNamespace(cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)), cudnn=SimpleNamespace(allow_tf32=False, benchmark=False), mps=SimpleNamespace(is_available=lambda: False)), set_float32_matmul_precision=lambda _: None, load=lambda *_args, **_kwargs: object())
     module_values = {
         "torch": torch,
@@ -253,6 +254,11 @@ def test_run_engine_success_empty_queue_and_errors(monkeypatch, tmp_path):
     process = Process(exitcode=2)
     separator._process = process
     raises(AICoreError, lambda: separator._run_engine(tmp_path, tmp_path), match='code 2')
+    process = Process(exitcode=0)
+    separator._process = process
+    separator._request_queue = ResultQueue()
+    separator._result_queue = ResultQueue(("job", 1.0, None))
+    separator._run_engine(tmp_path, tmp_path)
     process = Process([True], exitcode=0)
     separator._process = process
     separator._request_queue = ResultQueue()
@@ -319,7 +325,7 @@ def test_run_engine_heartbeat_and_timeout(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(separator, "_ensure_worker", lambda _: None)
     times = iter([0, 1, 2, 3])
     monkeypatch.setattr(separation.time, "monotonic", lambda: next(times, 3))
-    raises(AICoreError, lambda: separator._run_engine(tmp_path, tmp_path), match='code 0')
+    raises(AICoreError, lambda: separator._run_engine(tmp_path, tmp_path), match='without returning')
     assert "separation is active" in capsys.readouterr().out
 
     process = Process([True, True, True])

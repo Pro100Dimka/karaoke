@@ -58,6 +58,14 @@ def _park_model(model, device: str, torch):
     return model
 
 
+def _apply_inference_tuning(inference, tuning: dict[str, object]) -> None:
+    ignore_type = getattr(inference, "ignore_type", None)
+    context = ignore_type() if callable(ignore_type) else nullcontext()
+    with context:
+        inference.num_overlap = max(1.0, float(tuning.get("num_overlap", 2.0)))
+        inference.batch_size = int(tuning.get("batch_size", 4))
+
+
 def _run_persistent_msst_worker(
     engine_dir,
     base_arguments,
@@ -118,16 +126,13 @@ def _run_persistent_msst_worker(
             except Empty:
                 break
             if request is None: break
-            job_id, args.input_folder, args.store_dir, *options = request
-            tuning = options[0] if options else {}
-            inference = getattr(config, "inference", None)
-            if inference is not None:
-                inference.num_overlap = max(
-                    1.0, float(tuning.get("num_overlap", 2.0))
-                )
-                inference.batch_size = int(tuning.get("batch_size", 4))
+            job_id = request[0] if isinstance(request, (tuple, list)) and request else "unknown"
             started = time.perf_counter()
             try:
+                job_id, args.input_folder, args.store_dir, *options = request
+                tuning = options[0] if options else {}
+                inference = getattr(config, "inference", None)
+                if inference is not None: _apply_inference_tuning(inference, tuning)
                 if device != "cpu":
                     try:
                         model = model.to(device)
@@ -287,10 +292,23 @@ class MSSTMelRoformerSeparator(Separator):
             if error: raise AICoreError(error)
             return
         exitcode, timed_out = process.exitcode, time.monotonic() - started_at >= total_timeout_sec
+        if exitcode == 0 and not timed_out:
+            try:
+                response_id, elapsed_sec, error = self._result_queue.get(timeout=5)
+            except Empty:
+                pass
+            else:
+                if response_id == job_id:
+                    self.close()
+                    record_operation("separation.inference", elapsed_sec=elapsed_sec)
+                    if error: raise AICoreError(error)
+                    return
         self.close()
         if timed_out:
             minutes = int(total_timeout_sec // 60)
             raise AICoreError(f"MSST exceeded the {minutes}-minute safety timeout")
+        if exitcode == 0:
+            raise AICoreError("MSST worker exited without returning the separation result")
         raise AICoreError(f"MSST process exited with code {exitcode}")
 
     def _ensure_worker(self, arguments: dict[str, object]) -> None:

@@ -207,6 +207,9 @@ test("mock API implements the complete development contract", async () => {
   );
   const blob = await mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`);
   equal([blob.type, "application/zip"], [await blob.text(), "mock karaoke package"]);
+  const audioBlob = await mockBlobRequest(`/songs/${MOCK_SONG_ID}/audio/instrumental`);
+  equal([audioBlob.type, "audio/ogg"]);
+  assert.ok(audioBlob.size > 0);
   await assert.rejects(mockRequest("/missing", { method: "PUT" }), /not implemented/);
   await assert.rejects(mockBlobRequest("/missing", { method: "POST" }), /not implemented/);
   await assert.rejects(

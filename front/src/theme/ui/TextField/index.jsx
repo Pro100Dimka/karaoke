@@ -6,7 +6,7 @@ import cx from "../_internal/cx";
 import mergeSx from "../_internal/sx";
 import "./text-field.css";
 
-const TextField = forwardRef(function TextField({
+const TextField = forwardRef(({
   id,
   label,
   hint,
@@ -32,7 +32,7 @@ const TextField = forwardRef(function TextField({
   placeholder,
   rows,
   ...props
-}, ref) {
+}, ref) => {
   const uid = useId().replace(/:/g, "");
   const controlId = id || `ui-text-field-${uid}`;
   const hintId = hint ? `${controlId}-hint` : undefined;
@@ -56,7 +56,7 @@ const TextField = forwardRef(function TextField({
       required={required}
       value={value !== undefined ? value ?? "" : undefined}
       defaultValue={value === undefined ? defaultValue : undefined}
-      onChange={event => onChange?.(event.target.value, event)}
+      onChange={(event) => onChange?.(event.target.value, event)}
       placeholder={placeholder ?? (label ? " " : undefined)}
       rows={multiline ? rows : undefined}
       type={multiline ? undefined : type}
@@ -95,7 +95,7 @@ const TextField = forwardRef(function TextField({
                   variant="ghost"
                   size="sm"
                   aria-label="Подробнее"
-                  onMouseDown={event => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                 >
                   <Info size={14} />
                 </IconButton>
