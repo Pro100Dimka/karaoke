@@ -337,14 +337,44 @@ def test_audio_register_extreme_candidate_and_phrase_resets(monkeypatch):
         )
         == 2
     )
-    gapped, profile = [note(0, 0.1, 60), note(0.2, 0.3, 60)], replace(profile, phrase_gap=1, merge_gap=0.01, gap_scale=0.01)
+    gapped, profile = [note(0, 0.1, 60), note(0.2, 0.3, 60)], replace(
+        profile, phrase_gap=1, merge_gap=0.01, gap_scale=0.01
+    )
     onset[20] = 0.5
     assert (
         len(
-            notes._audio_verify_note_register(gapped, "audio.wav", profile, fmin_hz=50, fmax_hz=500)
+            notes._audio_verify_note_register(
+                gapped, "audio.wav", profile, fmin_hz=50, fmax_hz=500
+            )
         )
         == 2
     )
+
+
+def test_audio_register_corrects_low_octave_from_independent_spectrum(monkeypatch):
+    np = pytest.importorskip("numpy")
+    source = [note(0, 0.2, 62), note(0.21, 0.38, 50), note(0.39, 0.6, 62)]
+    frames = [frame(i * 0.01) for i in range(70)]
+    profile = notes._note_timing_profile(frames, source, min_note_hint=0.04)
+    low_hz = 440 * 2 ** ((50 - 69) / 12)
+    fake = SimpleNamespace(
+        yin=lambda *_a, **_k: np.full(100, low_hz),
+        stft=lambda *_a, **_k: np.ones((1025, 100), dtype=complex),
+        onset=SimpleNamespace(onset_strength=lambda **_: np.zeros(100)),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake)
+    patch_attrs(
+        monkeypatch,
+        notes,
+        load_mono=lambda *_: (np.ones(16000), 16000),
+        _audio_harmonic_salience=lambda _m, _i, midi, **_: 30 - abs(midi - 62) * 3,
+    )
+
+    result = notes._audio_verify_note_register(
+        source, "audio.wav", profile, fmin_hz=50, fmax_hz=500
+    )
+
+    assert result[1].midi_note == 62
 
 
 def test_build_vocal_notes_orchestrates_all_stages(monkeypatch):
@@ -397,3 +427,29 @@ def test_word_pitch_evidence_does_not_duplicate_an_existing_acoustic_note():
 
     assert result == detected
     assert retained == 0
+
+
+def test_word_pitch_evidence_fills_only_a_real_uncovered_pitch_run():
+    words = [Word(1.0, 1.8, "melisma", index=0)]
+    detected = [note(1.1, 1.3, 60, word=0)]
+    frames = [
+        frame(1.15, 60),
+        frame(1.2, 60),
+        frame(1.5, 64),
+        frame(1.51, 64),
+    ]
+
+    result, retained = notes._retain_word_pitch_evidence(
+        detected,
+        frames,
+        words,
+        min_confidence=0.38,
+        max_gap=0.05,
+        frame_step=0.01,
+    )
+
+    assert retained == 1
+    assert [(item.midi_note, item.start, item.end) for item in result] == [
+        (60, 1.1, 1.3),
+        (64, 1.495, 1.515),
+    ]

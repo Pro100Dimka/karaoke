@@ -14,7 +14,7 @@ from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
 from .utils.numeric import energy_attack_strength
 
-NOTE_DECODER_VERSION = "acoustic-notes-v35-word-frame-evidence"
+NOTE_DECODER_VERSION = "acoustic-notes-v36-independent-upward-register"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
 
 
@@ -759,7 +759,13 @@ def _audio_verify_note_register(
                 and original_yin_distance >= max(3.0, min(6.0, delta * 0.35))
             )
             if delta >= 12:
-                accept = yin_supports_rewrite and emission_margin >= required_margin
+                spectral_supports_upward_rewrite = (
+                    proposed > int(note.midi_note)
+                    and emission_margin >= required_margin + 0.75
+                )
+                accept = (
+                    yin_supports_rewrite and emission_margin >= required_margin
+                ) or spectral_supports_upward_rewrite
             else:
                 accept = emission_margin >= required_margin and (
                     yin_supports_rewrite
@@ -937,11 +943,6 @@ def _retain_word_pitch_evidence(
     output, retained = list(notes), 0
     step = max(float(frame_step), 1e-4)
     for word_index, word in enumerate(words):
-        if any(
-            min(note.end, word.end) - max(note.start, word.start) > 1e-9
-            for note in output
-        ):
-            continue
         candidates = [
             frame
             for frame in frames
@@ -949,6 +950,10 @@ def _retain_word_pitch_evidence(
             and frame.voiced
             and frame.frequency > 0
             and frame.confidence >= min_confidence
+            and not any(
+                note.start - step / 2.0 <= frame.time <= note.end + step / 2.0
+                for note in output
+            )
         ]
         runs: list[list[PitchFrame]] = []
         for frame in candidates:

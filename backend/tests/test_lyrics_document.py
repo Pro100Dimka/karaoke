@@ -54,7 +54,7 @@ def test_words_without_acoustic_evidence_do_not_borrow_a_nearby_note():
     words = [Word(1.0, 2.0, "first", index=0), Word(3.0, 4.0, "silent", index=1)]
     payload = words_with_notes(words, [VocalNote(1.2, 1.8, 60, word_index=0)])
 
-    assert payload[0]["notes"] == [{"note": 60, "start": 1.0, "end": 2.0}]
+    assert payload[0]["notes"] == [{"note": 60, "start": 1.2, "end": 1.8}]
     assert payload[1]["notes"] == []
 
 
@@ -69,11 +69,11 @@ def test_sustained_acoustic_note_is_preserved_in_every_word_it_crosses():
         [VocalNote(1.1, 1.7, 60, word_index=0)],
     )
 
-    assert payload[0]["notes"] == [{"note": 60, "start": 1.0, "end": 1.4}]
-    assert payload[1]["notes"] == [{"note": 60, "start": 1.4, "end": 1.8}]
+    assert payload[0]["notes"] == [{"note": 60, "start": 1.1, "end": 1.4}]
+    assert payload[1]["notes"] == [{"note": 60, "start": 1.4, "end": 1.7}]
 
 
-def test_export_removes_micro_intervals_without_inventing_a_pitch():
+def test_export_preserves_every_acoustically_detected_interval_without_filling_gaps():
     words = [Word(1.0, 1.3, "melody", index=0)]
     detected = [
         VocalNote(1.0, 1.15, 60, word_index=0),
@@ -83,9 +83,11 @@ def test_export_removes_micro_intervals_without_inventing_a_pitch():
 
     exported = words_with_notes(words, detected)[0]["notes"]
 
-    assert {note["note"] for note in exported} <= {60, 62, 72}
-    assert 72 not in {note["note"] for note in exported}
-    assert all(note["end"] - note["start"] >= 0.07 for note in exported)
+    assert exported == [
+        {"note": 60, "start": 1.0, "end": 1.15},
+        {"note": 72, "start": 1.151, "end": 1.152},
+        {"note": 62, "start": 1.16, "end": 1.3},
+    ]
 
 
 def test_short_word_keeps_its_acoustically_detected_note():
@@ -124,10 +126,6 @@ def test_editor_does_not_create_a_note_for_an_empty_word():
             {"note": 60, "start": 1.0, "end": 1.6},
             {"note": 62, "start": 1.5, "end": 1.8},
         ],
-        [
-            {"note": 60, "start": 1.0, "end": 1.4},
-            {"note": 62, "start": 1.5, "end": 2.0},
-        ],
         [{"note": 128, "start": 1.0, "end": 1.2}],
     ],
 )
@@ -138,6 +136,15 @@ def test_rejects_notes_outside_word_or_overlapping(notes):
 
 def test_accepts_word_without_an_acoustically_detected_note():
     assert validate_lyrics_document(document([]))["words"][0]["notes"] == []
+
+
+def test_accepts_real_silence_between_notes_inside_a_word():
+    notes = [
+        {"note": 60, "start": 1.1, "end": 1.4},
+        {"note": 62, "start": 1.55, "end": 1.8},
+    ]
+
+    assert validate_lyrics_document(document(notes))["words"][0]["notes"] == notes
 
 
 @pytest.mark.parametrize("field", ["bpm", "key", "words"])

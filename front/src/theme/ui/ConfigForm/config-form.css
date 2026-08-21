@@ -20,6 +20,7 @@
   }
 
   .ui-config-form-field > * {
+    padding: var(--config-field-pad, var(--space-2)) 0;
     width: 100%;
     min-width: 0;
   }

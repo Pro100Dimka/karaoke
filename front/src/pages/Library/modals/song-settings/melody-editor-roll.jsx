@@ -1,6 +1,7 @@
 import { MoveHorizontal, MoveVertical } from "lucide-react";
+import PianoKeyboard, { isBlackPianoKey } from "../../../../components/piano-keyboard";
 import { translateSaved } from "../../../../i18n/runtime";
-import { BLACK_KEYS, clamp, noteName } from "./melody-editor-state";
+import { clamp, noteName } from "./melody-editor-state";
 
 const thumbSize = (viewport, content) => Math.max(7, (viewport / Math.max(1, content)) * 100);
 const thumbOffset = (position, viewport, content) => {
@@ -8,57 +9,10 @@ const thumbOffset = (position, viewport, content) => {
   return (position / Math.max(1, content - viewport)) * Math.max(0, 100 - size);
 };
 
-function PianoKeyboard({
-  auditionNote,
-  keyboardWidth,
-  laneHeight,
-  maxMidi,
-  minMidi,
-  rowHeight,
-  whiteKeyGeometry
-}) {
-  const blackKeys = Array.from(
-    { length: maxMidi - minMidi + 1 },
-    (_, index) => maxMidi - index
-  ).filter((midi) => BLACK_KEYS.includes(((midi % 12) + 12) % 12));
-  const audition = (event, midi) => {
-    event.stopPropagation();
-    auditionNote(midi, 220);
-  };
-  return (
-    <div className="melody-editor-keyboard" style={{ width: keyboardWidth, height: laneHeight }}>
-      {whiteKeyGeometry.map(({ midi, top, height }) => (
-        <div
-          key={`white-${midi}`}
-          className="melody-editor-piano-key is-white"
-          style={{ top, width: keyboardWidth, height }}
-          onPointerDown={(event) => audition(event, midi)}
-        >
-          <span>{noteName(midi)}</span>
-        </div>
-      ))}
-      {blackKeys.map((midi) => {
-        const center = (maxMidi - midi + 0.5) * rowHeight;
-        const height = rowHeight * 0.68;
-        return (
-          <div
-            key={`black-${midi}`}
-            className="melody-editor-piano-key is-black"
-            style={{ top: center - height / 2, width: keyboardWidth * 0.64, height }}
-            onPointerDown={(event) => audition(event, midi)}
-          >
-            <span>{noteName(midi)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function PitchRows({ keyboardWidth, maxMidi, minMidi, rowHeight }) {
   return Array.from({ length: maxMidi - minMidi + 1 }, (_, index) => {
     const midi = maxMidi - index;
-    const black = BLACK_KEYS.includes(((midi % 12) + 12) % 12);
+    const black = isBlackPianoKey(midi);
     return (
       <div
         key={`row-${midi}`}
@@ -301,8 +255,8 @@ export default function MelodyEditorRoll({
           />
           <PianoKeyboard
             auditionNote={auditionNote}
-            keyboardWidth={keyboardWidth}
-            laneHeight={laneHeight}
+            width={keyboardWidth}
+            height={laneHeight}
             maxMidi={maxMidi}
             minMidi={minMidi}
             rowHeight={rowHeight}

@@ -20,14 +20,12 @@ const SONG_RENDERERS = {
   noteRange: ({ field, context }) => (
     <Stack gap={1}>
       <strong>{field.label}</strong>
-
       <Stack direction="row" gap={2}>
         <NumberField
           placeholder={translateSaved("Мин.")}
           value={context.form.note_range_min ?? ""}
           onChange={(value) => context.onChange("note_range_min", parseNumber(value))}
         />
-
         <NumberField
           placeholder={translateSaved("Макс.")}
           value={context.form.note_range_max ?? ""}
@@ -71,7 +69,7 @@ export default function SongSettings({ songId, onClose }) {
   const renderContent = () => {
     if (songsError) {
       return (
-        <Stack gap={1} sx={{ padding: "1rem" }}>
+        <Stack gap={1}>
           <p className="field-error">
             {translateSaved("Не удалось загрузить песню:")}
             {getErrorMessage(songsError)}
@@ -104,7 +102,7 @@ export default function SongSettings({ songId, onClose }) {
       );
     }
     return (
-      <Stack gap={2} sx={{ padding: "1rem" }}>
+      <Stack>
         <ConfigForm
           fields={SONG_FIELDS}
           context={{ form, onChange: updateField }}

@@ -21,6 +21,7 @@ export default function RotaryKnob({
 }) {
   const inputId = `rotary-knob-${normalizeId(useId())}`;
   const dragRef = useRef(null);
+  const editorRef = useRef(null);
   const [editing, setEditing] = useState(false);
   const [draftPercent, setDraftPercent] = useState("");
   const normalized = clamp(Number(value) || 0, min, max);
@@ -28,6 +29,11 @@ export default function RotaryKnob({
   useEffect(() => {
     if (!dragRef.current) valueRef.current = normalized;
   }, [normalized]);
+  useEffect(() => {
+    if (!editing) return;
+    editorRef.current?.focus();
+    editorRef.current?.select();
+  }, [editing]);
   const range = max - min || 1;
   const ratio = (normalized - min) / range;
   const percent = Math.round(ratio * 100);
@@ -131,7 +137,7 @@ export default function RotaryKnob({
       {editing ? (
         <span className="karaoke-effect-dial__value-editor">
           <input
-            autoFocus
+            ref={editorRef}
             aria-label={`${label}, ${percent}%`}
             inputMode="decimal"
             min="0"

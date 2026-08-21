@@ -17,7 +17,9 @@ vi.mock("../src/api/client", () => ({
 }));
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
 import WaveformTimeline from "../src/pages/Karaoke/components/waveform-timeline.jsx";
-import KaraokeLyrics from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyrics.jsx";
+import KaraokeLyrics, {
+  noteFillPercent
+} from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyrics.jsx";
 const KaraokeLyricLine = ({ line, currentTime }) => (
   <KaraokeLyrics lyricsSync={{ text: line.text, words: line.words }} currentTime={currentTime} />
 );
@@ -274,6 +276,55 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
       container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
     )
   ).toBeCloseTo(50, 10);
+});
+
+test("lyrics advance only while an acoustic note is sounding", () => {
+  const word = {
+    index: 0,
+    text: "тяну",
+    start: 0,
+    end: 2,
+    notes: [
+      { note: 60, start: 0.2, end: 0.7 },
+      { note: 62, start: 1.2, end: 1.7 }
+    ]
+  };
+  const { container, rerender } = render(
+    <KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={0.5} />
+  );
+  const fill = () =>
+    Number.parseFloat(
+      container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
+    );
+  expect(fill()).toBeCloseTo(30, 10);
+  rerender(<KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={0.9} />);
+  expect(fill()).toBeCloseTo(50, 10);
+  rerender(<KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={1.45} />);
+  expect(fill()).toBeCloseTo(75, 10);
+  rerender(<KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={1.7} />);
+  expect(fill()).toBe(100);
+});
+test("note progress ignores invalid rows, clips intervals and preserves acoustic gaps", () => {
+  const word = {
+    start: 1,
+    end: 4,
+    notes: [
+      { start: 3, end: 5 },
+      { start: Number.NaN, end: 2 },
+      { start: 0, end: 2 },
+      { start: 2.5, end: 2.5 }
+    ]
+  };
+
+  expect(noteFillPercent(word, 0)).toBe(0);
+  expect(noteFillPercent(word, 1)).toBe(0);
+  expect(noteFillPercent(word, 1.5)).toBe(25);
+  expect(noteFillPercent(word, 2.5)).toBe(50);
+  expect(noteFillPercent(word, 3.5)).toBe(75);
+  expect(noteFillPercent(word, 5)).toBe(100);
+  expect(noteFillPercent({ start: 2, end: 4 }, 3)).toBe(50);
+  expect(noteFillPercent({ start: 2, end: 4, notes: "invalid" }, 1)).toBe(0);
+  expect(noteFillPercent({ start: 2, end: 4, notes: [] }, 4)).toBe(100);
 });
 
 test("lyrics show only the current and next source lines", () => {

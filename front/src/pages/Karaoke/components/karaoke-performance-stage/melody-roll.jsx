@@ -1,10 +1,8 @@
+import PianoKeyboard from "../../../../components/piano-keyboard";
 import { translateSaved } from "../../../../i18n/runtime";
 import { clamp } from "../../../../utils/math";
-import { midiToWesternNote } from "../../utils/format";
 
-const VIEW = { width: 1200, height: 288, keyboardWidth: 48, seconds: 10, lead: 2.5 };
-const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
-const isBlackKey = (note) => BLACK_KEYS.has(((note % 12) + 12) % 12);
+const VIEW = { width: 1200, height: 288, keyboardWidth: 82, seconds: 10, lead: 2.5 };
 
 function visibleLyricsNotes(notes, viewStart, viewEnd, keyShift) {
   return notes
@@ -36,45 +34,6 @@ function melodyRange(notes, keyShift, sungNote) {
   };
 }
 
-function PianoKeyboard({ height, keyboardWidth, lanes, rowHeight, activeNote }) {
-  return (
-    <g className="melody-keyboard">
-      {lanes.map((note) => {
-        const black = isBlackKey(note);
-        const y = height - (note - lanes[0] + 1) * rowHeight;
-        const active = note === activeNote;
-        return (
-          <g key={`key-${note}`}>
-            <rect
-              fill={active ? "#ed214b" : black ? "#05050b" : "#f4f3f7"}
-              fillOpacity={active ? 0.76 : black ? 0.46 : 0.18}
-              height={Math.max(1, rowHeight - 0.5)}
-              stroke="rgba(255,255,255,.18)"
-              strokeWidth=".5"
-              width={black ? keyboardWidth * 0.66 : keyboardWidth}
-              x="0"
-              y={y + 0.25}
-            />
-            {!black && rowHeight >= 8 && (
-              <text
-                dominantBaseline="middle"
-                fill={active ? "#fff" : "rgba(255,255,255,.82)"}
-                fontFamily="Inter, Segoe UI, sans-serif"
-                fontSize={Math.min(10, rowHeight * 0.45)}
-                fontWeight="750"
-                x="4"
-                y={y + rowHeight / 2}
-              >
-                {midiToWesternNote(note)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
 export default function MelodyRoll({
   notes,
   currentTime,
@@ -92,11 +51,9 @@ export default function MelodyRoll({
   const pitchRange = Math.max(1, max - min + 1);
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(15, Math.max(5, rowHeight * 0.72));
-  const lanes = Array.from({ length: pitchRange }, (_, index) => min + index);
   const laneWidth = width - keyboardWidth;
   const x = (value) => keyboardWidth + ((value - viewStart) / seconds) * laneWidth;
   const y = (note) => height - (note - min + 1) * rowHeight;
-  const active = visibleNotes.find((note) => time >= note.start && time < note.end);
   const indicator = Number(sungMidi);
   const playheadX = x(time);
 
@@ -135,13 +92,15 @@ export default function MelodyRoll({
           x="0"
           y="0"
         />
-        <PianoKeyboard
-          activeNote={active?.note ?? null}
-          height={height}
-          keyboardWidth={keyboardWidth}
-          lanes={lanes}
-          rowHeight={rowHeight}
-        />
+        <foreignObject height={height} width={keyboardWidth} x="0" y="0">
+          <PianoKeyboard
+            height={height}
+            maxMidi={max}
+            minMidi={min}
+            rowHeight={rowHeight}
+            width={keyboardWidth}
+          />
+        </foreignObject>
 
         {visibleNotes.map((note) => {
           const noteX = Math.max(keyboardWidth, x(note.start));

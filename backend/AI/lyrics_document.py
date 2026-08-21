@@ -6,7 +6,6 @@ from typing import Any
 from .models import VocalNote, Word, to_dict
 
 _EPSILON = 1e-9
-_MIN_EXPORTED_NOTE_SECONDS = 0.07
 
 
 def _number(value: Any, name: str) -> float:
@@ -59,50 +58,40 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
                 raise ValueError(f"{path}.start must be less than end")
             if note_start < previous_end - _EPSILON:
                 raise ValueError(f"{path} overlaps the previous note")
-            if abs(note_start - previous_end) > _EPSILON:
-                raise ValueError(f"{path} leaves a gap in the word")
             previous_end = note_end
-        if abs(previous_end - end) > _EPSILON:
-            raise ValueError(f"words[{position}].notes do not reach the word end")
     return payload
 
 
-def _continuous_note_rows(
+def _acoustic_note_rows(
     word_start: float,
     word_end: float,
     rows: list[tuple[int, float, float]],
 ) -> list[dict[str, Any]]:
     compact: list[tuple[int, float, float]] = []
     for note, start, end in sorted(rows, key=lambda item: (item[1], item[2], item[0])):
-        if compact and compact[-1][0] == note:
+        clipped_start = max(float(word_start), float(start))
+        clipped_end = min(float(word_end), float(end))
+        if clipped_end <= clipped_start + _EPSILON:
             continue
-        compact.append((int(note), float(start), float(end)))
-    if not compact:
-        return []
-
-    while True:
-        boundaries = [float(word_start)]
-        for left, right in zip(compact, compact[1:], strict=False):
-            midpoint = (left[2] + right[1]) / 2.0
-            boundaries.append(max(float(word_start), min(float(word_end), midpoint)))
-        boundaries.append(float(word_end))
-        if any(right <= left for left, right in zip(boundaries, boundaries[1:], strict=False)):
-            step = (float(word_end) - float(word_start)) / len(compact)
-            boundaries = [float(word_start) + step * index for index in range(len(compact) + 1)]
-        durations = [right - left for left, right in zip(boundaries, boundaries[1:], strict=False)]
-        shortest = min(range(len(durations)), key=durations.__getitem__)
-        threshold = min(_MIN_EXPORTED_NOTE_SECONDS, float(word_end) - float(word_start))
-        if len(compact) == 1 or durations[shortest] + _EPSILON >= threshold:
-            break
-        compact.pop(shortest)
+        if compact and compact[-1][0] == int(note) and clipped_start <= compact[-1][2] + _EPSILON:
+            previous = compact[-1]
+            compact[-1] = (previous[0], previous[1], max(previous[2], clipped_end))
+            continue
+        if compact and clipped_start < compact[-1][2]:
+            boundary = (clipped_start + compact[-1][2]) / 2.0
+            previous = compact[-1]
+            compact[-1] = (previous[0], previous[1], boundary)
+            clipped_start = boundary
+        compact.append((int(note), clipped_start, clipped_end))
     return [
-        {"note": note[0], "start": boundaries[index], "end": boundaries[index + 1]}
-        for index, note in enumerate(compact)
+        {"note": note, "start": start, "end": end}
+        for note, start, end in compact
+        if end > start + _EPSILON
     ]
 
 
-def _continuous_word_notes(word: Word, owned: list[VocalNote]) -> list[dict[str, Any]]:
-    return _continuous_note_rows(
+def _acoustic_word_notes(word: Word, owned: list[VocalNote]) -> list[dict[str, Any]]:
+    return _acoustic_note_rows(
         float(word.start),
         float(word.end),
         [(note.midi_note, note.start, note.end) for note in owned],
@@ -126,7 +115,7 @@ def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str
     for word_index, owned in enumerate(assigned):
         payload_word = result[word_index]
         source_word = words[word_index]
-        payload_word["notes"] = _continuous_word_notes(source_word, owned)
+        payload_word["notes"] = _acoustic_word_notes(source_word, owned)
 
     validate_lyrics_document({"bpm": 1, "key": "unknown", "words": result})
     return result
@@ -173,7 +162,7 @@ def replace_word_notes(
         if not notes:
             continue
         start, end = _number(word["start"], "word.start"), _number(word["end"], "word.end")
-        word["notes"] = _continuous_note_rows(
+        word["notes"] = _acoustic_note_rows(
             start,
             end,
             [
