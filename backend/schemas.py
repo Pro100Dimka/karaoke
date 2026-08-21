@@ -56,6 +56,7 @@ class SongOut(ORMModel, ProcessingState):
 class SongIdentityOut(BaseModel):
     title: str
     artist: str | None = None
+    cover_data_url: str | None = None
 
 
 class SongUpdate(BaseModel):

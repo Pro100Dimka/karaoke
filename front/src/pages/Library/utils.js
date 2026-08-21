@@ -31,6 +31,18 @@ export function isProcessingActive(status) {
 export function hasActiveSongProcessing(songs) {
   return asArray(songs).some((song) => isProcessingActive(String(song?.status)));
 }
+export function getProcessingSongs(songs) {
+  const priority = { processing: 0, cancelling: 1, queued: 2 };
+  return asArray(songs)
+    .filter((song) => isProcessingActive(String(song?.status)))
+    .map((song, index) => ({ song, index }))
+    .sort(
+      (left, right) =>
+        (priority[left.song.status] ?? 3) - (priority[right.song.status] ?? 3) ||
+        left.index - right.index
+    )
+    .map(({ song }) => song);
+}
 export function mergeSongProcessingStatus(songs, status) {
   if (!Array.isArray(songs) || !status?.song_id) return songs ?? [];
   const songId = String(status.song_id);

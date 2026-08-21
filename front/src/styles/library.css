@@ -355,6 +355,82 @@
     0 0 1rem color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
+.settings-field--floating {
+  position: relative;
+  display: block;
+  min-width: 0;
+  border: var(--hairline) solid color-mix(in srgb, var(--color-primary-hover) 38%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-glass) 76%, transparent);
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 7%, transparent),
+    0 0 1rem color-mix(in srgb, var(--color-primary) 8%, transparent);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.settings-field--floating:focus-within {
+  border-color: var(--color-primary);
+  box-shadow:
+    0 0 0 0.16rem color-mix(in srgb, var(--color-primary) 14%, transparent),
+    var(--shadow-neon-soft);
+}
+
+.settings-field--floating > span {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: var(--space-3);
+  display: block;
+  min-width: 0;
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transform-origin: left center;
+  transition:
+    top var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.settings-field--floating > .input,
+.settings-field--floating > textarea {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.settings-field--floating > .input::placeholder,
+.settings-field--floating > textarea::placeholder {
+  color: transparent;
+}
+
+.settings-field--floating:focus-within > span,
+.settings-field--floating:has(.input:not(:placeholder-shown)) > span,
+.settings-field--floating:has(textarea:not(:placeholder-shown)) > span {
+  top: 0;
+  color: var(--color-primary-hover);
+  background: var(--color-surface-strong);
+  transform: translateY(-50%) scale(0.82);
+}
+
+.settings-field--floating:focus-within > .input::placeholder,
+.settings-field--floating:focus-within > textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+.field-hint {
+  padding-inline: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
 .field-row {
   gap: var(--space-3);
   min-width: 0;
@@ -1661,6 +1737,32 @@
   justify-content: flex-end;
   gap: 0.7rem;
   padding-top: 0.25rem;
+}
+
+.processing-song-carousel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-soft) 78%, transparent);
+}
+
+.processing-song-carousel > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  text-align: center;
+}
+
+.processing-song-carousel span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {

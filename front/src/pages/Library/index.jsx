@@ -27,6 +27,7 @@ import {
   countReadySongs,
   filterSongs,
   getLocalVisibleSongs,
+  getProcessingSongs,
   hasActiveSongProcessing,
   isProcessingActive,
   mergeSongProcessingStatus,
@@ -146,9 +147,9 @@ export default function Library({ onOpenSongSettings }) {
   }, [processingStatusError]);
   useEffect(() => {
     if (trackedSongId || !hasActiveSongProcessing(songs)) return;
-    const activeSong = songs.find((song) => isProcessingActive(song?.status));
-    setTrackedSongId(activeSong?.id || null);
-  }, [songs, trackedSongId]);
+    const [activeSong] = getProcessingSongs(songs);
+    trackProcessingSong(activeSong);
+  }, [songs, trackProcessingSong, trackedSongId]);
   useEffect(() => {
     if (
       !trackedSongId ||
@@ -235,6 +236,7 @@ export default function Library({ onOpenSongSettings }) {
     }
   }, [confirmDialog, notify, processingSong, refreshSongs]);
   const currentSongs = mergeSongProcessingStatus(songs, processingStatus);
+  const processingSongs = getProcessingSongs(currentSongs);
   const anySongProcessing = hasActiveSongProcessing(currentSongs);
   useEffect(() => {
     setProcessingLoadActive(anySongProcessing);
@@ -417,7 +419,9 @@ export default function Library({ onOpenSongSettings }) {
       )}
       <ProcessingModal
         song={processingSong}
-        status={processingStatus}
+        songs={processingSongs}
+        status={processingStatus?.song_id === processingSong?.id ? processingStatus : null}
+        onSelectSong={trackProcessingSong}
         onClose={() => setProcessingSong(null)}
         onCancel={cancelProcessing}
         onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}

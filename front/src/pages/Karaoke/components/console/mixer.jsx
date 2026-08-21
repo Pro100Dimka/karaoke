@@ -1,8 +1,8 @@
 import { Mic } from "lucide-react";
+import { RotaryKnob } from "../../../../components/fields";
 import { translateSaved } from "../../../../i18n/runtime";
 import { Stack, Typography } from "../../../../theme/ui";
 import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
-import EffectDial from "./effect-dial";
 import { clamp } from "./utils";
 
 const MIXER_COLORS = {
@@ -148,7 +148,7 @@ export default function MixerPanel({
           if (effect) {
             const [effectKey, effectLabel, accent] = effect;
             items.push(
-              <EffectDial
+              <RotaryKnob
                 key={`effect-${effectKey}`}
                 label={effectLabel}
                 value={microphoneEffects[effectKey]}

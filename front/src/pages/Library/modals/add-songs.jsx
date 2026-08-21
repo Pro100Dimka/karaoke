@@ -59,6 +59,7 @@ export default function AddSongsModal({ review, onCancel, onConfirm, onUpdate })
       maxWidth="48rem"
       titleProps={{
         icon: Music2,
+        image: item?.coverUrl || undefined,
         eyebrow: item
           ? translateSaved("Песня {0} из {1}", {
               0: review.index + 1,

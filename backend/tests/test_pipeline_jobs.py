@@ -194,18 +194,20 @@ def test_finalize_success_commits_metadata_and_best_effort_optimization(monkeypa
 
 
 def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch, tmp_path):
-    patch_attrs(monkeypatch, pipeline_service, _load_job_paths=Mock(return_value=('source', tmp_path)), _load_searchable_title=Mock(return_value='Title'), _load_ai_inputs=Mock(return_value=(None, None, None)), _is_cancelled=Mock(return_value=False), _update_progress=Mock(), _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())))
+    events = []
+    patch_attrs(monkeypatch, pipeline_service, _load_job_paths=Mock(return_value=('source', tmp_path)), _load_searchable_title=Mock(return_value='Title'), _load_ai_inputs=Mock(return_value=(None, None, None)), _is_cancelled=Mock(return_value=False), _update_progress=Mock(), _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())), _acquire_processing_slot=Mock(return_value=True), _release_processing_slot=Mock(side_effect=lambda _song_id: events.append("release")))
     capture = Mock()
     patch_many(monkeypatch, (pipeline_service, "_create_progress_capture", Mock(return_value=capture)), (pipeline_service.model_install_service, "ensure_ready_sync", Mock()))
     patch_attrs(monkeypatch, pipeline_service, _configure_ai_runtime=Mock(return_value='cpu'), format_runtime_plan=Mock(return_value=('CPU',)), _create_ai_progress_callback=Mock(return_value=Mock()))
     process = Mock()
     monkeypatch.setattr(pipeline_service.ai_bridge, "process_song", process)
     patch_attrs(monkeypatch, pipeline_service, _stop_progress_heartbeat=Mock(), _end_runtime_progress=Mock())
-    finalize = Mock()
+    finalize = Mock(side_effect=lambda *_args: events.append("finalize"))
     monkeypatch.setattr(pipeline_service, "_finalize_success", finalize)
     pipeline_service._run_job("song")
     process.assert_called_once()
     finalize.assert_called_once_with("song", tmp_path)
+    assert events[:2] == ["finalize", "release"]
     capture.close.assert_called_once()
 
     pipeline_service._load_job_paths.return_value = None

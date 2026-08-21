@@ -34,7 +34,7 @@ export default function FieldInput({
   const textProps = {
     ...commonProps,
     value: value ?? "",
-    placeholder: field.placeholder,
+    placeholder: field.placeholder ?? " ",
     maxLength: field.maxLength,
     onChange: (event) => onChange(event.target.value),
     onBlur: (event) => onBlur(event.target.value)
@@ -48,7 +48,7 @@ export default function FieldInput({
         {...commonProps}
         type="number"
         value={value ?? ""}
-        placeholder={field.placeholder}
+        placeholder={field.placeholder ?? " "}
         min={field.min}
         max={field.max}
         step={field.step}
@@ -61,7 +61,7 @@ export default function FieldInput({
         id={inputId}
         value={value ?? ""}
         options={field.options ?? []}
-        placeholder={field.placeholder}
+        placeholder={field.placeholder ?? " "}
         disabled={field.disabled}
         ariaInvalid={commonProps["aria-invalid"]}
         ariaDescribedBy={commonProps["aria-describedby"]}
@@ -74,7 +74,7 @@ export default function FieldInput({
       <textarea
         {...commonProps}
         value={value ?? ""}
-        placeholder={field.placeholder}
+        placeholder={field.placeholder ?? " "}
         maxLength={field.maxLength}
         rows={field.rows}
         spellCheck={field.spellCheck}
@@ -82,7 +82,7 @@ export default function FieldInput({
         onBlur={(event) => onBlur(event.target.value)}
       />
     ),
-    readonly: <input {...commonProps} value={value ?? ""} readOnly />,
+    readonly: <input {...commonProps} value={value ?? ""} placeholder=" " readOnly />,
     toggle: (
       <span className="app-checkbox">
         <input
@@ -110,6 +110,7 @@ export default function FieldInput({
       hint={field.hint}
       error={field.error}
       inline={field.type === "toggle"}
+      floating={["text", "url", "number", "textarea", "readonly"].includes(field.type ?? "text")}
       className={field.wrapperClassName}
       variant={field.variant}
     >

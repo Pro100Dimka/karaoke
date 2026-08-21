@@ -24,6 +24,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
         items: [
           {
             file: new File(["audio"], "Artist - Track.flac"),
+            coverUrl: "data:image/png;base64,cover",
             title: "Track",
             artist: "Artist"
           }
@@ -36,6 +37,9 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   );
 
   expect(view.container.querySelector(".library-add-song-fields")).not.toBeNull();
+  expect(view.container.querySelector(".modal-title__image")?.src).toContain(
+    "data:image/png;base64,cover"
+  );
   expect(view.container.querySelectorAll(".settings-field.library-add-song-field")).toHaveLength(2);
   const title = view.getByDisplayValue("Track");
   const artist = view.getByDisplayValue("Artist");

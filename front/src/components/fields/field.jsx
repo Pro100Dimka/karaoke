@@ -7,24 +7,35 @@ export default function Field({
   hint,
   error,
   inline = false,
+  floating = false,
   className = "",
   variant,
   children
 }) {
   const baseClass = inline ? "settings-toggle" : "settings-field";
-  const classes = cx(baseClass, variant && `${baseClass}--${variant}`, className);
+  const classes = cx(
+    baseClass,
+    floating && `${baseClass}--floating`,
+    variant && `${baseClass}--${variant}`,
+    className
+  );
 
   return (
     <Stack gap={0.5} align="start">
       <label className={classes} htmlFor={id}>
-        {(label || hint) && (
+        {(label || (!floating && hint)) && (
           <span>
             {label && <strong>{label}</strong>}
-            {hint && <small>{hint}</small>}
+            {!floating && hint && <small>{hint}</small>}
           </span>
         )}
       </label>
       {children}
+      {floating && hint && (
+        <small id={`${id}-hint`} className="field-hint">
+          {hint}
+        </small>
+      )}
       {error && <small className="field-error">{error}</small>}
     </Stack>
   );

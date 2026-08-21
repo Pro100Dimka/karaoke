@@ -10,8 +10,8 @@ import {
   Trash2,
   Undo2
 } from "lucide-react";
+import { RotaryKnob } from "../../../../components/fields";
 import { translateSaved } from "../../../../i18n/runtime";
-import EffectDial from "../../../Karaoke/components/console/effect-dial";
 import SongStrip from "../../../Karaoke/components/console/song-strip";
 import { noteName } from "./melody-editor-state";
 import MelodyEditorToolbarButton from "./melody-editor-toolbar";
@@ -147,18 +147,18 @@ function VolumeDials({ setVolumes, volumes }) {
     setVolumes((current) => ({ ...current, [key]: Number(value) }));
   return (
     <div className="melody-editor-compact-dials">
-      <EffectDial
+      <RotaryKnob
         label={translateSaved("Вокал")}
         value={volumes.vocals}
         onChange={setVolume("vocals")}
       />
-      <EffectDial
+      <RotaryKnob
         label={translateSaved("Мелодия")}
         value={volumes.melody}
         accent="secondary"
         onChange={setVolume("melody")}
       />
-      <EffectDial
+      <RotaryKnob
         label={translateSaved("Минус")}
         value={volumes.instrumental}
         onChange={setVolume("instrumental")}

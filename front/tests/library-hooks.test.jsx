@@ -91,7 +91,8 @@ describe("library file import", () => {
     const file = new File(["audio"], "wrong filename.mp3");
     api.inspectSongIdentity.mockResolvedValue({
       title: "Metadata title",
-      artist: "Metadata artist"
+      artist: "Metadata artist",
+      cover_data_url: "data:image/png;base64,cover"
     });
     const hook = renderHook(() =>
       useLibraryFileImport({ fileInputRef: { current: null }, notify: vi.fn(), onStarted: vi.fn() })
@@ -103,7 +104,11 @@ describe("library file import", () => {
 
     expect(api.inspectSongIdentity).toHaveBeenCalledWith(file);
     expect(hook.result.current.review.items[0]).toEqual(
-      expect.objectContaining({ title: "Metadata title", artist: "Metadata artist" })
+      expect.objectContaining({
+        title: "Metadata title",
+        artist: "Metadata artist",
+        coverUrl: "data:image/png;base64,cover"
+      })
     );
     expect(api.addSong).not.toHaveBeenCalled();
   });

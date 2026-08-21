@@ -1,4 +1,10 @@
 /* Shared analysis modal: same geometry and Card system as the application modals. */
+@property --character-fill {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
 .performance-analysis-modal {
   inline-size: min(43.75rem, 90vw);
   max-block-size: 90dvh;
@@ -597,6 +603,7 @@ body {
 /* The part of the current lyric that has already been sung is pure white.
    The not-yet-sung part keeps the theme accent so the progress remains clear. */
 .karaoke-lyric-current .karaoke-lyric-character {
+  transition: --character-fill 50ms linear;
   -webkit-text-fill-color: transparent !important;
   color: #fff !important;
   background-image: linear-gradient(

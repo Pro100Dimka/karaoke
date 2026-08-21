@@ -1,5 +1,6 @@
 """Управление песнями + запуск AI-обработки."""
 
+import base64
 import tempfile
 import zipfile
 from collections.abc import Callable
@@ -169,7 +170,17 @@ async def inspect_song_identity(file: UploadFile = File(...)):
             file.filename or "song",
             "",
         )
-        return schemas.SongIdentityOut(title=title, artist=artist)
+        cover = song_service.read_embedded_cover(temporary_path)
+        cover_data_url = None
+        if cover is not None:
+            payload, extension = cover
+            mime = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[extension]
+            cover_data_url = f"data:{mime};base64,{base64.b64encode(payload).decode('ascii')}"
+        return schemas.SongIdentityOut(
+            title=title,
+            artist=artist,
+            cover_data_url=cover_data_url,
+        )
     except HTTPException:
         raise
     except ValueError as exc:

@@ -6,6 +6,12 @@ import { passthrough } from "./helpers/mocks.mjs";
 vi.mock("../src/components/fields", () => ({
   RangeInput: ({ onChange, ...props }) => (
     <input {...props} type="range" onChange={(e) => onChange(e.target.value)} />
+  ),
+  RotaryKnob: ({ label, value, onChange }) => (
+    <label className="karaoke-effect-dial">
+      {label}
+      <input type="range" aria-label={label} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
   )
 }));
 vi.mock("../src/theme/ui", () => ({
@@ -27,15 +33,36 @@ vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({
     <button data-testid="timeline" onClick={() => onChange(3)} />
   )
 }));
-import EffectDial from "../src/pages/Karaoke/components/console/effect-dial.jsx";
+import RotaryKnob from "../src/components/fields/rotary-knob.jsx";
+import {
+  getRotaryDragValue,
+  getRotaryWheelValue
+} from "../src/components/fields/rotary-knob-utils.js";
 import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";
 import ToolsPanel from "../src/pages/Karaoke/components/console/tools.jsx";
 afterEach(cleanup);
+test("rotary calculations preserve VST sensitivity, direction and limits", () => {
+  expect(
+    getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1 })
+  ).toBe(1);
+  expect(
+    getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1, fine: true })
+  ).toBe(0.6);
+  expect(
+    getRotaryDragValue({ value: 0.5, lastY: 0, clientY: 900, min: 0, max: 1 })
+  ).toBe(0);
+  expect(getRotaryWheelValue({ value: 0.5, deltaY: -1, step: 0.1, min: 0, max: 1 })).toBe(0.6);
+  expect(getRotaryWheelValue({ value: 0.5, deltaY: 1, step: 0.1, min: 0, max: 1 })).toBe(0.4);
+  expect(
+    getRotaryWheelValue({ value: 0.5, deltaY: -1, step: 0.1, min: 0, max: 1, fine: true })
+  ).toBe(0.52);
+  expect(getRotaryWheelValue({ value: 1, deltaY: -1, step: 0.1, min: 0, max: 1 })).toBe(1);
+});
 test("effect dial supports range, wheel and pointer dragging with clamping", () => {
   const change = vi.fn();
-  const result = render( <EffectDial label="Echo" value={0.5} onChange={change} />
+  const result = render( <RotaryKnob label="Echo" value={0.5} onChange={change} />
   );
   const { container, getByLabelText } = result;
   const dial = container.querySelector("label");
@@ -49,7 +76,31 @@ test("effect dial supports range, wheel and pointer dragging with clamping", () 
   fireEvent.change(getByLabelText("Echo"), { target: { value: "0.3" } });
   verify([change.mock.calls.length, 'toBeGreaterThanOrEqual', 4], [change.mock.calls[2][0], 'toBe', 1]);
   result.unmount();
-  render(<EffectDial label="Empty" onChange={vi.fn()} />);
+  render(<RotaryKnob label="Empty" onChange={vi.fn()} />);
+});
+test("rotary knob supports cumulative VST drag, fine adjustment and reset", () => {
+  const change = vi.fn();
+  const commit = vi.fn();
+  const view = render(
+    <RotaryKnob
+      label="Reverb"
+      value={0.5}
+      defaultValue={0.25}
+      onChange={change}
+      onCommit={commit}
+    />
+  );
+  const dial = view.container.querySelector("label");
+  fireEvent.pointerDown(dial, { button: 0, clientY: 100, pointerId: 2 });
+  fireEvent.pointerMove(dial, { clientY: 82, pointerId: 2 });
+  fireEvent.pointerMove(dial, { clientY: 64, pointerId: 2, shiftKey: true });
+  fireEvent.pointerUp(dial, { clientY: 64, pointerId: 2 });
+  expect(change.mock.calls[0][0]).toBeCloseTo(0.6);
+  expect(change.mock.calls[1][0]).toBeCloseTo(0.62);
+  expect(commit).toHaveBeenLastCalledWith(0.62);
+  fireEvent.doubleClick(dial);
+  expect(change).toHaveBeenLastCalledWith(0.25);
+  expect(commit).toHaveBeenLastCalledWith(0.25);
 });
 test("song strip formats metadata and delegates seeking", () => {
   const seek = vi.fn();

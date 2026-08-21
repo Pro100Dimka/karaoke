@@ -118,10 +118,19 @@ def test_song_identity_preview_uses_the_same_metadata_parser_as_database(monkeyp
     monkeypatch.setattr(songs, "save_upload_limited", AsyncMock())
     detect = Mock(return_value=("Artist", "Tagged title"))
     monkeypatch.setattr(songs.song_service, "_read_source_identity", detect)
+    monkeypatch.setattr(
+        songs.song_service,
+        "read_embedded_cover",
+        Mock(return_value=(b"\x89PNG\r\n\x1a\ncover", ".png")),
+    )
 
     result = asyncio.run(songs.inspect_song_identity(upload_file(filename="fallback - name.mp3")))
 
-    assert result == schemas.SongIdentityOut(title="Tagged title", artist="Artist")
+    assert result == schemas.SongIdentityOut(
+        title="Tagged title",
+        artist="Artist",
+        cover_data_url="data:image/png;base64,iVBORw0KGgpjb3Zlcg==",
+    )
     assert detect.call_args.args[1:] == ("fallback - name.mp3", "")
     assert not detect.call_args.args[0].exists()
 

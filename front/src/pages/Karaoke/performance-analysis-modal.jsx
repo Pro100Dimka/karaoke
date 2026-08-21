@@ -1,9 +1,10 @@
-import { BarChart3, ChevronLeft, ChevronRight, Trash2, Trophy } from "lucide-react";
+import { BarChart3, Trash2, Trophy } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
 import { Button } from "../../components/fields";
 import Modal from "../../components/modal";
+import ModalCarouselNavigation from "../../components/modal/carousel-navigation";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../../hooks/useMountedRef";
@@ -185,37 +186,19 @@ export default function PerformanceAnalysisModal({
     >
       <VictoryScene />
       <div className="performance-analysis-body modal-scroll">
-        {recordingList.length > 1 && (
-          <div
-            className="performance-analysis-carousel"
-            aria-label={translateSaved("Записи исполнения")}
-          >
-            <Button
-              icon={ChevronLeft}
-              variant="ghost"
-              aria-label={translateSaved("Предыдущая запись")}
-              disabled={viewedIndex === 0}
-              onClick={() => setViewedRecordingId(recordingList[viewedIndex - 1].id)}
-            />
-            <div className="performance-analysis-recording-meta" aria-live="polite">
-              <strong>{formatRecordingDate(viewedRecording.created_at)}</strong>
-              <span>
-                {translateSaved("Запись {0} из {1}", {
-                  0: viewedIndex + 1,
-                  1: recordingList.length
-                })}
-                {viewingActive ? ` · ${translateSaved("анализируется")}` : ""}
-              </span>
-            </div>
-            <Button
-              icon={ChevronRight}
-              variant="ghost"
-              aria-label={translateSaved("Следующая запись")}
-              disabled={viewedIndex === recordingList.length - 1}
-              onClick={() => setViewedRecordingId(recordingList[viewedIndex + 1].id)}
-            />
-          </div>
-        )}
+        <ModalCarouselNavigation
+          ariaLabel={translateSaved("Записи исполнения")}
+          className="performance-analysis-carousel"
+          metaClassName="performance-analysis-recording-meta"
+          index={viewedIndex}
+          count={recordingList.length}
+          title={formatRecordingDate(viewedRecording.created_at)}
+          subtitle={`${translateSaved("Запись {0} из {1}", { 0: viewedIndex + 1, 1: recordingList.length })}${viewingActive ? ` · ${translateSaved("анализируется")}` : ""}`}
+          previousLabel={translateSaved("Предыдущая запись")}
+          nextLabel={translateSaved("Следующая запись")}
+          onPrevious={() => setViewedRecordingId(recordingList[viewedIndex - 1].id)}
+          onNext={() => setViewedRecordingId(recordingList[viewedIndex + 1].id)}
+        />
 
         <AudioPlayer src={api.getPerformanceFileUrl(viewedRecording.id)} />
 

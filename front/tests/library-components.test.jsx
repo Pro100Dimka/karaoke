@@ -65,6 +65,7 @@ import ProcessingSignal from "../src/pages/Library/components/song-card/processi
 import SongCardArtwork from "../src/pages/Library/components/song-card/song-card-artwork.jsx";
 import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
 import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
+import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
   mocks.noSettings = false;
@@ -131,6 +132,20 @@ test("processing signal clamps progress and exposes an accessible value", () => 
   rerender(<ProcessingSignal progress="bad" compact />);
   expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
 });
+test("processing songs keep the active job before the stable queue", () => {
+  const queuedA = { id: "a", status: "queued" };
+  const done = { id: "done", status: "done" };
+  const active = { id: "active", status: "processing" };
+  const queuedB = { id: "b", status: "queued" };
+  expect(getProcessingSongs([queuedA, done, active, queuedB])).toEqual([
+    active,
+    queuedA,
+    queuedB
+  ]);
+  const cancelling = { id: "cancel", status: "cancelling" };
+  expect(getProcessingSongs([queuedA, cancelling, active])).toEqual([active, cancelling, queuedA]);
+  expect(getProcessingSongs(null)).toEqual([]);
+});
 test("processing modal covers active, complete, error and absent songs", () => {
   const cancel = vi.fn();
   const close = vi.fn();
@@ -177,6 +192,31 @@ test("processing modal covers active, complete, error and absent songs", () => {
       onOpenKaraoke={open}
     />
   );
+});
+test("processing modal carousel changes only the viewed queued song", () => {
+  const select = vi.fn();
+  const songs = [
+    { id: "active", title: "Active", artist: "Artist A", status: "processing" },
+    { id: "queued", title: "Queued", artist: "Artist B", status: "queued" }
+  ];
+  const view = render(
+    <ProcessingModal
+      song={songs[0]}
+      songs={songs}
+      status={{ song_id: "queued", status: "queued", progress_percent: 77 }}
+      onSelectSong={select}
+      onCancel={vi.fn()}
+      onClose={vi.fn()}
+      onOpenKaraoke={vi.fn()}
+    />
+  );
+  expect(view.getByRole("heading").textContent).toBe("Active");
+  expect(view.getByTestId("status").textContent).toBe("processing");
+  const arrows = view.container.querySelectorAll(".processing-song-carousel button");
+  expect(arrows).toHaveLength(2);
+  expect(arrows[0].disabled).toBe(true);
+  fireEvent.click(arrows[1]);
+  expect(select).toHaveBeenCalledWith(songs[1]);
 });
 test("recordings modal renders empty, error and recording actions", () => {
   const analyze = vi.fn();

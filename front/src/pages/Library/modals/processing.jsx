@@ -1,6 +1,7 @@
 import { CircleDot, Library, OctagonX, Play } from "lucide-react";
 import Button from "../../../components/fields/button";
 import Modal from "../../../components/modal";
+import ModalCarouselNavigation from "../../../components/modal/carousel-navigation";
 import StatusBadge from "../../../components/ui/StatusBadge";
 import { translateSaved } from "../../../i18n/runtime";
 import ProcessingSignal from "../components/song-card/processing-signal";
@@ -12,14 +13,25 @@ function getVisibleProgress(progress, active, done) {
   return active ? Math.max(1, progress) : progress;
 }
 
-export default function ProcessingModal({ song, status, onCancel, onClose, onOpenKaraoke }) {
-  const currentStatus = status?.status ?? song?.status;
+export default function ProcessingModal({
+  song,
+  songs = [],
+  status,
+  onCancel,
+  onClose,
+  onOpenKaraoke,
+  onSelectSong
+}) {
+  const visibleStatus = !status?.song_id || status.song_id === song?.id ? status : null;
+  const currentStatus = visibleStatus?.status ?? song?.status;
   const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, currentStatus);
   if (!song) return null;
-  const progress = getProcessingProgress(status, song);
+  const progress = getProcessingProgress(visibleStatus, song);
   const active = isProcessingActive(currentStatus);
   const isDone = currentStatus === "done";
   const visibleProgress = getVisibleProgress(progress, active, isDone);
+  const carouselSongs = songs.some((item) => item.id === song.id) ? songs : [song, ...songs];
+  const songIndex = carouselSongs.findIndex((item) => item.id === song.id);
   const actions = [
     active && [OctagonX, translateSaved("Отменить"), "danger", onCancel],
     ...(isDone
@@ -63,6 +75,18 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
       }}
     >
       <div className="processing-modal-body modal-scroll">
+        <ModalCarouselNavigation
+          ariaLabel={translateSaved("Очередь песен")}
+          className="processing-song-carousel"
+          index={songIndex}
+          count={carouselSongs.length}
+          title={translateSaved("Песня {0} из {1}", { 0: songIndex + 1, 1: carouselSongs.length })}
+          subtitle={song.artist || translateSaved("Исполнитель не указан")}
+          previousLabel={translateSaved("Предыдущая песня")}
+          nextLabel={translateSaved("Следующая песня")}
+          onPrevious={() => onSelectSong(carouselSongs[songIndex - 1])}
+          onNext={() => onSelectSong(carouselSongs[songIndex + 1])}
+        />
         <div>
           <StatusBadge status={currentStatus} />
         </div>
@@ -71,21 +95,21 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
           <span>
             {isDone
               ? translateSaved("Песня готова к караоке")
-              : (status?.progress_detail ??
-                status?.progress_step ??
+              : (visibleStatus?.progress_detail ??
+                visibleStatus?.progress_step ??
                 translateSaved("Подготавливаем обработку песни"))}
           </span>
           {active && (
             <strong style={{ textAlign: "right", width: "100%" }}>
               {translateSaved("Осталось:")}
-              {formatEta(status?.eta_seconds)}
+              {formatEta(visibleStatus?.eta_seconds)}
             </strong>
           )}
         </div>
-        {status?.error_message && (
+        {visibleStatus?.error_message && (
           <p className="field-error">
             {translateSaved("Ошибка обработки:")}
-            {status.error_message}
+            {visibleStatus.error_message}
           </p>
         )}
       </div>

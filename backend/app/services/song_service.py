@@ -83,7 +83,7 @@ def _cover_extension(payload: bytes) -> str | None:
     return '.webp' if payload.startswith(b'RIFF') and payload[8:12] == b'WEBP' else None
 
 
-def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
+def read_embedded_cover(source_path: Path) -> tuple[bytes, str] | None:
     try:
         from mutagen import File as MutagenFile
 
@@ -129,11 +129,18 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
 
     for payload in candidates:
         extension = _cover_extension(payload)
-        if extension is None: continue
-        target = output_dir / f"cover{extension}"
-        atomic_write_bytes(target, payload)
-        return target
+        if extension is not None and len(payload) <= 5 * 1024 * 1024:
+            return payload, extension
     return None
+
+
+def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
+    cover = read_embedded_cover(source_path)
+    if cover is None: return None
+    payload, extension = cover
+    target = output_dir / f"cover{extension}"
+    atomic_write_bytes(target, payload)
+    return target
 
 
 

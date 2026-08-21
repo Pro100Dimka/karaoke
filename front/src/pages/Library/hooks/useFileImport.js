@@ -13,6 +13,7 @@ function suggestedIdentity(file, detected = {}) {
   const parts = stem.split(/\s+[-–—]\s+/, 2).map((part) => part.trim());
   return {
     file,
+    coverUrl: detected.cover_data_url || "",
     artist: detected.artist || (parts.length === 2 ? parts[0] : ""),
     title: detected.title || (parts.length === 2 ? parts[1] : stem)
   };

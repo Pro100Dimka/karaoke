@@ -595,6 +595,7 @@ def _run_job(song_id: str) -> None:
     heartbeat_stop: threading.Event | None = None
     heartbeat_thread: threading.Thread | None = None
     slot_acquired = False
+    pipeline_succeeded = False
     try:
         slot_acquired = _acquire_processing_slot(song_id)
         if not slot_acquired: return
@@ -628,6 +629,7 @@ def _run_job(song_id: str) -> None:
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
             logger.warning("Song processing warning: %s", warning)
+        pipeline_succeeded = True
     except ProcessingCancelled:
         _update_progress(
             song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
@@ -642,22 +644,29 @@ def _run_job(song_id: str) -> None:
                          error_message=_format_processing_error(exc))
         return
     finally:
-        if capture is not None: capture.close()
-        if lyrics_path is not None and lyrics_path.parent == config.CACHE_DIR / "trusted-lyrics":
-            lyrics_path.unlink(missing_ok=True)
-        _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
-        _end_runtime_progress(song_id)
-        if slot_acquired: _release_processing_slot(song_id)
-
-    if not _is_cancelled(song_id):
+        cleanup_succeeded = False
         try:
+            if capture is not None: capture.close()
+            if lyrics_path is not None and lyrics_path.parent == config.CACHE_DIR / "trusted-lyrics":
+                lyrics_path.unlink(missing_ok=True)
+            _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
+            _end_runtime_progress(song_id)
+            cleanup_succeeded = True
+        finally:
+            if slot_acquired and (not pipeline_succeeded or not cleanup_succeeded):
+                _release_processing_slot(song_id)
+
+    try:
+        if not _is_cancelled(song_id):
             with song_service.library_write_lock(): _finalize_success(song_id, out_dir)
-        except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
-            _update_progress(
-                song_id,
-                status=models.SongStatus.ERROR,
-                error_message=f"Could not finalize processing results: {_format_processing_error(exc)}",
-            )
+    except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
+        _update_progress(
+            song_id,
+            status=models.SongStatus.ERROR,
+            error_message=f"Could not finalize processing results: {_format_processing_error(exc)}",
+        )
+    finally:
+        if slot_acquired: _release_processing_slot(song_id)
 
 
 def _clear_generated_results(out_dir: Path) -> None:
