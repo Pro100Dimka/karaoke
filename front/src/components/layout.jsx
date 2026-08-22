@@ -27,36 +27,46 @@ function FloatingControls({ openSettings }) {
     t(radio.isPlaying ? "radio.disable" : "radio.enable", { station: radio.station.name });
   return (
     <Stack
-      direction="row"
-      justify="end"
-      align="center"
-      gap="var(--space-2)"
-      sx={{ position: "fixed", bottom: "var(--space-4)", right: "var(--space-4)", zIndex: 20 }}
+      aria-label={t("Управление приложением")}
+      sx={{
+        position: "fixed",
+        bottom: "var(--space-4)",
+        right: "var(--space-4)",
+        zIndex: 20,
+        width: "auto"
+      }}
     >
-      <IconButton
-        icon={Radio}
-        iconSize={28}
-        label={radioLabel}
-        onClick={radio.toggle}
-        className={`app-settings-fab app-radio-fab${radio.isPlaying ? " is-playing" : ""}${radio.isLoading ? " is-loading" : ""}`}
-      />
-      <Stack sx={{ width: "auto" }} gap="var(--space-2)">
-        <Slider
-          min={0}
-          label={<Volume2 size={15} />}
-          max={1}
-          step={0.01}
-          value={radio.volume}
-          formatValue={(value) => `${Math.round(value * 100)}%`}
-          onChange={(value) => radio.setVolume(value)}
-          controlSx={{ inlineSize: "var(--space-16)" }}
+      <Stack direction="row" align="center" gap="var(--space-5)">
+        {radio.isPlaying && (
+          <Slider
+            min={0}
+            label={<Volume2 size={15} />}
+            max={1}
+            step={0.01}
+            value={radio.volume}
+            formatValue={(value) => `${Math.round(value * 100)}%`}
+            onChange={(value) => radio.setVolume(value)}
+            controlSx={{ inlineSize: "var(--space-16)" }}
+          />
+        )}
+        <IconButton
+          icon={Radio}
+          label={radioLabel}
+          title={radioLabel}
+          variant={radio.isPlaying ? "contained" : "outline"}
+          tone={radio.isPlaying ? "success" : "primary"}
+          aria-pressed={radio.isPlaying}
+          iconSize={100}
+          disabled={radio.isLoading}
+          onClick={radio.toggle}
         />
         <IconButton
           icon={Cog}
-          iconSize={28}
+          variant="contained"
           label={t("settings.open")}
+          title={t("settings.open")}
+          iconSize={100}
           onClick={openSettings}
-          className="app-settings-fab"
         />
       </Stack>
     </Stack>

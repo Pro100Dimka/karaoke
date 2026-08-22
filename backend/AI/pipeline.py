@@ -77,26 +77,23 @@ class KaraokePipeline:
         request: PipelineRequest,
         vocals: Path,
         discovery: Future[LyricsDiscovery | None] | None = None,
-    ) -> tuple[str, list[Word], tuple]:
+    ) -> tuple[str, list[Word]]:
         if request.lyrics_path and Path(request.lyrics_path).is_file():
             text = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
-            return text, [], ()
+            return text, []
         found = discovery.result() if discovery else discover_lyrics(request.title)
         if found:
             print(f"[lyrics] FOUND via {found.source}", flush=True)
-            return found.text, [], found.lines
+            return found.text, []
         print("[lyrics] NOT FOUND online -> ASR fallback", flush=True)
         text, words = self.engines.transcriber.transcribe(vocals, request.language)
-        return text, words, ()
+        return text, words
 
-    def _align(self, vocals: Path, text: str, language: str | None, direct: list[Word], lines: tuple) -> list[Word]:
+    def _align(self, vocals: Path, text: str, language: str | None, direct: list[Word]) -> list[Word]:
         if direct:
             return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(direct)]
         try:
-            if lines and hasattr(self.engines.aligner, "align_timed_lines"):
-                words = self.engines.aligner.align_timed_lines(vocals, text, lines, language)
-            else:
-                words = self.engines.aligner.align_long_text(vocals, text, language)
+            words = self.engines.aligner.align_long_text(vocals, text, language)
         except Exception:
             if not self.config.allow_fallback:
                 raise
@@ -153,10 +150,10 @@ class KaraokePipeline:
 
             self._notify(request, "lyrics", 70, "Поиск и синхронизация текста")
             started = time.perf_counter()
-            text, direct, lines = self._lyrics(request, vocals, discovery)
+            text, direct = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
-            words = self._align(vocals, text, request.language, direct, lines)
+            words = self._align(vocals, text, request.language, direct)
             self._stage(reports, "lyrics", self.engines.aligner.name, started)
 
             self._notify(request, "notes", 84, "Построение мелодии голоса")

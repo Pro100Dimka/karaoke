@@ -30,10 +30,8 @@ const IconButton = forwardRef(
     ref
   ) => {
     const accessibleLabel = ariaLabel ?? label ?? title;
-
-    if (import.meta.env?.DEV && !accessibleLabel) {
-      console.warn("[Light UI] IconButton needs aria-label, label or title.");
-    }
+    const buttonSize = iconSize ?? ICON_SIZES[size] * 2;
+    const actualIconSize = buttonSize * 0.45;
 
     return (
       <Button
@@ -43,13 +41,11 @@ const IconButton = forwardRef(
         className={unstyled ? className : cx("ui-icon-button", className)}
         aria-label={accessibleLabel}
         title={title ?? accessibleLabel}
+        style={{ "--control-size": `${buttonSize}px` }}
         {...props}
       >
         {Icon ? (
-          <Icon
-            size={iconSize ?? ICON_SIZES[size] ?? ICON_SIZES.md}
-            aria-hidden="true"
-          />
+          <Icon size={actualIconSize} aria-hidden="true" />
         ) : (
           children
         )}

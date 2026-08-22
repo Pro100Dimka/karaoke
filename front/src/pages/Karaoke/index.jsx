@@ -250,6 +250,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     isRadioPlaying,
     navigate,
     setRecordingActive,
+    showControls,
     songId: song?.id,
     stop,
     togglePlay,

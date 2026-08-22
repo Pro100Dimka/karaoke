@@ -169,7 +169,6 @@ export default function PerformanceAnalysisModal({
           onPrevious={() => setViewedId(list[index - 1].id)}
           onNext={() => setViewedId(list[index + 1].id)}
         />
-        <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
         {!active && (
           <Typography tone="muted">
             {t(
@@ -190,6 +189,7 @@ export default function PerformanceAnalysisModal({
         {active && result && (
           <>
             <Summary result={result} />
+            <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
             <Button
               data-role="delete-recording"
               tone="danger"

@@ -154,10 +154,7 @@ export default function LibraryActions({
         aria-label={tr("Фильтры и сортировка")}
         style={{
           insetBlockStart: "calc(100% + var(--space-3))",
-          insetInline: 0,
           padding: "var(--space-6)",
-          borderRadius: "var(--shape-lg)",
-          background: "var(--overlay-bg)",
           boxShadow: "var(--shadow-lg)"
         }}
       >

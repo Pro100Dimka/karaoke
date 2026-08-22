@@ -68,11 +68,32 @@ def _invalid_runs(words: list[Word], span: float) -> list[tuple[int, int]]:
     indices = [index for index, word in enumerate(words) if _invalid(word, span)]
     runs: list[list[int]] = []
     for index in indices:
-        if not runs or index - runs[-1][1] > 11:
+        if not runs or index != runs[-1][1]:
             runs.append([index, index + 1])
         else:
             runs[-1][1] = index + 1
     return [(start, end) for start, end in runs]
+
+
+def _repair_bounds(words: list[Word], start: int, end: int, span: float, context: int = 2):
+    left = next(
+        (index for index in range(start - 1, -1, -1) if not _invalid(words[index], span)),
+        None,
+    )
+    right = next(
+        (index for index in range(end, len(words)) if not _invalid(words[index], span)),
+        None,
+    )
+    if left is None and right is None:
+        return 0, len(words), 0.0, span, left, right
+    estimate = max(4.0, (end - start) * 1.25)
+    lower, upper = (
+        max(0, start - (context if left is not None else 0)),
+        min(len(words), end + (context if right is not None else 0)),
+    )
+    crop_start = words[left].start - 1 if left is not None else words[right].start - estimate
+    crop_end = words[right].end + 1 if right is not None else words[left].end + estimate
+    return lower, upper, max(0, crop_start), min(span, crop_end), left, right
 
 
 def _load(model_class, name, role):
@@ -356,29 +377,37 @@ class Qwen3ForcedAligner(Aligner):
             return self._validate(words, tokens, span)
         if samples is None:
             samples, rate = sf.read(audio, dtype="float32", always_2d=False)
-        repairs = []
-        for start, end in _invalid_runs(words, span):
-            lower, upper = max(0, start - 5), min(len(words), end + 5)
-            crop_start = max(0, words[lower].start - 1) if lower < start and not _invalid(words[lower], span) else 0
-            crop_end = min(span, words[upper - 1].end + 1) if upper > end and not _invalid(words[upper - 1], span) else span
-            if crop_end > crop_start:
-                segment = samples[round(crop_start * rate):round(crop_end * rate)]
+        previous_invalid = len(words) + 1
+        while (runs := _invalid_runs(words, span)) and sum(end - start for start, end in runs) < previous_invalid:
+            previous_invalid = sum(end - start for start, end in runs)
+            repairs = []
+            for start, end in runs:
+                lower, upper, crop_start, crop_end, *_ = _repair_bounds(words, start, end, span)
+                segment = samples[round(crop_start * rate) : round(crop_end * rate)]
                 repairs.append((lower, upper, crop_start, crop_end, segment))
-        if repairs:
             aligned = self._load().align(
                 audio=[(segment, rate) for *_, segment in repairs],
                 text=[" ".join(tokens[lower:upper]) for lower, upper, *_ in repairs],
-                language=[resolve_alignment_language(text, language)] * len(repairs),
+                language=[resolved] * len(repairs),
             )
             for (lower, upper, offset, crop_end, _), result in zip(repairs, aligned, strict=True):
                 local = _words(result)
-                if len(local) == upper - lower and not any(_invalid(word, crop_end - offset) for word in local):
-                    words[lower:upper] = [
-                        Word(word.start + offset, word.end + offset, token, word.confidence, index)
-                        for index, (word, token) in enumerate(
-                            zip(local, tokens[lower:upper], strict=True), start=lower
-                        )
-                    ]
+                if len(local) != upper - lower:
+                    continue
+                for index, word in enumerate(local, start=lower):
+                    if not _invalid(words[index], span) or _invalid(word, crop_end - offset):
+                        continue
+                    candidate = Word(
+                        word.start + offset,
+                        word.end + offset,
+                        tokens[index],
+                        word.confidence,
+                        index,
+                    )
+                    left = words[index - 1] if index else None
+                    right = words[index + 1] if index + 1 < len(words) else None
+                    if (left is None or candidate.start >= left.start) and (right is None or _invalid(right, span) or candidate.start <= right.start):
+                        words[index] = candidate
         try:
             return self._validate(words, tokens, span)
         except InvalidArtifactError as qwen_error:
@@ -393,12 +422,22 @@ class Qwen3ForcedAligner(Aligner):
 
             ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
             try:
-                return self._validate(ctc.align(samples, rate, tokens, 0), tokens, span)
+                groups = []
+                for start, end in _invalid_runs(words, span):
+                    lower, upper = max(0, start - 2), min(len(words), end + 2)
+                    if groups and lower <= groups[-1][1]:
+                        groups[-1] = (groups[-1][0], max(groups[-1][1], upper))
+                    else:
+                        groups.append((lower, upper))
+                repairs = [_repair_bounds(words, start, end, span, context=0) for start, end in groups]
+                for lower, upper, crop_start, crop_end, left, right in repairs:
+                    crop_start = words[left].end if left is not None else crop_start
+                    crop_end = words[right].start if right is not None else crop_end
+                    segment = samples[round(crop_start * rate) : round(crop_end * rate)]
+                    words[lower:upper] = ctc.align(segment, rate, tokens[lower:upper], crop_start)
+                return self._validate(words, tokens, span)
             except (EngineUnavailableError, InvalidArtifactError) as ctc_error:
-                raise InvalidArtifactError(
-                    f"Qwen acoustic alignment failed: {qwen_error}; "
-                    f"{resolved} CTC fallback failed: {ctc_error}"
-                ) from ctc_error
+                raise InvalidArtifactError(f"Qwen acoustic alignment failed: {qwen_error}; {resolved} CTC fallback failed: {ctc_error}") from ctc_error
 
 
 class UniformTextFallback(Transcriber, Aligner):

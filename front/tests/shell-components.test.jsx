@@ -1,7 +1,11 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import TitleBar from "../src/components/TitleBar.jsx";
+import BackendBootLoader from "../src/components/backend-boot-loader.jsx";
+import AppLayout from "../src/components/layout.jsx";
 import { called, verify } from "./helpers/assertions.mjs";
+
 const mocks = vi.hoisted(() => ({
   location: { pathname: "/" },
   radio: {
@@ -31,11 +35,7 @@ vi.mock("../src/pages/Settings", () => ({
   default: ({ onClose }) => <button type="button" data-testid="settings" onClick={onClose} />
 }));
 vi.mock("../src/components/routes", () => ({
-  default: ({ onOpenAppSettings }) => (
-    <>
-      <button type="button" data-testid="route-settings" onClick={onOpenAppSettings} />
-    </>
-  )
+  default: ({ onOpenAppSettings }) => <button type="button" data-testid="route-settings" onClick={onOpenAppSettings} />
 }));
 vi.mock("../src/api/client", () => ({ api: { getHealth: mocks.getHealth } }));
 vi.mock("../src/api/core", () => ({ MOCK_API_ENABLED: false }));
@@ -43,9 +43,6 @@ vi.mock("../src/runtime-config", () => ({ BACKEND_BOOT_RETRY_MS: 5 }));
 vi.mock("../src/utils/theme", () => ({ getSavedTheme: mocks.getTheme }));
 vi.mock("../src/utils/language", () => ({ getSavedLanguage: () => "uk" }));
 vi.mock("../src/utils/ui-preferences", () => ({ hydrateUiPreferences: mocks.hydrate }));
-import TitleBar from "../src/components/TitleBar.jsx";
-import BackendBootLoader from "../src/components/backend-boot-loader.jsx";
-import AppLayout from "../src/components/layout.jsx";
 beforeEach(() => {
   mocks.location = { pathname: "/" };
   mocks.radio.error = "";
@@ -82,10 +79,12 @@ describe("application shell", () => {
     error.mockRestore();
   });
   test("layout opens global settings, radio and blackout state", async () => {
-    const { container, getByLabelText, getByRole, getByTestId } = render(<AppLayout />);
+    const { container, getByLabelText, getByRole, getByTestId, rerender } = render(<AppLayout />);
     verify([container.querySelector(".app-shell").classList.contains("karaoke-app-shell"), "toBe", false]);
     fireEvent.click(getByLabelText("radio.enable:Radio"));
     expect(mocks.radio.toggle).toHaveBeenCalled();
+    mocks.radio.isPlaying = true;
+    rerender(<AppLayout />);
     fireEvent.change(getByRole("slider"), {
       target: { value: "0.7" }
     });
@@ -104,7 +103,11 @@ describe("application shell", () => {
     mocks.radio.isPlaying = true;
     const view = render(<AppLayout />);
     const radio = view.getByLabelText("radio failed");
-    verify([radio.className, "toContain", "is-playing"], [radio.className, "toContain", "is-loading"]);
+    verify(
+      [radio.disabled, "toBe", true],
+      [radio.getAttribute("data-variant"), "toBe", "contained"],
+      [radio.getAttribute("data-tone"), "toBe", "success"]
+    );
     mocks.radio.error = "";
     view.rerender(<AppLayout />);
     expect(view.getByLabelText("radio.disable:Radio")).not.toBeNull();

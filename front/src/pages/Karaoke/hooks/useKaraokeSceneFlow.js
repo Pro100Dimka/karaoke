@@ -32,6 +32,7 @@ export default function useKaraokeSceneFlow({
   isRadioPlaying,
   navigate,
   setRecordingActive,
+  showControls,
   songId,
   stop,
   togglePlay,
@@ -111,10 +112,12 @@ export default function useKaraokeSceneFlow({
         await waitForScene(120);
         sceneTransitionRef.current = false;
         setSceneTransitioning(false);
+        showControls();
+        revealStageActions();
       }
       return result !== false;
     },
-    [hideControls, preloadSongMedia]
+    [hideControls, preloadSongMedia, revealStageActions, showControls]
   );
 
   const startSongWithIntro = useCallback(async () => {

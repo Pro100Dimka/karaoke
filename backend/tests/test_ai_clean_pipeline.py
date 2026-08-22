@@ -6,7 +6,7 @@ import soundfile as sf
 
 from AI.artifacts import publish_files_atomically
 from AI.engines.separation import MSSTMelRoformerSeparator
-from AI.engines.text import Qwen3ForcedAligner, resolve_alignment_language, tokenize
+from AI.engines.text import Qwen3ForcedAligner, _invalid_runs, resolve_alignment_language, tokenize
 from AI.errors import ProcessingCancelledError
 from AI.lyrics_sources import TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
@@ -163,8 +163,51 @@ def test_long_alignment_realigns_collapsed_ranges_acoustically(tmp_path, monkeyp
     words = aligner.align_long_text(audio, "one two three four", "en")
 
     assert [(round(word.start, 3), round(word.end, 3)) for word in words] == [
-        (0, 0.4), (0.8, 1.2), (1.6, 2), (2.4, 2.8)
+        (0.2, 0.8), (0.8, 1.2), (1.6, 2), (3, 3.6)
     ]
+
+
+def test_collapsed_ranges_are_repaired_locally_without_losing_acoustic_onset(tmp_path):
+    audio = tmp_path / "vocals.flac"
+    sf.write(audio, np.zeros(44100 * 20, dtype=np.float32), 44100)
+    initial = [
+        ("first", 12.9, 13.7),
+        ("short", 13.7, 13.7),
+        ("phrase", 13.7, 13.7),
+        ("anchor", 15.6, 16.2),
+    ]
+    repaired = [
+        ("first", 1.0, 1.8),
+        ("short", 1.8, 2.1),
+        ("phrase", 2.1, 2.8),
+        ("anchor", 3.7, 4.3),
+    ]
+
+    def align(audio, **_kwargs):
+        rows = repaired if isinstance(audio, list) else initial
+        return [SimpleNamespace(items=[{"text": token, "start_time": start, "end_time": end} for token, start, end in rows]) for _ in audio] if isinstance(audio, list) else SimpleNamespace(items=[{"text": token, "start_time": start, "end_time": end} for token, start, end in rows])
+
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = SimpleNamespace(align=align)
+
+    words = aligner.align_long_text(audio, "first short phrase anchor", "en")
+
+    assert words[0].start == 12.9
+    assert [(round(word.start, 3), round(word.end, 3)) for word in words[1:3]] == [
+        (13.7, 14.0),
+        (14.0, 14.7),
+    ]
+
+
+def test_invalid_runs_do_not_merge_across_valid_acoustic_anchors():
+    words = [
+        Word(1, 2, "one"),
+        Word(2, 2, "bad"),
+        Word(3, 4, "anchor"),
+        Word(4, 4, "bad"),
+    ]
+
+    assert _invalid_runs(words, 5) == [(1, 2), (3, 4)]
 
 
 def test_long_alignment_uses_model_window_and_acoustic_confidence(tmp_path):

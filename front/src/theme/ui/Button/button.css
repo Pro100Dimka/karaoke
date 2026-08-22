@@ -12,7 +12,6 @@
     min-block-size: var(--control-size, var(--control-md));
     padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
     border: 0;
-    border-radius: var(--shape-md);
     overflow: hidden;
     isolation: isolate;
     background: var(--_button-bg);
@@ -30,6 +29,10 @@
       background var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
+  .ui-button:not(.ui-icon-button){
+    border-radius: var(--shape-md);
+
+  }
   .ui-button::before {
     content: "";
     position: absolute;
@@ -88,7 +91,6 @@
     --_button-bg: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
     --_button-fg: var(--ui-text);
     border: 1px solid color-mix(in srgb, var(--_button-accent) 62%, var(--ui-border));
-    border-radius: var(--shape-lg, var(--shape-md));
     box-shadow:
       inset 0 1px 0 color-mix(in srgb, var(--ui-text) 8%, transparent),
       0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 16%, transparent);
@@ -118,7 +120,6 @@
 
     gap: var(--space-4);
     border: 1px solid var(--_button-accent);
-    border-radius: var(--shape-lg, var(--shape-md));
     box-shadow:
       inset 0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 35%, transparent),
       0 0 var(--space-1) color-mix(in srgb, var(--_button-accent) 92%, transparent),

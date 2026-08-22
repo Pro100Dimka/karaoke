@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import useKaraokeSceneFlow from "../src/pages/Karaoke/hooks/useKaraokeSceneFlow";
 import { same, notCalled, calledTimes, calledWith, verify } from "./helpers/assertions.mjs";
+
 const media = (overrides = {}) => ({ readyState: 4, load: vi.fn(), ...overrides });
 const props = (overrides = {}) => ({
   analysisRecordingIdRef: { current: null },
@@ -14,6 +15,7 @@ const props = (overrides = {}) => ({
   isRadioPlaying: true,
   navigate: vi.fn(),
   setRecordingActive: vi.fn(),
+  showControls: vi.fn(),
   songId: "song",
   stop: vi.fn().mockResolvedValue(true),
   togglePlay: vi.fn().mockResolvedValue(false),
@@ -44,6 +46,7 @@ describe("karaoke scene flow", () => {
     });
     expect(result).toBe(false);
     expect(input.hideControls).toHaveBeenCalledOnce();
+    expect(input.showControls).toHaveBeenCalledOnce();
     calledWith(
       [input.togglePlay, [{ forcePlaying: true }]],
       [input.turnOffRadio, [{ remember: false }]],
@@ -101,7 +104,8 @@ describe("karaoke scene flow", () => {
     hook.rerender();
     await expect(hook.result.current.handleTogglePlay()).resolves.toBe(true);
     expect(input.togglePlay).toHaveBeenLastCalledWith({ forcePlaying: false });
-    calledWith([input.setRecordingActive, [false]], [input.turnOnRadio, [{ remember: false, fadeIn: true }]]);
+    const fadeIn = { remember: false, fadeIn: true };
+    calledWith([input.setRecordingActive, [false]], [input.turnOnRadio, [fadeIn]]);
   });
   test("failed pause does not restore radio or change recording state", async () => {
     const input = props({ isPlaying: true, togglePlay: vi.fn().mockResolvedValue(false) });
@@ -211,7 +215,8 @@ describe("karaoke scene flow", () => {
       [input.togglePlay, "toHaveBeenCalledWith", { forcePlaying: true }],
       [routeEvents, "toContain", false]
     );
-    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false]);
+    const scene = hook.result.current;
+    same([scene.sceneBlackout, false], [scene.sceneTransitioning, false]);
     window.removeEventListener("app:route-blackout", listener);
   });
   test("autostart gives up deterministically when media never becomes available", async () => {
@@ -223,6 +228,7 @@ describe("karaoke scene flow", () => {
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     await act(async () => vi.runAllTimersAsync());
     expect(input.togglePlay).not.toHaveBeenCalled();
-    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false]);
+    const scene = hook.result.current;
+    same([scene.sceneBlackout, false], [scene.sceneTransitioning, false]);
   });
 });
