@@ -146,9 +146,17 @@ def _repair_bounds(words: list[Word], start: int, end: int, span: float, context
         max(0, start - (context if left is not None else 0)),
         min(len(words), end + (context if right is not None else 0)),
     )
-    crop_start = words[left].start - 1 if left is not None else words[right].start - estimate
-    crop_end = words[right].end + 1 if right is not None else words[left].end + estimate
-    return lower, upper, max(0, crop_start), min(span, crop_end), left, right
+    if left is not None and right is not None:
+        crop_start = min(words[left].start, words[right].start) - 1
+        crop_end = max(words[left].end, words[right].end) + 1
+    elif left is not None:
+        crop_start, crop_end = words[left].start - 1, words[left].end + estimate
+    else:
+        crop_start, crop_end = words[right].start - estimate, words[right].end + 1
+    crop_start, crop_end = max(0, crop_start), min(span, crop_end)
+    if crop_end - crop_start < 1.0:
+        crop_start, crop_end = max(0.0, crop_end - 1.0), min(span, crop_start + 1.0)
+    return lower, upper, crop_start, crop_end, left, right
 
 
 def _load(model_class, name, role):
@@ -219,8 +227,30 @@ class Qwen3ForcedAligner(Aligner):
             )
             crop_start = words[left].end if left is not None else crop_start
             crop_end = words[right].start if right is not None else crop_end
+            group_tokens = tokens[lower:upper]
+            required = max(1.0, sum(len(token) for token in group_tokens) * 0.05)
+            if crop_end - crop_start < required:
+                deficit = required - (crop_end - crop_start)
+                widened_start = max(0.0, crop_start - deficit / 2)
+                widened_end = min(span, crop_end + deficit / 2)
+                if widened_end - widened_start < required:
+                    widened_start = max(0.0, widened_end - required)
+                    widened_end = min(span, widened_start + required)
+                print(
+                    f"[ctc_repair] widening crop for tokens[{lower}:{upper}]={group_tokens!r}: "
+                    f"[{crop_start:.3f}..{crop_end:.3f}] ({crop_end - crop_start:.3f}s) is shorter than "
+                    f"required {required:.3f}s -> [{widened_start:.3f}..{widened_end:.3f}]",
+                    flush=True,
+                )
+                crop_start, crop_end = widened_start, widened_end
             segment = samples[round(crop_start * rate):round(crop_end * rate)]
-            words[lower:upper] = ctc.align(segment, rate, tokens[lower:upper], crop_start)
+            print(
+                f"[ctc_repair] aligning tokens[{lower}:{upper}]={group_tokens!r} "
+                f"crop=[{crop_start:.3f}..{crop_end:.3f}] ({crop_end - crop_start:.3f}s, "
+                f"{segment.shape[0] if hasattr(segment, 'shape') else len(segment)} samples)",
+                flush=True,
+            )
+            words[lower:upper] = ctc.align(segment, rate, group_tokens, crop_start)
         return words
 
     @staticmethod
@@ -398,7 +428,7 @@ class Qwen3ForcedAligner(Aligner):
         return self._validate([word for word in words if word is not None], tokens, span)
 
     def _align_windows(self, samples, rate, tokens: list[str], span: float, language: str) -> list[Word]:
-        window = 180.0
+        window = 90.0
         count = max(1, ceil(span / window))
         starts = [index * max(0, span - window) / max(1, count - 1) for index in range(count)]
         margin = max(8, ceil(len(tokens) * min(30.0, span) / span))

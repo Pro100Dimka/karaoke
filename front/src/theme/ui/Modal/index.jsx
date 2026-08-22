@@ -37,7 +37,7 @@ export default function Modal({
   onClose,
   ariaLabel = "Диалог",
   closeAriaLabel = "Закрыть",
-  closeIconSize = 18,
+  closeIconSize = 58,
   portal = false,
   tilt = true,
   titleProps,

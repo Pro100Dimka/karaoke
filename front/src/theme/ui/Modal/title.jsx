@@ -15,7 +15,7 @@ export default function ModalTitle({
     <Stack className="ui-modal-title" direction="row" align="center" gap="var(--space-4)">
       {(Icon || image) && (
         <Primitive className="ui-modal-title-media">
-          {image ? <img src={image} alt="" decoding="async" onError={onImageError} /> : <Icon />}
+          {image ? <img src={image} alt="" decoding="async" onError={onImageError} /> : <Icon  />}
         </Primitive>
       )}
       <Stack gap="var(--space-1)" className="ui-modal-title-copy">

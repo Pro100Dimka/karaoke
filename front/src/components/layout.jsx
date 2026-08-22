@@ -56,7 +56,7 @@ function FloatingControls({ openSettings }) {
           variant={radio.isPlaying ? "contained" : "outline"}
           tone={radio.isPlaying ? "success" : "primary"}
           aria-pressed={radio.isPlaying}
-          iconSize={100}
+          iconSize={70}
           disabled={radio.isLoading}
           onClick={radio.toggle}
         />
@@ -65,7 +65,7 @@ function FloatingControls({ openSettings }) {
           variant="contained"
           label={t("settings.open")}
           title={t("settings.open")}
-          iconSize={100}
+          iconSize={70}
           onClick={openSettings}
         />
       </Stack>

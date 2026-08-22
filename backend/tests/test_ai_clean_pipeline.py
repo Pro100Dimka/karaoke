@@ -253,11 +253,11 @@ def test_acoustic_runs_find_words_crossing_silence_and_overlapping_neighbors():
 
 def test_long_alignment_uses_model_window_and_acoustic_confidence(tmp_path):
     audio = tmp_path / "vocals.flac"
-    sf.write(audio, np.zeros(1880, dtype=np.float32), 10)
+    sf.write(audio, np.zeros(1600, dtype=np.float32), 10)
     tokens = [f"word{index}" for index in range(10)]
 
     def align(audio, text, **_kwargs):
-        assert all(len(segment) == 1800 for segment, _rate in audio)
+        assert all(len(segment) == 900 for segment, _rate in audio)
         assert text == [" ".join(tokens), " ".join(tokens)]
         return [
             SimpleNamespace(items=[
@@ -273,11 +273,11 @@ def test_long_alignment_uses_model_window_and_acoustic_confidence(tmp_path):
 
     words = aligner.align_long_text(audio, " ".join(tokens), "en")
 
-    assert words[0].start == 8.5
+    assert words[0].start == 70.5
     assert all(word.confidence == 0.9 for word in words)
 
 
-def test_six_minute_alignment_uses_two_model_windows(tmp_path):
+def test_six_minute_alignment_uses_four_model_windows(tmp_path):
     audio = tmp_path / "vocals.flac"
     sf.write(audio, np.zeros(3600, dtype=np.float32), 10)
     tokens = [f"word{index}" for index in range(36)]
@@ -302,8 +302,8 @@ def test_six_minute_alignment_uses_two_model_windows(tmp_path):
     aligner.align_long_text(audio, " ".join(tokens), "en")
 
     assert len(calls) == 1
-    assert len(calls[0][0]) == 2
-    assert all(len(segment) == 1800 for segment, _rate in calls[0][0])
+    assert len(calls[0][0]) == 4
+    assert all(len(segment) == 900 for segment, _rate in calls[0][0])
 
 
 def test_separation_cancel_stops_worker_immediately():

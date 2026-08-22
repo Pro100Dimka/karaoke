@@ -76,7 +76,7 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
             sx={{
               inlineSize: "100%",
               maxInlineSize: "100%",
-              overflow: "hidden",
+              overflow: lineOffset ? "visible" : "hidden",
               whiteSpace: "nowrap",
               color: lineOffset ? "var(--color-text-muted)" : "var(--color-text)",
               fontWeight: lineOffset ? 680 : 820,

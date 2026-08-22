@@ -37,16 +37,12 @@ function Metric({
   onNext
 }) {
   return (
-    <Card
-      tilt={false}
-      cardContent={{ style: { padding: "var(--space-2)" } }}
-      style={{ "--card-border": tone }}
-    >
-      <Stack align="center" gap="var(--space-1)">
+    <Card tilt={false} style={{ "--card-border": tone }}>
+      <Stack align="center" gap="var(--space-1)" sx={{ padding: "var(--space-2) 0" }}>
         <Typography variant="caption" style={{ color: tone }}>
           {label}
         </Typography>
-        <Stack direction="row" align="center" justify="space-between">
+        <Stack direction="row" align="center" justify="space-around">
           <Step icon={previous || Minus} label={previousLabel} onClick={onPrevious} />
           <Typography variant="body2">
             <strong>{value}</strong>

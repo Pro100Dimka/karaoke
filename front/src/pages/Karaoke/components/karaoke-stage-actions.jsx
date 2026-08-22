@@ -60,7 +60,7 @@ export default function KaraokeStageActions({
               title={label}
               aria-pressed={active}
               variant={active ? "contained" : "outline"}
-              size="lg"
+              iconSize={50}
               onClick={onClick}
             />
           )

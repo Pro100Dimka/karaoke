@@ -12,20 +12,28 @@ const Popover = forwardRef(({
   const popoverRef = useRef(null);
 
   useEffect(() => {
-    if (!open || !onClose) return undefined;
+    if (!open || !onClose) return;
 
     const closeOutside = (event) => {
-      if (!popoverRef.current?.contains(event.target)) onClose(event);
+      if (!popoverRef.current?.contains(event.target)) {
+        onClose(event);
+      }
     };
-    const closeOnEscape = (event) => event.key === "Escape" && onClose(event);
 
-    document.addEventListener("click", closeOutside);
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        onClose(event);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", closeOnEscape);
+
     return () => {
-      document.removeEventListener("click", closeOutside);
+      document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [onClose, open]);
+  }, [open, onClose]);
 
   return (
     <div
