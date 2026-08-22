@@ -1,17 +1,22 @@
+export const isRecord = (value) =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 export function getBrowserStorage() {
   try {
-    return globalThis.localStorage;
+    return globalThis.localStorage ?? globalThis.window?.localStorage ?? null;
   } catch {
     return null;
   }
 }
 
+const keyOf = (key) => String(key ?? "").trim();
+
 export function readJsonStorage(key, fallback = {}, storage = getBrowserStorage()) {
   try {
-    const normalizedKey = String(key ?? "").trim();
-    if (!normalizedKey) return fallback;
-    const parsed = JSON.parse(storage.getItem(normalizedKey));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
+    const normalized = keyOf(key);
+    if (!normalized || !storage) return fallback;
+    const value = JSON.parse(storage.getItem(normalized));
+    return isRecord(value) ? value : fallback;
   } catch {
     return fallback;
   }
@@ -19,11 +24,10 @@ export function readJsonStorage(key, fallback = {}, storage = getBrowserStorage(
 
 export function writeJsonStorage(key, value, storage = getBrowserStorage()) {
   try {
-    const normalizedKey = String(key ?? "").trim();
-    if (!normalizedKey) return false;
+    const normalized = keyOf(key);
     const serialized = JSON.stringify(value);
-    if (serialized === undefined) return false;
-    storage.setItem(normalizedKey, serialized);
+    if (!normalized || !storage || serialized === undefined) return false;
+    storage.setItem(normalized, serialized);
     return true;
   } catch {
     return false;

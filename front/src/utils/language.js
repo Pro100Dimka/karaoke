@@ -1,25 +1,24 @@
-const LANGUAGE_KEY = "advoice-language";
-// Stryker disable next-line StringLiteral: replacing "uk" is equivalent because
-// normalizeLanguage deliberately falls back to the same "uk" value.
-const SUPPORTED_LANGUAGES = ["uk", "ru", "en"];
+const STORAGE_KEY = "advoice-language";
+const DEFAULT_LANGUAGE = "uk";
+const SUPPORTED = new Set([DEFAULT_LANGUAGE, "ru", "en"]);
 
 export const normalizeLanguage = (language) =>
-  SUPPORTED_LANGUAGES.includes(language) ? language : "uk";
+  SUPPORTED.has(language) ? language : DEFAULT_LANGUAGE;
 
-export const getSavedLanguage = () => {
+export function getSavedLanguage() {
   try {
-    return normalizeLanguage(globalThis.localStorage.getItem(LANGUAGE_KEY));
+    return normalizeLanguage(globalThis.localStorage?.getItem(STORAGE_KEY));
   } catch {
-    return "uk";
+    return DEFAULT_LANGUAGE;
   }
-};
+}
 
-export const saveLanguage = (language) => {
+export function saveLanguage(language) {
   const normalized = normalizeLanguage(language);
   try {
-    globalThis.localStorage.setItem(LANGUAGE_KEY, normalized);
+    globalThis.localStorage?.setItem(STORAGE_KEY, normalized);
   } catch {
-    // Backend settings remain authoritative when storage is unavailable.
+    // Backend settings remain authoritative when browser storage is restricted.
   }
   return normalized;
-};
+}

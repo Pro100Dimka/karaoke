@@ -1,53 +1,39 @@
-const DEFAULT_THEME = "dark";
-const THEME_STORAGE_KEY = "karaoke-theme";
-const THEMES = [DEFAULT_THEME, "light", "green", "violet"];
+import { getBrowserStorage } from "./storage";
 
-export function resolveTheme(theme) {
-  if (typeof theme !== "string") return DEFAULT_THEME;
-  const candidate = theme.trim();
-  return THEMES.includes(candidate) ? candidate : DEFAULT_THEME;
-}
+const DEFAULT_THEME = "dark";
+const STORAGE_KEY = "karaoke-theme";
+const THEMES = new Set([DEFAULT_THEME, "light", "green", "violet"]);
+
+export const resolveTheme = (theme) => {
+  const value = typeof theme === "string" ? theme.trim() : "";
+  return THEMES.has(value) ? value : DEFAULT_THEME;
+};
 
 export function readStoredTheme(storage) {
-  // Stryker disable next-line ConditionalExpression: equivalent caught TypeError fallback.
-  if (!storage || typeof storage.getItem !== "function") return DEFAULT_THEME;
   try {
-    return resolveTheme(storage.getItem(THEME_STORAGE_KEY));
+    return resolveTheme(storage?.getItem?.(STORAGE_KEY));
   } catch {
     return DEFAULT_THEME;
   }
 }
 
 export function writeStoredTheme(storage, theme) {
-  const resolvedTheme = resolveTheme(theme);
-
-  // Stryker disable next-line ConditionalExpression: equivalent caught setter TypeError.
-  if (storage && typeof storage.setItem === "function") {
-    try {
-      storage.setItem(THEME_STORAGE_KEY, resolvedTheme);
-    } catch {
-      // Storage can be unavailable in private or restricted environments.
-    }
+  const value = resolveTheme(theme);
+  try {
+    storage?.setItem?.(STORAGE_KEY, value);
+  } catch {
+    // A valid theme is still returned when storage is unavailable.
   }
-
-  return resolvedTheme;
+  return value;
 }
 
-export function saveTheme(theme) {
-  return writeStoredTheme(window.localStorage, theme);
-}
+export const saveTheme = (theme) => writeStoredTheme(getBrowserStorage(), theme);
+export const getSavedTheme = () => readStoredTheme(getBrowserStorage());
 
 export function applyTheme(theme) {
-  const resolvedTheme = saveTheme(theme);
-
-  document.documentElement.dataset.theme = resolvedTheme;
-
-  const setIconTheme = window.electronAPI?.setIconTheme;
-  if (typeof setIconTheme === "function") setIconTheme(resolvedTheme);
-
-  return resolvedTheme;
-}
-
-export function getSavedTheme() {
-  return readStoredTheme(window.localStorage);
+  const value = saveTheme(theme);
+  const root = globalThis.document?.documentElement;
+  if (root) root.dataset.theme = value;
+  (globalThis.electronAPI ?? globalThis.window?.electronAPI)?.setIconTheme?.(value);
+  return value;
 }

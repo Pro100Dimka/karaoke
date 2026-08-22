@@ -1,37 +1,27 @@
-import { readJsonStorage, writeJsonStorage } from "./storage";
+import { isRecord, readJsonStorage, writeJsonStorage } from "./storage";
 
 const STORAGE_KEY = "karaoke-audio-preferences";
+const DEFAULT_DEVICE = "default";
 export const DEFAULT_AUDIO_PREFERENCES = Object.freeze({
-  monitorInputDeviceId: "default",
-  monitorOutputDeviceId: "default"
+  monitorInputDeviceId: DEFAULT_DEVICE,
+  monitorOutputDeviceId: DEFAULT_DEVICE
 });
-const normalizeDeviceId = (value) =>
-  typeof value === "string" && value.trim() ? value : "default";
 
-export function getAudioPreferences() {
-  const stored = readJsonStorage(STORAGE_KEY);
-  return {
-    monitorInputDeviceId: normalizeDeviceId(stored.monitorInputDeviceId),
-    monitorOutputDeviceId: normalizeDeviceId(stored.monitorOutputDeviceId)
-  };
-}
+const deviceId = (value) => (typeof value === "string" && value.trim() ? value : DEFAULT_DEVICE);
+const normalize = (value = {}) => ({
+  monitorInputDeviceId: deviceId(value.monitorInputDeviceId),
+  monitorOutputDeviceId: deviceId(value.monitorOutputDeviceId)
+});
+
+export const getAudioPreferences = () => normalize(readJsonStorage(STORAGE_KEY));
 
 export function saveAudioPreferences(patch) {
-  const current = getAudioPreferences();
-  const source = patch && typeof patch === "object" ? patch : {};
-  const next = {
-    monitorInputDeviceId: normalizeDeviceId(
-      source.monitorInputDeviceId ?? current.monitorInputDeviceId
-    ),
-    monitorOutputDeviceId: normalizeDeviceId(
-      source.monitorOutputDeviceId ?? current.monitorOutputDeviceId
-    )
-  };
+  const next = normalize({ ...getAudioPreferences(), ...(isRecord(patch) ? patch : {}) });
   writeJsonStorage(STORAGE_KEY, next);
   try {
     globalThis.dispatchEvent(new CustomEvent("audio-preferences-changed", { detail: next }));
   } catch {
-    /* storage can be unavailable */
+    // A restricted renderer may expose storage without DOM events.
   }
   return next;
 }

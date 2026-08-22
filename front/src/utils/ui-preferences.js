@@ -1,4 +1,4 @@
-import { readJsonStorage, writeJsonStorage } from "./storage";
+import { isRecord, readJsonStorage, writeJsonStorage } from "./storage";
 
 export const UI_PREFERENCE_STORAGE = Object.freeze({
   audio: "karaoke-audio-preferences",
@@ -8,13 +8,11 @@ export const UI_PREFERENCE_STORAGE = Object.freeze({
   settings: "karaoke-settings-view"
 });
 
-const isObject = (value) => value && typeof value === "object" && !Array.isArray(value);
-
 export async function hydrateUiPreferences(api) {
   const remote = await api.getUiPreferences();
   await Promise.all(
     Object.entries(UI_PREFERENCE_STORAGE).map(async ([namespace, key]) => {
-      const saved = isObject(remote?.[namespace]) ? remote[namespace] : {};
+      const saved = isRecord(remote?.[namespace]) ? remote[namespace] : {};
       if (Object.keys(saved).length) {
         writeJsonStorage(key, saved);
         return;
@@ -26,7 +24,8 @@ export async function hydrateUiPreferences(api) {
 }
 
 export function persistUiPreferences(api, namespace, value) {
-  writeJsonStorage(UI_PREFERENCE_STORAGE[namespace], value);
-  api.updateUiPreferences(namespace, value).catch(() => {});
+  const key = UI_PREFERENCE_STORAGE[namespace];
+  if (key) writeJsonStorage(key, value);
+  Promise.resolve(api.updateUiPreferences(namespace, value)).catch(() => {});
   return value;
 }

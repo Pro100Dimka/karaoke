@@ -1,7 +1,7 @@
 export async function closeAudioContext(context) {
-  if (!context?.close || context.state === "closed") return false;
+  if (typeof context?.close !== "function" || context.state === "closed") return false;
   try {
-    await Promise.resolve(context.close());
+    await context.close();
     return true;
   } catch {
     return false;
