@@ -111,8 +111,8 @@
     );
 
     position: relative;
-
-    container-type: inline-size;
+container-type: normal;
+    /* container-type: inline-size; */
 
     /*
      * ВАЖНО:

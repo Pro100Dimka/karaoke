@@ -23,24 +23,23 @@ export default function TitleBar({ hideActions = false, title = "A&D Voice" }) {
       aria-label={title}
       direction="row"
       justify="end"
-      sx={{ minBlockSize: electron ? 0 : "var(--space-1)", WebkitAppRegion: "drag" }}
+      sx={{ minBlockSize: "var(--space-1)", WebkitAppRegion: "drag", zIndex: 1 }}
     >
-      {electron &&
-        actions.map(([action, key, Icon, danger]) => (
-          <IconButton
-            key={action}
-            icon={Icon}
-            label={t(key)}
-            onClick={() => invoke(action)}
-            variant="ghost"
-            sx={{
-              color: danger ? "var(--color-danger)" : "var(--color-text-muted)",
-              borderTopRadius: 0,
-              WebkitAppRegion: "no-drag",
-              borderTopRightRadius: 0
-            }}
-          />
-        ))}
+      {actions.map(([action, key, Icon, danger]) => (
+        <IconButton
+          key={action}
+          icon={Icon}
+          label={t(key)}
+          onClick={() => invoke(action)}
+          variant="ghost"
+          sx={{
+            color: danger ? "var(--color-danger)" : "var(--color-text-muted)",
+            borderTopRadius: 0,
+            WebkitAppRegion: "no-drag",
+            borderTopRightRadius: 0
+          }}
+        />
+      ))}
     </Stack>
   );
 }
