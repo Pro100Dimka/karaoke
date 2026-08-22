@@ -1,79 +1,76 @@
 import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
 import { connectMicrophoneChannelStrip } from "./microphoneChannelStrip";
 
-const stopStream = (stream) => stream?.getTracks?.().forEach((track) => track.stop());
-let currentNoiseSuppression = 0.35;
-globalThis.addEventListener?.("audio-settings-changed", (event) => {
-  const value = Number(event.detail?.noise_suppression);
-  if (Number.isFinite(value)) currentNoiseSuppression = Math.max(0, Math.min(1, value));
+const stop = (stream) => stream?.getTracks?.().forEach((track) => track.stop());
+const disconnect = (node) => {
+  try {
+    node?.disconnect?.();
+  } catch {
+    // A source can already be detached by the browser.
+  }
+};
+
+let noiseSuppression = 0.35;
+globalThis.addEventListener?.("audio-settings-changed", ({ detail }) => {
+  const value = Number(detail?.noise_suppression);
+  if (Number.isFinite(value)) noiseSuppression = Math.max(0, Math.min(1, value));
 });
 
-/** Always-on microphone cleanup. Creative effects are intentionally not part of this graph. */
-export function createStudioMicrophoneGraph(rawStream, options = {}) {
-  const noiseSuppression = options.noiseSuppression ?? currentNoiseSuppression;
-  const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-  if (!AudioContextClass?.prototype || !rawStream) {
-    return {
-      stream: rawStream,
-      rawStream,
-      getStream: () => rawStream,
-      close: async () => stopStream(rawStream)
-    };
-  }
+function rawGraph(stream) {
+  return {
+    stream,
+    rawStream: stream,
+    getStream: () => stream,
+    close: async () => stop(stream)
+  };
+}
 
+export function createStudioMicrophoneGraph(rawStream, options = {}) {
+  const AudioContext = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+  if (!AudioContext?.prototype || !rawStream) return rawGraph(rawStream);
   let context;
   let source;
-  let inputStream = rawStream;
+  let input = rawStream;
   try {
-    context = new AudioContextClass({ latencyHint: "interactive", sampleRate: 44_100 });
-    source = context.createMediaStreamSource(rawStream);
+    context = new AudioContext({ latencyHint: "interactive", sampleRate: 44_100 });
+    source = context.createMediaStreamSource(input);
     const destination = context.createMediaStreamDestination();
-    const channelStrip = connectMicrophoneChannelStrip(context, source, destination, {
-      noiseSuppression
+    const strip = connectMicrophoneChannelStrip(context, source, destination, {
+      noiseSuppression: options.noiseSuppression ?? noiseSuppression
     });
-    const syncSettings = (event) => {
-      if (event.detail?.noise_suppression == null) return;
-      channelStrip.setNoiseSuppression(event.detail.noise_suppression);
+    const sync = ({ detail }) => {
+      if (detail?.noise_suppression != null) strip.setNoiseSuppression(detail.noise_suppression);
     };
-    globalThis.addEventListener?.("audio-settings-changed", syncSettings);
+    globalThis.addEventListener?.("audio-settings-changed", sync);
     destination.stream.getAudioTracks?.().forEach((track) => {
       track.contentHint = "music";
     });
     context.resume?.().catch(() => {});
-
     return {
       stream: destination.stream,
       rawStream,
-      getStream: ({ disabledEffects = false } = {}) =>
-        disabledEffects ? inputStream : destination.stream,
       context,
-      setNoiseSuppression: channelStrip.setNoiseSuppression,
-      replaceInput: async (nextStream) => {
-        const nextSource = context.createMediaStreamSource(nextStream);
-        nextSource.connect(channelStrip.highpass);
-        try {
-          source.disconnect();
-        } catch {
-          /* already disconnected */
-        }
-        stopStream(inputStream);
-        inputStream = nextStream;
-        source = nextSource;
+      setNoiseSuppression: strip.setNoiseSuppression,
+      getStream: ({ disabledEffects = false } = {}) =>
+        disabledEffects ? input : destination.stream,
+      async replaceInput(stream) {
+        const next = context.createMediaStreamSource(stream);
+        next.connect(strip.highpass);
+        disconnect(source);
+        stop(input);
+        input = stream;
+        source = next;
       },
-      close: async () => {
-        globalThis.removeEventListener?.("audio-settings-changed", syncSettings);
-        try {
-          source.disconnect();
-        } catch {
-          /* already disconnected */
-        }
-        stopStream(inputStream);
-        stopStream(destination.stream);
+      async close() {
+        globalThis.removeEventListener?.("audio-settings-changed", sync);
+        disconnect(source);
+        stop(input);
+        stop(destination.stream);
         if (context.state !== "closed") await closeAudioContext(context);
       }
     };
   } catch (error) {
-    stopStream(rawStream);
+    stop(rawStream);
     closeAudioContextQuietly(context);
     throw error;
   }

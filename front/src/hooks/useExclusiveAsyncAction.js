@@ -1,34 +1,24 @@
 import { useCallback, useRef, useState } from "react";
+
 import useMountedRef from "./useMountedRef";
 
-/**
- * Runs at most one asynchronous action at a time.
- * Repeated calls made before the active action settles reuse its promise.
- */
 export default function useExclusiveAsyncAction() {
-  const activePromiseRef = useRef(null);
-  const mountedRef = useMountedRef();
+  const active = useRef(null);
+  const mounted = useMountedRef();
   const [pending, setPending] = useState(false);
-
   const run = useCallback(
     (action) => {
-      if (activePromiseRef.current) return activePromiseRef.current;
-
-      // Stryker disable next-line ConditionalExpression: inert after unmount.
-      if (mountedRef.current) setPending(true);
-      const promise = Promise.resolve()
+      if (active.current) return active.current;
+      if (mounted.current) setPending(true);
+      active.current = Promise.resolve()
         .then(action)
         .finally(() => {
-          activePromiseRef.current = null;
-          // Stryker disable next-line ConditionalExpression: inert after unmount.
-          if (mountedRef.current) setPending(false);
+          active.current = null;
+          if (mounted.current) setPending(false);
         });
-      activePromiseRef.current = promise;
-      return promise;
+      return active.current;
     },
-    // Stryker disable next-line ArrayDeclaration: stable hook-lifetime ref.
-    [mountedRef]
+    [mounted]
   );
-
   return { pending, run };
 }

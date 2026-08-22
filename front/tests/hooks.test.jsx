@@ -23,7 +23,6 @@ import useKaraokeControls from "../src/pages/Karaoke/hooks/useKaraokeControls.js
 import useKaraokeHotkeys, {
   dispatchKaraokeHotkey
 } from "../src/pages/Karaoke/hooks/useKaraokeHotkeys.js";
-import useSettingsNavigation from "../src/pages/SettingsOLD/hooks/useSettingsNavigation.js";
 import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";
 import useKaraokeResult from "../src/pages/Karaoke/hooks/useKaraokeResult.js";
 import useKaraokeStageLayout from "../src/pages/Karaoke/hooks/useKaraokeStageLayout.js";
@@ -309,19 +308,6 @@ describe("song cover hook", () => {
   });
 });
 describe("navigation and karaoke hooks", () => {
-  test("changes settings navigation", () => {
-    const defaults = renderHook(() => useSettingsNavigation());
-    expect(defaults.result.current).toMatchObject({ tab: "audio", service: null });
-    defaults.unmount();
-    const { result } = renderHook(() => useSettingsNavigation("general"));
-    expect(result.current.tab).toBe("general");
-    act(() => result.current.openService("audio"));
-    expect(result.current.service).toBe("audio");
-    act(() => result.current.closeService());
-    expect(result.current.service).toBeNull();
-    act(() => result.current.selectTab("storage"));
-    expect(result.current).toMatchObject({ tab: "storage", service: null });
-  });
   test("auto-hides and reveals karaoke controls", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

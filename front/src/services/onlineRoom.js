@@ -1,73 +1,67 @@
-// Node's native ESM runner used by contract tests requires the extension.
-// eslint-disable-next-line import/extensions
-import { translateSaved } from "../i18n/runtime";
+import { translateSaved as translate } from "../i18n/runtime";
 
 export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
-const CONNECTION_TIMEOUT_MS = 10_000;
-// Many home routers/NATs/corporate firewalls silently drop an idle WebSocket
-// after ~30-60s of no traffic (no close frame, no reason -- the client just
-// sees an abrupt onclose). Sending a small ping well under that window keeps
-// the connection's NAT mapping alive for participants who aren't otherwise
-// sending anything (e.g. quietly listening).
-const PING_INTERVAL_MS = 20_000;
-function getMaxSignalMessageLength() {
-  return 256 * 1024;
-}
-// Must match the "signal" field cap the Cloudflare worker enforces
-// (cloudflare/src/worker.js MAX_SIGNAL_BYTES) -- it's tighter than the general
-// per-message limit above, so an oversized WebRTC signal that passes the
-// general check would still get the worker to close the whole socket.
-const MAX_SIGNAL_PAYLOAD_LENGTH = 64 * 1024;
-const MAX_PARTICIPANT_NAME_LENGTH = 40;
-const utf8ByteLength = (value) => new TextEncoder().encode(value).byteLength;
-export function createRoomId(cryptoApi = globalThis.crypto, random = Math.random) {
-  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
-    return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
-  }
-  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
-    const bytes = cryptoApi.getRandomValues(new Uint8Array(6));
-    return [...bytes]
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("")
-      .toUpperCase();
-  }
-  const high = Math.floor(random() * 0x1_0000);
-  const low = Math.floor(random() * 0x1_0000_0000);
-  return `${high.toString(16).padStart(4, "0")}${low.toString(16).padStart(8, "0")}`.toUpperCase();
-}
-export function createHostToken(cryptoApi = globalThis.crypto) {
-  if (cryptoApi && typeof cryptoApi.randomUUID === "function")
-    return `${cryptoApi.randomUUID()}${cryptoApi.randomUUID()}`.replaceAll("-", "");
-  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
-    const bytes = cryptoApi.getRandomValues(new Uint8Array(32));
-    return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  }
-  throw new Error(translateSaved("Безопасный генератор случайных чисел недоступен"));
+const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 20_000, signal: 64 * 1024 };
+const bytes = (value) => new TextEncoder().encode(value).byteLength;
+const hex = (values) => [...values].map((value) => value.toString(16).padStart(2, "0")).join("");
+
+export function createRoomId(crypto = globalThis.crypto, random = Math.random) {
+  if (crypto?.randomUUID) return crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
+  if (crypto?.getRandomValues) return hex(crypto.getRandomValues(new Uint8Array(6))).toUpperCase();
+  const high = Math.floor(random() * 0x1_0000)
+    .toString(16)
+    .padStart(4, "0");
+  const low = Math.floor(random() * 0x1_0000_0000)
+    .toString(16)
+    .padStart(8, "0");
+  return `${high}${low}`.toUpperCase();
 }
 
-export function normalizeRoomId(value) {
-  return String(value || "")
+export function createHostToken(crypto = globalThis.crypto) {
+  if (crypto?.randomUUID) return `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
+  if (crypto?.getRandomValues) return hex(crypto.getRandomValues(new Uint8Array(32)));
+  throw new Error(translate("Безопасный генератор случайных чисел недоступен"));
+}
+
+export const normalizeRoomId = (value) =>
+  String(value ?? "")
     .toUpperCase()
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 32);
+
+function safeUrl(value) {
+  const url = new URL(String(value), DEFAULT_SIGNALING_URL);
+  if (url.protocol === "http:") url.protocol = "ws:";
+  if (url.protocol === "https:") url.protocol = "wss:";
+  if (!url.protocol.match(/^wss?:$/))
+    throw new TypeError(translate("Некорректный адрес сервера комнат"));
+  url.username = "";
+  url.password = "";
+  return url.toString().replace(/\/$/, "");
 }
-function getCloseDetail(event) {
+
+function participantName(value) {
+  return (
+    [...String(value ?? "")]
+      .map((character) => {
+        const code = character.charCodeAt(0);
+        return code <= 31 || code === 127 ? " " : character;
+      })
+      .join("")
+      .trim()
+      .slice(0, LIMITS.name) || translate("Гость")
+  );
+}
+
+function closeDetail(event) {
   const reason = event?.reason?.trim();
   if (reason) return `: ${reason}`;
-  return event?.code && event.code !== 1006 ? translateSaved("(код {0})", { 0: event.code }) : "";
+  return event?.code && event.code !== 1006 ? translate("(код {0})", { 0: event.code }) : "";
 }
 
 export class OnlineRoomClient {
   constructor(url = DEFAULT_SIGNALING_URL) {
-    const parsedUrl = new URL(String(url), DEFAULT_SIGNALING_URL);
-    if (parsedUrl.protocol === "http:") parsedUrl.protocol = "ws:";
-    if (parsedUrl.protocol === "https:") parsedUrl.protocol = "wss:";
-    if (!["ws:", "wss:"].includes(parsedUrl.protocol)) {
-      throw new TypeError(translateSaved("Некорректный адрес сервера комнат"));
-    }
-    parsedUrl.username = "";
-    parsedUrl.password = "";
-    this.url = parsedUrl.toString().replace(/\/$/, "");
+    this.url = safeUrl(url);
     this.listeners = new Set();
     this.socket = null;
     this.pingTimer = null;
@@ -75,17 +69,9 @@ export class OnlineRoomClient {
     this.clockSynchronized = false;
   }
 
-  _stopPing() {
-    if (this.pingTimer !== null) {
-      globalThis.clearInterval(this.pingTimer);
-      this.pingTimer = null;
-    }
-  }
-
   onMessage(listener) {
-    if (typeof listener !== "function") {
-      throw new TypeError(translateSaved("Обработчик сообщений комнаты должен быть функцией"));
-    }
+    if (typeof listener !== "function")
+      throw new TypeError(translate("Обработчик сообщений комнаты должен быть функцией"));
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -104,92 +90,79 @@ export class OnlineRoomClient {
     return Date.now() + this.clockOffsetMs;
   }
 
-  _sendClockProbe() {
+  stopPing() {
+    if (this.pingTimer == null) return;
+    clearInterval(this.pingTimer);
+    this.pingTimer = null;
+  }
+
+  sendClockProbe() {
     this.send("ping", { clientTime: Date.now() });
   }
 
   connect({ id, name, host = false, hostToken = "" }) {
-    const normalizedId = normalizeRoomId(id);
-    if (normalizedId.length < 4) {
+    const roomId = normalizeRoomId(id);
+    if (roomId.length < 4)
       return Promise.reject(
-        new Error(translateSaved("Код комнаты должен содержать минимум 4 символа."))
+        new Error(translate("Код комнаты должен содержать минимум 4 символа."))
       );
-    }
     this.disconnect();
-    const participantName =
-      [...String(name ?? "")]
-        .map((character) => {
-          const code = character.charCodeAt(0);
-          return code <= 31 || code === 127 ? " " : character;
-        })
-        .join("")
-        .trim()
-        .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || translateSaved("Гость");
-    const query = new URLSearchParams({ name: participantName, role: host ? "host" : "guest" });
+    if (typeof globalThis.WebSocket !== "function")
+      return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
+    const query = new URLSearchParams({
+      name: participantName(name),
+      role: host ? "host" : "guest"
+    });
     if (host) {
       query.set("create", "1");
       query.set("hostToken", String(hostToken));
     }
-    if (typeof globalThis.WebSocket !== "function") {
-      return Promise.reject(
-        new Error(translateSaved("WebSocket не поддерживается в этом окружении."))
-      );
-    }
     let socket;
     try {
-      socket = new globalThis.WebSocket(
-        `${this.url}/rooms/${encodeURIComponent(normalizedId)}?${query}`
-      );
+      socket = new WebSocket(`${this.url}/rooms/${encodeURIComponent(roomId)}?${query}`);
     } catch (error) {
       return Promise.reject(
         error instanceof Error
           ? error
-          : new Error(translateSaved("Не удалось создать WebSocket-соединение."))
+          : new Error(translate("Не удалось создать WebSocket-соединение."))
       );
     }
     this.socket = socket;
     return new Promise((resolve, reject) => {
-      const isCurrent = () => this.socket === socket;
+      const current = () => this.socket === socket;
       const settle = (callback, value) => {
-        globalThis.clearTimeout(timeout);
+        clearTimeout(timeout);
         callback(value);
       };
       const fail = (message) => {
-        if (!isCurrent()) return;
+        if (!current()) return;
         this.socket = null;
         settle(reject, new Error(message));
-        if (socket.readyState < globalThis.WebSocket.CLOSING) socket.close();
+        if (socket.readyState < WebSocket.CLOSING) socket.close();
       };
-      const timeout = globalThis.setTimeout(
-        () => fail(translateSaved("Сервер комнат не ответил.")),
-        CONNECTION_TIMEOUT_MS
+      const timeout = setTimeout(
+        () => fail(translate("Сервер комнат не ответил.")),
+        LIMITS.connect
       );
       socket.onopen = () => {
-        if (!isCurrent()) {
-          socket.close(1000, "Stale connection");
-          return;
-        }
-        this._stopPing();
-        this._sendClockProbe();
-        this.pingTimer = globalThis.setInterval(() => this._sendClockProbe(), PING_INTERVAL_MS);
-        settle(resolve, normalizedId);
+        if (!current()) return socket.close(1000, "Stale connection");
+        this.stopPing();
+        this.sendClockProbe();
+        this.pingTimer = setInterval(() => this.sendClockProbe(), LIMITS.ping);
+        settle(resolve, roomId);
       };
-      socket.onmessage = (event) => {
-        if (!isCurrent() || typeof event.data !== "string") return;
-        if (utf8ByteLength(event.data) > getMaxSignalMessageLength()) {
-          socket.close(1009, "Message too large");
-          return;
-        }
+      socket.onmessage = ({ data }) => {
+        if (!current() || typeof data !== "string") return;
+        if (bytes(data) > LIMITS.message) return socket.close(1009, "Message too large");
         try {
-          const message = JSON.parse(event.data);
-          if (typeof message !== "object" || message === null || Array.isArray(message)) return;
+          const message = JSON.parse(data);
+          if (!message || typeof message !== "object" || Array.isArray(message)) return;
           if (
             message.type === "pong" &&
             Number.isFinite(message.serverTime) &&
             Number.isFinite(message.clientTime)
           ) {
-            const midpoint = (message.clientTime + Date.now()) / 2;
-            const sample = message.serverTime - midpoint;
+            const sample = message.serverTime - (message.clientTime + Date.now()) / 2;
             this.clockOffsetMs = this.clockSynchronized
               ? this.clockOffsetMs * 0.75 + sample * 0.25
               : sample;
@@ -197,27 +170,22 @@ export class OnlineRoomClient {
           }
           this.emit(message);
         } catch {
-          // A malformed packet must not interrupt the room connection.
+          // Malformed packets do not own the room connection.
         }
       };
-      socket.onerror = () => {
-        // Browsers intentionally hide network details here. onclose normally
-        // follows with the WebSocket status, which is more useful to the user.
-      };
+      socket.onerror = () => {};
       socket.onclose = (event) => {
-        const wasCurrent = isCurrent();
+        const wasCurrent = current();
         if (wasCurrent) {
           this.socket = null;
-          this._stopPing();
+          this.stopPing();
         }
-        globalThis.clearTimeout(timeout);
-        const detail = getCloseDetail(event);
         settle(
           reject,
           new Error(
-            translateSaved(
+            translate(
               "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
-              { 0: detail }
+              { 0: closeDetail(event) }
             )
           )
         );
@@ -227,28 +195,22 @@ export class OnlineRoomClient {
   }
 
   send(type, payload = {}) {
-    const { socket } = this;
     if (
-      socket?.readyState !== 1 ||
+      this.socket?.readyState !== 1 ||
       typeof type !== "string" ||
       !type.trim() ||
       !payload ||
       typeof payload !== "object" ||
       Array.isArray(payload)
-    ) {
+    )
       return false;
-    }
     try {
-      const trimmedType = type.trim();
-      if (
-        trimmedType === "signal" &&
-        utf8ByteLength(JSON.stringify(payload.signal ?? null)) > MAX_SIGNAL_PAYLOAD_LENGTH
-      ) {
+      const normalized = type.trim();
+      if (normalized === "signal" && bytes(JSON.stringify(payload.signal ?? null)) > LIMITS.signal)
         return false;
-      }
-      const serialized = JSON.stringify({ ...payload, type: trimmedType });
-      if (utf8ByteLength(serialized) > getMaxSignalMessageLength()) return false;
-      socket.send(serialized);
+      const packet = JSON.stringify({ ...payload, type: normalized });
+      if (bytes(packet) > LIMITS.message) return false;
+      this.socket.send(packet);
       return true;
     } catch {
       return false;
@@ -258,11 +220,9 @@ export class OnlineRoomClient {
   disconnect() {
     const { socket } = this;
     this.socket = null;
-    this._stopPing();
-    if (socket && socket.readyState < 2) socket.close(1000, "Client left room");
+    this.stopPing();
+    if (socket?.readyState < 2) socket.close(1000, "Client left room");
   }
 }
 
-// Node's direct ESM tests require the explicit source extension.
-// eslint-disable-next-line import/extensions
 export { default as OnlineVoiceMesh } from "./onlineVoiceMesh";

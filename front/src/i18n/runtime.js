@@ -5,7 +5,8 @@ import { interpolate } from "./translate";
 
 export const translateSaved = (source, values = {}) => {
   const language = getSavedLanguage();
-  if (language === "ru") return interpolate(source, values);
-  const message = sourceMessages[language][source] ?? source;
-  return interpolate(message, values);
+  return interpolate(
+    language === "ru" ? source : (sourceMessages[language]?.[source] ?? source),
+    values
+  );
 };

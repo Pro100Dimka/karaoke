@@ -1,34 +1,29 @@
 export function playParticipantJoinedSound() {
-  const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-  if (!AudioContextClass) return;
+  const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AudioContext) return;
   try {
-    const context = new AudioContextClass({ latencyHint: "interactive" });
+    const context = new AudioContext({ latencyHint: "interactive" });
     const gain = context.createGain();
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.09, context.currentTime + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
+    const { currentTime } = context;
+    gain.gain.setValueAtTime(0.0001, currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.09, currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, currentTime + 0.24);
     gain.connect(context.destination);
-    const oscillators = [660, 880].map((frequency, index) => {
-      const oscillator = context.createOscillator();
-      oscillator.frequency.value = frequency;
-      oscillator.connect(gain);
-      oscillator.start(context.currentTime + index * 0.05);
-      oscillator.stop(context.currentTime + 0.22);
-      return oscillator;
+    const tones = [660, 880].map((frequency, index) => {
+      const tone = context.createOscillator();
+      tone.frequency.value = frequency;
+      tone.connect(gain);
+      tone.start(currentTime + index * 0.05);
+      tone.stop(currentTime + 0.22);
+      return tone;
     });
-    const finalOscillator = oscillators.at(-1);
-    if (finalOscillator)
-      finalOscillator.onended = () => {
-        finalOscillator.onended = null;
-        Promise.resolve(context.close?.()).catch(() => {});
-      };
-    try {
-      const resumed = context.resume?.();
-      resumed?.catch?.(() => {});
-    } catch {
-      // Playback can still succeed when resume is unavailable or rejected.
-    }
+    const lastTone = tones.at(-1);
+    lastTone.onended = () => {
+      lastTone.onended = null;
+      Promise.resolve(context.close?.()).catch(() => undefined);
+    };
+    context.resume?.()?.catch?.(() => undefined);
   } catch {
-    // A notification sound is optional and must never affect room state.
+    // Optional feedback must never break room state.
   }
 }

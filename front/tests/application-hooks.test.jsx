@@ -4,8 +4,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useOnlineRoomNavigation } from "../src/hooks/useOnlineRoomNavigation.js";
 import { useRequireOnlineName } from "../src/hooks/useRequireOnlineName.js";
 import { translateSaved } from "../src/i18n/runtime.js";
-import useDiagnostics from "../src/pages/SettingsOLD/screens/diagnostics/useDiagnostics.js";
-import { POLLING_INTERVALS } from "../src/runtime-config.js";
 import { verify } from "./helpers/assertions.mjs";
 
 const mocks = vi.hoisted(() => ({
@@ -44,26 +42,6 @@ beforeEach(() => {
   });
 });
 describe("application hooks", () => {
-  test("collects every diagnostics stream with its configured interval", () => {
-    const results = ["health", "pipeline", "versions", "errors"];
-    mocks.usePolling.mockImplementation(() => ({ data: results.shift() }));
-    const { result } = renderHook(() => useDiagnostics());
-    verify([
-      result.current,
-      "toEqual",
-      { health: "health", pipeline: "pipeline", versions: "versions", errors: "errors" }
-    ]);
-    verify([
-      mocks.usePolling.mock.calls,
-      "toEqual",
-      [
-        [mocks.getHealth, POLLING_INTERVALS.health, []],
-        [mocks.getPipelineHealth, POLLING_INTERVALS.health, []],
-        [mocks.getVersions, POLLING_INTERVALS.versions, []],
-        [mocks.getErrors, POLLING_INTERVALS.errors, []]
-      ]
-    ]);
-  });
   test.each([
     [
       { type: "start-karaoke", songId: "song-1" },

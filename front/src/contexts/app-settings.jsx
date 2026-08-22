@@ -7,6 +7,7 @@ import {
   useReducer,
   useRef
 } from "react";
+
 import { api } from "../api/client";
 import { setErrorReporterUser } from "../utils/error-reporter";
 import { getSavedLanguage, saveLanguage } from "../utils/language";
@@ -18,77 +19,58 @@ export const INITIAL_APP_SETTINGS_STATE = Object.freeze({
   isLoading: true,
   error: null
 });
-
-const APP_SETTINGS_HANDLERS = {
+const reducers = {
   LOAD_START: (state) => ({ ...state, isLoading: true, error: null }),
-  LOAD_SUCCESS: (state, payload) => ({
+  LOAD_SUCCESS: (_state, settings) => ({ settings, isLoading: false, error: null }),
+  LOAD_ERROR: (state, error) => ({ ...state, isLoading: false, error }),
+  UPDATE_SETTINGS: (state, update) => ({
     ...state,
-    settings: payload,
-    isLoading: false,
-    error: null
-  }),
-  LOAD_ERROR: (state, payload) => ({ ...state, isLoading: false, error: payload }),
-  UPDATE_SETTINGS: (state, payload) => ({
-    ...state,
-    settings: typeof payload === "function" ? payload(state.settings) : payload
+    settings: typeof update === "function" ? update(state.settings) : update
   })
 };
 
-export function appSettingsReducer(state, { type, payload }) {
-  const handler = Object.hasOwn(APP_SETTINGS_HANDLERS, type) && APP_SETTINGS_HANDLERS[type];
-  return handler ? handler(state, payload) : state;
-}
+export const appSettingsReducer = (state, { type, payload }) =>
+  Object.hasOwn(reducers, type) ? reducers[type](state, payload) : state;
 
 export default function AppSettingsProvider({ children }) {
   const [state, dispatch] = useReducer(appSettingsReducer, INITIAL_APP_SETTINGS_STATE);
-  const loadRequestRef = useRef();
-
-  // The callback closes only over stable React dispatch/refs.
-  // Stryker disable ArrayDeclaration
-  const loadSettings = useCallback(() => {
-    const requestId = Symbol("settings-request");
-    loadRequestRef.current = requestId;
+  const latestLoad = useRef();
+  const reloadSettings = useCallback(() => {
+    const request = Symbol("settings");
+    latestLoad.current = request;
     dispatch({ type: "LOAD_START" });
-
-    return api
-      .getAppSettings()
-      .then((payload) => {
-        if (requestId === loadRequestRef.current) dispatch({ type: "LOAD_SUCCESS", payload });
+    return api.getAppSettings().then(
+      (payload) => {
+        if (latestLoad.current === request) dispatch({ type: "LOAD_SUCCESS", payload });
         return payload;
-      })
-      .catch((payload) => {
-        if (requestId === loadRequestRef.current) dispatch({ type: "LOAD_ERROR", payload });
-        throw payload;
-      });
+      },
+      (error) => {
+        if (latestLoad.current === request) dispatch({ type: "LOAD_ERROR", payload: error });
+        throw error;
+      }
+    );
   }, []);
-  // Stryker restore ArrayDeclaration
   const value = useMemo(
     () => ({
       ...state,
-      updateSettings: (payload) => dispatch({ type: "UPDATE_SETTINGS", payload }),
-      reloadSettings: loadSettings
+      reloadSettings,
+      updateSettings: (payload) => dispatch({ type: "UPDATE_SETTINGS", payload })
     }),
-    [state, loadSettings]
+    [reloadSettings, state]
   );
 
   useLayoutEffect(() => {
     applyTheme(state.settings?.theme ?? getSavedTheme());
   }, [state.settings?.theme]);
-  useEffect(() => {
-    setErrorReporterUser(state.settings?.online_name);
-  }, [state.settings?.online_name]);
+  useEffect(() => setErrorReporterUser(state.settings?.online_name), [state.settings?.online_name]);
   useLayoutEffect(() => {
     if (!state.settings?.language) return;
     const previous = getSavedLanguage();
-    const current = saveLanguage(state.settings.language);
-    if (previous !== current) globalThis.location.reload();
+    if (saveLanguage(state.settings.language) !== previous) globalThis.location.reload();
   }, [state.settings?.language]);
-  // loadSettings is stable for the provider lifetime.
-  // Stryker disable ArrayDeclaration
   useEffect(() => {
-    loadSettings().catch(() => {});
-  }, [loadSettings]);
-  // Stryker restore ArrayDeclaration
+    reloadSettings().catch(() => undefined);
+  }, [reloadSettings]);
 
   return <AppSettingsContext.Provider value={value}>{children}</AppSettingsContext.Provider>;
 }

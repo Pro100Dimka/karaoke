@@ -1,38 +1,27 @@
 import { useCallback, useRef, useState } from "react";
-import { translateSaved } from "../i18n/runtime";
+
+import { translateSaved as t } from "../i18n/runtime";
 import useMountedRef from "./useMountedRef";
 
-/**
- * Serializes asynchronous actions in call order.
- * Useful for settings updates where out-of-order responses would restore an
- * older value after a newer user choice.
- */
 export default function useAsyncQueue() {
-  const tailRef = useRef(Promise.resolve());
-  const mountedRef = useMountedRef();
-  const pendingCountRef = useRef(0);
+  const tail = useRef(Promise.resolve());
+  const count = useRef(0);
+  const mounted = useMountedRef();
   const [pending, setPending] = useState(false);
   const run = useCallback(
     (action) => {
-      if (typeof action !== "function") {
-        return Promise.reject(
-          new TypeError(translateSaved("Операция очереди должна быть функцией"))
-        );
-      }
-      pendingCountRef.current += 1;
-      // Stryker disable next-line ConditionalExpression: inert after unmount.
-      if (mountedRef.current) setPending(true);
-      const result = tailRef.current.then(() => Promise.resolve().then(action));
-      tailRef.current = result.catch(() => {});
+      if (typeof action !== "function")
+        return Promise.reject(new TypeError(t("Операция очереди должна быть функцией")));
+      count.current += 1;
+      if (mounted.current) setPending(true);
+      const result = tail.current.then(action);
+      tail.current = result.catch(() => undefined);
       return result.finally(() => {
-        pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
-        // Stryker disable next-line ConditionalExpression: inert after unmount.
-        if (!mountedRef.current) return;
-        if (pendingCountRef.current === 0) setPending(false);
+        count.current -= 1;
+        if (mounted.current && count.current === 0) setPending(false);
       });
     },
-    // Stryker disable next-line ArrayDeclaration: stable hook-lifetime ref.
-    [mountedRef]
+    [mounted]
   );
   return { pending, run };
 }

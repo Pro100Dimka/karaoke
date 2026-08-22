@@ -2,79 +2,59 @@ import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-cons
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 
 let active = null;
-let pending = null;
+let queue = Promise.resolve();
 
-const isLive = (stream) =>
-  stream?.getAudioTracks?.().some((track) => track.readyState === "live") === true;
-
-const normalizeDeviceId = (deviceId) => {
-  const value = String(deviceId || "").trim();
-  return value && value !== "default" ? value : "";
+const live = (stream) =>
+  stream?.getAudioTracks?.().some(({ readyState }) => readyState === "live") === true;
+const device = (value) => {
+  const id = String(value ?? "").trim();
+  return id && id !== "default" ? id : "";
 };
-
-const constraintsFor = (deviceId) => ({
+const constraints = (id) => ({
   audio: {
     ...MICROPHONE_CAPTURE_CONSTRAINTS,
     channelCount: 1,
     sampleRate: { ideal: 44_100 },
     sampleSize: { ideal: 24 },
-    ...(deviceId ? { deviceId: { exact: deviceId } } : {})
+    ...(id && { deviceId: { exact: id } })
   }
 });
 
-async function captureRaw(deviceId) {
+async function capture(id) {
   try {
-    return {
-      stream: await navigator.mediaDevices.getUserMedia(constraintsFor(deviceId)),
-      deviceId
-    };
+    return { stream: await navigator.mediaDevices.getUserMedia(constraints(id)), deviceId: id };
   } catch (error) {
-    if (!deviceId) throw error;
+    if (!id) throw error;
     return {
-      stream: await navigator.mediaDevices.getUserMedia(constraintsFor("")),
+      stream: await navigator.mediaDevices.getUserMedia(constraints("")),
       deviceId: ""
     };
   }
 }
 
-async function openCapture(deviceId) {
-  if (isLive(active?.graph?.stream)) return active;
-  const capture = await captureRaw(deviceId);
-  const graph = createStudioMicrophoneGraph(capture.stream);
-  active = { deviceId: capture.deviceId, graph, users: 0 };
+async function resolve(id) {
+  if (!live(active?.graph?.stream)) {
+    const next = await capture(id);
+    active = { deviceId: next.deviceId, graph: createStudioMicrophoneGraph(next.stream), users: 0 };
+  } else if (id && active.deviceId !== id) {
+    const next = await capture(id);
+    await active.graph.replaceInput(next.stream);
+    active.deviceId = next.deviceId;
+  }
   return active;
-}
-
-async function resolveCapture(deviceId) {
-  if (!isLive(active?.graph?.stream)) return openCapture(deviceId);
-  const entry = active;
-  if (!deviceId || entry.deviceId === deviceId) return entry;
-  const capture = await captureRaw(deviceId);
-  await entry.graph.replaceInput(capture.stream);
-  entry.deviceId = capture.deviceId;
-  return entry;
 }
 
 export async function acquireMicrophone(preferredDeviceId = "", { disabledEffects = false } = {}) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone capture is unavailable");
-  const deviceId = normalizeDeviceId(preferredDeviceId);
-  const request = (pending || Promise.resolve())
-    .catch(() => {})
-    .then(() => resolveCapture(deviceId));
-  pending = request;
-  let entry;
-  try {
-    entry = await request;
-  } finally {
-    if (pending === request) pending = null;
-  }
+  const request = queue.catch(() => {}).then(() => resolve(device(preferredDeviceId)));
+  queue = request;
+  const entry = await request;
   entry.users += 1;
   let released = false;
   return {
     stream:
       entry.graph.getStream?.({ disabledEffects }) ??
-      (disabledEffects ? entry.graph.rawStream : entry.graph.stream) ??
-      entry.graph.stream,
+      (disabledEffects ? entry.graph.rawStream : entry.graph.stream),
     setNoiseSuppression: entry.graph.setNoiseSuppression,
     async release() {
       if (released) return;
