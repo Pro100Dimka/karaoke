@@ -199,13 +199,7 @@ export function ProcessingModal({
   const index = queue.findIndex(({ id }) => id === song.id);
   const actions = [
     active && (
-      <Button
-        key="cancel"
-        variant="contained"
-        tone="danger"
-        startIcon={<OctagonX />}
-        onClick={onCancel}
-      >
+      <Button key="cancel" variant="contained" startIcon={<OctagonX />} onClick={onCancel}>
         {tr("Отменить")}
       </Button>
     ),

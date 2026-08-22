@@ -18,25 +18,47 @@
   .ui-modal-dialog>.ui-card__panel {
     inline-size: auto;
     block-size: auto;
-    overflow: hidden;
     max-block-size: calc(100dvh - var(--space-8));
+    overflow: hidden;
   }
 
   .ui-modal-dialog>.ui-card__panel>.ui-card__content {
     display: flex;
+    flex-direction: column;
     inline-size: auto;
     block-size: auto;
     min-inline-size: 0;
     min-block-size: 0;
     max-block-size: calc(100dvh - var(--space-8));
-    flex-direction: column;
+    overflow: hidden;
   }
 
   .ui-modal-body {
+    flex: 1 1 auto;
     inline-size: auto;
     min-inline-size: 0;
     min-block-size: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .ui-modal-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    inline-size: 100%;
+    min-inline-size: 0;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    border-block-start: var(--hairline) solid var(--color-border);
+    background:
+      linear-gradient(90deg,
+        color-mix(in srgb, var(--color-primary) 6%, transparent),
+        transparent),
+      var(--color-surface-glass);
+    backdrop-filter: blur(var(--space-2));
   }
 
   .ui-modal-close {
@@ -74,10 +96,12 @@
   }
 
   .ui-modal-title {
+    flex: 0 0 auto;
     min-inline-size: 0;
     padding: var(--space-5) var(--space-8) var(--space-4) var(--space-5);
     border-block-end: var(--hairline) solid var(--color-border);
-    background: linear-gradient(90deg,
+    background:
+      linear-gradient(90deg,
         color-mix(in srgb, var(--color-primary) 10%, transparent),
         transparent);
   }
@@ -92,7 +116,10 @@
     border: var(--hairline) solid var(--color-border-strong);
     border-radius: var(--radius-lg);
     color: var(--color-primary-hover);
-    background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-glass));
+    background:
+      color-mix(in srgb,
+        var(--color-primary) 12%,
+        var(--color-surface-glass));
     box-shadow: var(--shadow-neon-soft);
   }
 
@@ -146,6 +173,11 @@
 
     .ui-modal-title-actions {
       flex-basis: 100%;
+    }
+
+    .ui-modal-actions {
+      flex-wrap: wrap;
+      padding-inline: var(--space-4);
     }
   }
 }

@@ -137,6 +137,11 @@ export default function Modal({
         </Primitive>
         {titleProps && <ModalTitle {...titleProps} />}
         <Primitive className="ui-modal-body">{children}</Primitive>
+         {titleProps?.actions && (
+          <Primitive className={cx("ui-modal-actions", )}>
+            {titleProps?.actions}
+          </Primitive>
+        )}
       </Card>
     </Primitive>
   );
