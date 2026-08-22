@@ -37,6 +37,18 @@ def test_backend_status_and_session_controls(monkeypatch):
     assert recording_service._sessions == {}
 
 
+def test_close_sessions_for_song_keeps_unrelated_recordings(monkeypatch):
+    selected = SimpleNamespace(song_id="song", close=Mock())
+    other = SimpleNamespace(song_id="other", close=Mock())
+    monkeypatch.setattr(recording_service, "_sessions", {"selected": selected, "other": other})
+
+    recording_service.close_sessions_for_song("song")
+
+    selected.close.assert_called_once_with()
+    other.close.assert_not_called()
+    assert recording_service._sessions == {"other": other}
+
+
 def test_start_recording_uses_compatibility_fallback(monkeypatch):
     patch_many(monkeypatch, (recording_service, "_AUDIO_BACKEND_AVAILABLE", True), (recording_service.uuid, "uuid4", lambda: SimpleNamespace(hex="session")))
     patch_attrs(monkeypatch, recording_service, _capture_attempts=lambda *_args: [(1, 2, 48000, 64, True, 'low'), (1, None, 48000, 0, False, 'high')])

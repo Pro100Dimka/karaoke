@@ -63,64 +63,11 @@ export function LibraryBackdrop() {
   );
 }
 
-function EqualizerArtwork({ cardIndex }) {
-  return (
-    <Box sx={{ position: "absolute", inset: 0, background: "var(--ui-gradient-surface)" }}>
-      <Music2
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: "var(--space-5) auto auto 46%",
-          color: "var(--ui-primary)",
-          filter: "drop-shadow(0 0 var(--space-2) currentColor)"
-        }}
-      />
-      <Stack
-        direction="row"
-        align="stretch"
-        gap="var(--space-1)"
-        sx={{ position: "absolute", inset: "34% 10% 10%" }}
-      >
-        {EQUALIZER_BARS.map(({ level, speed }, index) => (
-          <Box
-            as="span"
-            key={index}
-            sx={{
-              flex: 1,
-              alignSelf: "stretch",
-              transformOrigin: "bottom",
-              borderRadius: "var(--shape-round)",
-              background: "linear-gradient(var(--ui-text), var(--ui-primary))"
-            }}
-            style={{
-              "--bar-level": level,
-              animation: `library-card-wave ${speed + ((cardIndex * 29) % 240)}ms ease-in-out ${(cardIndex + index) * -85}ms infinite alternate`
-            }}
-          />
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
 export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
   const version = `${song?.updated_at ?? ""}:${song?.status ?? ""}:${song?.__roomLocal ?? ""}`;
   const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, version);
   return (
-    <Box
-      aria-hidden="true"
-      sx={{
-        position: "relative",
-        display: "grid",
-        placeItems: "center",
-        overflow: "hidden",
-        aspectRatio: 1,
-        borderRadius: "var(--shape-md)",
-        color: "var(--ui-primary)",
-        background: "var(--ui-gradient-surface)",
-        ...sx
-      }}
-    >
+    <Stack align="center" justify="center" sx={{ height: "100%" }}>
       {hasCover ? (
         <Box
           as="img"
@@ -132,10 +79,43 @@ export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
           sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
-        <EqualizerArtwork cardIndex={cardIndex} />
+        <>
+          <Music2
+            aria-hidden="true"
+            style={{
+              flex: 1.5,
+              color: "var(--ui-primary)",
+              filter: "drop-shadow(0 0 var(--space-2) currentColor)"
+            }}
+          />
+          <Stack
+            direction="row"
+            align="stretch"
+            gap="var(--space-1)"
+            sx={{ flex: 1, overflow: "hidden" }}
+          >
+            {EQUALIZER_BARS.map(({ level, speed }, index) => (
+              <Box
+                as="span"
+                key={index}
+                sx={{
+                  flex: 1,
+                  alignSelf: "stretch",
+                  transformOrigin: "bottom",
+                  borderRadius: "var(--shape-round)",
+                  background: "linear-gradient(var(--ui-text), var(--ui-primary))"
+                }}
+                style={{
+                  "--bar-level": level,
+                  animation: `library-card-wave ${speed + ((cardIndex * 29) % 240)}ms ease-in-out ${(cardIndex + index) * -85}ms infinite alternate`
+                }}
+              />
+            ))}
+          </Stack>
+        </>
       )}
       {children}
-    </Box>
+    </Stack>
   );
 }
 
@@ -230,7 +210,7 @@ export const LibrarySongCard = memo(
           <Stack
             gap="var(--space-2)"
             justify="space-between"
-            sx={{ flex: 3.5, padding: "var(--space-4)" }}
+            sx={{ flex: 4, padding: "var(--space-4)" }}
           >
             <Stack direction="row" justify="space-between" align="start" gap="var(--space-3)">
               <Stack gap="var(--space-1)" sx={{ minWidth: 0 }}>

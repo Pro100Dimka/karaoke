@@ -3,7 +3,6 @@ import { translateSaved as t } from "../../../i18n/runtime";
 import { IconButton, Stack } from "../../../theme/ui";
 
 export default function KaraokeStageActions({
-  autoHideConsole,
   controlsVisible,
   hideControls,
   isPlaying,
@@ -22,7 +21,7 @@ export default function KaraokeStageActions({
       controlsVisible ? t("Скрыть консоль") : t("Показать консоль"),
       controlsVisible,
       controlsVisible ? hideControls : showControls,
-      !autoHideConsole
+      true
     ],
     [
       "radio",
@@ -44,8 +43,9 @@ export default function KaraokeStageActions({
         position: "absolute",
         inset: "var(--space-4) auto auto var(--space-4)",
         zIndex: 20,
-        opacity: stageActionsVisible && !sceneTransitioning ? 1 : 0,
-        pointerEvents: stageActionsVisible && !sceneTransitioning ? "auto" : "none",
+        opacity: (stageActionsVisible || !controlsVisible) && !sceneTransitioning ? 1 : 0,
+        pointerEvents:
+          (stageActionsVisible || !controlsVisible) && !sceneTransitioning ? "auto" : "none",
         transition: "opacity var(--motion-duration-normal) var(--motion-easing-standard)"
       }}
     >

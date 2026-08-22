@@ -329,6 +329,18 @@ def has_active_recording(song_id: object) -> bool:
     with _sessions_lock: return any(str(session.song_id) == key for session in _sessions.values())
 
 
+def close_sessions_for_song(song_id: object) -> None:
+    key = str(song_id)
+    with _sessions_lock:
+        sessions = [
+            _sessions.pop(session_id)
+            for session_id, session in tuple(_sessions.items())
+            if str(session.song_id) == key
+        ]
+    for session in sessions:
+        with contextlib.suppress(Exception): session.close()
+
+
 def close_all_sessions() -> None:
     with _sessions_lock:
         sessions = tuple(_sessions.values())

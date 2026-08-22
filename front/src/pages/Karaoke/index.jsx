@@ -10,7 +10,6 @@ import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import { flattenLyricsNotes } from "../../utils/lyrics-sync";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
-import useFullscreen from "./hooks/useFullscreen";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
@@ -106,10 +105,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
   const autoStartRequested = Boolean(location.state?.autoPlay);
-  const { isFullscreen } = useFullscreen();
   const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
-    autoHideEnabled: autoHideConsole,
-    isFullscreen
+    autoHideEnabled: autoHideConsole
   });
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
@@ -363,7 +360,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       analysisRecordingId={analysisRecordingId}
       onAnalysisClose={handleAnalysisClose}
       stageActionProps={{
-        autoHideConsole,
         controlsVisible,
         hideControls,
         isPlaying,

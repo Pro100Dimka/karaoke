@@ -3,14 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const CONTROLS_VISIBLE_MS = 2200;
 const VISIBILITY_CHECK_MS = 250;
 
-export default function useKaraokeControls({ autoHideEnabled = true, isFullscreen = false } = {}) {
+export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const lastActivityRef = useRef(Date.now());
   const lastPointerRef = useRef(null);
-  // Fullscreen is meant to be an unobstructed view: the transport console
-  // must auto-hide there even if the user turned the general auto-hide
-  // preference off for windowed playback.
-  const effectiveAutoHide = autoHideEnabled || isFullscreen;
+  const effectiveAutoHide = autoHideEnabled;
 
   const showControls = useCallback(
     () => {

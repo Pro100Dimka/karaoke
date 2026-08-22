@@ -6,7 +6,13 @@ import soundfile as sf
 
 from AI.artifacts import publish_files_atomically
 from AI.engines.separation import MSSTMelRoformerSeparator
-from AI.engines.text import Qwen3ForcedAligner, _invalid_runs, resolve_alignment_language, tokenize
+from AI.engines.text import (
+    Qwen3ForcedAligner,
+    _acoustic_runs,
+    _invalid_runs,
+    resolve_alignment_language,
+    tokenize,
+)
 from AI.errors import ProcessingCancelledError
 from AI.lyrics_sources import TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
@@ -208,6 +214,20 @@ def test_invalid_runs_do_not_merge_across_valid_acoustic_anchors():
     ]
 
     assert _invalid_runs(words, 5) == [(1, 2), (3, 4)]
+
+
+def test_acoustic_runs_find_words_crossing_silence_and_overlapping_neighbors():
+    rate = 100
+    samples = np.ones(rate * 5, dtype=np.float32)
+    samples[rate * 2:rate * 3] = 0
+    words = [
+        Word(0.2, 0.8, "clear"),
+        Word(1.8, 3.2, "silence"),
+        Word(3.3, 4.2, "overlap"),
+        Word(4.0, 4.7, "neighbor"),
+    ]
+
+    assert _acoustic_runs(words, samples, rate) == [(1, 4)]
 
 
 def test_long_alignment_uses_model_window_and_acoustic_confidence(tmp_path):

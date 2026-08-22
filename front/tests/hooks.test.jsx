@@ -420,10 +420,7 @@ describe("navigation and karaoke hooks", () => {
     expect(clearInterval).toHaveBeenCalled();
     verify([removeEvent, "toHaveBeenCalledWith", "fullscreenchange", fullscreenRegistration[1]]);
   });
-  test("fullscreen forces controls to auto-hide even when the preference is off", () => {
-    // Fullscreen is meant to be an unobstructed view: the console must still
-    // auto-hide there even if the user disabled the general preference for
-    // windowed playback.
+  test("fullscreen respects a disabled auto-hide preference", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const setInterval = vi.spyOn(window, "setInterval");
@@ -432,13 +429,8 @@ describe("navigation and karaoke hooks", () => {
     });
     expect(setInterval).not.toHaveBeenCalled();
     rerender({ isFullscreen: true });
-    expect(setInterval).toHaveBeenCalledOnce();
-    const checkVisibility = setInterval.mock.calls[0][0];
-    act(() => {
-      vi.setSystemTime(2200);
-      checkVisibility();
-    });
-    expect(result.current.controlsVisible).toBe(false);
+    expect(setInterval).not.toHaveBeenCalled();
+    expect(result.current.controlsVisible).toBe(true);
     rerender({ isFullscreen: false });
     expect(result.current.controlsVisible).toBe(true);
   });

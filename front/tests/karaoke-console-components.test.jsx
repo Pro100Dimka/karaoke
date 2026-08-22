@@ -50,6 +50,7 @@ import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";
 import ToolsPanel from "../src/pages/Karaoke/components/console/tools.jsx";
+import KaraokeStageActions from "../src/pages/Karaoke/components/karaoke-stage-actions.jsx";
 test("rotary calculations preserve VST sensitivity, direction and limits", () => {
   expect(getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1 })).toBe(1);
   expect(getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1, fine: true })).toBe(0.6);
@@ -285,4 +286,21 @@ test("center uses fallback note range and pause state", () => {
   );
   fireEvent.click(result.getByLabelText("Зменшити тональність"));
   verify([result.getByLabelText("Пауза"), "toBeTruthy"], [result.container.textContent, "toContain", "C2 – C5"]);
+});
+test("hidden console always leaves a visible restore action", () => {
+  const { getByLabelText } = render(
+    <KaraokeStageActions
+      controlsVisible={false}
+      hideControls={vi.fn()}
+      isPlaying
+      isRadioPlaying={false}
+      returnToLibrary={vi.fn()}
+      sceneTransitioning={false}
+      showControls={vi.fn()}
+      stageActionsVisible={false}
+      toggleRadio={vi.fn()}
+    />
+  );
+
+  expect(getByLabelText(/консол/i)).toBeTruthy();
 });

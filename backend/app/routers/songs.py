@@ -274,11 +274,11 @@ def patch_song(song: SongDependency, patch: schemas.SongUpdate, db: Session = De
 
 @router.delete("/{song_id}", status_code=204)
 def remove_song(song: SongDependency, db: Session = Depends(get_db)):
-    if recording_service.has_active_recording(song.id): raise HTTPException(status_code=409, detail="Нельзя удалить песню во время записи")
     if pipeline_service.is_processing(song.id):
         raise HTTPException(
             status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения"
         )
+    recording_service.close_sessions_for_song(song.id)
     try:
         song_service.delete_song(db, song)
     except (OSError, ValueError) as exc:

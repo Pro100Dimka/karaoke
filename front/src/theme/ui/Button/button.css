@@ -9,7 +9,6 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2, .5rem);
-    min-block-size: var(--control-size, var(--control-md));
     padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
     border: 0;
     overflow: hidden;
@@ -29,10 +28,10 @@
       background var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
-  .ui-button:not(.ui-icon-button){
-    border-radius: var(--shape-md);
-
+  .ui-button:not(.ui-icon-button) {
+    border-radius: var(--shape-lg, var(--shape-md));
   }
+
   .ui-button::before {
     content: "";
     position: absolute;
@@ -44,10 +43,22 @@
     transition: inline-size var(--motion-duration-normal) var(--motion-easing-standard);
   }
 
-  .ui-button[data-size="sm"] { font-size: .8125rem; }
-  .ui-button[data-size="md"] { font-size: .875rem; }
-  .ui-button[data-size="lg"] { font-size: 1rem; }
-  .ui-button-full-width { width: 100%; }
+  .ui-button[data-size="sm"] {
+    font-size: .8125rem;
+  }
+
+  .ui-button[data-size="md"] {
+    font-size: .875rem;
+  }
+
+  .ui-button[data-size="lg"] {
+    font-size: 1rem;
+  }
+
+  .ui-button-full-width {
+    width: 100%;
+  }
+
   .ui-button-start-icon {
     display: inline-flex;
     align-items: center;
@@ -58,7 +69,7 @@
     line-height: 0;
   }
 
-  .ui-button-start-icon > svg {
+  .ui-button-start-icon>svg {
     inline-size: 1.1em;
     block-size: 1.1em;
     display: block;
@@ -95,12 +106,11 @@
       inset 0 1px 0 color-mix(in srgb, var(--ui-text) 8%, transparent),
       0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 16%, transparent);
   }
+
   .ui-button[data-variant="outline"]:hover {
-    --_button-bg: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--_button-accent) 28%, var(--color-bg-elevated)),
-      color-mix(in srgb, var(--color-bg-deep) 82%, transparent)
-    );
+    --_button-bg: linear-gradient(180deg,
+        color-mix(in srgb, var(--_button-accent) 28%, var(--color-bg-elevated)),
+        color-mix(in srgb, var(--color-bg-deep) 82%, transparent));
     --_button-fg: var(--ui-text);
     border-color: color-mix(in srgb, var(--_button-accent) 88%, var(--ui-text));
     box-shadow:
@@ -111,11 +121,9 @@
 
   .ui-button[data-variant="contained"] {
     --_button-bg:
-      linear-gradient(
-        104deg,
+      linear-gradient(104deg,
         color-mix(in srgb, var(--color-bg-deep) 96%, var(--_button-accent)) 0 46%,
-        color-mix(in srgb, var(--color-bg-elevated) 80%, var(--_button-accent)) 100%
-      );
+        color-mix(in srgb, var(--color-bg-elevated) 80%, var(--_button-accent)) 100%);
     --_button-fg: var(--ui-text);
 
     gap: var(--space-4);
@@ -136,12 +144,10 @@
       radial-gradient(circle at 72% 28%, var(--_button-accent) 0 2%, transparent 4%),
       radial-gradient(circle at 88% 68%, color-mix(in srgb, var(--_button-accent) 78%, white) 0 2%, transparent 5%),
       radial-gradient(circle at 58% 76%, var(--_button-accent) 0 3%, transparent 7%),
-      repeating-conic-gradient(
-        from 24deg at 82% 52%,
+      repeating-conic-gradient(from 24deg at 82% 52%,
         transparent 0 7deg,
         color-mix(in srgb, var(--_button-accent) 42%, transparent) 8deg 10deg,
-        transparent 12deg 19deg
-      ),
+        transparent 12deg 19deg),
       radial-gradient(ellipse at 82% 50%, color-mix(in srgb, var(--_button-accent) 56%, transparent), transparent 65%);
     mask-image: linear-gradient(90deg, transparent, #000 28%, #000);
     animation: ui-contained-plasma 7s ease-in-out infinite alternate;
@@ -153,12 +159,10 @@
     position: absolute;
     inset: 0;
     z-index: 0;
-    background: linear-gradient(
-      112deg,
-      transparent 30%,
-      color-mix(in srgb, white 38%, transparent) 48%,
-      transparent 66%
-    );
+    background: linear-gradient(112deg,
+        transparent 30%,
+        color-mix(in srgb, white 38%, transparent) 48%,
+        transparent 66%);
     transform: translateX(-130%);
     pointer-events: none;
   }
@@ -182,8 +186,15 @@
   }
 
   @keyframes ui-contained-plasma {
-    from { transform: translate3d(-3%, -2%, 0) scale(1.05); filter: saturate(120%); }
-    to { transform: translate3d(3%, 2%, 0) scale(1.16); filter: saturate(170%); }
+    from {
+      transform: translate3d(-3%, -2%, 0) scale(1.05);
+      filter: saturate(120%);
+    }
+
+    to {
+      transform: translate3d(3%, 2%, 0) scale(1.16);
+      filter: saturate(170%);
+    }
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -211,7 +222,12 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ui-button[data-variant="contained"]::before { animation: none; }
-    .ui-button[data-variant="contained"]::after { display: none; }
+    .ui-button[data-variant="contained"]::before {
+      animation: none;
+    }
+
+    .ui-button[data-variant="contained"]::after {
+      display: none;
+    }
   }
 }

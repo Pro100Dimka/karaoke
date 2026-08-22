@@ -75,6 +75,61 @@ def _invalid_runs(words: list[Word], span: float) -> list[tuple[int, int]]:
     return [(start, end) for start, end in runs]
 
 
+def _runs(indices: list[int]) -> list[tuple[int, int]]:
+    result: list[list[int]] = []
+    for index in sorted(set(indices)):
+        if not result or index != result[-1][1]:
+            result.append([index, index + 1])
+        else:
+            result[-1][1] = index + 1
+    return [(start, end) for start, end in result]
+
+
+def _acoustic_runs(words: list[Word], samples, rate: int) -> list[tuple[int, int]]:
+    import numpy as np
+
+    bad = {
+        index
+        for index in range(len(words) - 1)
+        if words[index].end > words[index + 1].start + 0.04
+    }
+    bad.update(index + 1 for index in tuple(bad))
+    mono = np.asarray(samples, dtype=np.float32)
+    if mono.ndim > 1: mono = mono.mean(axis=1)
+    frame = max(1, round(rate * 0.02))
+    usable = len(mono) // frame * frame
+    if usable < frame: return _runs(list(bad))
+    rms = np.sqrt(np.mean(mono[:usable].reshape(-1, frame) ** 2, axis=1))
+    audible = rms[rms > 1e-7]
+    if not len(audible): return _runs(list(bad))
+    floor, signal = float(np.percentile(audible, 15)), float(np.percentile(audible, 85))
+    threshold = max(min(floor * 2.5, signal * 0.25), signal * 0.025)
+    active = rms >= threshold
+    for index, word in enumerate(words):
+        word_duration = word.end - word.start
+        if word_duration < 0.45: continue
+        lower = max(0, round(word.start * rate / frame))
+        upper = min(len(active), max(lower + 1, round(word.end * rate / frame)))
+        longest = current = 0
+        for voiced in active[lower:upper]:
+            current = 0 if voiced else current + 1
+            longest = max(longest, current)
+        silent_duration = longest * frame / rate
+        if silent_duration >= min(0.55, word_duration * 0.45): bad.add(index)
+    return _runs(list(bad))
+
+
+def _context_groups(runs: list[tuple[int, int]], count: int) -> list[tuple[int, int]]:
+    groups: list[tuple[int, int]] = []
+    for start, end in runs:
+        lower, upper = max(0, start - 2), min(count, end + 2)
+        if groups and lower <= groups[-1][1]:
+            groups[-1] = groups[-1][0], max(groups[-1][1], upper)
+        else:
+            groups.append((lower, upper))
+    return groups
+
+
 def _repair_bounds(words: list[Word], start: int, end: int, span: float, context: int = 2):
     left = next(
         (index for index in range(start - 1, -1, -1) if not _invalid(words[index], span)),
@@ -147,6 +202,26 @@ class Qwen3ForcedAligner(Aligner):
         raw = self._load().align(audio=str(audio), text=text, language=resolve_alignment_language(text, language))
         item = raw[0] if isinstance(raw, (list, tuple)) and len(raw) == 1 else raw
         return _words(item)
+
+    def _ctc_repair(self, words, tokens, samples, rate, span, resolved, runs):
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if not model_path: raise EngineUnavailableError(f"{resolved} CTC model is unavailable")
+        from .ctc import CTCWordAligner
+
+        ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+        for lower, upper in _context_groups(runs, len(words)):
+            _, _, crop_start, crop_end, left, right = _repair_bounds(
+                words, lower, upper, span, context=0
+            )
+            crop_start = words[left].end if left is not None else crop_start
+            crop_end = words[right].start if right is not None else crop_end
+            segment = samples[round(crop_start * rate):round(crop_end * rate)]
+            words[lower:upper] = ctc.align(segment, rate, tokens[lower:upper], crop_start)
+        return words
 
     @staticmethod
     def _validate(words: list[Word], tokens: list[str], span: float) -> list[Word]:
@@ -373,8 +448,7 @@ class Qwen3ForcedAligner(Aligner):
             words = self._align_windows(samples, rate, tokens, span, resolved)
         else:
             words = self._raw(audio, text, resolved)
-        if len(words) != len(tokens) or not _invalid_runs(words, span):
-            return self._validate(words, tokens, span)
+        if len(words) != len(tokens): return self._validate(words, tokens, span)
         if samples is None:
             samples, rate = sf.read(audio, dtype="float32", always_2d=False)
         previous_invalid = len(words) + 1
@@ -408,36 +482,22 @@ class Qwen3ForcedAligner(Aligner):
                     right = words[index + 1] if index + 1 < len(words) else None
                     if (left is None or candidate.start >= left.start) and (right is None or _invalid(right, span) or candidate.start <= right.start):
                         words[index] = candidate
+        structural = _invalid_runs(words, span)
         try:
-            return self._validate(words, tokens, span)
-        except InvalidArtifactError as qwen_error:
-            variable = {
-                "Russian": "KARAOKE_AI_CTC_RU_MODEL",
-                "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
-            }.get(resolved)
-            model_path = os.getenv(variable) if variable else None
-            if not model_path:
-                raise qwen_error
-            from .ctc import CTCWordAligner
-
-            ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
-            try:
-                groups = []
-                for start, end in _invalid_runs(words, span):
-                    lower, upper = max(0, start - 2), min(len(words), end + 2)
-                    if groups and lower <= groups[-1][1]:
-                        groups[-1] = (groups[-1][0], max(groups[-1][1], upper))
-                    else:
-                        groups.append((lower, upper))
-                repairs = [_repair_bounds(words, start, end, span, context=0) for start, end in groups]
-                for lower, upper, crop_start, crop_end, left, right in repairs:
-                    crop_start = words[left].end if left is not None else crop_start
-                    crop_end = words[right].start if right is not None else crop_end
-                    segment = samples[round(crop_start * rate) : round(crop_end * rate)]
-                    words[lower:upper] = ctc.align(segment, rate, tokens[lower:upper], crop_start)
-                return self._validate(words, tokens, span)
-            except (EngineUnavailableError, InvalidArtifactError) as ctc_error:
-                raise InvalidArtifactError(f"Qwen acoustic alignment failed: {qwen_error}; {resolved} CTC fallback failed: {ctc_error}") from ctc_error
+            if structural:
+                self._ctc_repair(words, tokens, samples, rate, span, resolved, structural)
+            validated = self._validate(words, tokens, span)
+        except (EngineUnavailableError, InvalidArtifactError) as error:
+            raise InvalidArtifactError(f"Qwen acoustic alignment failed: {error}") from error
+        suspicious = _acoustic_runs(validated, samples, rate)
+        if not suspicious: return validated
+        try:
+            repaired = self._ctc_repair(
+                validated.copy(), tokens, samples, rate, span, resolved, suspicious
+            )
+            return self._validate(repaired, tokens, span)
+        except (EngineUnavailableError, InvalidArtifactError):
+            return validated
 
 
 class UniformTextFallback(Transcriber, Aligner):

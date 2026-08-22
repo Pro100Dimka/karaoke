@@ -289,12 +289,16 @@ def test_result_and_lyrics_contracts(monkeypatch, tmp_path):
     assert_http_status(400, lambda: songs.update_lyrics(body, current))
 
 
-def test_song_mutations_are_blocked_while_recording_is_active(monkeypatch):
+def test_song_processing_is_blocked_but_explicit_delete_closes_active_recording(monkeypatch):
     database, pending, done = Mock(), domain_song(status=models.SongStatus.PENDING, output_dir=None), domain_song(status=models.SongStatus.DONE, output_dir='output')
-    patch_many(monkeypatch, (songs.recording_service, "has_active_recording", Mock(return_value=True)), (songs.pipeline_service, "is_processing", Mock(return_value=False)))
+    close = Mock()
+    delete = Mock()
+    patch_many(monkeypatch, (songs.recording_service, "has_active_recording", Mock(return_value=True)), (songs.recording_service, "close_sessions_for_song", close), (songs.pipeline_service, "is_processing", Mock(return_value=False)), (songs.song_service, "delete_song", delete))
 
+    songs.remove_song(done, database)
+    close.assert_called_once_with(done.id)
+    delete.assert_called_once_with(database, done)
     for action, song in (
-        (songs.remove_song, done),
         (songs.process_song, pending),
         (songs.reprocess_melody, done),
     ):
