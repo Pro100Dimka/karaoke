@@ -83,7 +83,7 @@ class KaraokePipeline:
             return text, [], ()
         found = discovery.result() if discovery else discover_lyrics(request.title)
         if found:
-            print(f"[lyrics] FOUND via {found.source}: {found.query}", flush=True)
+            print(f"[lyrics] FOUND via {found.source}", flush=True)
             return found.text, [], found.lines
         print("[lyrics] NOT FOUND online -> ASR fallback", flush=True)
         text, words = self.engines.transcriber.transcribe(vocals, request.language)

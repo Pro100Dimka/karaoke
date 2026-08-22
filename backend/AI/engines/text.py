@@ -27,12 +27,12 @@ def tokenize(text: str) -> list[str]:
 
 
 def resolve_alignment_language(text: str, language: str | None = None) -> str:
-    if language:
-        value = language.split("-")[0].lower()
-        return LANGUAGES.get(value, language)
     lowered = text.lower()
     if any(char in lowered for char in "іїєґ"):
         return "Ukrainian"
+    if language:
+        value = language.split("-")[0].lower()
+        return LANGUAGES.get(value, language)
     return "Russian" if any("а" <= char <= "я" or char == "ё" for char in lowered) else "English"
 
 
@@ -375,7 +375,26 @@ class Qwen3ForcedAligner(Aligner):
                             zip(local, tokens[lower:upper], strict=True), start=lower
                         )
                     ]
-        return self._validate(words, tokens, span)
+        try:
+            return self._validate(words, tokens, span)
+        except InvalidArtifactError as qwen_error:
+            variable = {
+                "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+                "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+            }.get(resolved)
+            model_path = os.getenv(variable) if variable else None
+            if not model_path:
+                raise qwen_error
+            from .ctc import CTCWordAligner
+
+            ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+            try:
+                return self._validate(ctc.align(samples, rate, tokens, 0), tokens, span)
+            except (EngineUnavailableError, InvalidArtifactError) as ctc_error:
+                raise InvalidArtifactError(
+                    f"Qwen acoustic alignment failed: {qwen_error}; "
+                    f"{resolved} CTC fallback failed: {ctc_error}"
+                ) from ctc_error
 
 
 class UniformTextFallback(Transcriber, Aligner):

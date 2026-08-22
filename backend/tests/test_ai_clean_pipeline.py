@@ -89,6 +89,7 @@ def test_lyrics_tokens_match_qwen_space_language_contract():
     ]
     assert resolve_alignment_language("текст", "ru-RU") == "Russian"
     assert resolve_alignment_language("український текст") == "Ukrainian"
+    assert resolve_alignment_language("український текст", "ru") == "Ukrainian"
 
 
 def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
@@ -161,6 +162,48 @@ def test_long_alignment_realigns_collapsed_ranges_acoustically(tmp_path, monkeyp
 
     assert [(round(word.start, 3), round(word.end, 3)) for word in words] == [
         (0, 0.4), (0.8, 1.2), (1.6, 2), (2.4, 2.8)
+    ]
+
+
+def test_long_ukrainian_alignment_uses_acoustic_ctc_when_qwen_remains_invalid(
+    tmp_path, monkeypatch
+):
+    audio = tmp_path / "vocals.flac"
+    sf.write(audio, np.zeros(44100 * 4, dtype=np.float32), 44100)
+    tokens = ["Заглядай", "у", "очі"]
+    model = SimpleNamespace(
+        align=lambda **_kwargs: [
+            SimpleNamespace(
+                items=[
+                    {"text": token, "start_time": 0, "end_time": 0} for token in tokens
+                ]
+            )
+        ]
+    )
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = model
+
+    class AcousticCTC:
+        def __init__(self, model_path):
+            assert model_path == "uk-model"
+
+        def align(self, _samples, _rate, canonical, offset):
+            assert canonical == tokens
+            assert offset == 0
+            return [
+                Word(index + 0.2, index + 0.8, token, 0.9, index)
+                for index, token in enumerate(canonical)
+            ]
+
+    monkeypatch.setenv("KARAOKE_AI_CTC_UK_MODEL", "uk-model")
+    monkeypatch.setattr("AI.engines.ctc.CTCWordAligner", AcousticCTC)
+
+    words = aligner.align_long_text(audio, "Заглядай у очі", "ru")
+
+    assert [(word.text, word.start, word.end) for word in words] == [
+        ("Заглядай", 0.2, 0.8),
+        ("у", 1.2, 1.8),
+        ("очі", 2.2, 2.8),
     ]
 
 
