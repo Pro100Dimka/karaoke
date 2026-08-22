@@ -5,6 +5,7 @@ import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
+import { queryKeys } from "../../query/client";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import { flattenLyricsNotes } from "../../utils/lyrics-sync";
@@ -43,7 +44,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   const { data: songs, error: songsError } = usePolling(
     api.listSongs,
     POLLING_INTERVALS.settings,
-    []
+    [],
+    { queryKey: queryKeys.songs }
   );
   const songId = location.state?.songId || null;
   const song = songId
@@ -114,17 +116,20 @@ export default function Karaoke({ onOpenAppSettings }) {
   const { data: directOutputDevices } = usePolling(
     () => api.listAudioOutputDevices(),
     POLLING_INTERVALS.devices,
-    []
+    [],
+    { queryKey: ["audio-output-devices"] }
   );
   const { data: audioSettings } = usePolling(
     () => api.getAudioSettings(),
     POLLING_INTERVALS.devices,
-    []
+    [],
+    { queryKey: queryKeys.audioSettings }
   );
   const { data: signal } = usePolling(
     () => api.getSignalQuality(),
     POLLING_INTERVALS.karaokeSignal,
-    []
+    [],
+    { queryKey: ["signal-quality"] }
   );
   const microphoneLevel = getMicrophoneLevel(signal);
   const microphoneSettings = useMicrophoneSettings({ audioSettings, onError: setRecordingError });

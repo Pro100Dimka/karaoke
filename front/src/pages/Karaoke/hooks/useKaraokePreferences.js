@@ -1,62 +1,49 @@
 import { useEffect, useState } from "react";
+import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
+import { createStore } from "zustand/vanilla";
 import { api } from "../../../api/client";
 import { loadKaraokePreferences, saveKaraokePreferences } from "../utils/preferences";
 
+const defaults = {
+  musicVolume: 1,
+  vocalVolume: 1,
+  melodyVolume: 0,
+  speed: 1,
+  keyShift: 0,
+  showLyrics: true,
+  showNotes: true,
+  autoHideConsole: true,
+  effectPreset: "studio"
+};
+const keys = Object.keys(defaults);
+const setterName = (key) => `set${key[0].toUpperCase()}${key.slice(1)}`;
+
+export const createKaraokePreferencesStore = (saved = loadKaraokePreferences()) =>
+  createStore((set) => ({
+    ...defaults,
+    ...saved,
+    ...Object.fromEntries(keys.map((key) => [setterName(key), (value) => set({ [key]: value })]))
+  }));
+
+const preferencesOf = (state) => Object.fromEntries(keys.map((key) => [key, state[key]]));
+
 export default function useKaraokePreferences() {
-  const [preferences] = useState(loadKaraokePreferences);
-  const [musicVolume, setMusicVolume] = useState(() => preferences.musicVolume ?? 1);
-  const [vocalVolume, setVocalVolume] = useState(() => preferences.vocalVolume ?? 1);
-  const [melodyVolume, setMelodyVolume] = useState(() => preferences.melodyVolume ?? 0);
-  const [speed, setSpeed] = useState(() => preferences.speed ?? 1);
-  const [keyShift, setKeyShift] = useState(() => preferences.keyShift ?? 0);
-  const [showLyrics, setShowLyrics] = useState(() => preferences.showLyrics ?? true);
-  const [showNotes, setShowNotes] = useState(() => preferences.showNotes ?? true);
-  const [autoHideConsole, setAutoHideConsole] = useState(() => preferences.autoHideConsole ?? true);
-  const [effectPreset, setEffectPreset] = useState(() => preferences.effectPreset ?? "studio");
+  const [store] = useState(createKaraokePreferencesStore);
+  const state = useStore(
+    store,
+    useShallow((value) => value)
+  );
 
-  useEffect(() => {
-    const next = {
-      musicVolume,
-      vocalVolume,
-      melodyVolume,
-      speed,
-      keyShift,
-      showLyrics,
-      showNotes,
-      autoHideConsole,
-      effectPreset
-    };
-    if (saveKaraokePreferences(next)) api.updateUiPreferences("karaoke", next).catch(() => {});
-  }, [
-    musicVolume,
-    vocalVolume,
-    melodyVolume,
-    speed,
-    keyShift,
-    showLyrics,
-    showNotes,
-    autoHideConsole,
-    effectPreset
-  ]);
+  useEffect(
+    () =>
+      store.subscribe((value) => {
+        const preferences = preferencesOf(value);
+        if (saveKaraokePreferences(preferences))
+          api.updateUiPreferences("karaoke", preferences).catch(() => {});
+      }),
+    [store]
+  );
 
-  return {
-    musicVolume,
-    setMusicVolume,
-    vocalVolume,
-    setVocalVolume,
-    melodyVolume,
-    setMelodyVolume,
-    speed,
-    setSpeed,
-    keyShift,
-    setKeyShift,
-    showLyrics,
-    setShowLyrics,
-    showNotes,
-    setShowNotes,
-    autoHideConsole,
-    setAutoHideConsole,
-    effectPreset,
-    setEffectPreset
-  };
+  return state;
 }

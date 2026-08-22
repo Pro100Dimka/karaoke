@@ -7,6 +7,7 @@ import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { getOnlineNameMessage } from "../../hooks/useRequireOnlineName";
 import { translateSaved as tr } from "../../i18n/runtime";
+import { queryKeys } from "../../query/client";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import { setProcessingLoadActive } from "../../utils/performance-profile";
@@ -50,17 +51,19 @@ export default function useLibrary() {
   const remoteStatuses = useRef(new Map());
   const syncQueue = useRef(Promise.resolve());
   const fileInputRef = useRef(null);
-  const songsQuery = usePolling(api.listSongs, 0, []);
+  const songsQuery = usePolling(api.listSongs, 0, [], { queryKey: queryKeys.songs });
   const recordingsQuery = usePolling(
     () => (recordingsSong ? api.listRecordingsForSong(recordingsSong.id) : Promise.resolve([])),
     0,
-    [recordingsSong?.id]
+    [recordingsSong?.id],
+    { queryKey: ["recordings", recordingsSong?.id ?? null] }
   );
   const statusQuery = usePolling(
     () => (trackedSongId ? api.getStatus(trackedSongId) : Promise.resolve(null)),
     trackedSongId ? POLLING_INTERVALS.processing : 0,
     [trackedSongId],
     {
+      queryKey: ["song-status", trackedSongId ?? null],
       shouldContinue: (status) => isProcessingActive(status?.status),
       shouldRetryError: (error) => error?.status !== 404
     }

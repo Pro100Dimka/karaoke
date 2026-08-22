@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { queryClient } from "../query/client";
 
 export function shouldSchedulePoll({
   active,
@@ -15,78 +17,65 @@ export function shouldSchedulePoll({
     : typeof shouldContinue !== "function" || shouldContinue(result);
 }
 
+const isHidden = () => globalThis.document?.visibilityState === "hidden";
+
 export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
-  const [state, setState] = useState({ data: null, error: null });
-  const latest = useRef({ fetchFn, ...options });
-  const refreshRef = useRef(null);
+  const id = useId();
+  const latest = useRef();
+  const refreshState = useRef({});
+  const [hidden, setHidden] = useState(isHidden);
   latest.current = { fetchFn, ...options };
 
-  useEffect(() => {
-    let active = true;
-    let timer;
-    let inFlight = false;
-    let queued = false;
-    const page = globalThis.document;
-    const hidden = () => page?.visibilityState === "hidden";
-
-    const schedule = (result, error) => {
-      if (
+  const query = useQuery(
+    {
+      queryKey: options.queryKey ?? ["poll", id, ...deps],
+      queryFn: ({ signal }) => latest.current.fetchFn({ signal }),
+      enabled: !hidden,
+      refetchInterval: ({ state }) =>
         shouldSchedulePoll({
-          active,
-          hidden: hidden(),
+          active: true,
+          hidden,
           intervalMs,
-          result,
-          error,
+          result: state.data,
+          error: state.error,
           ...latest.current
         })
-      )
-        timer = globalThis.setTimeout(run, intervalMs);
-    };
+          ? intervalMs
+          : false,
+      retry: false
+    },
+    queryClient
+  );
+  const refresh = useCallback(() => {
+    const state = refreshState.current;
+    if (state.inFlight) {
+      state.queued = true;
+      return state.inFlight;
+    }
     const run = async () => {
-      if (!active || hidden()) return;
-      if (inFlight) {
-        queued = true;
-        return;
-      }
-      globalThis.clearTimeout(timer);
-      timer = undefined;
-      inFlight = true;
       let result;
-      let error = null;
-      try {
-        result = await latest.current.fetchFn();
-        if (active) setState({ data: result, error: null });
-      } catch (reason) {
-        error = reason;
-        if (active) setState((current) => ({ ...current, error }));
-      } finally {
-        inFlight = false;
-        if (queued) {
-          queued = false;
-          run();
-        } else schedule(result, error);
-      }
+      do {
+        state.queued = false;
+        result = await query.refetch({ cancelRefetch: false });
+      } while (state.queued);
+      return result.data;
     };
-    const visible = () => {
-      globalThis.clearTimeout(timer);
-      timer = undefined;
-      queued = false;
-      run();
-    };
+    state.inFlight = run().finally(() => {
+      state.inFlight = null;
+    });
+    return state.inFlight;
+  }, [query.refetch]);
 
-    refreshRef.current = run;
-    run();
-    page?.addEventListener("visibilitychange", visible);
-    return () => {
-      active = false;
-      globalThis.clearTimeout(timer);
-      refreshRef.current = null;
-      page?.removeEventListener("visibilitychange", visible);
+  useEffect(() => {
+    const page = globalThis.document;
+    const update = () => {
+      const next = isHidden();
+      setHidden(next);
+      if (!next) refresh();
     };
-    // Resource identity is explicitly supplied by the caller.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intervalMs, ...deps]);
+    page?.addEventListener("visibilitychange", update);
+    return () => page?.removeEventListener("visibilitychange", update);
+  }, [refresh]);
 
-  const refresh = useCallback(() => refreshRef.current?.(), []);
-  return { ...state, refresh };
+  return { data: query.data ?? null, error: query.error ?? null, refresh };
 }

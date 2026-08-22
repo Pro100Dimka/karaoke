@@ -201,6 +201,7 @@ export default function EditorControls({ controller, onBack, save, saving, trans
         value={transport.time}
         duration={controller.duration}
         onChange={transport.seek}
+        url={transport.urls.instrumental || transport.urls.vocals}
       />
       <Typography variant="caption">{formatClockTime(controller.duration)}</Typography>
     </Stack>

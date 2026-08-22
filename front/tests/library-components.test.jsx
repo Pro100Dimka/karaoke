@@ -35,7 +35,7 @@ vi.mock("../src/api/client", () => ({
     getSongCoverUrl: (id) => `cover/${id}`
   }
 }));
-import { LibraryActions, LibraryHero, ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
+import { LibraryActions, LibraryHero, ProcessingSignal, SongCoverArt, SongGrid } from "../src/pages/Library/components.jsx";
 import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
@@ -89,6 +89,17 @@ test("hero and cover reflect saved theme and song counts", () => {
   expect(container.querySelector(".lucide-music2")).not.toBeNull();
   mocks.noSettings = true;
   verify([() => render(<LibraryHero songCount={0} readyCount={0} />), "not.toThrow"]);
+});
+test("large song collections render through the window virtualizer", () => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const songs = Array.from({ length: 60 }, (_, index) => ({
+    id: `song-${index}`,
+    title: `Song ${index}`,
+    status: "done"
+  }));
+  const { container } = render(<SongGrid songs={songs} />);
+  expect(container.querySelectorAll('[role="button"]').length).toBeGreaterThan(0);
+  expect(container.querySelectorAll('[role="button"]').length).toBeLessThan(songs.length);
 });
 test("processing signal clamps progress and exposes an accessible value", () => {
   const { getByRole, rerender } = render(<ProcessingSignal progress={140} />);

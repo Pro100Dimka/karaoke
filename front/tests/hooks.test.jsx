@@ -210,19 +210,25 @@ describe("async state hooks", () => {
       })
     );
     await act(async () => {
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(result.current.data).toBe(1);
     await act(async () => {
-      vi.advanceTimersByTime(100);
-      await Promise.resolve();
+      await result.current.refresh();
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(result.current.error?.message).toBe("offline");
-    await act(async () => {
-      result.current.refresh();
-      await Promise.resolve();
-    });
     unmount();
+  });
+  test("automatically refetches only while the polling contract allows it", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    const polling = renderHook(() => usePolling(fetcher, 10, [], { shouldContinue: (value) => value < 2 }));
+    await waitFor(() => expect(polling.result.current.data).toBe(2));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    polling.unmount();
   });
   test("polling resumes on visibility and coalesces overlapping refreshes", async () => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
@@ -237,7 +243,7 @@ describe("async state hooks", () => {
     const first = new Promise((resolve) => {
       release = resolve;
     });
-    const fetcher = vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce("second");
+    const fetcher = vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce("second").mockResolvedValueOnce("third");
     const polling = renderHook(() => usePolling(fetcher, 0));
     act(() => {
       polling.result.current.refresh();
@@ -247,6 +253,9 @@ describe("async state hooks", () => {
     release("first");
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(polling.result.current.data).toBe("second"));
+    await act(async () => polling.result.current.refresh());
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(polling.result.current.data).toBe("third"));
     polling.unmount();
   });
   test("ignores late results and replaces a scheduled poll on visibility", async () => {

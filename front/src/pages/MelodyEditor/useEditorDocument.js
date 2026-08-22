@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useState } from "react";
 import { api } from "../../api/client";
 import { translateSaved as t } from "../../i18n/runtime";
 import { getErrorMessage } from "../../utils/errors";
-import { flattenLyricsNotes } from "../../utils/lyrics-sync";
+import { prepareEditorNotes } from "../../workers/editor-client";
 import { documentReducer, initialDocument, serializeNotes } from "./model";
 
 export default function useEditorDocument({ songId, confirm, notify }) {
@@ -32,16 +32,17 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     };
   }, [songId]);
 
-  const accept = useCallback((result) => {
+  const accept = useCallback(async (result) => {
+    const notes = await prepareEditorNotes(result?.lyrics_sync);
     setPayload(result);
-    dispatch({ type: "load", notes: flattenLyricsNotes(result?.lyrics_sync) });
+    dispatch({ type: "load", notes });
   }, []);
 
   const load = useCallback(async () => {
     if (!song?.id) return;
     setLoading(true);
     try {
-      accept(await api.getSongEditor(song.id));
+      await accept(await api.getSongEditor(song.id));
     } catch (error) {
       await notify(t("Не удалось открыть редактор: {0}", { 0: getErrorMessage(error) }));
     } finally {
@@ -57,7 +58,7 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     if (!song?.id) return;
     setSaving(true);
     try {
-      accept(await api.saveSongEditor(song.id, serializeNotes(document.notes)));
+      await accept(await api.saveSongEditor(song.id, serializeNotes(document.notes)));
     } catch (error) {
       await notify(t("Не удалось сохранить редактор: {0}", { 0: getErrorMessage(error) }));
     } finally {
@@ -73,7 +74,7 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     )
       return;
     try {
-      accept(await api.resetSongEditor(song.id));
+      await accept(await api.resetSongEditor(song.id));
     } catch (error) {
       await notify(t("Не удалось восстановить AI: {0}", { 0: getErrorMessage(error) }));
     }
