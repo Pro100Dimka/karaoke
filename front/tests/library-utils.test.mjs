@@ -22,8 +22,7 @@ describe("library domain utilities", () => {
     assert.equal(formatLibraryDate(null), "—");
     assert.equal(formatLibraryDate("invalid"), "—");
     assert.equal(formatLibraryDate("2026-08-21T00:00:00Z", "en-CA"), "2026-08-21");
-    for (const value of [undefined, null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])
-      assert.equal(formatEta(value), tr("рассчитываем…"));
+    for (const value of [undefined, null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) assert.equal(formatEta(value), tr("рассчитываем…"));
     assert.equal(formatEta(1.4), tr("~{0} сек", { 0: 1 }));
     assert.equal(formatEta(59.6), tr("~{0} мин {1} сек", { 0: 1, 1: 0 }));
     assert.equal(formatEta(125), tr("~{0} мин {1} сек", { 0: 2, 1: 5 }));
@@ -34,10 +33,8 @@ describe("library domain utilities", () => {
     assert.equal(getProcessingProgress({ progress_percent: -3 }, {}), 0);
     assert.equal(getProcessingProgress({ progress_percent: "bad" }, { progress_percent: 80 }), 0);
     assert.equal(getProcessingProgress({}, { progress_percent: "42" }), 42);
-    for (const status of ["processing", "queued", "cancelling"])
-      assert.equal(isProcessingActive(status), true);
-    for (const status of ["done", "cancelled", "", null, undefined])
-      assert.equal(isProcessingActive(status), false);
+    for (const status of ["processing", "queued", "cancelling"]) assert.equal(isProcessingActive(status), true);
+    for (const status of ["done", "cancelled", "", null, undefined]) assert.equal(isProcessingActive(status), false);
     assert.equal(hasActiveSongProcessing([{ status: "done" }, { status: "queued" }]), true);
     assert.equal(hasActiveSongProcessing([{ status: "done" }, null]), false);
     assert.equal(hasActiveSongProcessing(null), false);
@@ -99,18 +96,11 @@ describe("library domain utilities", () => {
       }),
       [one, two]
     );
-    assert.deepEqual(
-      resolveVisibleSongs({ localSongs: local, room: { host: false }, roomSongs: [] }),
-      local
-    );
+    assert.deepEqual(resolveVisibleSongs({ localSongs: local, room: { host: false }, roomSongs: [] }), local);
   });
 
   test("searches all metadata case-insensitively", () => {
-    const songs = [
-      { title: "My Lady", artist: "Нервы", genre: "Rock" },
-      { title: "Весна", artist: null, genre: "Indie" },
-      null
-    ];
+    const songs = [{ title: "My Lady", artist: "Нервы", genre: "Rock" }, { title: "Весна", artist: null, genre: "Indie" }, null];
     assert.strictEqual(filterSongs(songs, ""), songs);
     assert.deepEqual(filterSongs(songs, "  НЕРВЫ "), [songs[0]]);
     assert.deepEqual(filterSongs(songs, "rock"), [songs[0]]);
@@ -120,10 +110,7 @@ describe("library domain utilities", () => {
   });
 
   test("counts ready songs and derives safe card state", () => {
-    assert.equal(
-      countReadySongs([{ status: "done" }, { status: "pending" }, { status: "done" }]),
-      2
-    );
+    assert.equal(countReadySongs([{ status: "done" }, { status: "pending" }, { status: "done" }]), 2);
     assert.equal(countReadySongs(null), 0);
     assert.deepEqual(getSongCardState({ status: "done" }), {
       status: "done",
@@ -148,7 +135,6 @@ describe("library domain utilities", () => {
     assert.equal(formatSongKey("C   MAJOR"), "Cmaj");
     assert.equal(formatSongKey("A minor extra"), "A minor extra");
     assert.equal(formatSongKey("C major extra"), "C major extra");
-    for (const value of [null, undefined, "", "   "])
-      assert.equal(formatSongKey(value), tr("Тональность определяется"));
+    for (const value of [null, undefined, "", "   "]) assert.equal(formatSongKey(value), tr("Тональность определяется"));
   });
 });

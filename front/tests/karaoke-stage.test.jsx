@@ -48,17 +48,11 @@ const notes = [
 test("melody roll renders lyricsSync notes at exact boundaries", () => {
   const normalized = normalizePianoNotes(notes);
   expect(pianoRollFrame(normalized, 0.5).notes).toHaveLength(3);
-  expect(pianoRollFrame(normalized, 0.5).notes.find(({ state }) => state === "current").note).toBe(
-    60
-  );
-  expect(pianoRollFrame(normalized, 1).notes.find(({ state }) => state === "current").note).toBe(
-    61
-  );
+  expect(pianoRollFrame(normalized, 0.5).notes.find(({ state }) => state === "current").note).toBe(60);
+  expect(pianoRollFrame(normalized, 1).notes.find(({ state }) => state === "current").note).toBe(61);
 });
 test("melody roll uses only the moving lyricsSync note window and restores pitch feedback", () => {
-  const { container } = render(
-    <MelodyRoll notes={notes} currentTime={20.5} isPitchDetected sungMidi={80} />
-  );
+  const { container } = render(<MelodyRoll notes={notes} currentTime={20.5} isPitchDetected sungMidi={80} />);
   const renderedNotes = pianoRollFrame(normalizePianoNotes(notes), 20.5, undefined, 80).notes;
   expect(renderedNotes).toHaveLength(1);
   expect(renderedNotes[0].start).toBe(20);
@@ -79,9 +73,7 @@ test("lyrics use the exact late-song start/end interval without accumulated drif
     ]
   };
   const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={30.75} />);
-  const current = [...view.container.querySelectorAll('[data-role="lyric-word"]')].find(
-    (word) => word.dataset.text === "Неблагодарно"
-  );
+  const current = [...view.container.querySelectorAll('[data-role="lyric-word"]')].find((word) => word.dataset.text === "Неблагодарно");
   expect(view.container.querySelectorAll('[data-role="lyric-line"]')).toHaveLength(2);
   expect(current.dataset.start).toBe("30.12");
   expect(current.dataset.end).toBe("31.38");
@@ -103,13 +95,9 @@ test("keeps a very short letter line visible without changing its word timing", 
   const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={19.25} />);
 
   expect(
-    [...view.container.querySelectorAll('[data-role="lyric-line"][data-current] > [data-text]')]
-      .map(({ dataset }) => dataset.text)
-      .join("")
+    [...view.container.querySelectorAll('[data-role="lyric-line"][data-current] > [data-text]')].map(({ dataset }) => dataset.text).join("")
   ).toBe("Ая");
-  const letter = [...view.container.querySelectorAll('[data-role="lyric-word"]')].find(
-    (word) => word.dataset.text === "А"
-  );
+  const letter = [...view.container.querySelectorAll('[data-role="lyric-word"]')].find((word) => word.dataset.text === "А");
   expect(letter.dataset.start).toBe("18.94");
   expect(letter.dataset.end).toBe("18.96");
   expect(letter.style.getPropertyValue("--character-fill")).toBe("100%");
@@ -210,10 +198,7 @@ test("stage randomizes local scene video with a short fade", () => {
   fireEvent.loadedMetadata(video);
   expect(video.dataset.switching).toBe("true");
   vi.advanceTimersByTime(180);
-  verify(
-    [video.currentTime, "toBeGreaterThan", 0],
-    [HTMLMediaElement.prototype.play, "toHaveBeenCalled"]
-  );
+  verify([video.currentTime, "toBeGreaterThan", 0], [HTMLMediaElement.prototype.play, "toHaveBeenCalled"]);
   vi.useRealTimers();
 });
 test("stage ignores a rejected background-video play request", async () => {
@@ -221,15 +206,7 @@ test("stage ignores a rejected background-video play request", async () => {
   HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("blocked"));
   globalThis.electronAPI = { getSceneVideoUrl: () => "scene.mp4" };
   const { container } = render(
-    <KaraokePerformanceStage
-      songId="song"
-      isPlaying
-      currentTime={0}
-      lyrics={[]}
-      notes={[]}
-      showLyrics={false}
-      showNotes={false}
-    />
+    <KaraokePerformanceStage songId="song" isPlaying currentTime={0} lyrics={[]} notes={[]} showLyrics={false} showNotes={false} />
   );
   const video = container.querySelector("video");
   Object.defineProperty(video, "duration", { configurable: true, value: 0.5 });
@@ -248,15 +225,7 @@ test("ignores a delayed video switch after stage removal", () => {
   });
   globalThis.electronAPI = { getSceneVideoUrl: () => "scene.mp4" };
   const view = render(
-    <KaraokePerformanceStage
-      songId="song"
-      isPlaying
-      currentTime={0}
-      lyrics={[]}
-      notes={[]}
-      showLyrics={false}
-      showNotes={false}
-    />
+    <KaraokePerformanceStage songId="song" isPlaying currentTime={0} lyrics={[]} notes={[]} showLyrics={false} showNotes={false} />
   );
   const video = view.container.querySelector("video");
   Object.defineProperty(video, "duration", { configurable: true, value: 2 });

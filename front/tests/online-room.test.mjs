@@ -3,11 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "vitest";
-import {
-  DEFAULT_SIGNALING_URL,
-  OnlineRoomClient,
-  OnlineVoiceMesh
-} from "../src/services/onlineRoom.js";
+import { DEFAULT_SIGNALING_URL, OnlineRoomClient, OnlineVoiceMesh } from "../src/services/onlineRoom.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 test("production CSP allows the online room WebSocket", () => {
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");

@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, render } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 vi.mock("../src/theme/ui", () => ({
@@ -36,7 +36,6 @@ vi.mock("../src/pages/Karaoke/components/console/tools", () => ({
 }));
 import ContextProviders from "../src/contexts/index.jsx";
 import KaraokeConsole from "../src/pages/Karaoke/components/console/index.jsx";
-afterEach(cleanup);
 test("context composition preserves provider ownership order", () => {
   const result = render(
     <ContextProviders>
@@ -48,9 +47,7 @@ test("context composition preserves provider ownership order", () => {
   expect(result.container.querySelectorAll("[data-provider]")).toHaveLength(5);
 });
 test("karaoke console forwards shared and auto-hide contracts", () => {
-  const result = render(
-    <KaraokeConsole marker="karaoke" autoHideEnabled onAutoHideChange={vi.fn()} />
-  );
+  const result = render(<KaraokeConsole marker="karaoke" autoHideEnabled onAutoHideChange={vi.fn()} />);
   for (const id of ["strip", "mixer", "center", "tools"]) {
     expect(result.getByTestId(id).textContent).toBe("karaoke");
   }

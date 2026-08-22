@@ -72,6 +72,7 @@ const store = {
 };
 
 function parseBody(body) {
+  if (body instanceof FormData) return Object.fromEntries(body.entries());
   try {
     return JSON.parse(body);
   } catch {
@@ -93,7 +94,8 @@ export async function mockRequest(path, options = {}) {
   if (pathname === "/songs" && method === "POST") {
     const song = {
       id: `mock-song-${store.songs.length + 1}`,
-      title: "Новая песня",
+      title: String(body.title || "Новая песня"),
+      ...(body.artist ? { artist: String(body.artist) } : {}),
       status: "processing",
       progress_percent: 0
     };

@@ -1,14 +1,11 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ServiceCards, formatBytes, formatDate } from "../src/pages/Settings/Services.jsx";
 
 vi.mock("../src/i18n", () => ({
   useI18n: () => ({ t: (key) => key, language: "ru" })
 }));
-
-afterEach(cleanup);
-
 describe("settings services", () => {
   test("formats defensive service values", () => {
     expect(formatBytes(0)).toBe("0 Б");

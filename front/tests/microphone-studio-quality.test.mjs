@@ -8,11 +8,9 @@ class Param {
 }
 class Node {
   constructor() {
-    ["frequency", "Q", "gain", "threshold", "knee", "ratio", "attack", "release"].forEach(
-      (name) => {
-        this[name] = new Param();
-      }
-    );
+    ["frequency", "Q", "gain", "threshold", "knee", "ratio", "attack", "release"].forEach((name) => {
+      this[name] = new Param();
+    });
   }
   connect(target) {
     this.target = target;

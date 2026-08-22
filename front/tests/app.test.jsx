@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, render } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import App from "../src/App.jsx";
 
@@ -20,7 +20,6 @@ vi.mock("../src/components/OnlineRoomDock", () => ({
   OnlineRoomDock: () => <div data-testid="room" />
 }));
 vi.mock("../src/components/RoomRadioSync", () => ({ default: () => <div data-testid="radio" /> }));
-afterEach(cleanup);
 test("composes the application providers and global room controls", () => {
   const result = render(<App />);
   for (const id of ["boundary", "loader", "contexts", "router", "layout", "room", "radio"]) {

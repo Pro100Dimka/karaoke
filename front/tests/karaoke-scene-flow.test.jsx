@@ -44,8 +44,16 @@ describe("karaoke scene flow", () => {
     });
     expect(result).toBe(false);
     expect(input.hideControls).toHaveBeenCalledOnce();
-    calledWith([input.togglePlay, [{ forcePlaying: true }]], [input.turnOffRadio, [{ remember: false }]], [input.turnOnRadio, [{ remember: false, fadeIn: true }]]);
-    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneIntroVisible, false], [hook.result.current.sceneTransitioning, false]);
+    calledWith(
+      [input.togglePlay, [{ forcePlaying: true }]],
+      [input.turnOffRadio, [{ remember: false }]],
+      [input.turnOnRadio, [{ remember: false, fadeIn: true }]]
+    );
+    same(
+      [hook.result.current.sceneBlackout, false],
+      [hook.result.current.sceneIntroVisible, false],
+      [hook.result.current.sceneTransitioning, false]
+    );
   });
   test("transition guard rejects overlapping play and stop commands", async () => {
     const input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
@@ -62,7 +70,7 @@ describe("karaoke scene flow", () => {
     await expect(first).resolves.toBe(true);
     await expect(second).resolves.toBe(false);
     await expect(stopResult).resolves.toBe(false);
-    verify([input.togglePlay, 'toHaveBeenCalledTimes', 1], [input.stop, 'not.toHaveBeenCalled']);
+    verify([input.togglePlay, "toHaveBeenCalledTimes", 1], [input.stop, "not.toHaveBeenCalled"]);
   });
   test("successful first start uses intro once, then resume skips the intro", async () => {
     let input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
@@ -137,9 +145,12 @@ describe("karaoke scene flow", () => {
     });
     expect(result).toBe(true);
     expect(slowMedia.load).toHaveBeenCalledOnce();
-    verify([slowMedia.addEventListener, 'toHaveBeenCalledWith', "canplay", expect.any(Function), { once: true }]);
-    verify([slowMedia.addEventListener, 'toHaveBeenCalledWith', "error", expect.any(Function), { once: true }]);
-    calledWith([slowMedia.removeEventListener, ["canplay", expect.any(Function)]], [slowMedia.removeEventListener, ["error", expect.any(Function)]]);
+    verify([slowMedia.addEventListener, "toHaveBeenCalledWith", "canplay", expect.any(Function), { once: true }]);
+    verify([slowMedia.addEventListener, "toHaveBeenCalledWith", "error", expect.any(Function), { once: true }]);
+    calledWith(
+      [slowMedia.removeEventListener, ["canplay", expect.any(Function)]],
+      [slowMedia.removeEventListener, ["error", expect.any(Function)]]
+    );
     expect(listeners.size).toBe(0);
   });
   test("stop failure restores stage state without navigating", async () => {
@@ -154,7 +165,11 @@ describe("karaoke scene flow", () => {
     expect(result).toBe(false);
     expect(input.stop).toHaveBeenCalledOnce();
     expect(input.navigate).not.toHaveBeenCalled();
-    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false], [hook.result.current.stageActionsVisible, true]);
+    same(
+      [hook.result.current.sceneBlackout, false],
+      [hook.result.current.sceneTransitioning, false],
+      [hook.result.current.stageActionsVisible, true]
+    );
   });
   test("successful stop blackouts the route and carries the analysis id to library", async () => {
     const routeEvents = [];
@@ -169,7 +184,12 @@ describe("karaoke scene flow", () => {
       result = await pending;
     });
     expect(result).toBe(true);
-    verify([input.navigate, 'toHaveBeenCalledWith', "/", { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: "recording-7" } }]);
+    verify([
+      input.navigate,
+      "toHaveBeenCalledWith",
+      "/",
+      { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: "recording-7" } }
+    ]);
     expect(routeEvents).toContainEqual({ visible: true });
     window.removeEventListener("app:route-blackout", listener);
   });
@@ -177,7 +197,7 @@ describe("karaoke scene flow", () => {
     const input = props();
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     act(() => hook.result.current.navigateToLibraryFromBlackout(""));
-    verify([input.navigate, 'toHaveBeenCalledWith', "/", { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: null } }]);
+    verify([input.navigate, "toHaveBeenCalledWith", "/", { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: null } }]);
   });
   test("autostart starts once when media exists and releases initial route blackout", async () => {
     const routeEvents = [];
@@ -186,7 +206,11 @@ describe("karaoke scene flow", () => {
     const input = props({ autoStartRequested: true, togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     await act(async () => vi.runAllTimersAsync());
-    verify([input.togglePlay, 'toHaveBeenCalledTimes', 1], [input.togglePlay, 'toHaveBeenCalledWith', { forcePlaying: true }], [routeEvents, 'toContain', false]);
+    verify(
+      [input.togglePlay, "toHaveBeenCalledTimes", 1],
+      [input.togglePlay, "toHaveBeenCalledWith", { forcePlaying: true }],
+      [routeEvents, "toContain", false]
+    );
     same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false]);
     window.removeEventListener("app:route-blackout", listener);
   });

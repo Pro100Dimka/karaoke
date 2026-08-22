@@ -50,13 +50,12 @@ const contextValue = (updateSettings = vi.fn()) => ({
 });
 const contextWrapper = (value) =>
   function ContextWrapper({ children }) {
-    return (
-      <AppSettingsContext.Provider value={value}>
-        {children}
-      </AppSettingsContext.Provider>
-    );
+    return <AppSettingsContext.Provider value={value}>{children}</AppSettingsContext.Provider>;
   };
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 beforeEach(async () => {
   vi.resetModules();
   ({
@@ -81,12 +80,10 @@ describe("application settings context", () => {
     same([appSettingsReducer(state, { type: "UNKNOWN" }), state], [appSettingsReducer(state, { type: "toString" }), state]);
   });
   test("requires its provider", () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const suppressExpectedError = (event) => event.preventDefault();
     window.addEventListener("error", suppressExpectedError);
-    verify([() => renderHook(() => useAppSettings()), 'toThrow', "useAppSettings must be used inside AppSettingsProvider"]);
+    verify([() => renderHook(() => useAppSettings()), "toThrow", "useAppSettings must be used inside AppSettingsProvider"]);
     window.removeEventListener("error", suppressExpectedError);
     consoleError.mockRestore();
   });
@@ -96,16 +93,11 @@ describe("application settings context", () => {
     mocks.getSavedLanguage.mockReturnValue("uk");
     const initialLoad = deferred();
     const nextLoad = deferred();
-    mocks.getAppSettings
-      .mockReturnValueOnce(initialLoad.promise)
-      .mockReturnValueOnce(nextLoad.promise);
-    const wrapper = ({ children }) => (
-      <AppSettingsProvider>{children}</AppSettingsProvider>
-    );
+    mocks.getAppSettings.mockReturnValueOnce(initialLoad.promise).mockReturnValueOnce(nextLoad.promise);
+    const wrapper = ({ children }) => <AppSettingsProvider>{children}</AppSettingsProvider>;
     const { result } = renderHook(() => useAppSettings(), { wrapper });
     expect(result.current).toMatchObject({ settings: null, isLoading: true, error: null });
-    await act(async () => initialLoad.resolve({ theme: "green", language: "uk" })
-    );
+    await act(async () => initialLoad.resolve({ theme: "green", language: "uk" }));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.settings).toEqual({ theme: "green", language: "uk" });
     expect(mocks.applyTheme).toHaveBeenLastCalledWith("green");
@@ -115,8 +107,10 @@ describe("application settings context", () => {
     act(() => result.current.updateSettings({ theme: "direct" }));
     expect(result.current.settings).toEqual({ theme: "direct" });
     let reloadPromise;
-    act(() => { reloadPromise = result.current.reloadSettings(); });
-    verify([result.current.isLoading, 'toBe', true], [result.current.error, 'toBeNull']);
+    act(() => {
+      reloadPromise = result.current.reloadSettings();
+    });
+    verify([result.current.isLoading, "toBe", true], [result.current.error, "toBeNull"]);
     await act(async () => {
       nextLoad.resolve({ theme: "violet", language: "en" });
       await reloadPromise;
@@ -128,21 +122,25 @@ describe("application settings context", () => {
   test("exposes load errors and ignores a response after unmount", async () => {
     const failure = new Error("offline");
     mocks.getAppSettings.mockRejectedValueOnce(failure);
-    const wrapper = ({ children }) => (
-      <AppSettingsProvider>{children}</AppSettingsProvider>
-    );
+    const wrapper = ({ children }) => <AppSettingsProvider>{children}</AppSettingsProvider>;
     const failed = renderHook(() => useAppSettings(), { wrapper });
     await waitFor(() => expect(failed.result.current.error).toBe(failure));
     expect(failed.result.current.isLoading).toBe(false);
     failed.unmount();
     let resolve;
-    mocks.getAppSettings.mockReturnValueOnce( new Promise((done) => { resolve = done; })
+    mocks.getAppSettings.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      })
     );
     const pending = renderHook(() => useAppSettings(), { wrapper });
     pending.unmount();
     await act(async () => resolve({ theme: "light" }));
     let reject;
-    mocks.getAppSettings.mockReturnValueOnce( new Promise((_resolve, fail) => { reject = fail; })
+    mocks.getAppSettings.mockReturnValueOnce(
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      })
     );
     const rejected = renderHook(() => useAppSettings(), { wrapper });
     rejected.unmount();
@@ -152,18 +150,11 @@ describe("application settings context", () => {
     const initial = deferred();
     const stale = deferred();
     const latest = deferred();
-    mocks.getAppSettings
-      .mockReturnValueOnce(initial.promise)
-      .mockReturnValueOnce(stale.promise)
-      .mockReturnValueOnce(latest.promise);
-    const wrapper = ({ children }) => (
-      <AppSettingsProvider>{children}</AppSettingsProvider>
-    );
+    mocks.getAppSettings.mockReturnValueOnce(initial.promise).mockReturnValueOnce(stale.promise).mockReturnValueOnce(latest.promise);
+    const wrapper = ({ children }) => <AppSettingsProvider>{children}</AppSettingsProvider>;
     const hook = renderHook(() => useAppSettings(), { wrapper });
     await act(async () => initial.resolve({ version: 1 }));
-    const stalePromise = hook.result.current
-      .reloadSettings()
-      .catch((error) => error);
+    const stalePromise = hook.result.current.reloadSettings().catch((error) => error);
     const latestPromise = hook.result.current.reloadSettings();
     await act(async () => latest.resolve({ version: 3 }));
     expect(hook.result.current.settings).toEqual({ version: 3 });
@@ -175,22 +166,15 @@ describe("application settings context", () => {
     const initial = deferred();
     const stale = deferred();
     const latest = deferred();
-    mocks.getAppSettings
-      .mockReturnValueOnce(initial.promise)
-      .mockReturnValueOnce(stale.promise)
-      .mockReturnValueOnce(latest.promise);
-    const wrapper = ({ children }) => (
-      <AppSettingsProvider>{children}</AppSettingsProvider>
-    );
+    mocks.getAppSettings.mockReturnValueOnce(initial.promise).mockReturnValueOnce(stale.promise).mockReturnValueOnce(latest.promise);
+    const wrapper = ({ children }) => <AppSettingsProvider>{children}</AppSettingsProvider>;
     const hook = renderHook(() => useAppSettings(), { wrapper });
     await act(async () => initial.resolve({ version: 1 }));
-    const stalePromise = hook.result.current
-      .reloadSettings()
-      .catch((error) => error);
+    const stalePromise = hook.result.current.reloadSettings().catch((error) => error);
     const latestPromise = hook.result.current.reloadSettings();
     await act(async () => latest.resolve({ version: 3 }));
     await act(async () => stale.reject(new Error("stale")));
     await Promise.all([stalePromise, latestPromise]);
-    verify([hook.result.current, 'toMatchObject', { settings: { version: 3 }, isLoading: false, error: null }]);
+    verify([hook.result.current, "toMatchObject", { settings: { version: 3 }, isLoading: false, error: null }]);
   });
 });

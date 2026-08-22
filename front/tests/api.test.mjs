@@ -12,14 +12,7 @@ const importDomain = (name) =>
   import(`../src/api/domains/${name}.js`).catch(() => {
     throw Error(`Unknown API domain: ${name}`);
   });
-const response = ({
-  body = "{}",
-  json,
-  ok = true,
-  status = 200,
-  statusText = "",
-  url = ""
-} = {}) => ({
+const response = ({ body = "{}", json, ok = true, status = 200, statusText = "", url = "" } = {}) => ({
   ok,
   status,
   statusText,
@@ -97,10 +90,7 @@ describe("API transport", () => {
     await request("object", { headers: { "Content-Type": "text/plain" }, body: "plain" });
     deepEqual([lastCall()[1].headers, { "Content-Type": "text/plain" }]);
     await request("accept", { headers: { Accept: "application/json" }, body: "{}" });
-    deepEqual([
-      lastCall()[1].headers,
-      { Accept: "application/json", "Content-Type": "application/json" }
-    ]);
+    deepEqual([lastCall()[1].headers, { Accept: "application/json", "Content-Type": "application/json" }]);
     await request("null", { body: null });
     equal([lastCall()[1].headers, undefined]);
     await request("binary", { body: new Uint8Array([1]) });
@@ -113,23 +103,13 @@ describe("API transport", () => {
       globalThis.FormData = FormDataCtor;
     }
     [url, options] = lastCall();
-    equal(
-      [pathOf(url), "/without-form-data"],
-      [options.headers["Content-Type"], "application/json"]
-    );
+    equal([pathOf(url), "/without-form-data"], [options.headers["Content-Type"], "application/json"]);
   });
   test("reports HTTP, malformed JSON and missing fetch failures", async () => {
     const { request } = await importApi("core");
-    fetch.mockResolvedValueOnce(
-      response({ ok: false, status: 422, json: { detail: "bad" }, url: "http://api/bad" })
-    );
-    await assert.rejects(
-      request("bad"),
-      ({ message, status, url }) => message === "bad" && status === 422 && url === "http://api/bad"
-    );
-    fetch.mockResolvedValueOnce(
-      response({ ok: false, status: 500, statusText: "Failure", json: { detail: { code: 1 } } })
-    );
+    fetch.mockResolvedValueOnce(response({ ok: false, status: 422, json: { detail: "bad" }, url: "http://api/bad" }));
+    await assert.rejects(request("bad"), ({ message, status, url }) => message === "bad" && status === 422 && url === "http://api/bad");
+    fetch.mockResolvedValueOnce(response({ ok: false, status: 500, statusText: "Failure", json: { detail: { code: 1 } } }));
     await assert.rejects(request("bad"), /\{"code":1\}/);
     fetch.mockResolvedValueOnce({
       ...response({ ok: false, status: 503, statusText: "Offline" }),
@@ -137,10 +117,7 @@ describe("API transport", () => {
         throw Error("not json");
       }
     });
-    await assert.rejects(
-      request("bad"),
-      ({ message, url }) => message === "Offline" && url === "http://127.0.0.1:8000/bad"
-    );
+    await assert.rejects(request("bad"), ({ message, url }) => message === "Offline" && url === "http://127.0.0.1:8000/bad");
     fetch.mockResolvedValueOnce({
       ...response({ ok: false, status: 418 }),
       json: async () => {
@@ -162,10 +139,7 @@ describe("API transport", () => {
     vi.useFakeTimers();
     const { request } = await importApi("core");
     fetch.mockImplementationOnce((_, { signal }) => abortPromise(signal, "aborted"));
-    const rejection = assert.rejects(
-      request("stalled", { timeoutMs: 25 }),
-      ({ name }) => name === "TimeoutError"
-    );
+    const rejection = assert.rejects(request("stalled", { timeoutMs: 25 }), ({ name }) => name === "TimeoutError");
     await vi.advanceTimersByTimeAsync(25);
     await rejection;
     vi.useRealTimers();
@@ -177,10 +151,7 @@ describe("API transport", () => {
       ...response(),
       text: () => abortPromise(signal, "body aborted")
     }));
-    const rejection = assert.rejects(
-      request("stalled-body", { timeoutMs: 25 }),
-      ({ name }) => name === "TimeoutError"
-    );
+    const rejection = assert.rejects(request("stalled-body", { timeoutMs: 25 }), ({ name }) => name === "TimeoutError");
     await vi.advanceTimersByTimeAsync(25);
     await rejection;
     vi.useRealTimers();
@@ -231,17 +202,12 @@ describe("API normalization", () => {
     equal([clampNumber("3", 0, 2), 2], [clampNumber("x", 0, 2, 1), 1]);
     for (const value of [null, "  "]) assert.equal(normalizeString(value, "fallback"), "fallback");
     for (const value of [true, 1, "YES", "on"]) assert.equal(normalizeBoolean(value), true);
-    for (const value of [false, 0, "false", "0", "NO", "off", ""])
-      equal([normalizeBoolean(value, true), false]);
+    for (const value of [false, 0, "false", "0", "NO", "off", ""]) equal([normalizeBoolean(value, true), false]);
     equal([normalizeBoolean(" true "), true]);
     for (const value of [NaN, "maybe", {}]) assert.equal(normalizeBoolean(value, true), true);
     deepEqual(
       [
-        [
-          normalizeNonNegativeNumber(-1, 4),
-          normalizeNonNegativeNumber(0, 4),
-          normalizeNonNegativeNumber("2")
-        ],
+        [normalizeNonNegativeNumber(-1, 4), normalizeNonNegativeNumber(0, 4), normalizeNonNegativeNumber("2")],
         [4, 0, 2]
       ],
       [normalizeSongList(null), []]
@@ -251,22 +217,11 @@ describe("API normalization", () => {
       [normalizeSong({ status: "DONE", error_message: " " }).error_message, null]
     );
     deepEqual([normalizeSongList([null]).map(({ status }) => status), ["pending"]]);
-    for (const status of [
-      "pending",
-      "queued",
-      "processing",
-      "cancelling",
-      "cancelled",
-      "done",
-      "error"
-    ])
+    for (const status of ["pending", "queued", "processing", "cancelling", "cancelled", "done", "error"])
       equal([normalizeSong({ status }).status, status]);
     equal([Object.hasOwn(normalizeSong("x"), "0"), false]);
     deepEqual([normalizeModel(null), { name: "", downloaded: false, selected: false, size: 0 }]);
-    equal(
-      [Object.hasOwn(normalizeModel("x"), "0"), false],
-      [normalizeRecording({ duration_sec: -2 }).duration_sec, 0]
-    );
+    equal([Object.hasOwn(normalizeModel("x"), "0"), false], [normalizeRecording({ duration_sec: -2 }).duration_sec, 0]);
     deepEqual([normalizeRecording(null), { id: "", song_id: "", duration_sec: 0 }]);
     equal([Object.hasOwn(normalizeRecording("x"), "0"), false]);
   });
@@ -283,17 +238,8 @@ describe("API domains", () => {
       [audioApi.listAudioOutputDevices, "/audio/output-devices"],
       [audioApi.listAsioDrivers, "/audio/asio-drivers"],
       [audioApi.getAudioSettings, "/audio/settings"],
-      [
-        () => audioApi.updateAudioSettings({ latency: 1 }),
-        "/audio/settings",
-        "POST",
-        { latency: 1 }
-      ],
-      [
-        audioApi.startDirectMonitoring,
-        "/audio/direct-monitor/start?disabled_effects=false",
-        "POST"
-      ],
+      [() => audioApi.updateAudioSettings({ latency: 1 }), "/audio/settings", "POST", { latency: 1 }],
+      [audioApi.startDirectMonitoring, "/audio/direct-monitor/start?disabled_effects=false", "POST"],
       [audioApi.stopDirectMonitoring, "/audio/direct-monitor/stop", "POST"],
       [audioApi.getSignalQuality, "/audio/signal-quality"],
       [() => playerApi.getSync("a/b"), "/player/a%2Fb/sync"],
@@ -328,15 +274,9 @@ describe("API domains", () => {
     equal([await audioApi.releaseDirectMonitoring(), null]);
   });
   test("routes model and recording operations and normalizes collections", async () => {
-    const [{ modelsApi }, { recordingsApi }] = await Promise.all([
-      importDomain("models"),
-      importDomain("recordings")
-    ]);
+    const [{ modelsApi }, { recordingsApi }] = await Promise.all([importDomain("models"), importDomain("recordings")]);
     fetch.mockResolvedValueOnce(response({ body: '[{"name":" x ","size":-1}]' }));
-    deepEqual([
-      await modelsApi.listWhisperModels(),
-      [{ name: "x", size: 0, downloaded: false, selected: false }]
-    ]);
+    deepEqual([await modelsApi.listWhisperModels(), [{ name: "x", size: 0, downloaded: false, selected: false }]]);
     equal([pathOf(lastCall()[0]), "/models/whisper"]);
     fetch.mockResolvedValueOnce(response({ body: "null" }));
     deepEqual([await modelsApi.listWhisperModels(), []]);
@@ -388,10 +328,7 @@ describe("API domains", () => {
     ])
       await assertRequest(invoke, { path, method: "POST" });
     fetch.mockResolvedValueOnce(response({ body: '[{"id":1,"duration_sec":"2"}]' }));
-    equal(
-      [(await recordingsApi.listRecordingsForSong("song"))[0].duration_sec, 2],
-      [pathOf(lastCall()[0]), "/recording/by-song/song"]
-    );
+    equal([(await recordingsApi.listRecordingsForSong("song"))[0].duration_sec, 2], [pathOf(lastCall()[0]), "/recording/by-song/song"]);
     fetch.mockResolvedValueOnce(response({ body: "null" }));
     deepEqual([await recordingsApi.listRecordingsForSong("song"), []]);
     equal([pathOf(lastCall()[0]), "/recording/by-song/song"]);
@@ -399,10 +336,7 @@ describe("API domains", () => {
     deepEqual([await recordingsApi.listRecordingLibrary(), []]);
     equal([pathOf(lastCall()[0]), "/recording/library"]);
     fetch.mockResolvedValueOnce(response({ body: '[{"id":"library"}]' }));
-    equal(
-      [(await recordingsApi.listRecordingLibrary())[0].id, "library"],
-      [pathOf(lastCall()[0]), "/recording/library"]
-    );
+    equal([(await recordingsApi.listRecordingLibrary())[0].id, "library"], [pathOf(lastCall()[0]), "/recording/library"]);
     await assertRequest(recordingsApi.getRecordingSettings, { path: "/recording/settings" });
     await assertRequest(() => recordingsApi.deleteRecording("a/b"), {
       path: "/recording/a%2Fb",
@@ -421,12 +355,8 @@ describe("API domains", () => {
   test("routes song reads and normalizes their public results", async () => {
     const { songsApi } = await importDomain("songs");
     fetch
-      .mockResolvedValueOnce(
-        response({ body: '[{"id":1,"title":" Song ","status":"DONE","progress_percent":120}]' })
-      )
-      .mockResolvedValueOnce(
-        response({ body: '{"id":"a/b","title":" ","status":"UNKNOWN","progress_percent":-1}' })
-      );
+      .mockResolvedValueOnce(response({ body: '[{"id":1,"title":" Song ","status":"DONE","progress_percent":120}]' }))
+      .mockResolvedValueOnce(response({ body: '{"id":"a/b","title":" ","status":"UNKNOWN","progress_percent":-1}' }));
     deepEqual([
       await songsApi.listSongs(),
       [
@@ -467,19 +397,9 @@ describe("API domains", () => {
       [() => songsApi.getLog(id), "/songs/a%2Fb/log"],
       [() => songsApi.getResult(id), "/songs/a%2Fb/result"],
       [() => songsApi.getSongEditor(id), "/songs/a%2Fb/editor"],
-      [
-        () => songsApi.saveSongEditor(id, [{ pitch: 60 }]),
-        "/songs/a%2Fb/editor",
-        "PUT",
-        { notes: [{ pitch: 60 }] }
-      ],
+      [() => songsApi.saveSongEditor(id, [{ pitch: 60 }]), "/songs/a%2Fb/editor", "PUT", { notes: [{ pitch: 60 }] }],
       [() => songsApi.resetSongEditor(id), "/songs/a%2Fb/editor/reset", "POST"],
-      [
-        () => songsApi.updateLyrics(id, "lyrics"),
-        "/songs/a%2Fb/lyrics",
-        "PUT",
-        { lyrics: "lyrics" }
-      ]
+      [() => songsApi.updateLyrics(id, "lyrics"), "/songs/a%2Fb/lyrics", "PUT", { lyrics: "lyrics" }]
     ])
       await assertRequest(invoke, {
         path,
@@ -500,21 +420,13 @@ describe("API domains", () => {
     await songsApi.addSong(song, "Title");
     [url, options] = lastCall();
     deepEqual([
-      [
-        pathOf(url),
-        options.method,
-        await options.body.get("file").text(),
-        options.body.get("title")
-      ],
+      [pathOf(url), options.method, await options.body.get("file").text(), options.body.get("title")],
       ["/songs", "POST", "song", "Title"]
     ]);
     await songsApi.addSong(song);
     [, options] = lastCall();
     deepEqual([[...options.body.keys()], ["file", "artist"]]);
-    equal([
-      pathOf(songsApi.getAudioTrackUrl("a/b", "lead vocal")),
-      "/songs/a%2Fb/audio/lead%20vocal"
-    ]);
+    equal([pathOf(songsApi.getAudioTrackUrl("a/b", "lead vocal")), "/songs/a%2Fb/audio/lead%20vocal"]);
     const coverUrl = new URL(songsApi.getSongCoverUrl("a/b", "2026-08-21 15:00"));
     deepEqual([
       [coverUrl.pathname, coverUrl.searchParams.get("v")],
@@ -531,12 +443,7 @@ describe("API domains", () => {
     await songsApi.importSongPackage(archive);
     [url, options] = lastCall();
     deepEqual([
-      [
-        pathOf(url),
-        options.method,
-        options.body.get("file").name,
-        await options.body.get("file").text()
-      ],
+      [pathOf(url), options.method, options.body.get("file").name, await options.body.get("file").text()],
       ["/songs/package/import", "POST", "song.karaoke.zip", "zip"]
     ]);
     await songsApi.importSongPackage(archive, "custom.zip", { expectedRevision: "sha256:def" });
@@ -551,16 +458,10 @@ describe("API domains", () => {
     globalThis.localStorage = { getItem: () => "dark", setItem: vi.fn() };
     globalThis.window = { localStorage };
     fetch.mockResolvedValueOnce(response());
-    equal(
-      [(await settingsApi.getAppSettings()).theme, "dark"],
-      [pathOf(fetch.mock.calls[0][0]), "/settings"]
-    );
+    equal([(await settingsApi.getAppSettings()).theme, "dark"], [pathOf(fetch.mock.calls[0][0]), "/settings"]);
     fetch.mockResolvedValue(response({ body: '{"ok":true}' }));
     const updated = await settingsApi.updateAppSettings({ theme: "light", audio: true });
-    deepEqual(
-      [updated, { ok: true, theme: "light" }],
-      [localStorage.setItem.mock.calls[0], ["karaoke-theme", "light"]]
-    );
+    deepEqual([updated, { ok: true, theme: "light" }], [localStorage.setItem.mock.calls[0], ["karaoke-theme", "light"]]);
     const [, options] = lastCall();
     equal([options.method, "PATCH"]);
     deepEqual([JSON.parse(options.body), { audio: true, theme: "light" }]);
@@ -590,9 +491,7 @@ describe("API domains", () => {
     releaseFirst();
     await Promise.all([first, second]);
     deepEqual([
-      fetch.mock.calls
-        .filter(([url]) => pathOf(url) === "/preferences/audio")
-        .map(([, { body }]) => JSON.parse(body)),
+      fetch.mock.calls.filter(([url]) => pathOf(url) === "/preferences/audio").map(([, { body }]) => JSON.parse(body)),
       [{ device: "old" }, { device: "new" }]
     ]);
   });

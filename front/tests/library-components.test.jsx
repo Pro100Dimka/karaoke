@@ -15,12 +15,7 @@ vi.mock("../src/theme/ui", async (importOriginal) => ({
     return (
       <section>
         {titleProps?.image ? (
-          <img
-            className="modal-title__image"
-            src={titleProps.image}
-            alt=""
-            onError={titleProps.onImageError}
-          />
+          <img className="modal-title__image" src={titleProps.image} alt="" onError={titleProps.onImageError} />
         ) : (
           Icon && <Icon />
         )}
@@ -40,17 +35,8 @@ vi.mock("../src/api/client", () => ({
     getSongCoverUrl: (id) => `cover/${id}`
   }
 }));
-import {
-  LibraryActions,
-  LibraryHero,
-  ProcessingSignal,
-  SongCoverArt
-} from "../src/pages/Library/components.jsx";
-import {
-  getProcessingFailureInfo,
-  ProcessingModal,
-  RecordingsModal
-} from "../src/pages/Library/modals.jsx";
+import { LibraryActions, LibraryHero, ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
+import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
@@ -80,16 +66,7 @@ test("library actions cover search, room, adding and file selection", () => {
   fireEvent.change(view.container.querySelector("input[type=file]"));
   expect(setQuery).toHaveBeenCalledWith("song", expect.any(Object));
   called(onRoom, onAdd, onFile);
-  view.rerender(
-    <LibraryActions
-      canManageLibrary
-      importing
-      onAdd={onAdd}
-      onOpenRoom={onRoom}
-      query=""
-      setQuery={setQuery}
-    />
-  );
+  view.rerender(<LibraryActions canManageLibrary importing onAdd={onAdd} onOpenRoom={onRoom} query="" setQuery={setQuery} />);
 });
 test("hero and cover reflect saved theme and song counts", () => {
   mocks.theme = "unknown";
@@ -134,9 +111,7 @@ test("processing failure details classify backend causes without hiding the orig
     type: "EngineUnavailableError",
     reason: "CTC model unavailable"
   });
-  expect(getProcessingFailureInfo("InvalidArtifactError: invalid interval").hint).toContain(
-    "интервалы"
-  );
+  expect(getProcessingFailureInfo("InvalidArtifactError: invalid interval").hint).toContain("интервалы");
   expect(getProcessingFailureInfo("disk failure")).toMatchObject({
     type: "ProcessingError",
     reason: "disk failure"
@@ -188,8 +163,7 @@ test("processing modal covers active, complete, error and absent songs", () => {
         status: "error",
         progress_percent: 77,
         progress_step: "Синхронизация текста",
-        error_message:
-          "InvalidArtifactError: Full-song aligner returned invalid timestamps (word 0 has an invalid interval)"
+        error_message: "InvalidArtifactError: Full-song aligner returned invalid timestamps (word 0 has an invalid interval)"
       }}
       onCancel={cancel}
       onClose={close}
@@ -236,9 +210,7 @@ test("recordings modal renders empty, error and recording actions", () => {
   const analyze = vi.fn();
   const remove = vi.fn();
   const result = render(<RecordingsModal song={{ title: "Song" }} recordings={[]} />);
-  expect(result.container.textContent).toMatch(
-    /пока нет записанных|ще немає записаних|немає записаних/
-  );
+  expect(result.container.textContent).toMatch(/пока нет записанных|ще немає записаних|немає записаних/);
   result.rerender(<RecordingsModal song={{ title: "Song" }} error={new Error("offline")} />);
   verify([result.getByRole("alert").textContent, "toContain", "offline"]);
   result.rerender(

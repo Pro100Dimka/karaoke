@@ -3,14 +3,8 @@ import { test, vi } from "vitest";
 import { equal, deepEqual } from "./helpers/assertions.mjs";
 test("mock fixtures preserve the complete development data contract", async () => {
   vi.resetModules();
-  const {
-    MOCK_SONG_ID,
-    mockAppSettings,
-    mockAudioSettings,
-    mockKaraokeResult,
-    mockSongEditor,
-    mockSongs
-  } = await import("../src/api/mock/fixtures.js");
+  const { MOCK_SONG_ID, mockAppSettings, mockAudioSettings, mockKaraokeResult, mockSongEditor, mockSongs } =
+    await import("../src/api/mock/fixtures.js");
   equal([MOCK_SONG_ID, "mock-song-1"]);
   equal(
     [mockSongs.length, 2],
@@ -30,42 +24,38 @@ test("mock API implements the complete development contract", async () => {
     import("../src/api/mock/request.js")
   ]);
   const { mockBlobRequest, mockRequest } = requestModule;
-  const rejectsRoute = (path, options) =>
-    assert.rejects(mockRequest(path, options), /not implemented/);
+  const rejectsRoute = (path, options) => assert.rejects(mockRequest(path, options), /not implemented/);
   deepEqual([await mockRequest("/recording/library"), []]);
   const originalSongs = await mockRequest("/songs");
   deepEqual([originalSongs, mockSongs]);
   originalSongs[0].title = "mutated outside store";
   equal([(await mockRequest("/songs"))[0].title, "Тестовая песня"]);
   const added = await mockRequest("/songs", { method: "post" });
+  const form = new FormData();
+  form.set("title", "Saved title");
+  form.set("artist", "Saved artist");
   deepEqual([
-    await mockRequest("/songs/identity", { method: "post" }),
-    { title: "Новая песня", artist: "Исполнитель" }
+    await mockRequest("/songs", { method: "POST", body: form }),
+    {
+      id: "mock-song-4",
+      title: "Saved title",
+      artist: "Saved artist",
+      status: "processing",
+      progress_percent: 0
+    }
   ]);
-  deepEqual([
-    added,
-    { id: "mock-song-3", title: "Новая песня", status: "processing", progress_percent: 0 }
-  ]);
+  deepEqual([await mockRequest("/songs/identity", { method: "post" }), { title: "Новая песня", artist: "Исполнитель" }]);
+  deepEqual([added, { id: "mock-song-3", title: "Новая песня", status: "processing", progress_percent: 0 }]);
   equal(
     [(await mockRequest(`/songs/${added.id}`)).id, added.id],
-    [
-      (await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: '{"title":"Changed"}' }))
-        .title,
-      "Changed"
-    ],
-    [
-      (await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: "broken" })).title,
-      "Changed"
-    ],
+    [(await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: '{"title":"Changed"}' })).title, "Changed"],
+    [(await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: "broken" })).title, "Changed"],
     [await mockRequest(`/songs/${added.id}`, { method: "DELETE" }), null],
     [(await mockRequest("/songs")).some((song) => song.id === added.id), false],
     [await mockRequest("/songs/missing"), null],
     [await mockRequest("/songs/missing", { method: "DELETE" }), null]
   );
-  await assert.rejects(
-    mockRequest("/songs/missing", { method: "PUT" }),
-    /Mock API route is not implemented/
-  );
+  await assert.rejects(mockRequest("/songs/missing", { method: "PUT" }), /Mock API route is not implemented/);
   deepEqual([await mockRequest("/songs/package/import", { method: "POST" }), { imported: true }]);
   assert.ok((await mockRequest(`/songs/${MOCK_SONG_ID}/result`)).lyrics_sync);
   const editorPath = `/songs/${MOCK_SONG_ID}/editor`;
@@ -80,20 +70,13 @@ test("mock API implements the complete development contract", async () => {
   deepEqual([edited.lyrics_sync.words[0].notes, [{ note: 67, start: 0.25, end: 1 }]]);
   equal(
     [
-      (
-        await mockRequest("/songs/new/editor", { method: "PUT", body: "{}" })
-      ).lyrics_sync.words.every((word) => word.notes.length === 0),
+      (await mockRequest("/songs/new/editor", { method: "PUT", body: "{}" })).lyrics_sync.words.every((word) => word.notes.length === 0),
       true
     ],
-    [
-      (await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, { method: "POST" })).lyrics_sync
-        .words[0].notes.length,
-      2
-    ],
+    [(await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, { method: "POST" })).lyrics_sync.words[0].notes.length, 2],
     [(await mockRequest(`/songs/${MOCK_SONG_ID}/status`)).id, MOCK_SONG_ID]
   );
-  for (const action of ["process", "reprocess", "cancel"])
-    deepEqual([await mockRequest(`/songs/${MOCK_SONG_ID}/${action}`), { ok: true }]);
+  for (const action of ["process", "reprocess", "cancel"]) deepEqual([await mockRequest(`/songs/${MOCK_SONG_ID}/${action}`), { ok: true }]);
   deepEqual(
     [await mockRequest(`/songs/${MOCK_SONG_ID}/lyrics`), { ok: true }],
     [await mockRequest(`/songs/${MOCK_SONG_ID}/log`), ["Mock pipeline ready"]]
@@ -115,13 +98,8 @@ test("mock API implements the complete development contract", async () => {
     [(await mockRequest("/settings", { method: "PATCH", body: '{"accent":"red"}' })).accent, "red"]
   );
   equal([(await mockRequest("/audio/settings")).noise_suppression, 0.35]);
-  equal([
-    (await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' }))
-      .buffer_size,
-    128
-  ]);
-  for (const path of ["/audio/devices", "/audio/output-devices", "/audio/asio-drivers"])
-    deepEqual([await mockRequest(path), []]);
+  equal([(await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' })).buffer_size, 128]);
+  for (const path of ["/audio/devices", "/audio/output-devices", "/audio/asio-drivers"]) deepEqual([await mockRequest(path), []]);
   equal([(await mockRequest("/audio/signal-quality")).rms_dbfs, -42]);
   deepEqual([await mockRequest("/audio/direct-monitor/start"), { ok: true }]);
   equal([(await mockRequest("/recording/start")).recording_session_id, "mock-session-1"]);
@@ -145,16 +123,10 @@ test("mock API implements the complete development contract", async () => {
     [(await mockRequest(`/recording/by-song/${MOCK_SONG_ID}`)).at(-1).id, retainedRecording.id],
     [await mockRequest(`/recording/${recording.id}`, { method: "DELETE" }), null]
   );
-  deepEqual(
-    [await mockRequest("/recording/library"), [retainedRecording]],
-    [await mockRequest("/analysis/id/run"), { queued: true }]
-  );
+  deepEqual([await mockRequest("/recording/library"), [retainedRecording]], [await mockRequest("/analysis/id/run"), { queued: true }]);
   equal([(await mockRequest("/analysis/id")).accuracy_percent, 82]);
   deepEqual(
-    [
-      await mockRequest("/analysis/id"),
-      { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }
-    ],
+    [await mockRequest("/analysis/id"), { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }],
     [await mockRequest("/models/whisper"), []]
   );
   equal([(await mockRequest("/models/whisper/base/download")).ok, true]);
@@ -200,10 +172,7 @@ test("mock API implements the complete development contract", async () => {
     [await mockRequest("/diagnostics/versions"), {}],
     [await mockRequest("/diagnostics/errors"), []],
     [await mockRequest("/history"), []],
-    [
-      await mockRequest("/about"),
-      { backend_version: "mock", ai_version: "mock", data_dir: "mock://data" }
-    ]
+    [await mockRequest("/about"), { backend_version: "mock", ai_version: "mock", data_dir: "mock://data" }]
   );
   const blob = await mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`);
   equal([blob.type, "application/zip"], [await blob.text(), "mock karaoke package"]);
@@ -212,14 +181,8 @@ test("mock API implements the complete development contract", async () => {
   assert.ok(audioBlob.size > 0);
   await assert.rejects(mockRequest("/missing", { method: "PUT" }), /not implemented/);
   await assert.rejects(mockBlobRequest("/missing", { method: "POST" }), /not implemented/);
-  await assert.rejects(
-    mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`, { method: "POST" }),
-    /not implemented/
-  );
-  for (const path of [
-    `/prefix/songs/${MOCK_SONG_ID}/package`,
-    `/songs/${MOCK_SONG_ID}/package/suffix`
-  ])
+  await assert.rejects(mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`, { method: "POST" }), /not implemented/);
+  for (const path of [`/prefix/songs/${MOCK_SONG_ID}/package`, `/songs/${MOCK_SONG_ID}/package/suffix`])
     await assert.rejects(mockBlobRequest(path), /not implemented/);
   for (const path of [
     "/prefix/songs/mock-song-1",
@@ -244,11 +207,7 @@ test("mock API implements the complete development contract", async () => {
     "/analysis/id/suffix"
   ])
     await rejectsRoute(path);
-  for (const path of [
-    "/recording/pause/suffix",
-    "/recording/resume/suffix",
-    "/recording/stop/suffix"
-  ])
+  for (const path of ["/recording/pause/suffix", "/recording/resume/suffix", "/recording/stop/suffix"])
     await rejectsRoute(path, { method: "POST" });
   await rejectsRoute("/songs", { method: "PUT" });
   await rejectsRoute("/songs/package/import", { method: "GET" });

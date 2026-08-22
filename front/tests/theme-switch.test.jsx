@@ -1,21 +1,10 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import Switch from "../src/theme/ui/Switch";
-
-afterEach(cleanup);
-
 test("switch uses an outlined field and reports its state", () => {
   const change = vi.fn();
-  render(
-    <Switch
-      label="Радио"
-      checked={false}
-      checkedText="Включено"
-      uncheckedText="Выключено"
-      onChange={change}
-    />
-  );
+  render(<Switch label="Радио" checked={false} checkedText="Включено" uncheckedText="Выключено" onChange={change} />);
 
   const control = screen.getByRole("switch", { name: "Радио" });
   const field = control.closest(".ui-switch-field");
@@ -42,16 +31,7 @@ test("plain switch keeps its compact label layout", () => {
 });
 
 test("switch supports native uncontrolled, required and disabled states", () => {
-  render(
-    <Switch
-      variant="plain"
-      label="Автозапуск"
-      defaultChecked
-      disabled
-      required
-      size="lg"
-    />
-  );
+  render(<Switch variant="plain" label="Автозапуск" defaultChecked disabled required size="lg" />);
   const control = screen.getByRole("switch", { name: "Автозапуск" });
   expect(control.checked).toBe(true);
   expect(control.disabled).toBe(true);

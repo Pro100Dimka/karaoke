@@ -11,23 +11,27 @@ test.afterEach(async ({}, testInfo) => {
 });
 
 async function closeProcessingModal(page) {
-  const modal = page.locator(".processing-modal");
+  const modal = page.getByRole("dialog", { name: /Обработка песни|Обробка пісні/ });
   await expect(modal).toBeVisible();
-  await modal.locator(".app-modal-close").click();
+  await modal.getByRole("button", { name: "Закрыть" }).click();
   await expect(modal).toBeHidden();
 }
 
 test("library boots and remains interactive", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".app-shell")).toBeVisible();
-  await expect(page.locator(".library-song-card")).toHaveCount(2);
-  await expect(page.locator(".title-bar")).toBeVisible();
+  await closeProcessingModal(page);
+  await expect(page.getByRole("banner", { name: "A&D Voice" })).toBeVisible();
+  const ready = page.getByRole("heading", { name: "Тестовая песня", exact: true });
+  const processing = page.getByRole("heading", { name: "Песня в обработке", exact: true });
+  await expect(ready).toBeVisible();
+  await expect(processing).toBeVisible();
 
-  const search = page.locator('input[type="search"], input[placeholder]').first();
+  const search = page.getByRole("textbox", { name: "Поиск" });
   await search.fill("A&D Voice");
-  await expect(page.locator(".library-song-card")).toHaveCount(1);
+  await expect(ready).toBeVisible();
+  await expect(processing).toBeHidden();
   await search.fill("");
-  await expect(page.locator(".library-song-card")).toHaveCount(2);
+  await expect(processing).toBeVisible();
 });
 
 test("song import enters the visible processing flow", async ({ page }) => {
@@ -39,43 +43,49 @@ test("song import enters the visible processing flow", async ({ page }) => {
   });
   const review = page.getByRole("dialog", { name: "Подтверждение добавления песни" });
   await expect(review).toBeVisible();
+  await review.getByRole("textbox", { name: /Назва пісні|Название песни/ }).fill("E2E song");
   await review.locator('button[type="submit"]').click();
-  await expect(page.locator(".processing-modal-body")).toBeVisible();
-  await expect(page.locator(".library-song-card")).toHaveCount(3);
+  const processing = page.getByRole("dialog", { name: /Обработка песни|Обробка пісні/ });
+  await expect(processing).toBeVisible();
+  await expect(processing.getByRole("progressbar")).toBeVisible();
+  await expect(processing.getByRole("heading", { name: "E2E song", exact: true })).toBeVisible();
 });
 
 test("room creation reaches a usable dock even without microphone access", async ({ page }) => {
   await page.routeWebSocket(/karaoke-studio-online/, () => {});
   await page.goto("/");
   await closeProcessingModal(page);
-  await page.locator(".library-action-card").first().click();
-  const modal = page.locator(".online-room-modal");
+  await page.getByRole("button", { name: /Співати разом|Петь вместе/ }).click();
+  const modal = page.getByRole("dialog", { name: /Спільне виконання|Совместное исполнение/ });
   await expect(modal).toBeVisible();
-  await modal.locator(".modal-title-action").click();
-  await expect(page.locator(".online-room-dock")).toBeVisible();
-  await expect(page.locator(".online-room-dock-code")).not.toBeEmpty();
+  await modal.getByRole("button", { name: /Створити кімнату|Создать комнату/ }).click();
+  const dock = page.getByRole("region", { name: /Учасники кімнати|Участники комнаты/ });
+  await expect(dock.getByRole("button", { name: /Сховати панель кімнати|Скрыть панель комнаты/ })).toBeVisible();
+  await expect(dock).toContainText(/[A-F0-9]{8}/);
 });
 
 test("settings load persisted values and remain navigable", async ({ page }) => {
   await page.goto("/");
   await closeProcessingModal(page);
-  await page.locator(".app-floating-controls > .app-settings-fab").click();
-  const dialog = page.locator('[role="dialog"]');
+  await page.getByRole("button", { name: /Налаштування програми|Настройки программы/ }).click();
+  const dialog = page.getByRole("dialog", { name: /Налаштування програми|Настройки программы/ });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('[role="tab"]')).toHaveCount(3);
-  await expect(dialog.locator(".settings-neon-card").first()).toBeVisible();
-  await dialog.locator('[role="tab"]').last().click();
-  await expect(dialog.locator('[role="tab"]').last()).toHaveAttribute("aria-selected", "true");
+  const tabs = dialog.getByRole("tab");
+  await expect(tabs).toHaveCount(3);
+  await expect(dialog.getByRole("textbox", { name: /Ім'я у мережі|Имя в сети/ })).toHaveValue("Тестовый пользователь");
+  await tabs.last().click();
+  await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
   await expect(dialog.getByRole("spinbutton")).toBeVisible();
 });
 
 test("ready song opens the complete karaoke workspace", async ({ page }) => {
   await page.goto("/#/karaoke");
-  await expect(page.locator(".karaoke-stage")).toBeVisible();
-  await expect(page.locator(".karaoke-performance-stage")).toBeVisible();
-  await expect(page.locator(".karaoke-transport-area")).toBeVisible();
+  const karaoke = page.locator('[data-role="karaoke"]');
+  await expect(karaoke).toBeVisible();
+  await expect(karaoke.locator('[data-role="performance-stage"]')).toBeVisible();
+  await expect(karaoke.locator('[data-role="karaoke-console"]')).toBeVisible();
   await page.keyboard.press("Space");
-  await expect(page.locator(".karaoke-stage")).toHaveClass(/karaoke-is-playing/);
+  await expect(karaoke).toHaveAttribute("data-playing", "true");
   await expect
     .poll(() =>
       page
@@ -88,11 +98,12 @@ test("ready song opens the complete karaoke workspace", async ({ page }) => {
 
 test("melody editor loads notes and supports selection", async ({ page }) => {
   await page.goto("/#/editor/mock-song-1");
-  const editor = page.locator(".melody-editor-workspace");
+  const editor = page.getByRole("main", { name: /Редактор мелодии|Редактор мелодії/ });
   await expect(editor).toBeVisible();
-  await expect(editor.locator(".melody-editor-note")).toHaveCount(2);
-  await editor.locator(".melody-editor-note").first().click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(1);
+  const notes = editor.locator('[data-role="editor-note"]');
+  await expect(notes).toHaveCount(2);
+  await notes.first().click();
+  await expect(editor.locator('[data-role="editor-note"][data-selected="true"]')).toHaveCount(1);
   await page.keyboard.press("Control+s");
   await expect(editor).toBeVisible();
 });
@@ -101,25 +112,24 @@ test("melody editor persists a merged note across reopening", async ({ page }) =
   const editorUrl = "/#/editor/e2e-merge-persistence";
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto(editorUrl);
-  const editor = page.locator(".melody-editor-workspace");
-  const notes = editor.locator(".melody-editor-note");
+  const editor = page.getByRole("main", { name: /Редактор мелодии|Редактор мелодії/ });
+  const notes = editor.locator('[data-role="editor-note"]');
   await expect(notes).toHaveCount(2);
 
   await notes.first().click();
   await notes.last().click({ modifiers: ["Control"] });
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(2);
+  await expect(editor.locator('[data-role="editor-note"][data-selected="true"]')).toHaveCount(2);
 
-  const merge = editor.locator(".melody-editor-tool-group.is-edit button").first();
+  const merge = editor.getByRole("button", { name: /Объединить|Об'єднати/ });
   await expect(merge).toBeEnabled();
   await merge.click();
   await expect(notes).toHaveCount(1);
 
-  await editor.locator(".melody-editor-tool-group.is-nav button").nth(1).click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(0);
-  await editor.locator(".melody-editor-tool-group.is-nav button").first().click();
-  await expect(page.locator(".app-shell")).toBeVisible();
+  await editor.getByRole("button", { name: /Зберегти|Сохранить/ }).click();
+  await editor.getByRole("button", { name: /Назад/ }).click();
+  await expect(page.getByRole("banner", { name: "A&D Voice" })).toBeVisible();
   await page.evaluate(() => {
     window.location.hash = "/editor/e2e-merge-persistence";
   });
-  await expect(page.locator(".melody-editor-note")).toHaveCount(1);
+  await expect(page.locator('[data-role="editor-note"]')).toHaveCount(1);
 });

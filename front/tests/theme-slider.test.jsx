@@ -27,14 +27,7 @@ test("slider is an outlined field with a formatted live value", () => {
 
 test("slider accepts compact control geometry without leaking native field sizing", () => {
   render(
-    <Slider
-      aria-label="Масштаб"
-      min={10}
-      max={36}
-      value={14}
-      showValue={false}
-      controlSx={{ minBlockSize: 0, inlineSize: "5rem" }}
-    />
+    <Slider aria-label="Масштаб" min={10} max={36} value={14} showValue={false} controlSx={{ minBlockSize: 0, inlineSize: "5rem" }} />
   );
 
   const control = screen.getByRole("slider", { name: "Масштаб" }).parentElement;

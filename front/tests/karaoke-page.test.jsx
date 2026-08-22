@@ -78,12 +78,7 @@ vi.mock("../src/pages/Karaoke/components/console", () => ({
         <button data-testid="play" onClick={props.onTogglePlay} />
         <button data-testid="stop" onClick={props.onStop} />
         <button data-testid="monitor" onClick={() => props.onMonitoringChange(true)} />
-        <button
-          data-testid="preset"
-          onClick={() =>
-            props.onApplyEffectPreset({ id: "hall", reverb: 0.4, echo: 0.2, delay: 0.1 })
-          }
-        />
+        <button data-testid="preset" onClick={() => props.onApplyEffectPreset({ id: "hall", reverb: 0.4, echo: 0.2, delay: 0.1 })} />
         <button data-testid="monitor-off" onClick={() => props.onMonitoringChange(false)} />
         <button data-testid="effect" onClick={() => props.onEffectChange("echo", 0.6)} />
         <button data-testid="commit" onClick={() => props.onMicrophoneCommit(0.9)} />
@@ -237,10 +232,7 @@ describe("karaoke page", () => {
     same([mocks.stageProps.songId, "song"], [mocks.consoleProps.currentTempo, 120]);
     fireEvent.mouseMove(page.container.querySelector('[data-role="karaoke"]'));
     fireEvent.click(page.getByTestId("preset"));
-    verify(
-      [mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"],
-      [mocks.microphone.updateMicrophone, "toHaveBeenCalled"]
-    );
+    verify([mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"], [mocks.microphone.updateMicrophone, "toHaveBeenCalled"]);
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(mocks.startMonitoring).toHaveBeenCalled());
     expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(true);
@@ -256,11 +248,7 @@ describe("karaoke page", () => {
       [{ data: [], error: null }, mocks.result, "[role=status]"],
       [{ data: [{ ...song, status: "processing" }], error: null }, mocks.result, "[role=status]"],
       [{ data: [song], error: null }, { result, loading: true, error: null }, "[role=status]"],
-      [
-        { data: [song], error: null },
-        { result: null, loading: false, error: new Error("bad") },
-        "[role=alert]"
-      ],
+      [{ data: [song], error: null }, { result: null, loading: false, error: new Error("bad") }, "[role=alert]"],
       [{ data: [song], error: null }, { result: null, loading: false, error: null }, "[role=alert]"]
     ];
     for (const [poll, karaokeResult, selector] of cases) {
@@ -304,22 +292,13 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("stop"));
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
-    verify([
-      mocks.navigate,
-      "toHaveBeenCalledWith",
-      "/",
-      expect.objectContaining({ replace: true })
-    ]);
+    verify([mocks.navigate, "toHaveBeenCalledWith", "/", expect.objectContaining({ replace: true })]);
   });
   test("syncs participant effects while a room is active", () => {
     mocks.room.room = { host: true };
     mocks.room.participants = [{ id: "guest" }];
     render(<Karaoke />);
-    verify([
-      mocks.room.syncUi,
-      "toHaveBeenCalledWith",
-      { participantEffects: mocks.microphone.microphoneEffects }
-    ]);
+    verify([mocks.room.syncUi, "toHaveBeenCalledWith", { participantEffects: mocks.microphone.microphoneEffects }]);
   });
   test("suspends radio only for an active recording during playback", async () => {
     render(<Karaoke />);
@@ -334,9 +313,7 @@ describe("karaoke page", () => {
     mocks.startMonitoring.mockRejectedValueOnce(new Error("monitor failed"));
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("monitor"));
-    await waitFor(() =>
-      expect(page.container.querySelector("[role=alert]").textContent).toContain("monitor failed")
-    );
+    await waitFor(() => expect(page.container.querySelector("[role=alert]").textContent).toContain("monitor failed"));
   });
   test("wires all console mutations and stopping monitoring", async () => {
     const page = render(<Karaoke />);
@@ -369,15 +346,8 @@ describe("karaoke page", () => {
     await act(async () => mocks.transportOptions.setAnalysisRecordingId("rec"));
     expect(page.getByTestId("analysis-modal")).toBeTruthy();
     fireEvent.click(page.getByTestId("analysis-close"));
-    verify([
-      mocks.navigate,
-      "toHaveBeenCalledWith",
-      "/",
-      expect.objectContaining({ replace: true })
-    ]);
-    await act(async () =>
-      mocks.transportOptions.setAnalysisRecordingId((previous) => previous || "next")
-    );
+    verify([mocks.navigate, "toHaveBeenCalledWith", "/", expect.objectContaining({ replace: true })]);
+    await act(async () => mocks.transportOptions.setAnalysisRecordingId((previous) => previous || "next"));
     fireEvent.click(page.getByTestId("analysis-done"));
     await act(async () => mocks.transportOptions.setAnalysisRecordingId("last"));
     fireEvent.click(page.getByTestId("analysis-delete"));
@@ -393,16 +363,10 @@ describe("karaoke page", () => {
     mocks.radio.turnOn.mockRejectedValueOnce(new Error("radio unavailable"));
     fireEvent.click(page.getByTestId("play"));
     await act(async () => Promise.resolve());
-    calledWith(
-      [mocks.transport.togglePlay, [{ forcePlaying: false }]],
-      [mocks.radio.turnOn, [{ remember: false, fadeIn: true }]]
-    );
+    calledWith([mocks.transport.togglePlay, [{ forcePlaying: false }]], [mocks.radio.turnOn, [{ remember: false, fadeIn: true }]]);
     await act(async () => mocks.transportOptions.setIsPlaying(false));
     fireEvent.click(page.getByTestId("play"));
-    verify(
-      [mocks.radio.turnOff, "toHaveBeenCalled"],
-      [mocks.transport.togglePlay, "toHaveBeenCalledWith", { forcePlaying: true }]
-    );
+    verify([mocks.radio.turnOff, "toHaveBeenCalled"], [mocks.transport.togglePlay, "toHaveBeenCalledWith", { forcePlaying: true }]);
   });
   test("auto-starts after route handoff and clears its timers on unmount", async () => {
     vi.useFakeTimers();
@@ -412,10 +376,7 @@ describe("karaoke page", () => {
     window.addEventListener("app:route-blackout", listener);
     const page = render(<Karaoke />);
     await vi.runAllTimersAsync();
-    verify(
-      [mocks.transport.togglePlay, "toHaveBeenCalledWith", { forcePlaying: true }],
-      [events, "toContain", false]
-    );
+    verify([mocks.transport.togglePlay, "toHaveBeenCalledWith", { forcePlaying: true }], [events, "toContain", false]);
     page.unmount();
     window.removeEventListener("app:route-blackout", listener);
   });
@@ -425,10 +386,7 @@ describe("karaoke page", () => {
     mocks.renderMedia = false;
     const page = render(<Karaoke />);
     await vi.runAllTimersAsync();
-    verify(
-      [mocks.transport.togglePlay, "not.toHaveBeenCalled"],
-      [mocks.stageProps.sceneBlackout, "toBe", false]
-    );
+    verify([mocks.transport.togglePlay, "not.toHaveBeenCalled"], [mocks.stageProps.sceneBlackout, "toBe", false]);
     page.unmount();
   });
   test("continues intro after media readiness timeout and handles media-ended callback", async () => {
@@ -477,10 +435,7 @@ describe("karaoke page", () => {
     };
     mocks.controls.controlsVisible = false;
     const page = render(<Karaoke />);
-    verify(
-      [mocks.consoleProps.currentTempo, "toBe", 137],
-      [mocks.consoleProps.compactKey, "toContain", "D"]
-    );
+    verify([mocks.consoleProps.currentTempo, "toBe", 137], [mocks.consoleProps.compactKey, "toContain", "D"]);
     // Stage actions render in a fixed order: back, console visibility
     // toggle, radio.
     const consoleToggle = page.container.querySelector('[data-action="console"]');

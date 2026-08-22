@@ -29,7 +29,7 @@ describe("useFullscreen", () => {
     document.exitFullscreen = exitFullscreen;
     const { result } = renderHook(() => useFullscreen());
     act(() => result.current.toggleFullscreen());
-    verify([requestFullscreen, 'toHaveBeenCalled'], [exitFullscreen, 'not.toHaveBeenCalled']);
+    verify([requestFullscreen, "toHaveBeenCalled"], [exitFullscreen, "not.toHaveBeenCalled"]);
     Object.defineProperty(document, "fullscreenElement", {
       value: document.body,
       configurable: true

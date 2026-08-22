@@ -70,6 +70,7 @@
   --radius-pill: 62.4375rem;
   --radius-round: var(--radius-pill);
   --content-max: 90rem;
+  --content-sm: 28rem;
   --titlebar-height: 2.125rem;
   --hairline: max(0.0625rem, 0.06vw);
   --library-gutter: clamp(1rem, 3vw, 3rem);

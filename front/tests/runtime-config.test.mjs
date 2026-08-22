@@ -1,6 +1,9 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { same } from "./helpers/assertions.mjs";
-afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.resetModules();
+});
 test("accepts positive runtime overrides", async () => {
   vi.stubEnv("VITE_POLLING_SCALE", "2");
   vi.stubEnv("VITE_BACKEND_RETRY_MS", "25");

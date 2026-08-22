@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useOnlineRoomNavigation } from "../src/hooks/useOnlineRoomNavigation.js";
 import { useRequireOnlineName } from "../src/hooks/useRequireOnlineName.js";
@@ -30,7 +30,6 @@ vi.mock("../src/api/client", () => ({
     getErrors: mocks.getErrors
   }
 }));
-afterEach(cleanup);
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.useOnlineRoom.mockReturnValue({ roomCommand: null });
@@ -43,10 +42,7 @@ beforeEach(() => {
 });
 describe("application hooks", () => {
   test.each([
-    [
-      { type: "start-karaoke", songId: "song-1" },
-      ["/karaoke", { state: { songId: "song-1", autoPlay: false, roomPrepared: true } }]
-    ],
+    [{ type: "start-karaoke", songId: "song-1" }, ["/karaoke", { state: { songId: "song-1", autoPlay: false, roomPrepared: true } }]],
     [{ type: "open-library" }, ["/"]]
   ])("routes room command %#", (roomCommand, expected) => {
     mocks.useOnlineRoom.mockReturnValue({ roomCommand });
@@ -85,9 +81,7 @@ describe("application hooks", () => {
     verify([
       alert,
       "toHaveBeenCalledWith",
-      translateSaved(
-        "Укажите своё имя в настройках приложения. Оно нужно для совместного исполнения и будет видно участникам комнаты."
-      )
+      translateSaved("Укажите своё имя в настройках приложения. Оно нужно для совместного исполнения и будет видно участникам комнаты.")
     ]);
     mocks.useAppSettings.mockReturnValue({
       settings: { online_name: " " },

@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-import {
-  DEFAULT_SIGNALING_URL,
-  OnlineRoomClient,
-  createRoomId,
-  normalizeRoomId
-} from "../src/services/onlineRoom.js";
+import { DEFAULT_SIGNALING_URL, OnlineRoomClient, createRoomId, normalizeRoomId } from "../src/services/onlineRoom.js";
 import { same, verify } from "./helpers/assertions.mjs";
 class FakeSocket {
   static CONNECTING = 0;
@@ -38,7 +33,7 @@ afterEach(() => {
 describe("online room service", () => {
   test("loads deployment limits from the active module instance", async () => {
     const service = await loadOnlineRoomService();
-    verify([service.DEFAULT_SIGNALING_URL, 'toBe', "wss://karaoke-studio-online.pro100dimka-and.workers.dev"]);
+    verify([service.DEFAULT_SIGNALING_URL, "toBe", "wss://karaoke-studio-online.pro100dimka-and.workers.dev"]);
     installSocket();
     const client = new service.OnlineRoomClient();
     const connection = client.connect({ id: "ABCD" });
@@ -51,19 +46,35 @@ describe("online room service", () => {
     client.disconnect();
   });
   test("generates and normalizes room identifiers through every entropy source", () => {
-    same([DEFAULT_SIGNALING_URL, "wss://karaoke-studio-online.pro100dimka-and.workers.dev"], [createRoomId({ randomUUID: () => "ab-cd-ef-gh-12-34-56" }), "ABCDEFGH1234"]);
-    verify([createRoomId({ getRandomValues: (bytes) => { bytes.set([0, 1, 254, 255, 16, 32]); return bytes; } }), 'toBe', "0001FEFF1020"]);
-    verify([createRoomId({}, () => 0), 'toBe', "000000000000"], [createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000), 'toHaveLength', 12]);
-    same([normalizeRoomId(" ab!_c-d? "), "AB_C-D"], [normalizeRoomId(`a${"b".repeat(40)}`), `A${"B".repeat(31)}`], [normalizeRoomId(null), ""]);
+    same(
+      [DEFAULT_SIGNALING_URL, "wss://karaoke-studio-online.pro100dimka-and.workers.dev"],
+      [createRoomId({ randomUUID: () => "ab-cd-ef-gh-12-34-56" }), "ABCDEFGH1234"]
+    );
+    verify([
+      createRoomId({
+        getRandomValues: (bytes) => {
+          bytes.set([0, 1, 254, 255, 16, 32]);
+          return bytes;
+        }
+      }),
+      "toBe",
+      "0001FEFF1020"
+    ]);
+    verify([createRoomId({}, () => 0), "toBe", "000000000000"], [createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000), "toHaveLength", 12]);
+    same(
+      [normalizeRoomId(" ab!_c-d? "), "AB_C-D"],
+      [normalizeRoomId(`a${"b".repeat(40)}`), `A${"B".repeat(31)}`],
+      [normalizeRoomId(null), ""]
+    );
   });
   test("sanitizes signaling URLs and rejects unsupported protocols", () => {
-    verify([new OnlineRoomClient("https://user:pass@example.test/path/").url, 'toBe', "wss://example.test/path"]);
+    verify([new OnlineRoomClient("https://user:pass@example.test/path/").url, "toBe", "wss://example.test/path"]);
     expect(new OnlineRoomClient("http://example.test").url).toBe("ws://example.test");
-    verify([() => new OnlineRoomClient("ftp://example.test"), 'toThrow', translateSaved("Некорректный адрес сервера комнат")]);
+    verify([() => new OnlineRoomClient("ftp://example.test"), "toThrow", translateSaved("Некорректный адрес сервера комнат")]);
   });
   test("validates listeners and isolates listener failures", () => {
     const client = new OnlineRoomClient();
-    verify([() => client.onMessage(null), 'toThrow', translateSaved("Обработчик сообщений комнаты должен быть функцией")]);
+    verify([() => client.onMessage(null), "toThrow", translateSaved("Обработчик сообщений комнаты должен быть функцией")]);
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const bad = vi.fn(() => {
       throw new Error("listener");
@@ -73,7 +84,7 @@ describe("online room service", () => {
     client.onMessage(good);
     client.emit({ type: "ok" });
     expect(good).toHaveBeenCalledWith({ type: "ok" });
-    verify([error, 'toHaveBeenCalledWith', "Online room listener failed", expect.objectContaining({ message: "listener" })]);
+    verify([error, "toHaveBeenCalledWith", "Online room listener failed", expect.objectContaining({ message: "listener" })]);
     unsubscribe();
     client.emit({ type: "again" });
     expect(bad).toHaveBeenCalledTimes(1);
@@ -86,7 +97,11 @@ describe("online room service", () => {
     client.onMessage(listener);
     const connection = client.connect({ id: " room-1 ", name: " A\u001fB\u007fC ", host: true });
     const socket = FakeSocket.instances[0];
-    verify([socket.url, 'toContain', "/rooms/ROOM-1?"], [new URL(socket.url).searchParams.get("name"), 'toBe', "A B C"], [socket.url, 'toContain', "role=host"]);
+    verify(
+      [socket.url, "toContain", "/rooms/ROOM-1?"],
+      [new URL(socket.url).searchParams.get("name"), "toBe", "A B C"],
+      [socket.url, "toContain", "role=host"]
+    );
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
     await expect(connection).resolves.toBe("ROOM-1");
@@ -100,7 +115,7 @@ describe("online room service", () => {
     socket.onmessage({ data: "bad" });
     socket.onmessage({ data: new ArrayBuffer(1) });
     socket.onmessage({ data: { length: 16, toString: () => JSON.stringify({ type: "coerced" }) } });
-    verify([listener, 'toHaveBeenCalledTimes', 1], [listener, 'toHaveBeenCalledWith', { type: "state" }]);
+    verify([listener, "toHaveBeenCalledTimes", 1], [listener, "toHaveBeenCalledWith", { type: "state" }]);
     socket.onclose({ code: 1000 });
     expect(client.socket).toBeNull();
   });
@@ -120,13 +135,20 @@ describe("online room service", () => {
       value: 1,
       type: "update"
     });
-    same([client.send("", {}), false], [client.send("   ", {}), false], [client.send(null, {}), false], [client.send("x", []), false], [client.send("x", null), false], [client.send("x", "payload"), false]);
+    same(
+      [client.send("", {}), false],
+      [client.send("   ", {}), false],
+      [client.send(null, {}), false],
+      [client.send("x", []), false],
+      [client.send("x", null), false],
+      [client.send("x", "payload"), false]
+    );
     const serializedOverhead = JSON.stringify({ value: "", type: "x" }).length;
     expect(client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead) })).toBe(true);
-    verify([client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead + 1) }), 'toBe', false]);
+    verify([client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead + 1) }), "toBe", false]);
     same([client.send("x", { value: "x".repeat(300_000) }), false], [client.send("x", { value: 1n }), false]);
     client.disconnect();
-    verify([socket.close, 'toHaveBeenCalledWith', 1000, "Client left room"], [client.send("x"), 'toBe', false]);
+    verify([socket.close, "toHaveBeenCalledWith", 1000, "Client left room"], [client.send("x"), "toBe", false]);
     const longConnection = client.connect({
       id: "ABCD",
       name: `A${"b".repeat(80)}`
@@ -154,12 +176,8 @@ describe("online room service", () => {
   });
   test("rejects invalid setup and synchronous WebSocket construction errors", async () => {
     const client = new OnlineRoomClient();
-    await expect(client.connect({ id: "a" })).rejects.toThrow(
-      translateSaved("Код комнаты должен содержать минимум 4 символа.")
-    );
-    await expect(client.connect({ id: "ABCD" })).rejects.toThrow(
-      translateSaved("WebSocket не поддерживается в этом окружении.")
-    );
+    await expect(client.connect({ id: "a" })).rejects.toThrow(translateSaved("Код комнаты должен содержать минимум 4 символа."));
+    await expect(client.connect({ id: "ABCD" })).rejects.toThrow(translateSaved("WebSocket не поддерживается в этом окружении."));
     globalThis.WebSocket = class {
       constructor() {
         throw new Error("constructor failed");
@@ -188,7 +206,7 @@ describe("online room service", () => {
     first.onopen();
     expect(first.close).toHaveBeenLastCalledWith(1000, "Stale connection");
     first.onclose({ code: 1000 });
-    verify([client.socket, 'toBe', second], [listener, 'not.toHaveBeenCalled']);
+    verify([client.socket, "toBe", second], [listener, "not.toHaveBeenCalled"]);
     await expect(firstConnection).rejects.toThrow();
     second.onclose({ code: 4001, reason: " denied " });
     await expect(secondConnection).rejects.toThrow(/denied/);
@@ -197,10 +215,9 @@ describe("online room service", () => {
   test("formats every initial close reason exactly", async () => {
     installSocket();
     const expectedError = (detail) =>
-      translateSaved(
-        "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
-        { 0: detail }
-      );
+      translateSaved("Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.", {
+        0: detail
+      });
     for (const [event, detail] of [
       [{ code: 4001, reason: " denied " }, ": denied"],
       [{ code: 4001, reason: " " }, translateSaved("(код {0})", { 0: 4001 })],
@@ -236,9 +253,7 @@ describe("online room service", () => {
     expect(socket.close).not.toHaveBeenCalled();
     socket.onmessage({ data: "x".repeat(256 * 1024 + 1) });
     expect(socket.close).toHaveBeenCalledWith(1009, "Message too large");
-    const rejection = expect(connection).rejects.toThrow(
-      translateSaved("Сервер комнат не ответил.")
-    );
+    const rejection = expect(connection).rejects.toThrow(translateSaved("Сервер комнат не ответил."));
     await vi.advanceTimersByTimeAsync(10_000);
     await rejection;
     expect(socket.close).toHaveBeenCalledTimes(1);

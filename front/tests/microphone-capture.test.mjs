@@ -21,18 +21,13 @@ describe("central microphone capture", () => {
     graph = {
       stream: processedStream,
       rawStream,
-      getStream: vi.fn(({ disabledEffects = false } = {}) =>
-        disabledEffects ? rawStream : processedStream
-      ),
+      getStream: vi.fn(({ disabledEffects = false } = {}) => (disabledEffects ? rawStream : processedStream)),
       close: vi.fn().mockResolvedValue(undefined),
       replaceInput: vi.fn().mockResolvedValue(undefined),
       setNoiseSuppression: vi.fn()
     };
     mocks.createGraph.mockReset().mockReturnValue(graph);
-    getUserMedia = vi
-      .fn()
-      .mockResolvedValueOnce({ id: "default" })
-      .mockResolvedValueOnce({ id: "studio" });
+    getUserMedia = vi.fn().mockResolvedValueOnce({ id: "default" }).mockResolvedValueOnce({ id: "studio" });
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
       value: { mediaDevices: { getUserMedia } }
@@ -83,10 +78,7 @@ describe("central microphone capture", () => {
   });
 
   test("falls back to the default input when the selected device disappeared", async () => {
-    getUserMedia = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("missing device"))
-      .mockResolvedValueOnce({ id: "fallback" });
+    getUserMedia = vi.fn().mockRejectedValueOnce(new Error("missing device")).mockResolvedValueOnce({ id: "fallback" });
     navigator.mediaDevices.getUserMedia = getUserMedia;
     const { acquireMicrophone } = await import("../src/services/microphoneCapture.js");
     const lease = await acquireMicrophone("missing");

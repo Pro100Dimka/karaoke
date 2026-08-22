@@ -3,40 +3,73 @@ import { test, vi } from "vitest";
 import { flush } from "./helpers/async.mjs";
 import { TEST_REVISION } from "./helpers/constants.mjs";
 import { translateSaved } from "../src/i18n/runtime.js";
-import {
-  createDialogConfig,
-  getDialogCloseResult,
-  normalizeDialogOptions
-} from "../src/contexts/dialog-utils.js";
+import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "../src/contexts/dialog-utils.js";
 import { openKaraokeInRoom } from "../src/contexts/onlineRoomActions.js";
-import {
-  createOnlineRoomMessageHandler,
-  upsertParticipant
-} from "../src/contexts/onlineRoomMessages.js";
+import { createOnlineRoomMessageHandler, upsertParticipant } from "../src/contexts/onlineRoomMessages.js";
 import { equal, deepEqual } from "./helpers/assertions.mjs";
 test("dialog contracts normalize kinds, messages and close results", () => {
   equal([getDialogCloseResult("confirm"), false], [getDialogCloseResult("alert"), true]);
   deepEqual([normalizeDialogOptions("Title"), { title: "Title" }]);
   const custom = { title: "Object title" };
   equal([normalizeDialogOptions(custom), custom]);
-  for (const invalid of [[], null, undefined, 0, false, () => {}])
-    deepEqual([normalizeDialogOptions(invalid), {}]);
-  deepEqual([createDialogConfig("confirm", 5, "Custom"), { kind: "confirm", title: "Custom", label: translateSaved("Требуется подтверждение"), confirmText: translateSaved("Подтвердить"), cancelText: translateSaved("Отмена"), confirmClassName: "btn btn-primary", message: "5" }]);
+  for (const invalid of [[], null, undefined, 0, false, () => {}]) deepEqual([normalizeDialogOptions(invalid), {}]);
+  deepEqual([
+    createDialogConfig("confirm", 5, "Custom"),
+    {
+      kind: "confirm",
+      title: "Custom",
+      label: translateSaved("Требуется подтверждение"),
+      confirmText: translateSaved("Подтвердить"),
+      cancelText: translateSaved("Отмена"),
+      confirmClassName: "btn btn-primary",
+      message: "5"
+    }
+  ]);
   equal([createDialogConfig("confirm", "message").title, translateSaved("Подтвердите действие")]);
-  deepEqual([createDialogConfig("unknown", null), { kind: "alert", title: translateSaved("Уведомление"), label: "A&D Voice", confirmText: translateSaved("Понятно"), confirmClassName: "btn btn-primary", message: "" }]);
+  deepEqual([
+    createDialogConfig("unknown", null),
+    {
+      kind: "alert",
+      title: translateSaved("Уведомление"),
+      label: "A&D Voice",
+      confirmText: translateSaved("Понятно"),
+      confirmClassName: "btn btn-primary",
+      message: ""
+    }
+  ]);
   equal([createDialogConfig("alert", "message").message, "message"]);
 });
 test("only the host can publish the room karaoke selection", async () => {
   const client = { send: vi.fn() };
   const hostSongCommandRef = { current: null };
-  const base = { songId: "song", client, hostSongCommandRef, roomApi: { getSongRevision: vi.fn().mockResolvedValue({ revision: TEST_REVISION }) } };
+  const base = {
+    songId: "song",
+    client,
+    hostSongCommandRef,
+    roomApi: { getSongRevision: vi.fn().mockResolvedValue({ revision: TEST_REVISION }) }
+  };
   equal([await openKaraokeInRoom({ ...base, room: null, isCurrentConnection: () => true }), true]);
   const first = client.send.mock.calls[0][1].state;
-  equal([first.type, "open-karaoke"], [first.songId, "song"], [typeof first.commandId, "string"], [first.revision.startsWith("sha256:"), true], [hostSongCommandRef.current.commandId, first.commandId], [client.send.mock.calls.at(-1)[1].state.type, "start-karaoke"]);
+  equal(
+    [first.type, "open-karaoke"],
+    [first.songId, "song"],
+    [typeof first.commandId, "string"],
+    [first.revision.startsWith("sha256:"), true],
+    [hostSongCommandRef.current.commandId, first.commandId],
+    [client.send.mock.calls.at(-1)[1].state.type, "start-karaoke"]
+  );
   client.send.mockClear();
-  equal([await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => true }), true], [client.send.mock.calls.length, 2]);
+  equal(
+    [await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => true }), true],
+    [client.send.mock.calls.length, 2]
+  );
   client.send.mockClear();
-  equal([await openKaraokeInRoom({ ...base, room: { host: false }, isCurrentConnection: () => true }), false], [client.send.mock.calls.length, 0], [await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => false }), true], [client.send.mock.calls.length, 0]);
+  equal(
+    [await openKaraokeInRoom({ ...base, room: { host: false }, isCurrentConnection: () => true }), false],
+    [client.send.mock.calls.length, 0],
+    [await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => false }), true],
+    [client.send.mock.calls.length, 0]
+  );
 });
 test("a newer open-karaoke command rejects an earlier one still waiting on participant readiness", async () => {
   const client = { send: vi.fn() };
@@ -86,7 +119,24 @@ test("a newer open-karaoke command rejects an earlier one still waiting on parti
   equal([await secondCall, true]);
 });
 test("room messages update participants, UI, voice and connection state", async () => {
-  deepEqual([upsertParticipant([], null), []], [upsertParticipant([], { id: "a", name: "A" }), [ { id: "a", name: "A" } ]], [upsertParticipant([{ id: "a", name: "A" }], { id: "a", speaking: true }), [{ id: "a", name: "A", speaking: true }]], [upsertParticipant( [ { id: "a", name: "A" }, { id: "b", name: "B" } ], { id: "b", speaking: true } ), [ { id: "a", name: "A" }, { id: "b", name: "B", speaking: true } ]]);
+  deepEqual(
+    [upsertParticipant([], null), []],
+    [upsertParticipant([], { id: "a", name: "A" }), [{ id: "a", name: "A" }]],
+    [upsertParticipant([{ id: "a", name: "A" }], { id: "a", speaking: true }), [{ id: "a", name: "A", speaking: true }]],
+    [
+      upsertParticipant(
+        [
+          { id: "a", name: "A" },
+          { id: "b", name: "B" }
+        ],
+        { id: "b", speaking: true }
+      ),
+      [
+        { id: "a", name: "A" },
+        { id: "b", name: "B", speaking: true }
+      ]
+    ]
+  );
   let participants = [];
   const participantsRef = { current: [] };
   let room = null;
@@ -107,12 +157,16 @@ test("room messages update participants, UI, voice and connection state", async 
   };
   const setters = {
     cleanupConnection: vi.fn(),
-    setRoom: vi.fn((value) => { room = value; }),
+    setRoom: vi.fn((value) => {
+      room = value;
+    }),
     setParticipants: vi.fn((value) => {
       participants = typeof value === "function" ? value(participants) : value;
       participantsRef.current = participants;
     }),
-    setRoomUi: vi.fn((value) => { ui = typeof value === "function" ? value(ui) : value; }),
+    setRoomUi: vi.fn((value) => {
+      ui = typeof value === "function" ? value(ui) : value;
+    }),
     setRoomCommand: vi.fn(),
     setVoiceError: vi.fn(),
     setTransferStatus: vi.fn()
@@ -160,7 +214,10 @@ test("room messages update participants, UI, voice and connection state", async 
   handler({ type: "participant-left", participantId: "b" });
   deepEqual([participants, [{ id: "c" }]], [voice.removePeer.mock.calls.at(-1), ["b"]]);
   handler({ type: "signal", fromId: "a", signal: {} });
-  participantsRef.current = [{ id: "a", role: "host" }, { id: "guest", role: "guest" }];
+  participantsRef.current = [
+    { id: "a", role: "host" },
+    { id: "guest", role: "guest" }
+  ];
   ui = { effectsByParticipant: { old: { dry: 1 } } };
   handler({ type: "ui", fromId: "a", state: { radio: true, participantEffects: { echo: 1 } } });
   equal([ui.__eventId.startsWith("ui-"), true]);
@@ -181,7 +238,11 @@ test("room messages update participants, UI, voice and connection state", async 
   equal([voice.invite.mock.calls.length, 1], [voice.accept.mock.calls.length, 1]);
   handler({ type: "connection-closed" });
   equal([setters.cleanupConnection.mock.calls.length, 1]);
-  deepEqual([setters.setRoom.mock.calls.at(-1), [null]], [setters.setParticipants.mock.calls.at(-1), [[]]], [setters.setVoiceError.mock.calls.at(-1), [ translateSaved("Соединение с комнатой потеряно.") ]]);
+  deepEqual(
+    [setters.setRoom.mock.calls.at(-1), [null]],
+    [setters.setParticipants.mock.calls.at(-1), [[]]],
+    [setters.setVoiceError.mock.calls.at(-1), [translateSaved("Соединение с комнатой потеряно.")]]
+  );
   intentionalDisconnectRef.current = true;
   handler({ type: "connection-closed" });
   equal([setters.cleanupConnection.mock.calls.length, 1]);
@@ -223,12 +284,21 @@ test("cleans a coalesced exported package even if the room becomes stale", async
   let resolveExport;
   let current = true;
   const cleanup = vi.fn().mockResolvedValue();
-  const hostSongCommandRef = { current: { type: "open-karaoke", songId: "song", commandId: "cmd", revision: TEST_REVISION } };
+  const hostSongCommandRef = {
+    current: { type: "open-karaoke", songId: "song", commandId: "cmd", revision: TEST_REVISION }
+  };
   const handler = createOnlineRoomMessageHandler({
     id: "room",
     client: { send: vi.fn() },
     voice: { sendFile: vi.fn(), invite: vi.fn(), removePeer: vi.fn(), accept: vi.fn() },
-    roomApi: { exportSongPackage: vi.fn(() => new Promise((resolve) => { resolveExport = resolve; })) },
+    roomApi: {
+      exportSongPackage: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveExport = resolve;
+          })
+      )
+    },
     isCurrentConnection: () => current,
     roomRef: { current: { selfId: "self", host: true } },
     participantsRef: { current: [{ id: "guest", role: "guest" }] },
@@ -247,7 +317,13 @@ test("cleans a coalesced exported package even if the room becomes stale", async
   handler({
     type: "sync",
     fromId: "guest",
-    state: { type: "song-request", requesterId: "guest", songId: "song", commandId: "cmd", revision: TEST_REVISION }
+    state: {
+      type: "song-request",
+      requesterId: "guest",
+      songId: "song",
+      commandId: "cmd",
+      revision: TEST_REVISION
+    }
   });
   current = false;
   const blob = new Blob(["x"]);
@@ -281,13 +357,25 @@ test("room song error is correlated to the current pending command", () => {
   handler({
     type: "sync",
     fromId: "host",
-    state: { type: "song-transfer-error", requesterId: "self", songId: "A", commandId: "cmd-A", error: "old" }
+    state: {
+      type: "song-transfer-error",
+      requesterId: "self",
+      songId: "A",
+      commandId: "cmd-A",
+      error: "old"
+    }
   });
   equal([pendingSongCommandRef.current.songId, "B"], [setTransferStatus.mock.calls.length, 0]);
   handler({
     type: "sync",
     fromId: "host",
-    state: { type: "song-transfer-error", requesterId: "self", songId: "B", commandId: "cmd-B", error: "current" }
+    state: {
+      type: "song-transfer-error",
+      requesterId: "self",
+      songId: "B",
+      commandId: "cmd-B",
+      error: "current"
+    }
   });
   equal([pendingSongCommandRef.current, null]);
   deepEqual([setTransferStatus.mock.calls.at(-1)[0], { participantId: "host", stage: "error", error: "current", percent: 0 }]);

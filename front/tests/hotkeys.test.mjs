@@ -30,7 +30,7 @@ test("space always controls karaoke inside the active scope", () => {
 test("space does not escape a modal outside karaoke", () => {
   const scope = { isConnected: true };
   installDocument([{ contains: () => false }]);
-  equal([getKaraokeHotkeyAction( { code: "Space", target: null, defaultPrevented: false, isComposing: false, repeat: false }, scope ), null]);
+  equal([getKaraokeHotkeyAction({ code: "Space", target: null, defaultPrevented: false, isComposing: false, repeat: false }, scope), null]);
 });
 test("karaoke action mapping is exact and rejects cancelled events", () => {
   installDocument();
@@ -48,9 +48,13 @@ test("karaoke action mapping is exact and rejects cancelled events", () => {
     ["Escape", "stop"]
   ])
     equal([getKaraokeHotkeyAction({ ...base, code }, scope), action]);
-  equal([getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null], [getKaraokeHotkeyAction({ ...base, code: "toString" }, scope), null], [getKaraokeHotkeyAction(null, scope), null]);
+  equal(
+    [getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null],
+    [getKaraokeHotkeyAction({ ...base, code: "toString" }, scope), null],
+    [getKaraokeHotkeyAction(null, scope), null]
+  );
   for (const property of ["defaultPrevented", "isComposing", "repeat"])
-    equal([getKaraokeHotkeyAction( { ...base, code: "Space", [property]: true }, scope ), null]);
+    equal([getKaraokeHotkeyAction({ ...base, code: "Space", [property]: true }, scope), null]);
   equal([getKaraokeHotkeyAction({ ...base, code: "Space" }, { isConnected: false }), null]);
 });
 test("editable targets use the complete protected selector", async () => {
@@ -67,7 +71,20 @@ test("editable targets use the complete protected selector", async () => {
     '[role="slider"]',
     '[data-hotkeys="off"]'
   ].join(", ");
-  equal([isEditableHotkeyTarget({ closest: (selector) => { assert.equal(selector, expected); return {}; } }), true], [isEditableHotkeyTarget({ closest: () => null }), false], [isEditableHotkeyTarget({}), false], [isEditableHotkeyTarget(null), false]);
+  equal(
+    [
+      isEditableHotkeyTarget({
+        closest: (selector) => {
+          assert.equal(selector, expected);
+          return {};
+        }
+      }),
+      true
+    ],
+    [isEditableHotkeyTarget({ closest: () => null }), false],
+    [isEditableHotkeyTarget({}), false],
+    [isEditableHotkeyTarget(null), false]
+  );
 });
 test("only the top dialog owns an active hotkey scope", async () => {
   const { isHotkeyScopeActive } = await loadHotkeys();
@@ -75,9 +92,9 @@ test("only the top dialog owns an active hotkey scope", async () => {
   equal([isHotkeyScopeActive(null), false], [isHotkeyScopeActive({ isConnected: false }), false]);
   installDocument([]);
   equal([isHotkeyScopeActive(scope), true]);
-  installDocument([ { contains: (candidate) => candidate === scope }, { contains: () => false } ]);
+  installDocument([{ contains: (candidate) => candidate === scope }, { contains: () => false }]);
   equal([isHotkeyScopeActive(scope), false]);
-  installDocument([ { contains: () => false }, { contains: (candidate) => candidate === scope } ]);
+  installDocument([{ contains: () => false }, { contains: (candidate) => candidate === scope }]);
   equal([isHotkeyScopeActive(scope), true]);
 });
 test("every browser cancellation signal suppresses a hotkey", async () => {
@@ -93,5 +110,8 @@ test("every browser cancellation signal suppresses a hotkey", async () => {
   equal([shouldIgnoreHotkey(event, scope), false], [shouldIgnoreHotkey(null, scope), true]);
   for (const property of ["defaultPrevented", "isComposing", "repeat"])
     equal([shouldIgnoreHotkey({ ...event, [property]: true }, scope), true]);
-  equal([shouldIgnoreHotkey({ ...event, target: { closest: () => ({}) } }, scope), true], [shouldIgnoreHotkey(event, { isConnected: false }), true]);
+  equal(
+    [shouldIgnoreHotkey({ ...event, target: { closest: () => ({}) } }, scope), true],
+    [shouldIgnoreHotkey(event, { isConnected: false }), true]
+  );
 });

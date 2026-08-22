@@ -47,18 +47,15 @@ export default function ModelStatus() {
           {loading
             ? t("settings.loading")
             : ready
-            ? t("settings.ai.models.ready")
-            : downloading
-              ? t("settings.ai.models.downloading", { model: status.current_model || "…" })
-              : t("settings.ai.models.missing", {
-                  count: status.models?.filter((item) => !item.ready).length ?? 0
-                })}
+              ? t("settings.ai.models.ready")
+              : downloading
+                ? t("settings.ai.models.downloading", { model: status.current_model || "…" })
+                : t("settings.ai.models.missing", {
+                    count: status.models?.filter((item) => !item.ready).length ?? 0
+                  })}
         </Typography>
         {(loading || downloading || (!ready && total > 0)) && (
-          <Progress
-            value={loading || (downloading && !total) ? null : current}
-            max={total || 1}
-          />
+          <Progress value={loading || (downloading && !total) ? null : current} max={total || 1} />
         )}
         {(actionError || status.error || error) && (
           <Typography tone="danger" variant="caption">

@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 import { mockUseI18nWithFallback } from "./helpers/mocks.mjs";
@@ -8,7 +8,6 @@ vi.mock("../src/i18n", async (importOriginal) => {
   return { ...actual, useI18n: mockUseI18nWithFallback };
 });
 import { LibrarySongCard } from "../src/pages/Library/components.jsx";
-afterEach(cleanup);
 const handlers = () => ({
   onDelete: vi.fn(),
   onOpenFolder: vi.fn(),
@@ -40,10 +39,7 @@ test("ready song opens from card click and keyboard but not nested actions", () 
   expect(actions.onOpenKaraoke).toHaveBeenCalledTimes(3);
   const nested = view.getByRole("button", { name: /Прослушать записи|Прослухати записи/ });
   fireEvent.click(nested);
-  verify(
-    [actions.onOpenKaraoke, "toHaveBeenCalledTimes", 3],
-    [view.container.textContent, "toContain", "120 BPM"]
-  );
+  verify([actions.onOpenKaraoke, "toHaveBeenCalledTimes", 3], [view.container.textContent, "toContain", "120 BPM"]);
 });
 test("working song shows progress and opens its processing modal", () => {
   const actions = handlers();
@@ -56,20 +52,8 @@ test("working song shows progress and opens its processing modal", () => {
 });
 test("unknown song status uses safe badge fallback", () => {
   const actions = handlers();
-  const { container } = render(
-    <LibrarySongCard
-      cardIndex={0}
-      song={{ id: "song", title: "Title", status: "custom" }}
-      {...actions}
-    />
-  );
+  const { container } = render(<LibrarySongCard cardIndex={0} song={{ id: "song", title: "Title", status: "custom" }} {...actions} />);
   expect(container.textContent).toContain("custom");
-  const empty = render(
-    <LibrarySongCard
-      cardIndex={0}
-      song={{ id: "empty", title: "Title", status: "" }}
-      {...actions}
-    />
-  );
+  const empty = render(<LibrarySongCard cardIndex={0} song={{ id: "empty", title: "Title", status: "" }} {...actions} />);
   expect(empty.container.textContent).toMatch(/Ожидает обработки|Очікує обробки/);
 });

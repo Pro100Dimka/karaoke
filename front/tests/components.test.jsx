@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { suppressWindowErrors } from "./helpers/browser.mjs";
 import { same, calledWith, verify } from "./helpers/assertions.mjs";
@@ -29,7 +29,6 @@ beforeAll(() => {
     load: { configurable: true, value: vi.fn() }
   });
 });
-afterEach(cleanup);
 describe("primitive UI components", () => {
   test("renders buttons, icons, fields and rows", () => {
     const clicked = vi.fn();
@@ -74,10 +73,7 @@ describe("primitive UI components", () => {
     const card = document.querySelector(".ui-card");
     card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
     fireEvent.pointerMove(card, { clientX: 75, clientY: 25 });
-    same(
-      [card.style.getPropertyValue("--card-mx"), "75%"],
-      [card.style.getPropertyValue("--tilt-y"), "2.5deg"]
-    );
+    same([card.style.getPropertyValue("--card-mx"), "75%"], [card.style.getPropertyValue("--tilt-y"), "2.5deg"]);
     fireEvent.pointerLeave(card);
     expect(card.style.getPropertyValue("--card-mx")).toBe("");
     expect(moved).toHaveBeenCalledOnce();
@@ -113,12 +109,7 @@ describe("field controls", () => {
     const change = vi.fn();
     const blur = vi.fn();
     render(
-      <FieldInput
-        field={{ name: type, type, label: type, hint: "hint", error: "error" }}
-        value={value}
-        onChange={change}
-        onBlur={blur}
-      />
+      <FieldInput field={{ name: type, type, label: type, hint: "hint", error: "error" }} value={value} onChange={change} onBlur={blur} />
     );
     const control = screen.getByRole("textbox");
     fireEvent.change(control, { target: { value: next } });
@@ -130,13 +121,7 @@ describe("field controls", () => {
     const change = vi.fn();
     const blur = vi.fn();
     const { rerender } = render(
-      <FieldInput
-        id="n"
-        field={{ name: "n", type: "number", label: "Number" }}
-        value={1}
-        onChange={change}
-        onBlur={blur}
-      />
+      <FieldInput id="n" field={{ name: "n", type: "number", label: "Number" }} value={1} onChange={change} onBlur={blur} />
     );
     const number = screen.getByLabelText("Number");
     fireEvent.change(number, { target: { value: "" } });
@@ -146,24 +131,11 @@ describe("field controls", () => {
     fireEvent.blur(number, { target: { value: "3" } });
     expect(change).toHaveBeenLastCalledWith(2.5);
     expect(blur).toHaveBeenLastCalledWith(3);
-    rerender(
-      <FieldInput
-        field={{ name: "flag", type: "toggle", label: "Flag" }}
-        value={false}
-        onChange={change}
-        onBlur={blur}
-      />
-    );
+    rerender(<FieldInput field={{ name: "flag", type: "toggle", label: "Flag" }} value={false} onChange={change} onBlur={blur} />);
     fireEvent.click(screen.getByLabelText("Flag"));
     fireEvent.blur(screen.getByLabelText("Flag"));
     expect(change).toHaveBeenCalledWith(true);
-    rerender(
-      <FieldInput
-        field={{ name: "read", type: "readonly", label: "Read" }}
-        value="locked"
-        onChange={change}
-      />
-    );
+    rerender(<FieldInput field={{ name: "read", type: "readonly", label: "Read" }} value="locked" onChange={change} />);
     expect(screen.getByDisplayValue("locked").readOnly).toBe(true);
     rerender(
       <FieldInput
@@ -182,21 +154,13 @@ describe("field controls", () => {
     expect(document.body.textContent).toBe("");
   });
   test("accepts the default blur handler", () => {
-    render(
-      <FieldInput
-        field={{ name: "text", type: "text", label: "Text" }}
-        value="value"
-        onChange={vi.fn()}
-      />
-    );
+    render(<FieldInput field={{ name: "text", type: "text", label: "Text" }} value="value" onChange={vi.fn()} />);
     expect(() => fireEvent.blur(screen.getByLabelText("Text"))).not.toThrow();
   });
   test("handles range commit semantics", () => {
     const change = vi.fn();
     const commit = vi.fn();
-    const { rerender } = render(
-      <RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />
-    );
+    const { rerender } = render(<RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />);
     const range = screen.getByLabelText("Range");
     fireEvent.change(range, { target: { value: "2" } });
     fireEvent.pointerUp(range, { target: { value: "2" } });
@@ -209,18 +173,12 @@ describe("field controls", () => {
 });
 describe("AudioPlayer and error boundary", () => {
   test("normalizes every audio value boundary", () => {
-    expect([
-      clampFinite(0.5, 0, 1),
-      clampFinite(-2, 0, 1),
-      clampFinite(3, 0, 1),
-      clampFinite("bad", 0, 1, 0.25)
-    ]).toEqual([0.5, 0, 1, 0.25]);
-    expect([
-      normalizeAudioDuration(3),
-      normalizeAudioDuration(0),
-      normalizeAudioDuration(-1),
-      normalizeAudioDuration("bad")
-    ]).toEqual([3, 0, 0, 0]);
+    expect([clampFinite(0.5, 0, 1), clampFinite(-2, 0, 1), clampFinite(3, 0, 1), clampFinite("bad", 0, 1, 0.25)]).toEqual([
+      0.5, 0, 1, 0.25
+    ]);
+    expect([normalizeAudioDuration(3), normalizeAudioDuration(0), normalizeAudioDuration(-1), normalizeAudioDuration("bad")]).toEqual([
+      3, 0, 0, 0
+    ]);
     expect([
       normalizeAudioPosition("bad"),
       normalizeAudioPosition(0),
@@ -248,9 +206,7 @@ describe("AudioPlayer and error boundary", () => {
     const playing = { paused: false, pause: vi.fn() };
     expect(await toggleAudioPlayback(playing)).toBe(false);
     expect(playing.pause).toHaveBeenCalledOnce();
-    expect(await toggleAudioPlayback({ paused: true, play: vi.fn().mockResolvedValue() })).toBe(
-      true
-    );
+    expect(await toggleAudioPlayback({ paused: true, play: vi.fn().mockResolvedValue() })).toBe(true);
     expect(
       await toggleAudioPlayback({
         paused: true,
@@ -321,11 +277,7 @@ describe("AudioPlayer and error boundary", () => {
         <Crash />{" "}
       </ErrorBoundary>
     );
-    verify(
-      [screen.getByRole("alert"), "not.toBeNull"],
-      [screen.getByText("boom"), "not.toBeNull"],
-      [log, "toHaveBeenCalled"]
-    );
+    verify([screen.getByRole("alert"), "not.toBeNull"], [screen.getByText("boom"), "not.toBeNull"], [log, "toHaveBeenCalled"]);
     restore();
     fireEvent.click(screen.getByRole("button"));
   });

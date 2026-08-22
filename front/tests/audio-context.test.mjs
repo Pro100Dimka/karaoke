@@ -8,7 +8,11 @@ test("audio context cleanup tolerates every close implementation", async () => {
   await expect(closeAudioContext(synchronous)).resolves.toBe(true);
   const rejected = { close: vi.fn().mockRejectedValue(new Error("closed")) };
   await expect(closeAudioContext(rejected)).resolves.toBe(false);
-  const throwing = { close: vi.fn(() => { throw new Error("already closed"); }) };
+  const throwing = {
+    close: vi.fn(() => {
+      throw new Error("already closed");
+    })
+  };
   await expect(closeAudioContext(throwing)).resolves.toBe(false);
   const alreadyClosed = { state: "closed", close: vi.fn() };
   await expect(closeAudioContext(alreadyClosed)).resolves.toBe(false);

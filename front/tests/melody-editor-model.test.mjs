@@ -46,19 +46,11 @@ test("normalizes, clamps, sorts and rejects invalid or overlapping notes", () =>
       { ...note("bad-word", 0.8, 1), word_index: 0.5 }
     ]).map(({ _id }) => _id)
   ).toEqual(["zero", "top"]);
-  expect(
-    normalizeNotes([note("higher", 0, 0.2, 64), note("lower", 2, 2.2, 60, 1)]).map(({ _id }) => _id)
-  ).toEqual(["higher", "lower"]);
-  expect(
-    normalizeNotes([note("high", 0, 0.2, 72), note("low", 0.2, 0.4, 48)]).map(
-      ({ note: pitch }) => pitch
-    )
-  ).toEqual([72, 48]);
-  expect(
-    normalizeNotes([note("higher-pitch", 0, 0.2, 72), note("lower-pitch", 0, 0.2, 48)]).map(
-      ({ _id }) => _id
-    )
-  ).toEqual(["lower-pitch"]);
+  expect(normalizeNotes([note("higher", 0, 0.2, 64), note("lower", 2, 2.2, 60, 1)]).map(({ _id }) => _id)).toEqual(["higher", "lower"]);
+  expect(normalizeNotes([note("high", 0, 0.2, 72), note("low", 0.2, 0.4, 48)]).map(({ note: pitch }) => pitch)).toEqual([72, 48]);
+  expect(normalizeNotes([note("higher-pitch", 0, 0.2, 72), note("lower-pitch", 0, 0.2, 48)]).map(({ _id }) => _id)).toEqual([
+    "lower-pitch"
+  ]);
 });
 
 test("merges only notes from the same word and deletes selected notes", () => {
@@ -94,27 +86,9 @@ test("constrains movement and resizing to the word and neighbouring notes", () =
   expect(constrainedMoveDelta(notes, ["a"], -1)).toBeCloseTo(-0.2);
   expect(constrainedMoveDelta(notes, ["a"], 1)).toBeCloseTo(0.2);
   expect(constrainedMoveDelta(notes, [], 1)).toBe(0);
-  expect(
-    constrainedMoveDelta(
-      [note("a", 0.2, 0.5), note("b", 0.7, 1), note("other", 2, 3, 70, 1)],
-      ["a", "b"],
-      2
-    )
-  ).toBe(1);
-  expect(
-    constrainedMoveDelta(
-      [note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)],
-      ["moving"],
-      -1
-    )
-  ).toBe(0);
-  expect(
-    constrainedMoveDelta(
-      [note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)],
-      ["moving"],
-      1
-    )
-  ).toBe(0);
+  expect(constrainedMoveDelta([note("a", 0.2, 0.5), note("b", 0.7, 1), note("other", 2, 3, 70, 1)], ["a", "b"], 2)).toBe(1);
+  expect(constrainedMoveDelta([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], ["moving"], -1)).toBe(0);
+  expect(constrainedMoveDelta([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], ["moving"], 1)).toBe(0);
   expect(resizeBounds(notes, "a")).toEqual({
     minStart: 0,
     maxStart: 0.57,
@@ -123,21 +97,18 @@ test("constrains movement and resizing to the word and neighbouring notes", () =
   });
   expect(resizeBounds(notes, "missing")).toBeNull();
   expect(resizeBounds([note("previous", 0, 0.2), ...notes], "b").minStart).toBe(0.6);
-  expect(
-    resizeBounds(
-      [note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)],
-      "moving"
-    )
-  ).toMatchObject({ minStart: 0.2, maxEnd: 0.5 });
-  expect(
-    resizeBounds([note("moving", 0.2, 0.5), note("other-word", 2, 3, 70, 1)], "moving")
-  ).toMatchObject({ minStart: 0, maxEnd: 2 });
+  expect(resizeBounds([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], "moving")).toMatchObject({
+    minStart: 0.2,
+    maxEnd: 0.5
+  });
+  expect(resizeBounds([note("moving", 0.2, 0.5), note("other-word", 2, 3, 70, 1)], "moving")).toMatchObject({
+    minStart: 0,
+    maxEnd: 2
+  });
 });
 
 test("projects canonical lyrics and detects marquee intersections", () => {
-  expect(canonicalLyricProjection([{ text: "Я", start: "1", end: "2" }])).toEqual([
-    { index: 0, text: "Я", start: 1, end: 2 }
-  ]);
+  expect(canonicalLyricProjection([{ text: "Я", start: "1", end: "2" }])).toEqual([{ index: 0, text: "Я", start: 1, end: 2 }]);
   expect(canonicalLyricProjection()).toEqual([]);
   expect(canonicalLyricProjection([{ start: 0, end: 1 }])[0].text).toBe("");
   expect(
@@ -205,8 +176,6 @@ test("document history records commits and previews without losing redo", () => 
 });
 
 test("serializes only the backend note contract and rounds editor time", () => {
-  expect(serializeNotes([{ ...note("a", 0, 1), extra: true }])).toEqual([
-    { note: 60, start: 0, end: 1, word_index: 0 }
-  ]);
+  expect(serializeNotes([{ ...note("a", 0, 1), extra: true }])).toEqual([{ note: 60, start: 0, end: 1, word_index: 0 }]);
   expect(roundTime(1.23456)).toBe(1.235);
 });

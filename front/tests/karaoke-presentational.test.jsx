@@ -40,16 +40,16 @@ test("karaoke media keeps direct authenticated URLs inside Electron", () => {
     sendYouTubeCommand: vi.fn(),
     syncSecondaryMedia: vi.fn()
   };
-  const { container, rerender } = render(
-    <KaraokeMedia {...props} song={{ id: "electron-song", title: "Title" }} />
-  );
-  expect(
-    [...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))
-  ).toEqual(["electron-song/instrumental", "electron-song/vocals"]);
+  const { container, rerender } = render(<KaraokeMedia {...props} song={{ id: "electron-song", title: "Title" }} />);
+  expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
+    "electron-song/instrumental",
+    "electron-song/vocals"
+  ]);
   rerender(<KaraokeMedia {...props} song={{ id: "next-song", title: "Next" }} />);
-  expect(
-    [...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))
-  ).toEqual(["next-song/instrumental", "next-song/vocals"]);
+  expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
+    "next-song/instrumental",
+    "next-song/vocals"
+  ]);
   expect(apiMocks.getAudioTrackBlob).not.toHaveBeenCalled();
 });
 test("karaoke media releases authenticated files resolved after unmount", async () => {
@@ -57,9 +57,7 @@ test("karaoke media releases authenticated files resolved after unmount", async 
   const release = vi.fn();
   const createObjectURL = vi.spyOn(URL, "createObjectURL");
   const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL");
-  apiMocks.getAudioTrackBlob.mockImplementation(
-    () => new Promise((resolve) => resolvers.push(resolve))
-  );
+  apiMocks.getAudioTrackBlob.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)));
   const view = render(
     <KaraokeMedia
       instrumentalRef={createRef()}
@@ -108,14 +106,10 @@ test("karaoke media leaves failed browser tracks unloaded", async () => {
     />
   );
   await waitFor(() => expect(apiMocks.getAudioTrackBlob).toHaveBeenCalledTimes(2));
-  expect(
-    [...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))
-  ).toBe(true);
+  expect([...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))).toBe(true);
 });
 test("karaoke media loads authenticated audio blobs and initializes YouTube playback", async () => {
-  const createObjectURL = vi
-    .spyOn(URL, "createObjectURL")
-    .mockImplementation((blob) => `blob:${blob.size}`);
+  const createObjectURL = vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => `blob:${blob.size}`);
   const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   const send = vi.fn();
   const sync = vi.fn();
@@ -136,9 +130,7 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
       syncSecondaryMedia={sync}
     />
   );
-  expect(
-    [...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))
-  ).toBe(true);
+  expect([...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))).toBe(true);
   await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(2));
   send.mockClear();
   const audio = container.querySelector("audio");
@@ -147,11 +139,7 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
   fireEvent.load(container.querySelector("iframe"));
-  verify([
-    send.mock.calls.map(([command]) => command),
-    "toEqual",
-    ["mute", "setPlaybackRate", "playVideo"]
-  ]);
+  verify([send.mock.calls.map(([command]) => command), "toEqual", ["mute", "setPlaybackRate", "playVideo"]]);
   expect(sync).toHaveBeenCalled();
   rerender(
     <KaraokeMedia
@@ -192,9 +180,7 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
 });
 test("waveform supports click, drag and range seeking", () => {
   const change = vi.fn();
-  const { container, rerender } = render(
-    <WaveformTimeline value={2} duration={10} onChange={change} />
-  );
+  const { container, rerender } = render(<WaveformTimeline value={2} duration={10} onChange={change} />);
   const timeline = container.querySelector('[data-role="waveform"]');
   timeline.getBoundingClientRect = () => ({ left: 10, width: 100 });
   fireEvent.pointerDown(timeline, { clientX: 60 });
@@ -236,17 +222,9 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
       }}
     />
   );
-  expect(
-    [...container.querySelectorAll('[data-role="lyric-word"]')]
-      .map(({ dataset }) => dataset.text)
-      .join("")
-  ).toBe("Яне");
+  expect([...container.querySelectorAll('[data-role="lyric-word"]')].map(({ dataset }) => dataset.text).join("")).toBe("Яне");
   expect(container.querySelectorAll('[data-role="lyric-syllable"]')).toHaveLength(0);
-  expect(
-    container
-      .querySelectorAll('[data-role="lyric-word"]')[0]
-      .style.getPropertyValue("--character-fill")
-  ).toBe("0%");
+  expect(container.querySelectorAll('[data-role="lyric-word"]')[0].style.getPropertyValue("--character-fill")).toBe("0%");
   rerender(
     <KaraokeLyricLine
       currentTime={3.9088815789473683}
@@ -256,9 +234,7 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
       }}
     />
   );
-  expect(
-    container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")
-  ).toBe("100%");
+  expect(container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")).toBe("100%");
   rerender(
     <KaraokeLyricLine
       currentTime={(4.790885627530364 + 4.83475) / 2}
@@ -268,11 +244,10 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
       }}
     />
   );
-  expect(
-    Number.parseFloat(
-      container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")
-    )
-  ).toBeCloseTo(50, 10);
+  expect(Number.parseFloat(container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill"))).toBeCloseTo(
+    50,
+    10
+  );
 });
 
 test("lyrics keep a readable constant pace across the exact acoustic note envelope", () => {
@@ -286,19 +261,12 @@ test("lyrics keep a readable constant pace across the exact acoustic note envelo
       { note: 62, start: 1.2, end: 1.7 }
     ]
   };
-  const { container, rerender } = render(
-    <KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={0.5} />
-  );
-  const fill = () =>
-    Number.parseFloat(
-      container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")
-    );
+  const { container, rerender } = render(<KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={0.5} />);
+  const fill = () => Number.parseFloat(container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill"));
   const renderedWord = container.querySelector('[data-role="lyric-word"]');
   expect(renderedWord.style.background).toBe("");
   expect(renderedWord.style.filter).toBe("");
-  expect(renderedWord.querySelector('[data-role="lyric-word-fill"]').style.clipPath).toContain(
-    "--character-fill"
-  );
+  expect(renderedWord.querySelector('[data-role="lyric-word-fill"]').style.clipPath).toContain("--character-fill");
   expect(fill()).toBeCloseTo(20, 10);
   rerender(<KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={0.9} />);
   expect(fill()).toBeCloseTo(46.6666667, 6);
@@ -322,16 +290,11 @@ test("lyrics show only the current and next source lines", () => {
       { index: 5, text: "строка", start: 3.42, end: 3.82 }
     ]
   };
-  const { container, rerender } = render(
-    <KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />
-  );
+  const { container, rerender } = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />);
 
   let lines = container.querySelectorAll('[data-role="lyric-line"]');
   expect(lines).toHaveLength(2);
-  const lineText = (line) =>
-    [...line.querySelectorAll(':scope > [data-role="lyric-word"]')]
-      .map(({ dataset }) => dataset.text)
-      .join("");
+  const lineText = (line) => [...line.querySelectorAll(':scope > [data-role="lyric-word"]')].map(({ dataset }) => dataset.text).join("");
   expect(lineText(lines[0])).toBe("Перваястрока");
   expect(lineText(lines[1])).toBe("Втораястрока");
   expect(container.textContent).not.toContain("Третья");

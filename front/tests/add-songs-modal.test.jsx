@@ -38,9 +38,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   );
 
   expect(view.getAllByRole("textbox")).toHaveLength(2);
-  expect(view.container.querySelector(".ui-modal-title-media img")?.src).toContain(
-    "data:image/png;base64,cover"
-  );
+  expect(view.container.querySelector(".ui-modal-title-media img")?.src).toContain("data:image/png;base64,cover");
   expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(3);
   expect(view.getByText(/Авто ·/)).not.toBeNull();
   const title = view.getByDisplayValue("Track");
@@ -54,9 +52,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   audio.pause = vi.fn();
   fireEvent.click(preview);
   expect(audio.play).toHaveBeenCalledOnce();
-  await waitFor(() =>
-    expect(preview.getAttribute("aria-label")).toMatch(/Приостановить|Призупинити/)
-  );
+  await waitFor(() => expect(preview.getAttribute("aria-label")).toMatch(/Приостановить|Призупинити/));
   fireEvent.pause(audio);
   expect(preview.getAttribute("aria-label")).toMatch(/Прослушать|Прослухати/);
   fireEvent.play(audio);

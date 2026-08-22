@@ -1,9 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  DEFAULT_PROCESSING_MODE,
-  getProcessingModeOptions,
-  normalizeProcessingMode
-} from "../src/pages/Library/processing-modes.js";
+import { DEFAULT_PROCESSING_MODE, getProcessingModeOptions, normalizeProcessingMode } from "../src/pages/Library/processing-modes.js";
 
 describe("song processing modes", () => {
   test("exposes every supported mode with a distinct user-facing label", () => {

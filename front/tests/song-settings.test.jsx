@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 import { passthrough } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
@@ -28,19 +28,11 @@ vi.mock("../src/theme/ui", () => ({
   Stack: passthrough("div"),
   Typography: passthrough("p"),
   NumberField: ({ value, onChange, placeholder }) => (
-    <input
-      aria-label={placeholder}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <input aria-label={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
   ),
   ConfigForm: ({ context, fields }) => (
     <div data-testid="form">
-      <input
-        aria-label="title"
-        value={context.form.title}
-        onChange={(event) => context.onChange("title", event.target.value)}
-      />
+      <input aria-label="title" value={context.form.title} onChange={(event) => context.onChange("title", event.target.value)} />
       {fields.find(({ name }) => name === "note_range").render({ context })}
     </div>
   )
@@ -61,15 +53,12 @@ beforeEach(() => {
   mocks.refresh.mockReset().mockResolvedValue(undefined);
   mocks.updateSong.mockReset().mockResolvedValue({ title: "Updated" });
 });
-afterEach(cleanup);
 describe("song settings", () => {
   test("edits, validates and saves song fields", async () => {
     const result = render(<SongSettings songId="song" onClose={vi.fn()} />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
     fireEvent.change(result.getByLabelText("title"), { target: { value: "New title" } });
-    const numericFields = result.container.querySelectorAll(
-      '[data-testid="form"] input:not([aria-label="title"])'
-    );
+    const numericFields = result.container.querySelectorAll('[data-testid="form"] input:not([aria-label="title"])');
     fireEvent.change(numericFields[0], { target: { value: "48" } });
     fireEvent.change(numericFields[1], { target: { value: "72" } });
     fireEvent.change(numericFields[0], { target: { value: "" } });
@@ -78,11 +67,7 @@ describe("song settings", () => {
     fireEvent.click(save);
     await waitFor(() => expect(mocks.updateSong).toHaveBeenCalled());
     expect(mocks.updateSong.mock.calls[0][0]).toBe("song");
-    verify([
-      mocks.updateSong.mock.calls[0][1],
-      "toMatchObject",
-      { title: "New title", note_range_min: 48, note_range_max: 72 }
-    ]);
+    verify([mocks.updateSong.mock.calls[0][1], "toMatchObject", { title: "New title", note_range_min: 48, note_range_max: 72 }]);
     expect(mocks.refresh).toHaveBeenCalled();
   });
   test("opens melody editor after closing settings", async () => {

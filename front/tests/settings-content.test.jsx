@@ -90,13 +90,9 @@ describe("settings field binding", () => {
     expect(selectFolder).toHaveBeenCalledWith("D:/Old");
     expect(text.pick).toBeUndefined();
     vi.unstubAllGlobals();
-    expect(
-      bindField(source, { source: "app", type: "folder", name: "songs_folder" }).pick
-    ).toBeUndefined();
+    expect(bindField(source, { source: "app", type: "folder", name: "songs_folder" }).pick).toBeUndefined();
     vi.stubGlobal("electronAPI", {});
-    expect(
-      bindField(source, { source: "app", type: "folder", name: "songs_folder" }).pick
-    ).toBeUndefined();
+    expect(bindField(source, { source: "app", type: "folder", name: "songs_folder" }).pick).toBeUndefined();
     vi.unstubAllGlobals();
   });
 });

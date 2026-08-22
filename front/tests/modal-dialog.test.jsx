@@ -2,11 +2,7 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  stubFrameQueue,
-  stubImmediateAnimationFrame,
-  suppressWindowErrors
-} from "./helpers/browser.mjs";
+import { stubFrameQueue, stubImmediateAnimationFrame, suppressWindowErrors } from "./helpers/browser.mjs";
 import { Modal } from "../src/theme/ui";
 import { AppDialogProvider, resolveDialog, useAppDialog } from "../src/contexts/AppDialog";
 import { same, verify } from "./helpers/assertions.mjs";
@@ -111,11 +107,7 @@ describe("modal", () => {
       </>
     );
     act(() => frames.forEach((callback) => callback()));
-    verify([
-      screen.getByRole("dialog", { name: "Top delayed" }).contains(document.activeElement),
-      "toBe",
-      true
-    ]);
+    verify([screen.getByRole("dialog", { name: "Top delayed" }).contains(document.activeElement), "toBe", true]);
   });
   test("keeps focus in a dialog without controls", () => {
     render(
@@ -165,11 +157,7 @@ describe("application dialog provider", () => {
   });
   test("requires the application dialog provider", () => {
     const { log, restore } = suppressWindowErrors();
-    verify([
-      () => renderHook(() => useAppDialog()),
-      "toThrow",
-      "useAppDialog повинен використовуватися всередині AppDialogProvider"
-    ]);
+    verify([() => renderHook(() => useAppDialog()), "toThrow", "useAppDialog повинен використовуватися всередині AppDialogProvider"]);
     restore();
   });
   test("resolves confirmation cancellation and replacement", async () => {

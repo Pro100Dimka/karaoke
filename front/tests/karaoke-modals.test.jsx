@@ -1,11 +1,8 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import React from "react";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import PerformanceAnalysisModal, {
-  formatRecordingDate,
-  getRecordingList
-} from "../src/pages/Karaoke/performance-analysis-modal.jsx";
+import { beforeEach, expect, test, vi } from "vitest";
+import PerformanceAnalysisModal, { formatRecordingDate, getRecordingList } from "../src/pages/Karaoke/performance-analysis-modal.jsx";
 const mocks = vi.hoisted(() => ({
   runAnalysis: vi.fn(),
   deleteRecording: vi.fn(),
@@ -37,7 +34,6 @@ beforeEach(() => {
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.confirm.mockReset().mockResolvedValue(true);
 });
-afterEach(cleanup);
 test("analysis modal renders normalized result and deletes recording", async () => {
   mocks.runAnalysis.mockResolvedValue({
     pitch_accuracy_percent: 88,
@@ -46,19 +42,10 @@ test("analysis modal renders normalized result and deletes recording", async () 
   });
   const done = vi.fn();
   const deleted = vi.fn();
-  const result = render(
-    <PerformanceAnalysisModal
-      recordingId="rec"
-      onClose={vi.fn()}
-      onDone={done}
-      onDeleted={deleted}
-    />
-  );
+  const result = render(<PerformanceAnalysisModal recordingId="rec" onClose={vi.fn()} onDone={done} onDeleted={deleted} />);
   expect(result.container.textContent).toMatch(/Аналізуємо|Анализируем/);
   await waitFor(() => expect(result.getByTestId("audio")).not.toBeNull());
-  await waitFor(() =>
-    expect(result.container.querySelector('[data-role="analysis-score"]')).not.toBeNull()
-  );
+  await waitFor(() => expect(result.container.querySelector('[data-role="analysis-score"]')).not.toBeNull());
   fireEvent.click(result.getByRole("button", { name: /Готово/ }));
   expect(done).toHaveBeenCalled();
   fireEvent.click(result.container.querySelector('[data-role="delete-recording"]'));
@@ -78,9 +65,7 @@ test("analysis recording carousel starts on the active recording without restart
       onClose={vi.fn()}
     />
   );
-  await waitFor(() =>
-    expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/second")
-  );
+  await waitFor(() => expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/second"));
   expect(mocks.runAnalysis).toHaveBeenCalledTimes(1);
   expect(mocks.runAnalysis).toHaveBeenCalledWith("second");
   const previous = view.getByLabelText(/Предыдущая|Попередня/);
@@ -104,36 +89,25 @@ test("analysis recording carousel starts on the active recording without restart
 });
 test("analysis recording list keeps one canonical active entry", () => {
   expect(getRecordingList(null, "active")).toEqual([{ id: "active" }]);
-  expect(
-    getRecordingList([{ id: "first" }, null, { id: "first", created_at: "new" }], "active")
-  ).toEqual([{ id: "first", created_at: "new" }, { id: "active" }]);
-  expect(getRecordingList([{ id: "active", created_at: "kept" }], "active")).toEqual([
-    { id: "active", created_at: "kept" }
+  expect(getRecordingList([{ id: "first" }, null, { id: "first", created_at: "new" }], "active")).toEqual([
+    { id: "first", created_at: "new" },
+    { id: "active" }
   ]);
+  expect(getRecordingList([{ id: "active", created_at: "kept" }], "active")).toEqual([{ id: "active", created_at: "kept" }]);
   expect(formatRecordingDate()).toMatch(/Запись исполнения|Запис виконання/);
   expect(formatRecordingDate("invalid")).toMatch(/Запись исполнения|Запис виконання/);
-  expect(formatRecordingDate("2026-08-21T10:00:00Z")).not.toMatch(
-    /Запись исполнения|Запис виконання/
-  );
+  expect(formatRecordingDate("2026-08-21T10:00:00Z")).not.toMatch(/Запись исполнения|Запис виконання/);
 });
 test("analysis carousel resets its view when a new recording starts analysis", async () => {
   mocks.runAnalysis.mockResolvedValue({ accuracy_percent: 80 });
   const recordings = [{ id: "first" }, { id: "second" }, { id: "third" }];
-  const view = render(
-    <PerformanceAnalysisModal recordingId="second" recordings={recordings} onClose={vi.fn()} />
-  );
-  await waitFor(() =>
-    expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/second")
-  );
+  const view = render(<PerformanceAnalysisModal recordingId="second" recordings={recordings} onClose={vi.fn()} />);
+  await waitFor(() => expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/second"));
   fireEvent.click(view.getByLabelText(/Предыдущая|Попередня/));
   expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/first");
-  view.rerender(
-    <PerformanceAnalysisModal recordingId="third" recordings={recordings} onClose={vi.fn()} />
-  );
+  view.rerender(<PerformanceAnalysisModal recordingId="third" recordings={recordings} onClose={vi.fn()} />);
   await waitFor(() => expect(mocks.runAnalysis).toHaveBeenLastCalledWith("third"));
-  await waitFor(() =>
-    expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/third")
-  );
+  await waitFor(() => expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/third"));
   expect(mocks.runAnalysis).toHaveBeenCalledTimes(2);
 });
 test("analysis modal reports analysis and deletion failures", async () => {
@@ -178,9 +152,7 @@ test("analysis deletion respects cancellation and stale modal lifetimes", async 
       rejectDelete = reject;
     })
   );
-  const staleDelete = render(
-    <PerformanceAnalysisModal recordingId="stale-delete" onClose={vi.fn()} />
-  );
+  const staleDelete = render(<PerformanceAnalysisModal recordingId="stale-delete" onClose={vi.fn()} />);
   await waitFor(() => expect(staleDelete.getByTestId("audio")).not.toBeNull());
   fireEvent.click(staleDelete.container.querySelector('[data-role="delete-recording"]'));
   await act(async () => Promise.resolve());
@@ -221,9 +193,7 @@ test("analysis ignores stale requests and completed deletion after unmount", asy
       resolveDelete = resolve;
     })
   );
-  const deleting = render(
-    <PerformanceAnalysisModal recordingId="late-success" onClose={vi.fn()} onDeleted={vi.fn()} />
-  );
+  const deleting = render(<PerformanceAnalysisModal recordingId="late-success" onClose={vi.fn()} onDeleted={vi.fn()} />);
   await waitFor(() => expect(deleting.getByTestId("audio")).not.toBeNull());
   fireEvent.click(deleting.container.querySelector('[data-role="delete-recording"]'));
   await act(async () => Promise.resolve());

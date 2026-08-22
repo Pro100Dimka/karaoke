@@ -48,8 +48,7 @@ const createProps = (overrides = {}) => {
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({ default: useKaraokeMediaSync } =
-    await import("../src/pages/Karaoke/hooks/useKaraokeMediaSync"));
+  ({ default: useKaraokeMediaSync } = await import("../src/pages/Karaoke/hooks/useKaraokeMediaSync"));
   vi.stubGlobal(
     "requestAnimationFrame",
     vi.fn(() => 1)
@@ -65,8 +64,17 @@ describe("karaoke media synchronization", () => {
   test("applies exact volumes, effects, speed and YouTube commands", () => {
     const props = createProps();
     renderHook(() => useKaraokeMediaSync(props));
-    verify([props.instrumentalRef.current.volume, 'toBeCloseTo', 0.64], [props.vocalsRef.current.volume, 'toBeCloseTo', 0.36], [props.instrumentalRef.current.playbackRate, 'toBe', 1.25]);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenCalledWith', JSON.stringify({ event: "command", func: "setPlaybackRate", args: [1.25] }), "https://www.youtube-nocookie.com"]);
+    verify(
+      [props.instrumentalRef.current.volume, "toBeCloseTo", 0.64],
+      [props.vocalsRef.current.volume, "toBeCloseTo", 0.36],
+      [props.instrumentalRef.current.playbackRate, "toBe", 1.25]
+    );
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenCalledWith",
+      JSON.stringify({ event: "command", func: "setPlaybackRate", args: [1.25] }),
+      "https://www.youtube-nocookie.com"
+    ]);
     expect(props.silenceMelodyGuide).toHaveBeenCalled();
   });
   test("starts the melody guide while audible playback is active", async () => {
@@ -79,17 +87,37 @@ describe("karaoke media synchronization", () => {
     const props = createProps();
     const { result } = renderHook(() => useKaraokeMediaSync(props));
     expect(result.current.sendYouTubeCommand("  seekTo  ", [2])).toBe(true);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "seekTo", args: [2] }), "https://www.youtube-nocookie.com"]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "seekTo", args: [2] }),
+      "https://www.youtube-nocookie.com"
+    ]);
     same([result.current.sendYouTubeCommand("  "), false], [result.current.sendYouTubeCommand(null), false]);
     props.youTubeClipRef.current.src = "https://evil.example/embed/id";
     expect(result.current.sendYouTubeCommand("playVideo")).toBe(true);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "playVideo", args: [] }), "https://www.youtube.com"]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+      "https://www.youtube.com"
+    ]);
     props.youTubeClipRef.current.src = "https://www.youtube.com/embed/id";
     expect(result.current.sendYouTubeCommand("playVideo")).toBe(true);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "playVideo", args: [] }), "https://www.youtube.com"]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "playVideo", args: [] }),
+      "https://www.youtube.com"
+    ]);
     props.youTubeClipRef.current.src = "not a url";
     expect(result.current.sendYouTubeCommand("pauseVideo")).toBe(true);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "pauseVideo", args: [] }), "https://www.youtube.com"]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
+      "https://www.youtube.com"
+    ]);
     props.youTubeClipRef.current = { src: "https://www.youtube.com/embed/id" };
     expect(result.current.sendYouTubeCommand("playVideo")).toBe(false);
     props.youTubeClipRef.current = null;
@@ -100,14 +128,22 @@ describe("karaoke media synchronization", () => {
     const { result } = renderHook(() => useKaraokeMediaSync(props));
     act(() => result.current.syncSecondaryMedia(95, true));
     same([props.vocalsRef.current.currentTime, 95], [props.videoRef.current.currentTime, 80]);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenCalledWith', expect.stringContaining("seekTo"), expect.any(String)]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenCalledWith",
+      expect.stringContaining("seekTo"),
+      expect.any(String)
+    ]);
     props.vocalsRef.current.currentTime = 94.95;
     act(() => result.current.syncSecondaryMedia(95, false));
     expect(props.vocalsRef.current.currentTime).toBe(94.95);
     props.vocalsRef.current.currentTime = 20;
     props.youTubeClipRef.current.contentWindow.postMessage.mockClear();
     act(() => result.current.syncSecondaryMedia(22));
-    verify([props.vocalsRef.current.currentTime, 'toBe', 22], [props.youTubeClipRef.current.contentWindow.postMessage, 'not.toHaveBeenCalled']);
+    verify(
+      [props.vocalsRef.current.currentTime, "toBe", 22],
+      [props.youTubeClipRef.current.contentWindow.postMessage, "not.toHaveBeenCalled"]
+    );
     Object.defineProperty(props.videoRef.current, "duration", {
       configurable: true,
       value: Number.NaN
@@ -135,14 +171,19 @@ describe("karaoke media synchronization", () => {
     });
     expect(() => act(() => result.current.syncSecondaryMedia(9, true))).not.toThrow();
     expect(currentTime).toBe(0);
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "seekTo", args: [9, true] }), "https://www.youtube-nocookie.com"]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "seekTo", args: [9, true] }),
+      "https://www.youtube-nocookie.com"
+    ]);
   });
   test("tracks metadata and performs default end cleanup", () => {
     const props = createProps();
     const add = vi.spyOn(props.instrumentalRef.current, "addEventListener");
     const remove = vi.spyOn(props.instrumentalRef.current, "removeEventListener");
     const hook = renderHook(() => useKaraokeMediaSync(props));
-    verify([add.mock.calls.map(([event]) => event), 'toEqual', [ "loadedmetadata", "durationchange", "ended", "timeupdate" ]]);
+    verify([add.mock.calls.map(([event]) => event), "toEqual", ["loadedmetadata", "durationchange", "ended", "timeupdate"]]);
     expect(props.setDuration).toHaveBeenCalledWith(120);
     act(() => props.instrumentalRef.current.dispatchEvent(new Event("durationchange")));
     Object.defineProperty(props.instrumentalRef.current, "duration", {
@@ -166,15 +207,20 @@ describe("karaoke media synchronization", () => {
     act(() => props.instrumentalRef.current.dispatchEvent(new Event("ended")));
     called(props.vocalsRef.current.pause, props.videoRef.current.pause);
     expect(props.sendYouTubeCommand).toBeUndefined();
-    verify([props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "pauseVideo", args: [] }), "https://www.youtube-nocookie.com"]);
-    verify([props.silenceMelodyGuide, 'toHaveBeenCalled'], [props.setIsPlaying, 'toHaveBeenCalledWith', false]);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
+      "https://www.youtube-nocookie.com"
+    ]);
+    verify([props.silenceMelodyGuide, "toHaveBeenCalled"], [props.setIsPlaying, "toHaveBeenCalledWith", false]);
     hook.unmount();
-    verify([remove.mock.calls.map(([event]) => event), 'toEqual', [ "loadedmetadata", "durationchange", "ended", "timeupdate" ]]);
+    verify([remove.mock.calls.map(([event]) => event), "toEqual", ["loadedmetadata", "durationchange", "ended", "timeupdate"]]);
   });
   test("handles an ended master without optional secondary media", () => {
     const props = createProps({ vocalsRef: { current: null }, videoRef: { current: null } });
     renderHook(() => useKaraokeMediaSync(props));
-    verify([() => act(() => props.instrumentalRef.current.dispatchEvent(new Event("ended"))), 'not.toThrow']);
+    verify([() => act(() => props.instrumentalRef.current.dispatchEvent(new Event("ended"))), "not.toThrow"]);
     expect(props.setIsPlaying).toHaveBeenCalledWith(false);
   });
   test("delegates end handling when the parent supplies a callback", async () => {
@@ -192,7 +238,7 @@ describe("karaoke media synchronization", () => {
     props.setCurrentTime.mockClear();
     props.instrumentalRef.current.currentTime = 12.5;
     act(() => props.instrumentalRef.current.dispatchEvent(new Event("timeupdate")));
-    verify([props.currentTimeRef.current, 'toBe', 12.5], [props.setCurrentTime, 'toHaveBeenCalledWith', 12.5]);
+    verify([props.currentTimeRef.current, "toBe", 12.5], [props.setCurrentTime, "toHaveBeenCalledWith", 12.5]);
   });
   test("publishes master time from animation frames", () => {
     let frame;
@@ -208,14 +254,21 @@ describe("karaoke media synchronization", () => {
     now.mockReturnValue(451);
     props.instrumentalRef.current.currentTime = 5;
     act(() => frame());
-    verify([props.currentTimeRef.current, 'toBe', 5], [props.setCurrentTime, 'toHaveBeenCalledWith', 5], [props.vocalsRef.current.currentTime, 'toBe', 5]);
+    verify(
+      [props.currentTimeRef.current, "toBe", 5],
+      [props.setCurrentTime, "toHaveBeenCalledWith", 5],
+      [props.vocalsRef.current.currentTime, "toBe", 5]
+    );
     const syncCount = props.youTubeClipRef.current.contentWindow.postMessage.mock.calls.length;
     props.instrumentalRef.current.currentTime = 0;
     props.vocalsRef.current.currentTime = 20;
     now.mockReturnValue(900);
     act(() => frame());
     expect(props.setCurrentTime).toHaveBeenLastCalledWith(0);
-    verify([props.vocalsRef.current.currentTime, 'toBe', 20], [props.youTubeClipRef.current.contentWindow.postMessage, 'toHaveBeenCalledTimes', syncCount]);
+    verify(
+      [props.vocalsRef.current.currentTime, "toBe", 20],
+      [props.youTubeClipRef.current.contentWindow.postMessage, "toHaveBeenCalledTimes", syncCount]
+    );
     props.instrumentalRef.current.currentTime = Number.NaN;
     act(() => frame());
     expect(props.setCurrentTime).toHaveBeenCalledTimes(3);
@@ -327,7 +380,11 @@ describe("karaoke media synchronization", () => {
       vocalVolume: 0.4,
       speed: 2
     });
-    verify([props.instrumentalRef.current.volume, 'toBe', 0.25], [props.vocalsRef.current.volume, 'toBeCloseTo', 0.16], [props.videoRef.current.playbackRate, 'toBe', 2]);
+    verify(
+      [props.instrumentalRef.current.volume, "toBe", 0.25],
+      [props.vocalsRef.current.volume, "toBeCloseTo", 0.16],
+      [props.videoRef.current.playbackRate, "toBe", 2]
+    );
   });
   test("refreshes callback closures and media listeners when their identities change", () => {
     const props = createProps();
@@ -353,7 +410,12 @@ describe("karaoke media synchronization", () => {
     });
     act(() => hook.result.current.syncSecondaryMedia(7, true));
     same([nextVocals.currentTime, 7], [nextVideo.currentTime, 7]);
-    verify([nextWindow.postMessage, 'toHaveBeenLastCalledWith', JSON.stringify({ event: "command", func: "seekTo", args: [7, true] }), "https://www.youtube.com"]);
+    verify([
+      nextWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      JSON.stringify({ event: "command", func: "seekTo", args: [7, true] }),
+      "https://www.youtube.com"
+    ]);
     act(() => nextInstrumental.dispatchEvent(new Event("durationchange")));
     expect(props.setDuration).toHaveBeenLastCalledWith(40);
   });

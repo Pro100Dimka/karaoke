@@ -1,23 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-import {
-  getAnalysisFeedback,
-  normalizeAnalysisResult,
-  normalizeAnalysisSection
-} from "../src/pages/Karaoke/utils/analysis.js";
-import {
-  createPanoramaPath,
-  getYouTubeVideoId,
-  playbackGain,
-  transposeKey,
-  youTubeEmbedUrl
-} from "../src/pages/Karaoke/utils/data.js";
-import {
-  createBrowserDeviceOptions,
-  createBufferSizeOptions,
-  createIndexedDeviceOptions
-} from "../src/pages/Karaoke/utils/devices.js";
+import { getAnalysisFeedback, normalizeAnalysisResult, normalizeAnalysisSection } from "../src/pages/Karaoke/utils/analysis.js";
+import { createPanoramaPath, getYouTubeVideoId, playbackGain, transposeKey, youTubeEmbedUrl } from "../src/pages/Karaoke/utils/data.js";
+import { createBrowserDeviceOptions, createBufferSizeOptions, createIndexedDeviceOptions } from "../src/pages/Karaoke/utils/devices.js";
 import {
   detectMidiFromAnalyser,
   findBestPitchLag,
@@ -32,31 +18,7 @@ import {
 } from "../src/pages/Karaoke/utils/pitch.js";
 import { getSongActions } from "../src/pages/Library/components.jsx";
 import { formatSongKey } from "../src/pages/Library/utils.js";
-import {
-  createSongPayload,
-  getSelectedSong,
-  normalizeText,
-  validateSongSettings
-} from "../src/pages/Library/song-settings.jsx";
-import {
-  FORM_FIELDS,
-  audioDriverVisible,
-  audioSelect,
-  audioSlider,
-  fieldType,
-  formReadonly,
-  monitorDisabled,
-  multipleAudioDriversAvailable,
-  opts,
-  percent,
-  preferenceSelect,
-  radioField,
-  speakerPlaying
-} from "../src/pages/SettingsOLD/utils.js";
-import {
-  MEMORY_ACTIONS,
-  buildOptimizeOptions
-} from "../src/pages/SettingsOLD/screens/memory/config.js";
+import { createSongPayload, getSelectedSong, normalizeText, validateSongSettings } from "../src/pages/Library/song-settings.jsx";
 import { equal, deepEqual } from "./helpers/assertions.mjs";
 describe("analysis normalization and feedback", () => {
   test("normalizes every nullable section field without inventing data", () => {
@@ -128,20 +90,12 @@ describe("analysis normalization and feedback", () => {
   });
   test("normalizes result shape and removes malformed sections", () => {
     for (const result of [null, false, "bad"])
-      deepEqual([
-        normalizeAnalysisResult(result),
-        { pitch_accuracy_percent: null, mean_deviation_semitones: null, sections: [] }
-      ]);
+      deepEqual([normalizeAnalysisResult(result), { pitch_accuracy_percent: null, mean_deviation_semitones: null, sections: [] }]);
     deepEqual([normalizeAnalysisResult({ sections: "bad" }).sections, []]);
     const normalized = normalizeAnalysisResult({
       pitch_accuracy_percent: 120,
       mean_deviation_semitones: "2",
-      sections: [
-        null,
-        "bad",
-        { label: " best ", start: 1, end: 2, accuracy_percent: 90 },
-        { start: 3, end: 2, accuracy_percent: -2 }
-      ]
+      sections: [null, "bad", { label: " best ", start: 1, end: 2, accuracy_percent: 90 }, { start: 3, end: 2, accuracy_percent: -2 }]
     });
     equal(
       [normalized.pitch_accuracy_percent, 100],
@@ -163,14 +117,8 @@ describe("analysis normalization and feedback", () => {
       sections: [{ label: "unscored" }, middle, firstBest, firstWorst, secondBest, secondWorst]
     });
     equal([feedback.scoredSections.length, 5]);
-    deepEqual([
-      feedback.scoredSections.map(({ label }) => label),
-      ["middle", "first-best", "first-worst", "second-best", "second-worst"]
-    ]);
-    equal(
-      [feedback.bestSection.label, "first-best"],
-      [feedback.needsPractice.label, "first-worst"]
-    );
+    deepEqual([feedback.scoredSections.map(({ label }) => label), ["middle", "first-best", "first-worst", "second-best", "second-worst"]]);
+    equal([feedback.bestSection.label, "first-best"], [feedback.needsPractice.label, "first-worst"]);
     const empty = getAnalysisFeedback({ sections: [] });
     equal([empty.bestSection, null], [empty.needsPractice, null]);
     deepEqual([empty.scoredSections, []]);
@@ -194,25 +142,11 @@ describe("analysis normalization and feedback", () => {
       [excellent.grade, translateSaved("Отличное исполнение")],
       [feedback(84.99, 0).grade, translateSaved("Хороший результат")],
       [feedback(69.99, 0).grade, translateSaved("Есть потенциал")],
-      [
-        noData.advice,
-        translateSaved(
-          "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
-        )
-      ],
-      [
-        poor.advice,
-        translateSaved("Повторите сложные фразы медленнее, ориентируясь на ноты на экране.")
-      ],
-      [
-        feedback(70, null).advice,
-        translateSaved("Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию.")
-      ],
+      [noData.advice, translateSaved("Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону.")],
+      [poor.advice, translateSaved("Повторите сложные фразы медленнее, ориентируясь на ноты на экране.")],
+      [feedback(70, null).advice, translateSaved("Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию.")],
       [feedback(70, 1).advice, feedback(70, null).advice],
-      [
-        feedback(70, 1.01).advice,
-        translateSaved("Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты.")
-      ],
+      [feedback(70, 1.01).advice, translateSaved("Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты.")],
       [feedback(69.99, 0).advice, poor.advice]
     );
   });
@@ -281,8 +215,7 @@ describe("karaoke data contracts", () => {
       youTubeEmbedUrl(" abcdefghijk "),
       "https://www.youtube.com/embed/abcdefghijk?enablejsapi=1&playsinline=1&controls=0&disablekb=1&fs=0&iv_load_policy=3&cc_load_policy=0&rel=0&modestbranding=1&mute=1"
     ]);
-    for (const id of ["bad", "xabcdefghijk", "abcdefghijkx", null, 7])
-      equal([youTubeEmbedUrl(id), null]);
+    for (const id of ["bad", "xabcdefghijk", "abcdefghijkx", null, 7]) equal([youTubeEmbedUrl(id), null]);
     deepEqual(
       [createPanoramaPath(() => 0), { xPhaseA: 0, xPhaseB: 0, xPhaseC: 0, yPhaseA: 0, yPhaseB: 0 }],
       [
@@ -319,10 +252,7 @@ describe("lyrics, melody and pitch", () => {
     deepEqual(
       [findBestPitchLag(scores, 2, 6), { lag: 3, score: 0.8 }],
       [findBestPitchLag(new Float64Array(5), 1, 3), { lag: -1, score: 0 }],
-      [
-        findBestPitchLag(Float64Array.of(0, 0, 0.5, 0.6, 0.7, 0.8, 0.9), 2, 6),
-        { lag: 6, score: 0.9 }
-      ]
+      [findBestPitchLag(Float64Array.of(0, 0, 0.5, 0.6, 0.7, 0.8, 0.9), 2, 6), { lag: 6, score: 0.9 }]
     );
     const weak = Float64Array.of(0, 0, 0.6, 0.7, 0.6, 0, 0.6, 0);
     deepEqual([selectFundamentalLag(weak, 1, 7, 7, 1), { lag: 7, score: 1 }]);
@@ -351,23 +281,17 @@ describe("lyrics, melody and pitch", () => {
       [1760 * 1.02, 93]
     ])
       assert.ok(Math.abs(pitchFrequencyToMidi(frequency) - midi) < 1e-9);
-    for (const frequency of [NaN, Infinity, 53, 1800])
-      equal([pitchFrequencyToMidi(frequency), null]);
+    for (const frequency of [NaN, Infinity, 53, 1800]) equal([pitchFrequencyToMidi(frequency), null]);
   });
   test("detects a stable tone and rejects invalid or quiet input", () => {
     const rate = 48_000;
     const length = 2048;
     const detect = (samples, sampleRate = rate) =>
-      detectMidiFromAnalyser(
-        { getFloatTimeDomainData: (buffer) => buffer.set(samples) },
-        new Float32Array(samples.length),
-        sampleRate
-      );
+      detectMidiFromAnalyser({ getFloatTimeDomainData: (buffer) => buffer.set(samples) }, new Float32Array(samples.length), sampleRate);
     const sine = (frequency, amplitude = 0.5, envelope = () => 1) => {
       const samples = new Float32Array(length);
       for (let index = 0; index < samples.length; index += 1)
-        samples[index] =
-          amplitude * envelope(index) * Math.sin((2 * Math.PI * frequency * index) / rate);
+        samples[index] = amplitude * envelope(index) * Math.sin((2 * Math.PI * frequency * index) / rate);
       return samples;
     };
     for (const [frequency, midi] of [
@@ -389,9 +313,7 @@ describe("lyrics, melody and pitch", () => {
         0.2 * Math.sin((2 * Math.PI * 440 * index) / rate) +
         0.1 * Math.sin((2 * Math.PI * 660 * index) / rate);
     assert.ok(Math.abs(detect(harmonic) - 57) < 0.03);
-    assert.ok(
-      Math.abs(detect(sine(261.6256, 0.5, (index) => Math.exp(-index / length))) - 60) < 0.03
-    );
+    assert.ok(Math.abs(detect(sine(261.6256, 0.5, (index) => Math.exp(-index / length))) - 60) < 0.03);
     equal([detect(sine(53)), null], [detect(sine(1800)), null], [detect(sine(440, 0.014)), null]);
     assert.ok(Math.abs(detect(sine(440, 0.0142)) - 69) < 0.03);
     const tone = sine(440);
@@ -426,33 +348,12 @@ describe("lyrics, melody and pitch", () => {
         ),
         null
       ],
-      [
-        detectMidiFromAnalyser(
-          { getFloatTimeDomainData: (buffer) => buffer.fill(0) },
-          new Float32Array(length),
-          rate
-        ),
-        null
-      ],
-      [
-        detectMidiFromAnalyser(
-          { getFloatTimeDomainData: (buffer) => buffer.fill(0.5) },
-          new Float32Array(3),
-          rate
-        ),
-        null
-      ]
+      [detectMidiFromAnalyser({ getFloatTimeDomainData: (buffer) => buffer.fill(0) }, new Float32Array(length), rate), null],
+      [detectMidiFromAnalyser({ getFloatTimeDomainData: (buffer) => buffer.fill(0.5) }, new Float32Array(3), rate), null]
     );
     const impulse = new Float32Array(length);
     impulse[0] = 1;
-    equal([
-      detectMidiFromAnalyser(
-        { getFloatTimeDomainData: (buffer) => buffer.set(impulse) },
-        new Float32Array(length),
-        rate
-      ),
-      null
-    ]);
+    equal([detectMidiFromAnalyser({ getFloatTimeDomainData: (buffer) => buffer.set(impulse) }, new Float32Array(length), rate), null]);
     let seed = 1;
     const noise = new Float32Array(length);
     for (let index = 0; index < noise.length; index += 1) {
@@ -468,15 +369,7 @@ describe("device, settings and song-card factories", () => {
       [createIndexedDeviceOptions(null, "Default"), [{ value: "", label: "Default" }]],
       [
         createIndexedDeviceOptions(
-          [
-            "invalid",
-            { index: 0, label: "Zero" },
-            { index: 1, name: "A" },
-            { index: 1 },
-            { index: 2 },
-            null,
-            {}
-          ],
+          ["invalid", { index: 0, label: "Zero" }, { index: 1, name: "A" }, { index: 1 }, { index: 2 }, null, {}],
           "Default"
         ),
         [
@@ -500,66 +393,12 @@ describe("device, settings and song-card factories", () => {
       ],
       [createBufferSizeOptions([64, "64", 0, 12.5, "bad"]), [{ value: 64, label: "64 samples" }]],
       [createBufferSizeOptions(null), []],
-      [
-        createBufferSizeOptions(),
-        [32, 64, 128, 256, 512].map((value) => ({ value, label: `${value} samples` }))
-      ]
+      [createBufferSizeOptions(), [32, 64, 128, 256, 512].map((value) => ({ value, label: `${value} samples` }))]
     );
     equal(
       [createIndexedDeviceOptions(null)[0].label, translateSaved("По умолчанию")],
       [createBrowserDeviceOptions([], "Device")[0].label, translateSaved("Системное по умолчанию")]
     );
-  });
-  test("builds field contracts and predicates", () => {
-    deepEqual([opts([[1, "One"]]), [{ value: 1, label: "One" }]]);
-    assert.match(percent("Volume")({ value: 0.125 }), /13%/);
-    assert.match(percent("Volume")({ value: null }), /0%/);
-    const onChange = vi.fn();
-    const onFieldBlur = vi.fn();
-    const field = FORM_FIELDS.text("name");
-    equal([field.getValue({ form: { name: "x" } }), "x"]);
-    field.setValue({ onChange }, "y");
-    field.saveValue({ onFieldBlur }, "y");
-    deepEqual([onChange.mock.calls[0], ["name", "y"]], [onFieldBlur.mock.calls[0], ["name", "y"]]);
-    equal(
-      [formReadonly("x").type, "readonly"],
-      [fieldType((name, config) => ({ name, ...config }), "x")("a").type, "x"]
-    );
-    const radio = { stationId: "a", setStation: vi.fn() };
-    equal([radioField("stationId").getValue({ radio }), "a"]);
-    radioField("stationId").setValue({ radio }, "b");
-    const audio = {
-      values: { volume: 1, audio_driver: "asio" },
-      preferences: { input: "x" },
-      options: { devices: [1], audioDrivers: [1, 2] },
-      states: { monitoringEnabled: true, speakerTestState: "playing" },
-      updateBackend: vi.fn(),
-      updatePreference: vi.fn()
-    };
-    audioSlider("volume").setValue({ audio }, 0.5);
-    equal(
-      [audioSlider("volume").getValue({ audio }), 1],
-      [audioSelect("device", "devices").getOptions({ audio }).length, 1]
-    );
-    deepEqual([preferenceSelect("input", [{ value: "x" }]).options, [{ value: "x" }]]);
-    equal([preferenceSelect("input").getValue({ audio }), "x"]);
-    preferenceSelect("input").setValue({ audio }, "y");
-    equal(
-      [monitorDisabled({ audio }), true],
-      [audioDriverVisible({ audio }), true],
-      [multipleAudioDriversAvailable({ audio }), true]
-    );
-    deepEqual([audioSelect("device", "devices").getOptions({ audio: {} }), []]);
-    equal([multipleAudioDriversAvailable({ audio: {} }), false], [speakerPlaying({ audio }), true]);
-    assert.ok(MEMORY_ACTIONS[0][5]({ freed_bytes: 1024 }));
-    assert.ok(MEMORY_ACTIONS[1][5]({ freed_bytes: 2048 }));
-    equal([
-      buildOptimizeOptions([
-        { id: "a", title: "A", status: "done", optimized: false },
-        { id: "b", title: "B", status: "pending", optimized: false }
-      ]).length,
-      2
-    ]);
   });
   test("validates song settings and dispatches card actions", () => {
     const songs = [
@@ -578,10 +417,7 @@ describe("device, settings and song-card factories", () => {
     equal(
       [validateSongSettings(undefined), translateSaved("Укажите название песни.")],
       [validateSongSettings({ title: "" }), translateSaved("Укажите название песни.")],
-      [
-        validateSongSettings({ title: "x", tempo_override: 0 }),
-        translateSaved("Темп должен быть больше 0 BPM.")
-      ],
+      [validateSongSettings({ title: "x", tempo_override: 0 }), translateSaved("Темп должен быть больше 0 BPM.")],
       [
         validateSongSettings({ title: "x", note_range_min: 90, note_range_max: 20 }),
         translateSaved("Нижняя нота диапазона не может быть выше верхней.")
@@ -599,10 +435,7 @@ describe("device, settings and song-card factories", () => {
       equal([validateSongSettings(form), null]);
     deepEqual(
       [
-        createSongPayload(
-          { title: "", artist: " A ", note_range_min: -2, note_range_max: 130 },
-          songs[0]
-        ),
+        createSongPayload({ title: "", artist: " A ", note_range_min: -2, note_range_max: 130 }, songs[0]),
         {
           title: "A",
           artist: "A",
@@ -649,8 +482,7 @@ describe("device, settings and song-card factories", () => {
       [formatSongKey("A minor extra"), "A minor extra"],
       [formatSongKey("C major extra"), "C major extra"]
     );
-    for (const value of [null, undefined, "", "   ", 0])
-      equal([formatSongKey(value), translateSaved("Тональность определяется")]);
+    for (const value of [null, undefined, "", "   ", 0]) equal([formatSongKey(value), translateSaved("Тональность определяется")]);
     const callbacks = {
       onDelete: vi.fn(),
       onOpenFolder: vi.fn(),
@@ -738,15 +570,8 @@ describe("device, settings and song-card factories", () => {
     pending.forEach((action) => action[3]());
     deepEqual(
       [callbacks.onProcess.mock.calls.at(-1), [songs[0]]],
-      [
-        getSongActions({ ...callbacks, canManageLibrary: false, isReady: false, song: songs[0] }),
-        []
-      ]
+      [getSongActions({ ...callbacks, canManageLibrary: false, isReady: false, song: songs[0] }), []]
     );
-    equal([
-      getSongActions({ ...callbacks, canManageLibrary: false, isReady: true, song: songs[0] })
-        .length,
-      1
-    ]);
+    equal([getSongActions({ ...callbacks, canManageLibrary: false, isReady: true, song: songs[0] }).length, 1]);
   });
 });

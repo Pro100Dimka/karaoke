@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { sameDeep, called, calledWith, verify } from "./helpers/assertions.mjs";
 import { passthrough } from "./helpers/mocks.mjs";
@@ -16,24 +16,10 @@ vi.mock("../src/theme/ui", () => ({
   RotaryKnob: ({ label, value, onChange }) => (
     <label className="karaoke-effect-dial">
       {label}
-      <input
-        type="range"
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
+      <input type="range" aria-label={label} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   ),
-  Slider: ({
-    label,
-    value,
-    onChange,
-    onCommit,
-    formatValue: _format,
-    showValue: _show,
-    sx,
-    ...props
-  }) => (
+  Slider: ({ label, value, onChange, onCommit, formatValue: _format, showValue: _show, sx, ...props }) => (
     <input
       {...props}
       type="range"
@@ -47,17 +33,8 @@ vi.mock("../src/theme/ui", () => ({
   Stack: passthrough("div"),
   Grid: passthrough("div"),
   Typography: passthrough("span"),
-  Card: ({
-    children,
-    surface: _surface,
-    tilt: _tilt,
-    sx: _sx,
-    cardContent: _content,
-    ...props
-  }) => <div {...props}>{children}</div>,
-  Button: ({ children, sx: _sx, startIcon: _startIcon, ...props }) => (
-    <button {...props}>{children}</button>
-  ),
+  Card: ({ children, surface: _surface, tilt: _tilt, sx: _sx, cardContent: _content, ...props }) => <div {...props}>{children}</div>,
+  Button: ({ children, sx: _sx, startIcon: _startIcon, ...props }) => <button {...props}>{children}</button>,
   IconButton: ({ icon: Icon, sx: _sx, label, ...props }) => (
     <button aria-label={label} {...props}>
       {Icon ? <Icon /> : null}
@@ -68,27 +45,18 @@ vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({
   default: ({ onChange }) => <button data-testid="timeline" onClick={() => onChange(3)} />
 }));
 import RotaryKnob from "../src/theme/ui/RotaryKnob/index.jsx";
-import {
-  getRotaryDragValue,
-  getRotaryPointerValue,
-  getRotaryWheelValue
-} from "../src/theme/ui/RotaryKnob/utils.js";
+import { getRotaryDragValue, getRotaryPointerValue, getRotaryWheelValue } from "../src/theme/ui/RotaryKnob/utils.js";
 import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";
 import ToolsPanel from "../src/pages/Karaoke/components/console/tools.jsx";
-afterEach(cleanup);
 test("rotary calculations preserve VST sensitivity, direction and limits", () => {
   expect(getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1 })).toBe(1);
-  expect(
-    getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1, fine: true })
-  ).toBe(0.6);
+  expect(getRotaryDragValue({ value: 0.5, lastY: 100, clientY: 10, min: 0, max: 1, fine: true })).toBe(0.6);
   expect(getRotaryDragValue({ value: 0.5, lastY: 0, clientY: 900, min: 0, max: 1 })).toBe(0);
   expect(getRotaryWheelValue({ value: 0.5, deltaY: -1, step: 0.1, min: 0, max: 1 })).toBe(0.6);
   expect(getRotaryWheelValue({ value: 0.5, deltaY: 1, step: 0.1, min: 0, max: 1 })).toBe(0.4);
-  expect(
-    getRotaryWheelValue({ value: 0.5, deltaY: -1, step: 0.1, min: 0, max: 1, fine: true })
-  ).toBe(0.52);
+  expect(getRotaryWheelValue({ value: 0.5, deltaY: -1, step: 0.1, min: 0, max: 1, fine: true })).toBe(0.52);
   expect(getRotaryWheelValue({ value: 1, deltaY: -1, step: 0.1, min: 0, max: 1 })).toBe(1);
   expect(
     getRotaryPointerValue({
@@ -149,9 +117,7 @@ test("rotary calculations preserve VST sensitivity, direction and limits", () =>
 test("effect dial supports range, wheel and pointer dragging with clamping", () => {
   const change = vi.fn();
   const commit = vi.fn();
-  const result = render(
-    <RotaryKnob label="Echo" value={0.5} onChange={change} onCommit={commit} />
-  );
+  const result = render(<RotaryKnob label="Echo" value={0.5} onChange={change} onCommit={commit} />);
   const { container, getByLabelText } = result;
   const dial = container.querySelector("label");
   fireEvent.pointerMove(dial, { clientY: 50, pointerId: 1 });
@@ -175,15 +141,7 @@ test("effect dial supports range, wheel and pointer dragging with clamping", () 
 test("rotary knob supports cumulative VST drag, fine adjustment and reset", () => {
   const change = vi.fn();
   const commit = vi.fn();
-  const view = render(
-    <RotaryKnob
-      label="Reverb"
-      value={0.5}
-      defaultValue={0.25}
-      onChange={change}
-      onCommit={commit}
-    />
-  );
+  const view = render(<RotaryKnob label="Reverb" value={0.5} defaultValue={0.25} onChange={change} onCommit={commit} />);
   const dial = view.container.querySelector("label");
   fireEvent.pointerDown(dial, { button: 0, clientY: 100, pointerId: 2 });
   fireEvent.pointerMove(dial, { clientY: 82, pointerId: 2 });
@@ -214,23 +172,11 @@ test("rotary knob jumps to the clicked arc and accepts an exact percentage", () 
 });
 test("song strip formats metadata and delegates seeking", () => {
   const seek = vi.fn();
-  const result = render(
-    <SongStrip
-      song={{ title: "Song", performer: "Singer" }}
-      currentTime={65}
-      duration={130}
-      onSeek={seek}
-    />
-  );
-  verify(
-    [result.container.textContent, "toContain", "Singer"],
-    [result.container.textContent, "toContain", "1:05"]
-  );
+  const result = render(<SongStrip song={{ title: "Song", performer: "Singer" }} currentTime={65} duration={130} onSeek={seek} />);
+  verify([result.container.textContent, "toContain", "Singer"], [result.container.textContent, "toContain", "1:05"]);
   fireEvent.click(result.getByTestId("timeline"));
   expect(seek).toHaveBeenCalledWith(3);
-  result.rerender(
-    <SongStrip song={{ title: "Unknown" }} currentTime={0} duration={0} onSeek={seek} />
-  );
+  result.rerender(<SongStrip song={{ title: "Unknown" }} currentTime={0} duration={0} onSeek={seek} />);
 });
 test("mixer changes and commits volumes and effects", () => {
   const microphone = vi.fn();
@@ -280,20 +226,11 @@ test("tools toggle visibility, monitoring, auto-hide, settings and presets", () 
     onApplyEffectPreset: vi.fn()
   };
   const { container } = render(
-    <ToolsPanel
-      {...handlers}
-      showNotes
-      showLyrics={false}
-      monitoringEnabled
-      autoHideEnabled={false}
-      effectPreset="hall"
-    />
+    <ToolsPanel {...handlers} showNotes showLyrics={false} monitoringEnabled autoHideEnabled={false} effectPreset="hall" />
   );
   const toolButtons = container.querySelectorAll("div > button");
   for (const button of [...toolButtons].slice(0, 5)) fireEvent.click(button);
-  const preset = [...container.querySelectorAll("button")].find((button) =>
-    button.title?.includes("%")
-  );
+  const preset = [...container.querySelectorAll("button")].find((button) => button.title?.includes("%"));
   fireEvent.click(preset);
   called(handlers.onToggleNotes, handlers.onToggleLyrics);
   calledWith([handlers.onMonitoringChange, [false]], [handlers.onAutoHideChange, [true]]);
@@ -328,10 +265,7 @@ test("center controls transport, tempo and bounded key changes", () => {
   expect(handlers.onSkip.mock.calls).toEqual([[-5], [5]]);
   expect(handlers.onTogglePlay).toHaveBeenCalledOnce();
   expect(handlers.onStop).toHaveBeenCalledOnce();
-  sameDeep(
-    [handlers.onTempoChange.mock.calls, [[-1], [1]]],
-    [handlers.onKeyShiftChange.mock.calls, [[11], [12]]]
-  );
+  sameDeep([handlers.onTempoChange.mock.calls, [[-1], [1]]], [handlers.onKeyShiftChange.mock.calls, [[11], [12]]]);
   expect(result.container.textContent).toContain("A2 – E5");
 });
 test("center uses fallback note range and pause state", () => {
@@ -350,8 +284,5 @@ test("center uses fallback note range and pause state", () => {
     />
   );
   fireEvent.click(result.getByLabelText("Зменшити тональність"));
-  verify(
-    [result.getByLabelText("Пауза"), "toBeTruthy"],
-    [result.container.textContent, "toContain", "C2 – C5"]
-  );
+  verify([result.getByLabelText("Пауза"), "toBeTruthy"], [result.container.textContent, "toContain", "C2 – C5"]);
 });

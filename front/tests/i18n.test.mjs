@@ -20,23 +20,39 @@ const catalogs = {
 };
 test("UI locale source files do not contain duplicate translation keys", () => {
   for (const language of ["uk", "ru", "en"]) {
-    const source = fs.readFileSync(
-      new URL(`../src/i18n/messages-${language}.js`, import.meta.url),
-      "utf8"
-    );
+    const source = fs.readFileSync(new URL(`../src/i18n/messages-${language}.js`, import.meta.url), "utf8");
     const keys = [...source.matchAll(/^\s{4}"([^"]+)":/gm)].map(([, key]) => key);
     equal([new Set(keys).size, keys.length, `Duplicate translation key in messages-${language}.js`]);
   }
 });
 test("Ukrainian is the safe default locale", async () => {
   const { normalizeLanguage } = await loadLanguage();
-  equal([normalizeLanguage(), "uk"], [normalizeLanguage("uk"), "uk"], [normalizeLanguage("de"), "uk"], [normalizeLanguage("en"), "en"], [normalizeLanguage("ru"), "ru"]);
+  equal(
+    [normalizeLanguage(), "uk"],
+    [normalizeLanguage("uk"), "uk"],
+    [normalizeLanguage("de"), "uk"],
+    [normalizeLanguage("en"), "en"],
+    [normalizeLanguage("ru"), "ru"]
+  );
 });
 test("translation resolves locale, interpolation and fallbacks", () => {
-  equal([translate(catalogs, "en", "greeting", { name: "Ada" }), "Hello, Ada!"], [translate(catalogs, "de", "greeting", { name: "Olia" }), "Hello from Ukraine, Olia!"], [translate(catalogs, "en", "ukFallback"), "Ukrainian fallback"], [translate(catalogs, "en", "ukFallback", {}, "English source"), "Ukrainian fallback"], [translate(catalogs, "ru", "ukFallback", {}, "Russian source"), "Russian source"], [translate(catalogs, "en", "missing", {}, "Fallback"), "Fallback"], [translate(catalogs, "ru", "missing", {}, "Russian source"), "Russian source"], [translate(catalogs, "en", "missing"), "missing"], [interpolate("{known}/{unknown}", { known: 1 }), "1/{unknown}"]);
+  equal(
+    [translate(catalogs, "en", "greeting", { name: "Ada" }), "Hello, Ada!"],
+    [translate(catalogs, "de", "greeting", { name: "Olia" }), "Hello from Ukraine, Olia!"],
+    [translate(catalogs, "en", "ukFallback"), "Ukrainian fallback"],
+    [translate(catalogs, "en", "ukFallback", {}, "English source"), "Ukrainian fallback"],
+    [translate(catalogs, "ru", "ukFallback", {}, "Russian source"), "Russian source"],
+    [translate(catalogs, "en", "missing", {}, "Fallback"), "Fallback"],
+    [translate(catalogs, "ru", "missing", {}, "Russian source"), "Russian source"],
+    [translate(catalogs, "en", "missing"), "missing"],
+    [interpolate("{known}/{unknown}", { known: 1 }), "1/{unknown}"]
+  );
 });
 test("catalog parity reports every missing locale key", () => {
-  deepEqual([missingTranslationKeys({ uk: { one: "1", two: "2" }, en: { one: "1" } }), { uk: [], en: ["two"] }], [missingTranslationKeys({}), {}]);
+  deepEqual(
+    [missingTranslationKeys({ uk: { one: "1", two: "2" }, en: { one: "1" } }), { uk: [], en: ["two"] }],
+    [missingTranslationKeys({}), {}]
+  );
 });
 test("saved locale handles available, absent and blocked storage", async () => {
   const { getSavedLanguage, saveLanguage } = await loadLanguage();

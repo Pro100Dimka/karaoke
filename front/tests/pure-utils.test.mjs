@@ -1,13 +1,6 @@
 import { describe, expect, test } from "vitest";
-import {
-  normalizeAudioEffects,
-  normalizeAudioRuntimeSettings
-} from "../src/pages/Karaoke/utils/audio-settings.js";
-import {
-  findActiveMelodyNote,
-  getMelodyGuideState,
-  midiToFrequency
-} from "../src/pages/Karaoke/utils/melody-guide.js";
+import { normalizeAudioEffects, normalizeAudioRuntimeSettings } from "../src/pages/Karaoke/utils/audio-settings.js";
+import { findActiveMelodyNote, getMelodyGuideState, midiToFrequency } from "../src/pages/Karaoke/utils/melody-guide.js";
 import {
   adjacentNoteId,
   canMergeSelectedNotes,
@@ -17,11 +10,7 @@ import {
   mergeSelectedNotes,
   resizeBounds
 } from "../src/pages/MelodyEditor/model.js";
-import {
-  flattenLyricsNotes,
-  lyricsNoteFillPercent,
-  mergeAdjacentLyricsNotes
-} from "../src/utils/lyrics-sync.js";
+import { flattenLyricsNotes, lyricsNoteFillPercent, mergeAdjacentLyricsNotes } from "../src/utils/lyrics-sync.js";
 
 describe("canonical lyricsSync utilities", () => {
   const lyricsSync = {
@@ -235,7 +224,9 @@ test("microphone settings clamp malformed values and preserve noise suppression"
     delay: 0.5,
     noise_suppression: 0.35
   });
-  expect(
-    normalizeAudioRuntimeSettings({ volume: 4, monitoring_enabled: "false", buffer_size: 0 })
-  ).toMatchObject({ volume: 2, monitoringEnabled: false, bufferSize: 64 });
+  expect(normalizeAudioRuntimeSettings({ volume: 4, monitoring_enabled: "false", buffer_size: 0 })).toMatchObject({
+    volume: 2,
+    monitoringEnabled: false,
+    bufferSize: 64
+  });
 });

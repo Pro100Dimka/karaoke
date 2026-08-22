@@ -9,11 +9,7 @@ test("keeps generated coverage consolidated under one canonical directory", () =
     .readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("coverage-"));
   expect(legacyCoverage).toEqual([]);
-  verify([
-    fs.readFileSync(path.join(root, "vitest.config.mjs"), "utf8"),
-    "toContain",
-    'reportsDirectory: "../generated/coverage/front"'
-  ]);
+  verify([fs.readFileSync(path.join(root, "vitest.config.mjs"), "utf8"), "toContain", 'reportsDirectory: "../generated/coverage/front"']);
   expect(exists("coverage")).toBe(false);
 });
 test("keeps required production entry files in their canonical locations", () => {
@@ -45,22 +41,10 @@ test("mutation gate uses canonical production module ids and pragmatic threshold
     [stryker, "not.toContain", '"!src/utils/config.js"']
   );
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-  verify([
-    pkg.scripts["test:mutation"],
-    "toBe",
-    "stryker run && node scripts/check-mutation-quality.mjs"
-  ]);
-  const qualityCheck = fs.readFileSync(
-    path.join(root, "scripts/check-mutation-quality.mjs"),
-    "utf8"
-  );
-  verify(
-    [qualityCheck, "toContain", "const BREAK_SCORE = 75"],
-    [qualityCheck, "toContain", "const COVERED_TARGET = 90"]
-  );
-  const testFiles = fs
-    .readdirSync(path.join(root, "tests"))
-    .filter((name) => /\.(?:mjs|jsx)$/.test(name));
+  verify([pkg.scripts["test:mutation"], "toBe", "stryker run && node scripts/check-mutation-quality.mjs"]);
+  const qualityCheck = fs.readFileSync(path.join(root, "scripts/check-mutation-quality.mjs"), "utf8");
+  verify([qualityCheck, "toContain", "const BREAK_SCORE = 75"], [qualityCheck, "toContain", "const COVERED_TARGET = 90"]);
+  const testFiles = fs.readdirSync(path.join(root, "tests")).filter((name) => /\.(?:mjs|jsx)$/.test(name));
   const queryImports = [];
   for (const name of testFiles) {
     const source = fs.readFileSync(path.join(root, "tests", name), "utf8");

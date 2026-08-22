@@ -12,45 +12,56 @@ let isAutoplayBlocked;
 let normalizeRadioSettings;
 let useRadio;
 const wrapper = ({ children }) => <RadioProvider>{children}</RadioProvider>;
-const store = (value) =>
-  localStorage.setItem("karaoke-radio", JSON.stringify(value));
-const installAudio = ({ state = "running", getByteFrequencyData = vi.fn(), resume = vi.fn(), close = vi.fn().mockResolvedValue(), onConstruct } = {}) => {
-  const analyser = { fftSize: 0, smoothingTimeConstant: 0, frequencyBinCount: 32, connect: vi.fn(), getByteFrequencyData };
+const store = (value) => localStorage.setItem("karaoke-radio", JSON.stringify(value));
+const installAudio = ({
+  state = "running",
+  getByteFrequencyData = vi.fn(),
+  resume = vi.fn(),
+  close = vi.fn().mockResolvedValue(),
+  onConstruct
+} = {}) => {
+  const analyser = {
+    fftSize: 0,
+    smoothingTimeConstant: 0,
+    frequencyBinCount: 32,
+    connect: vi.fn(),
+    getByteFrequencyData
+  };
   const context = {
-    state, sampleRate: 48000, destination: {},
+    state,
+    sampleRate: 48000,
+    destination: {},
     createAnalyser: vi.fn(() => analyser),
     createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
-    resume, close
+    resume,
+    close
   };
-  window.AudioContext = class { constructor() { onConstruct?.(); return context; } };
+  window.AudioContext = class {
+    constructor() {
+      onConstruct?.();
+      return context;
+    }
+  };
   return { analyser, context };
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({
-    RADIO_STATIONS,
-    RadioProvider,
-    calculateRadioSpectrum,
-    isAutoplayBlocked,
-    normalizeRadioSettings,
-    useRadio
-  } = await import("../src/contexts/radio.jsx"));
+  ({ RADIO_STATIONS, RadioProvider, calculateRadioSpectrum, isAutoplayBlocked, normalizeRadioSettings, useRadio } =
+    await import("../src/contexts/radio.jsx"));
   localStorage.clear();
   store({ stationId: "poptron", volume: 0.45, enabled: false });
   mocks.updateUiPreferences.mockReset().mockResolvedValue({});
   vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
-  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(
-    function pause() {
-      Object.defineProperty(this, "paused", { configurable: true, value: true });
-    }
-  );
-  vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(
-    function play() {
-      Object.defineProperty(this, "paused", { configurable: true, value: false });
-      return Promise.resolve();
-    }
-  );
-  vi.stubGlobal( "requestAnimationFrame", vi.fn(() => 1)
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(function pause() {
+    Object.defineProperty(this, "paused", { configurable: true, value: true });
+  });
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function play() {
+    Object.defineProperty(this, "paused", { configurable: true, value: false });
+    return Promise.resolve();
+  });
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn(() => 1)
   );
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
 });
@@ -60,26 +71,51 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.documentElement.style.removeProperty("--radio-bass");
   document.documentElement.style.removeProperty("--radio-analysis-active");
-  for (let index = 0; index < 18; index += 1)
-    document.documentElement.style.removeProperty(`--radio-band-${index}`);
+  for (let index = 0; index < 18; index += 1) document.documentElement.style.removeProperty(`--radio-band-${index}`);
   delete window.AudioContext;
   delete window.webkitAudioContext;
 });
 describe("radio context", () => {
   test("keeps the complete station catalog contract", () => {
-    verify([RADIO_STATIONS, 'toEqual', [ expect.objectContaining({ id: "poptron", name: "SomaFM PopTron", streams: [ "https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3" ] }), expect.objectContaining({ id: "indiepop", name: "SomaFM Indie Pop Rocks", streams: [ "https://ice5.somafm.com/indiepop-128-mp3", "https://ice2.somafm.com/indiepop-128-mp3" ] }), expect.objectContaining({ id: "beatblender", name: "SomaFM Beat Blender" }), expect.objectContaining({ id: "groovesalad", name: "SomaFM Groove Salad" }) ]]);
+    verify([
+      RADIO_STATIONS,
+      "toEqual",
+      [
+        expect.objectContaining({
+          id: "poptron",
+          name: "SomaFM PopTron",
+          streams: ["https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3"]
+        }),
+        expect.objectContaining({
+          id: "indiepop",
+          name: "SomaFM Indie Pop Rocks",
+          streams: ["https://ice5.somafm.com/indiepop-128-mp3", "https://ice2.somafm.com/indiepop-128-mp3"]
+        }),
+        expect.objectContaining({ id: "beatblender", name: "SomaFM Beat Blender" }),
+        expect.objectContaining({ id: "groovesalad", name: "SomaFM Groove Salad" })
+      ]
+    ]);
     RADIO_STATIONS.forEach(({ description, streams }) => {
-      verify([description, 'not.toBe', ""], [streams, 'toHaveLength', 2]);
+      verify([description, "not.toBe", ""], [streams, "toHaveLength", 2]);
     });
   });
   test("normalizes settings and classifies autoplay failures", () => {
     expect(normalizeRadioSettings()).toEqual({ enabled: true, stationId: "poptron", volume: 0.1 });
-    verify([normalizeRadioSettings({ stationId: "indiepop", volume: -1, enabled: false }), 'toEqual', { enabled: false, stationId: "indiepop", volume: 0 }]);
-    same([isAutoplayBlocked({ name: "NotAllowedError" }), true], [isAutoplayBlocked({ message: "user didn't interact" }), true], [isAutoplayBlocked("not allowed by browser"), true], [isAutoplayBlocked(null), false], [isAutoplayBlocked(new Error("offline")), false]);
+    verify([
+      normalizeRadioSettings({ stationId: "indiepop", volume: -1, enabled: false }),
+      "toEqual",
+      { enabled: false, stationId: "indiepop", volume: 0 }
+    ]);
+    same(
+      [isAutoplayBlocked({ name: "NotAllowedError" }), true],
+      [isAutoplayBlocked({ message: "user didn't interact" }), true],
+      [isAutoplayBlocked("not allowed by browser"), true],
+      [isAutoplayBlocked(null), false],
+      [isAutoplayBlocked(new Error("offline")), false]
+    );
   });
   test("calculates deterministic attack, decay and frequency bands", () => {
-    const data = Uint8Array.from( { length: 64 }, (_, index) => (index * 7) % 256
-    );
+    const data = Uint8Array.from({ length: 64 }, (_, index) => (index * 7) % 256);
     const result = calculateRadioSpectrum(
       data,
       48000,
@@ -88,79 +124,97 @@ describe("radio context", () => {
       Array.from({ length: 18 }, (_, index) => index / 40)
     );
     expect(result.bass).toBeCloseTo(0.19082352941176473, 14);
-    verify([result.bands, 'toEqual', [ 0.045217254901960775, 0.07832588235294116, 0.11143450980392156, 0.15584745098039215, 0.2228690196078431, 0.35373607843137256, 0.46008392156862743, 0.6075094117647059, 0.6639999999999999, 0.5684728506787331, 0.486435294117647, 0.6955, 0.252, 0.273, 0.294, 0.315, 0.336, 0.357 ]]);
-    const decay = calculateRadioSpectrum( new Uint8Array(64), 48000, 2048, 0.5, Array(18).fill(0.5)
-    );
+    verify([
+      result.bands,
+      "toEqual",
+      [
+        0.045217254901960775, 0.07832588235294116, 0.11143450980392156, 0.15584745098039215, 0.2228690196078431, 0.35373607843137256,
+        0.46008392156862743, 0.6075094117647059, 0.6639999999999999, 0.5684728506787331, 0.486435294117647, 0.6955, 0.252, 0.273, 0.294,
+        0.315, 0.336, 0.357
+      ]
+    ]);
+    const decay = calculateRadioSpectrum(new Uint8Array(64), 48000, 2048, 0.5, Array(18).fill(0.5));
     expect(decay).toEqual({ bands: Array(18).fill(0.42), bass: 0.44 });
-    const attack = calculateRadioSpectrum(
-      new Uint8Array(1025).fill(50),
-      48000,
-      2048,
-      0,
-      Array(18).fill(0)
-    );
+    const attack = calculateRadioSpectrum(new Uint8Array(1025).fill(50), 48000, 2048, 0, Array(18).fill(0));
     expect(attack.bass).toBeCloseTo(0.09019607843137255, 14);
-    verify([attack.bands.slice(0, 5), 'toEqual', Array(5).fill(0.16149019607843135)]);
-    verify([attack.bands.slice(5, 12), 'toEqual', Array(7).fill(0.19560784313725488)]);
+    verify([attack.bands.slice(0, 5), "toEqual", Array(5).fill(0.16149019607843135)]);
+    verify([attack.bands.slice(5, 12), "toEqual", Array(7).fill(0.19560784313725488)]);
     expect(attack.bands.slice(12)).toEqual(Array(6).fill(0.23313725490196074));
-    const lowSampleRate = calculateRadioSpectrum( data, 8000, 2048, 0.2, Array(18).fill(0)
-    );
+    const lowSampleRate = calculateRadioSpectrum(data, 8000, 2048, 0.2, Array(18).fill(0));
     expect(lowSampleRate.bass).toBeCloseTo(0.32825882352941177, 14);
-    verify([lowSampleRate.bands.slice(0, 8), 'toEqual', [ 0.293912156862745, 0.37304235294117644, 0.4747811764705881, 0.58, 0.5319487058823529, 0.20343215686274507, 0.5320533333333333, 0.58 ]]);
+    verify([
+      lowSampleRate.bands.slice(0, 8),
+      "toEqual",
+      [0.293912156862745, 0.37304235294117644, 0.4747811764705881, 0.58, 0.5319487058823529, 0.20343215686274507, 0.5320533333333333, 0.58]
+    ]);
   });
   test("requires the provider", () => {
     const { log, restore } = suppressWindowErrors();
-    verify([() => renderHook(() => useRadio()), 'toThrow', "useRadio must be used inside RadioProvider"]);
+    verify([() => renderHook(() => useRadio()), "toThrow", "useRadio must be used inside RadioProvider"]);
     restore();
   });
   test("normalizes stored settings and exposes station metadata", () => {
     store({ stationId: "unknown", volume: 8, enabled: "yes" });
     const { result } = renderHook(() => useRadio(), { wrapper });
-    same([result.current.stationId, "poptron"], [result.current.volume, 1], [result.current.stations, RADIO_STATIONS], [result.current.getBassLevel(), 0]);
+    same(
+      [result.current.stationId, "poptron"],
+      [result.current.volume, 1],
+      [result.current.stations, RADIO_STATIONS],
+      [result.current.getBassLevel(), 0]
+    );
     expect(result.current.getSpectrumLevels()).toHaveLength(18);
     cleanup();
     store({ stationId: "poptron", volume: "bad", enabled: false });
     const fallback = renderHook(() => useRadio(), { wrapper });
-    same([fallback.result.current.volume, 0.1], [fallback.result.current.isPlaying, false], [fallback.result.current.isLoading, false], [fallback.result.current.error, ""]);
+    same(
+      [fallback.result.current.volume, 0.1],
+      [fallback.result.current.isPlaying, false],
+      [fallback.result.current.isLoading, false],
+      [fallback.result.current.error, ""]
+    );
   });
   test("starts, stops, toggles and persists playback", async () => {
     const hook = renderHook(() => useRadio(), { wrapper });
-    await act(async () => { expect(await hook.result.current.turnOn()).toBe(true); });
-    verify([hook.result.current.isPlaying, 'toBe', true], [document.querySelector("audio").src, 'toContain', "poptron"]);
-    verify([mocks.updateUiPreferences, 'toHaveBeenCalledWith', "radio", expect.objectContaining({ enabled: true })]);
+    await act(async () => {
+      expect(await hook.result.current.turnOn()).toBe(true);
+    });
+    verify([hook.result.current.isPlaying, "toBe", true], [document.querySelector("audio").src, "toContain", "poptron"]);
+    verify([mocks.updateUiPreferences, "toHaveBeenCalledWith", "radio", expect.objectContaining({ enabled: true })]);
     act(() => hook.result.current.toggle());
     expect(hook.result.current.isPlaying).toBe(false);
-    verify([mocks.updateUiPreferences, 'toHaveBeenLastCalledWith', "radio", expect.objectContaining({ enabled: false })]);
+    verify([mocks.updateUiPreferences, "toHaveBeenLastCalledWith", "radio", expect.objectContaining({ enabled: false })]);
     act(() => hook.result.current.toggle());
     await act(async () => Promise.resolve());
     expect(hook.result.current.isPlaying).toBe(true);
   });
   test("exposes pending playback state and applies startup options", async () => {
     let resolvePlay;
-    HTMLMediaElement.prototype.play.mockImplementationOnce(
-      function playPending() {
-        Object.defineProperty(this, "paused", { configurable: true, value: false });
-        return new Promise((resolve) => { resolvePlay = resolve; });
-      }
-    );
+    HTMLMediaElement.prototype.play.mockImplementationOnce(function playPending() {
+      Object.defineProperty(this, "paused", { configurable: true, value: false });
+      return new Promise((resolve) => {
+        resolvePlay = resolve;
+      });
+    });
     const { analyser } = installAudio();
     const hook = renderHook(() => useRadio(), { wrapper });
     fireEvent.error(document.querySelector("audio"));
     expect(hook.result.current.error).not.toBe("");
     let pending;
-    act(() => { pending = hook.result.current.turnOn({ remember: false }); });
+    act(() => {
+      pending = hook.result.current.turnOn({ remember: false });
+    });
     same([hook.result.current.error, ""], [hook.result.current.isLoading, true], [document.querySelector("audio").volume, 0.45]);
     resolvePlay();
     await act(async () => expect(await pending).toBe(true));
-    verify([analyser.getByteFrequencyData, 'toHaveBeenCalledTimes', 1], [mocks.updateUiPreferences, 'not.toHaveBeenCalled']);
+    verify([analyser.getByteFrequencyData, "toHaveBeenCalledTimes", 1], [mocks.updateUiPreferences, "not.toHaveBeenCalled"]);
     hook.result.current.turnOff({ remember: false });
     let resolveFade;
-    HTMLMediaElement.prototype.play.mockImplementationOnce(
-      function playPendingFade() {
-        Object.defineProperty(this, "paused", { configurable: true, value: false });
-        return new Promise((resolve) => { resolveFade = resolve; });
-      }
-    );
+    HTMLMediaElement.prototype.play.mockImplementationOnce(function playPendingFade() {
+      Object.defineProperty(this, "paused", { configurable: true, value: false });
+      return new Promise((resolve) => {
+        resolveFade = resolve;
+      });
+    });
     act(() => {
       pending = hook.result.current.turnOn({ analyse: false, fadeIn: true, remember: false });
     });
@@ -172,11 +226,15 @@ describe("radio context", () => {
   test("turning off cancels a pending start immediately", async () => {
     let resolvePlay;
     HTMLMediaElement.prototype.play.mockReturnValueOnce(
-      new Promise((resolve) => { resolvePlay = resolve; })
+      new Promise((resolve) => {
+        resolvePlay = resolve;
+      })
     );
     const hook = renderHook(() => useRadio(), { wrapper });
     let pending;
-    act(() => { pending = hook.result.current.turnOn({ analyse: false, remember: false }); });
+    act(() => {
+      pending = hook.result.current.turnOn({ analyse: false, remember: false });
+    });
     expect(hook.result.current.isLoading).toBe(true);
     act(() => hook.result.current.turnOff({ remember: false }));
     same([hook.result.current.isLoading, false], [hook.result.current.isPlaying, false]);
@@ -194,19 +252,19 @@ describe("radio context", () => {
     const hook = renderHook(() => useRadio(), { wrapper });
     act(() => hook.result.current.setVolume(0.6));
     await act(async () => {
-      verify([await hook.result.current.turnOn({ fadeIn: true, analyse: false }), 'toBe', true]);
+      verify([await hook.result.current.turnOn({ fadeIn: true, analyse: false }), "toBe", true]);
     });
     const audio = document.querySelector("audio");
     act(() => frames.at(-1)(2000));
-    verify([audio.volume, 'toBeCloseTo', 0.3], [frames, 'toHaveLength', 2]);
+    verify([audio.volume, "toBeCloseTo", 0.3], [frames, "toHaveLength", 2]);
     act(() => frames.at(-1)(3000));
-    verify([audio.volume, 'toBeCloseTo', 0.6], [frames, 'toHaveLength', 2], [cancelAnimationFrame, 'toHaveBeenCalled']);
+    verify([audio.volume, "toBeCloseTo", 0.6], [frames, "toHaveLength", 2], [cancelAnimationFrame, "toHaveBeenCalled"]);
   });
   test("clamps volume and switches valid stations", async () => {
     const hook = renderHook(() => useRadio(), { wrapper });
     act(() => hook.result.current.setVolume(4));
     expect(hook.result.current.volume).toBe(1);
-    verify([mocks.updateUiPreferences, 'toHaveBeenLastCalledWith', "radio", expect.objectContaining({ volume: 1 })]);
+    verify([mocks.updateUiPreferences, "toHaveBeenLastCalledWith", "radio", expect.objectContaining({ volume: 1 })]);
     act(() => hook.result.current.setVolume("bad"));
     expect(hook.result.current.volume).toBe(0.1);
     act(() => hook.result.current.setStation("unknown"));
@@ -221,18 +279,22 @@ describe("radio context", () => {
     act(() => hook.result.current.setStation("indiepop"));
     await act(async () => Promise.resolve());
     same([hook.result.current.stationId, "indiepop"], [hook.result.current.station.id, "indiepop"]);
-    verify([document.querySelector("audio").src, 'toContain', "indiepop"], [hook.result.current.isPlaying, 'toBe', true]);
-    verify([mocks.updateUiPreferences, 'toHaveBeenCalledWith', "radio", expect.objectContaining({ stationId: "indiepop" })]);
+    verify([document.querySelector("audio").src, "toContain", "indiepop"], [hook.result.current.isPlaying, "toBe", true]);
+    verify([mocks.updateUiPreferences, "toHaveBeenCalledWith", "radio", expect.objectContaining({ stationId: "indiepop" })]);
     expect(mocks.updateUiPreferences).toHaveBeenCalledTimes(1);
   });
   test("resumes the selected station when switching during loading", async () => {
     let resolveOld;
     HTMLMediaElement.prototype.play.mockReturnValueOnce(
-      new Promise((resolve) => { resolveOld = resolve; })
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      })
     );
     const hook = renderHook(() => useRadio(), { wrapper });
     let oldPlayback;
-    act(() => { oldPlayback = hook.result.current.turnOn({ analyse: false }); });
+    act(() => {
+      oldPlayback = hook.result.current.turnOn({ analyse: false });
+    });
     expect(hook.result.current.isLoading).toBe(true);
     act(() => hook.result.current.setStation("indiepop"));
     await act(async () => Promise.resolve());
@@ -250,16 +312,15 @@ describe("radio context", () => {
     mocks.updateUiPreferences.mockClear();
     act(() => hook.result.current.setStation("indiepop"));
     same([hook.result.current.station.id, "indiepop"], [hook.result.current.error, ""], [hook.result.current.isLoading, false]);
-    verify([HTMLMediaElement.prototype.play, 'not.toHaveBeenCalled'], [mocks.updateUiPreferences, 'toHaveBeenCalledTimes', 1]);
-    verify([mocks.updateUiPreferences, 'toHaveBeenCalledWith', "radio", expect.objectContaining({ stationId: "indiepop" })]);
+    verify([HTMLMediaElement.prototype.play, "not.toHaveBeenCalled"], [mocks.updateUiPreferences, "toHaveBeenCalledTimes", 1]);
+    verify([mocks.updateUiPreferences, "toHaveBeenCalledWith", "radio", expect.objectContaining({ stationId: "indiepop" })]);
   });
   test("uses the latest station for a later manual start", async () => {
     const hook = renderHook(() => useRadio(), { wrapper });
     act(() => hook.result.current.setStation("indiepop"));
     const audio = document.querySelector("audio");
     audio.removeAttribute("src");
-    await act(() => hook.result.current.turnOn({ analyse: false, remember: false })
-    );
+    await act(() => hook.result.current.turnOn({ analyse: false, remember: false }));
     expect(audio.src).toContain("indiepop");
   });
   test("suspends radio while recording and resumes afterwards", async () => {
@@ -271,11 +332,13 @@ describe("radio context", () => {
     HTMLMediaElement.prototype.play.mockClear();
     act(() => hook.result.current.setRecordingActive(true));
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
-    await act(async () => { expect(await hook.result.current.turnOn()).toBe(false); });
+    await act(async () => {
+      expect(await hook.result.current.turnOn()).toBe(false);
+    });
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
     act(() => hook.result.current.setRecordingActive(false));
     await act(async () => Promise.resolve());
-    verify([hook.result.current.isPlaying, 'toBe', true], [mocks.updateUiPreferences, 'not.toHaveBeenCalled']);
+    verify([hook.result.current.isPlaying, "toBe", true], [mocks.updateUiPreferences, "not.toHaveBeenCalled"]);
     HTMLMediaElement.prototype.play.mockClear();
     act(() => hook.result.current.setRecordingActive(false));
     await act(async () => Promise.resolve());
@@ -287,7 +350,7 @@ describe("radio context", () => {
     HTMLMediaElement.prototype.pause.mockClear();
     act(() => hook.result.current.setRecordingActive(false));
     await act(async () => {
-      verify([await hook.result.current.turnOn({ analyse: false, remember: false }), 'toBe', true]);
+      verify([await hook.result.current.turnOn({ analyse: false, remember: false }), "toBe", true]);
     });
     expect(mocks.updateUiPreferences).not.toHaveBeenCalled();
     act(() => hook.result.current.turnOff({ remember: false }));
@@ -300,43 +363,39 @@ describe("radio context", () => {
     act(() => hook.result.current.setRecordingActive(true));
     HTMLMediaElement.prototype.load.mockClear();
     HTMLMediaElement.prototype.play.mockClear();
-    await expect( hook.result.current.turnOn({ analyse: false, remember: false })
-    ).resolves.toBe(false);
+    await expect(hook.result.current.turnOn({ analyse: false, remember: false })).resolves.toBe(false);
     notCalled(HTMLMediaElement.prototype.load, HTMLMediaElement.prototype.play);
   });
   test("tries mirror streams and handles blocked startup autoplay", async () => {
-    HTMLMediaElement.prototype.play
-      .mockRejectedValueOnce(new Error("first mirror failed"))
-      .mockResolvedValueOnce(undefined);
+    HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("first mirror failed")).mockResolvedValueOnce(undefined);
     const hook = renderHook(() => useRadio(), { wrapper });
-    await act(async () => { expect(await hook.result.current.turnOn()).toBe(true); });
+    await act(async () => {
+      expect(await hook.result.current.turnOn()).toBe(true);
+    });
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
     hook.result.current.turnOff({ remember: false });
     const blocked = new Error("user gesture is required");
     blocked.name = "NotAllowedError";
     HTMLMediaElement.prototype.play.mockRejectedValueOnce(blocked);
     await act(async () => {
-      verify([await hook.result.current.turnOn({ fadeIn: true, remember: false }), 'toBe', false]);
+      verify([await hook.result.current.turnOn({ fadeIn: true, remember: false }), "toBe", false]);
     });
     same([hook.result.current.error, ""], [hook.result.current.isPlaying, false], [hook.result.current.isLoading, false]);
     window.dispatchEvent(new Event("keydown"));
     await act(async () => Promise.resolve());
     hook.result.current.turnOff({ remember: false });
-    HTMLMediaElement.prototype.play.mockRejectedValueOnce( new Error("user gesture required")
-    );
+    HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("user gesture required"));
     await act(async () => {
-      verify([await hook.result.current.turnOn({ fadeIn: true, remember: false }), 'toBe', false]);
+      verify([await hook.result.current.turnOn({ fadeIn: true, remember: false }), "toBe", false]);
     });
   });
   test("treats an autoplay rejection as a mirror failure without fade-in", async () => {
     const blocked = new Error("gesture required");
     blocked.name = "NotAllowedError";
-    HTMLMediaElement.prototype.play
-      .mockRejectedValueOnce(blocked)
-      .mockResolvedValueOnce(undefined);
+    HTMLMediaElement.prototype.play.mockRejectedValueOnce(blocked).mockResolvedValueOnce(undefined);
     const hook = renderHook(() => useRadio(), { wrapper });
     await act(async () => {
-      verify([await hook.result.current.turnOn({ analyse: false, fadeIn: false, remember: false }), 'toBe', true]);
+      verify([await hook.result.current.turnOn({ analyse: false, fadeIn: false, remember: false }), "toBe", true]);
     });
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
     window.dispatchEvent(new Event("keydown"));
@@ -345,30 +404,34 @@ describe("radio context", () => {
   });
   test("reports exhausted streams and recovers from media errors", async () => {
     const order = [];
-    const immediate = vi
-      .spyOn(globalThis, "setTimeout")
-      .mockImplementation((callback) => { order.push("delay"); callback(); return 1; });
+    const immediate = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback) => {
+      order.push("delay");
+      callback();
+      return 1;
+    });
     HTMLMediaElement.prototype.play.mockImplementation(() => {
       order.push("play");
       return Promise.reject(new Error("offline"));
     });
     const hook = renderHook(() => useRadio(), { wrapper });
-    await act(async () => { expect(await hook.result.current.turnOn()).toBe(false); });
-    verify([hook.result.current.error, 'toContain', "offline"], [hook.result.current.isPlaying, 'toBe', false]);
+    await act(async () => {
+      expect(await hook.result.current.turnOn()).toBe(false);
+    });
+    verify([hook.result.current.error, "toContain", "offline"], [hook.result.current.isPlaying, "toBe", false]);
     calledTimes([HTMLMediaElement.prototype.play, 4], [immediate, 1]);
-    verify([immediate, 'toHaveBeenCalledWith', expect.any(Function), 500], [order, 'toEqual', ["play", "play", "delay", "play", "play"]]);
+    verify([immediate, "toHaveBeenCalledWith", expect.any(Function), 500], [order, "toEqual", ["play", "play", "delay", "play", "play"]]);
     immediate.mockRestore();
     HTMLMediaElement.prototype.play.mockResolvedValue(undefined);
     await act(() => hook.result.current.turnOn());
     mocks.updateUiPreferences.mockClear();
     HTMLMediaElement.prototype.play.mockClear();
     await act(async () => fireEvent.error(document.querySelector("audio")));
-    verify([HTMLMediaElement.prototype.play, 'toHaveBeenCalled'], [mocks.updateUiPreferences, 'not.toHaveBeenCalled']);
+    verify([HTMLMediaElement.prototype.play, "toHaveBeenCalled"], [mocks.updateUiPreferences, "not.toHaveBeenCalled"]);
   });
   test("reports a media error before any playback attempt", () => {
     const hook = renderHook(() => useRadio(), { wrapper });
     fireEvent.error(document.querySelector("audio"));
-    verify([hook.result.current.error, 'toContain', hook.result.current.station.name]);
+    verify([hook.result.current.error, "toContain", hook.result.current.station.name]);
     same([hook.result.current.isPlaying, false], [hook.result.current.isLoading, false]);
   });
   test("builds an analyser graph and clears its visual state", async () => {
@@ -384,22 +447,31 @@ describe("radio context", () => {
     await act(async () => {
       expect(await hook.result.current.turnOn({ analyse: true })).toBe(true);
     });
-    verify([context.resume, 'toHaveBeenCalled'], [analyser.getByteFrequencyData, 'toHaveBeenCalledTimes', 1], [hook.result.current.getBassLevel(), 'toBeGreaterThan', 0], [hook.result.current.getSpectrumLevels()[0], 'toBeGreaterThan', 0]);
-    verify([document.documentElement.style.getPropertyValue("--radio-analysis-active"), 'toBe', "1"]);
-    verify([document.documentElement.style.getPropertyValue("--radio-bass"), 'toBe', hook.result.current.getBassLevel().toFixed(3)]);
-    verify([document.documentElement.style.getPropertyValue("--radio-band-0"), 'toBe', hook.result.current.getSpectrumLevels()[0].toFixed(3)]);
+    verify(
+      [context.resume, "toHaveBeenCalled"],
+      [analyser.getByteFrequencyData, "toHaveBeenCalledTimes", 1],
+      [hook.result.current.getBassLevel(), "toBeGreaterThan", 0],
+      [hook.result.current.getSpectrumLevels()[0], "toBeGreaterThan", 0]
+    );
+    verify([document.documentElement.style.getPropertyValue("--radio-analysis-active"), "toBe", "1"]);
+    verify([document.documentElement.style.getPropertyValue("--radio-bass"), "toBe", hook.result.current.getBassLevel().toFixed(3)]);
+    verify([
+      document.documentElement.style.getPropertyValue("--radio-band-0"),
+      "toBe",
+      hook.result.current.getSpectrumLevels()[0].toFixed(3)
+    ]);
     await act(() => hook.result.current.turnOn({ analyse: true }));
-    verify([constructions, 'toBe', 1], [analyser.getByteFrequencyData, 'toHaveBeenCalledTimes', 2]);
+    verify([constructions, "toBe", 1], [analyser.getByteFrequencyData, "toHaveBeenCalledTimes", 2]);
     act(() => hook.result.current.turnOff({ remember: false }));
-    verify([document.documentElement.style.getPropertyValue("--radio-analysis-active"), 'toBe', "0"]);
-    verify([document.documentElement.style.getPropertyValue("--radio-bass"), 'toBe', "0"]);
-    verify([document.documentElement.style.getPropertyValue("--radio-band-17"), 'toBe', "0"]);
+    verify([document.documentElement.style.getPropertyValue("--radio-analysis-active"), "toBe", "0"]);
+    verify([document.documentElement.style.getPropertyValue("--radio-bass"), "toBe", "0"]);
+    verify([document.documentElement.style.getPropertyValue("--radio-band-17"), "toBe", "0"]);
     expect(hook.result.current.getSpectrumLevels()).toEqual(Array(18).fill(0));
     const audio = document.querySelector("audio");
     HTMLMediaElement.prototype.load.mockClear();
     HTMLMediaElement.prototype.pause.mockClear();
     hook.unmount();
-    verify([context.close, 'toHaveBeenCalled'], [audio.hasAttribute("src"), 'toBe', false]);
+    verify([context.close, "toHaveBeenCalled"], [audio.hasAttribute("src"), "toBe", false]);
     calledTimes([HTMLMediaElement.prototype.pause, 1], [HTMLMediaElement.prototype.load, 1]);
   });
   test("handles a silent fade and a fade interrupted by pause", async () => {
@@ -409,19 +481,18 @@ describe("radio context", () => {
     const frameCount = frames.length;
     await act(() => hook.result.current.turnOn({ fadeIn: true }));
     const audio = document.querySelector("audio");
-    verify([audio.volume, 'toBe', 0], [frames, 'toHaveLength', frameCount]);
+    verify([audio.volume, "toBe", 0], [frames, "toHaveLength", frameCount]);
     act(() => hook.result.current.setVolume(0.5));
     await act(() => hook.result.current.turnOn({ fadeIn: true }));
     audio.pause();
     const pausedFrameCount = frames.length;
     act(() => frames.at(-1)(performance.now() + 100));
-    verify([audio.paused, 'toBe', true], [frames, 'toHaveLength', pausedFrameCount]);
+    verify([audio.paused, "toBe", true], [frames, "toHaveLength", pausedFrameCount]);
   });
   test("cancels a stale fade whose audio element was detached", async () => {
     const frames = installFrameQueue();
     const hook = renderHook(() => useRadio(), { wrapper });
-    await act(() => hook.result.current.turnOn({ fadeIn: true, analyse: false })
-    );
+    await act(() => hook.result.current.turnOn({ fadeIn: true, analyse: false }));
     const audio = document.querySelector("audio");
     const staleFrame = frames.at(-1);
     hook.unmount();
@@ -431,16 +502,22 @@ describe("radio context", () => {
     expect(frames).toHaveLength(frameCount);
   });
   test("stops analysis after a browser analyser failure", async () => {
-    installAudio({ getByteFrequencyData: vi.fn(() => { throw new Error("device removed"); }) });
+    installAudio({
+      getByteFrequencyData: vi.fn(() => {
+        throw new Error("device removed");
+      })
+    });
     const hook = renderHook(() => useRadio(), { wrapper });
     await act(() => hook.result.current.turnOn({ analyse: true }));
-    verify([document.documentElement.style.getPropertyValue("--radio-analysis-active"), 'toBe', "0"]);
+    verify([document.documentElement.style.getPropertyValue("--radio-analysis-active"), "toBe", "0"]);
   });
   test("cancels a pending playback and reports the final media-stream error", async () => {
     let resolvePlay;
     HTMLMediaElement.prototype.play.mockImplementationOnce(
       () =>
-        new Promise((resolve) => { resolvePlay = resolve; })
+        new Promise((resolve) => {
+          resolvePlay = resolve;
+        })
     );
     const hook = renderHook(() => useRadio(), { wrapper });
     const pending = hook.result.current.turnOn();
@@ -458,46 +535,51 @@ describe("radio context", () => {
     expect(hook.result.current.error).not.toBe("");
   });
   test("reports a generic error when media rejects without a reason", async () => {
-    const immediate = vi
-      .spyOn(globalThis, "setTimeout")
-      .mockImplementation((callback) => { callback(); return 1; });
+    const immediate = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback) => {
+      callback();
+      return 1;
+    });
     HTMLMediaElement.prototype.play.mockRejectedValue(undefined);
     const hook = renderHook(() => useRadio(), { wrapper });
-    await act(async () => { expect(await hook.result.current.turnOn()).toBe(false); });
+    await act(async () => {
+      expect(await hook.result.current.turnOn()).toBe(false);
+    });
     expect(hook.result.current.error).not.toBe("");
-    verify([hook.result.current.error, 'toContain', "No radio stream could be played"]);
+    verify([hook.result.current.error, "toContain", "No radio stream could be played"]);
     immediate.mockRestore();
   });
   test("recognizes message-only autoplay blocks and reasonless objects", async () => {
-    HTMLMediaElement.prototype.play.mockRejectedValueOnce( new Error("user gesture is required")
-    );
+    HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("user gesture is required"));
     const blocked = renderHook(() => useRadio(), { wrapper });
     await act(async () => {
       expect(await blocked.result.current.turnOn({ fadeIn: true })).toBe(false);
     });
     blocked.unmount();
-    const immediate = vi
-      .spyOn(globalThis, "setTimeout")
-      .mockImplementation((callback) => { callback(); return 1; });
+    const immediate = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback) => {
+      callback();
+      return 1;
+    });
     HTMLMediaElement.prototype.play.mockRejectedValue({});
     const reasonless = renderHook(() => useRadio(), { wrapper });
-    await act(async () => { expect(await reasonless.result.current.turnOn()).toBe(false); });
-    verify([reasonless.result.current.error, 'not.toBe', ""], [immediate, 'toHaveBeenCalledTimes', 1]);
+    await act(async () => {
+      expect(await reasonless.result.current.turnOn()).toBe(false);
+    });
+    verify([reasonless.result.current.error, "not.toBe", ""], [immediate, "toHaveBeenCalledTimes", 1]);
     immediate.mockRestore();
-    HTMLMediaElement.prototype.play.mockRejectedValueOnce( "user gesture is required"
-    );
+    HTMLMediaElement.prototype.play.mockRejectedValueOnce("user gesture is required");
     const stringReason = renderHook(() => useRadio(), { wrapper });
     await act(async () => {
-      verify([await stringReason.result.current.turnOn({ fadeIn: true }), 'toBe', false]);
+      verify([await stringReason.result.current.turnOn({ fadeIn: true }), "toBe", false]);
     });
     stringReason.unmount();
-    const immediateNull = vi
-      .spyOn(globalThis, "setTimeout")
-      .mockImplementation((callback) => { callback(); return 1; });
+    const immediateNull = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback) => {
+      callback();
+      return 1;
+    });
     HTMLMediaElement.prototype.play.mockRejectedValue(null);
     const nullReason = renderHook(() => useRadio(), { wrapper });
     await act(async () => {
-      verify([await nullReason.result.current.turnOn({ fadeIn: true }), 'toBe', false]);
+      verify([await nullReason.result.current.turnOn({ fadeIn: true }), "toBe", false]);
     });
     immediateNull.mockRestore();
   });
@@ -526,12 +608,14 @@ describe("radio context", () => {
     act(() => hook.result.current.setRecordingActive(true));
     act(() => hook.result.current.setRecordingActive(false));
     await act(async () => Promise.resolve());
-    verify([hook.result.current.isPlaying, 'toBe', false], [HTMLMediaElement.prototype.play, 'not.toHaveBeenCalled']);
+    verify([hook.result.current.isPlaying, "toBe", false], [HTMLMediaElement.prototype.play, "not.toHaveBeenCalled"]);
   });
   test("ignores late blocked and failed playback after unmount", async () => {
     let rejectBlocked;
     HTMLMediaElement.prototype.play.mockReturnValueOnce(
-      new Promise((_resolve, reject) => { rejectBlocked = reject; })
+      new Promise((_resolve, reject) => {
+        rejectBlocked = reject;
+      })
     );
     const blockedHook = renderHook(() => useRadio(), { wrapper });
     const blockedPlayback = blockedHook.result.current.turnOn({ fadeIn: true });
@@ -542,7 +626,9 @@ describe("radio context", () => {
     await expect(blockedPlayback).resolves.toBe(false);
     let rejectFailed;
     HTMLMediaElement.prototype.play.mockReturnValueOnce(
-      new Promise((_resolve, reject) => { rejectFailed = reject; })
+      new Promise((_resolve, reject) => {
+        rejectFailed = reject;
+      })
     );
     const failedHook = renderHook(() => useRadio(), { wrapper });
     const failedPlayback = failedHook.result.current.turnOn();
@@ -553,7 +639,11 @@ describe("radio context", () => {
   test("cancels an older playback before it tries another mirror", async () => {
     let rejectFirst;
     HTMLMediaElement.prototype.play
-      .mockImplementationOnce( () => new Promise((_resolve, reject) => { rejectFirst = reject; })
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFirst = reject;
+          })
       )
       .mockResolvedValue(undefined);
     const hook = renderHook(() => useRadio(), { wrapper });
@@ -568,7 +658,9 @@ describe("radio context", () => {
   test("does not try another mirror after recording suspension", async () => {
     let rejectPlay;
     HTMLMediaElement.prototype.play.mockReturnValueOnce(
-      new Promise((_resolve, reject) => { rejectPlay = reject; })
+      new Promise((_resolve, reject) => {
+        rejectPlay = reject;
+      })
     );
     const hook = renderHook(() => useRadio(), { wrapper });
     const pending = hook.result.current.turnOn({ analyse: false });
@@ -581,15 +673,25 @@ describe("radio context", () => {
     let rejectOld;
     let resolveNew;
     HTMLMediaElement.prototype.play
-      .mockReturnValueOnce( new Promise((_resolve, reject) => { rejectOld = reject; })
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectOld = reject;
+        })
       )
-      .mockReturnValueOnce( new Promise((resolve) => { resolveNew = resolve; })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveNew = resolve;
+        })
       );
     const hook = renderHook(() => useRadio(), { wrapper });
     let oldPlayback;
     let newPlayback;
-    act(() => { oldPlayback = hook.result.current.turnOn({ analyse: false }); });
-    act(() => { newPlayback = hook.result.current.turnOn({ analyse: false }); });
+    act(() => {
+      oldPlayback = hook.result.current.turnOn({ analyse: false });
+    });
+    act(() => {
+      newPlayback = hook.result.current.turnOn({ analyse: false });
+    });
     rejectOld(new Error("obsolete"));
     await act(async () => expect(await oldPlayback).toBe(false));
     expect(hook.result.current.isLoading).toBe(true);
@@ -650,12 +752,12 @@ describe("radio context", () => {
     const blocked = new Error("gesture required");
     blocked.name = "NotAllowedError";
     let resolveRetry;
-    HTMLMediaElement.prototype.play
-      .mockRejectedValueOnce(blocked)
-      .mockImplementationOnce(function retryPending() {
-        Object.defineProperty(this, "paused", { configurable: true, value: false });
-        return new Promise((resolve) => { resolveRetry = resolve; });
+    HTMLMediaElement.prototype.play.mockRejectedValueOnce(blocked).mockImplementationOnce(function retryPending() {
+      Object.defineProperty(this, "paused", { configurable: true, value: false });
+      return new Promise((resolve) => {
+        resolveRetry = resolve;
       });
+    });
     const { analyser } = installAudio();
     const hook = renderHook(() => useRadio(), { wrapper });
     await act(async () => Promise.resolve());
@@ -671,7 +773,7 @@ describe("radio context", () => {
     calledTimes([HTMLMediaElement.prototype.play, 2], [analyser.getByteFrequencyData, 2]);
     window.dispatchEvent(new Event("keydown"));
     await act(async () => Promise.resolve());
-    verify([HTMLMediaElement.prototype.play, 'toHaveBeenCalledTimes', 2], [mocks.updateUiPreferences, 'not.toHaveBeenCalled']);
+    verify([HTMLMediaElement.prototype.play, "toHaveBeenCalledTimes", 2], [mocks.updateUiPreferences, "not.toHaveBeenCalled"]);
   });
   test("starts enabled radio with analysis but without rewriting preferences", async () => {
     store({ stationId: "poptron", volume: 0.45, enabled: true });
@@ -679,7 +781,7 @@ describe("radio context", () => {
     const hook = renderHook(() => useRadio(), { wrapper });
     await act(async () => Promise.resolve());
     same([hook.result.current.isPlaying, true], [document.querySelector("audio").volume, 0]);
-    verify([analyser.getByteFrequencyData, 'toHaveBeenCalled'], [mocks.updateUiPreferences, 'not.toHaveBeenCalled']);
+    verify([analyser.getByteFrequencyData, "toHaveBeenCalled"], [mocks.updateUiPreferences, "not.toHaveBeenCalled"]);
   });
   test("removes the keydown autoplay listener on unmount", async () => {
     store({ stationId: "poptron", volume: 0.45, enabled: true });
@@ -691,7 +793,7 @@ describe("radio context", () => {
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
     const removeListener = vi.spyOn(window, "removeEventListener");
     hook.unmount();
-    verify([removeListener, 'toHaveBeenCalledWith', "keydown", expect.any(Function), true]);
+    verify([removeListener, "toHaveBeenCalledWith", "keydown", expect.any(Function), true]);
     window.dispatchEvent(new Event("keydown"));
     await act(async () => Promise.resolve());
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);

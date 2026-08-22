@@ -97,13 +97,7 @@ vi.mock("../src/pages/Library/components", () => ({
     </div>
   ),
   LibraryResults: ({ error, songs, children }) =>
-    error ? (
-      <p role="alert">{error.message}</p>
-    ) : songs.length ? (
-      children
-    ) : (
-      <p data-testid="empty-library">empty</p>
-    ),
+    error ? <p role="alert">{error.message}</p> : songs.length ? children : <p data-testid="empty-library">empty</p>,
   SongGrid: ({ songs, onOpenKaraoke, onOpenProcessing, onOpenRecordings, onOpenSettings }) =>
     songs.map((song) => (
       <div key={song.id} data-testid={`song-${song.id}`}>
@@ -201,11 +195,7 @@ describe("library page", () => {
     // freezing the whole system, which only cleared up once the renderer's
     // GPU process was killed by closing the window. Suppress those
     // animations for as long as any song is actively processing/queued.
-    mocks.polls = [
-      { data: [{ id: "one", title: "One", status: "queued" }] },
-      { data: [] },
-      { data: null }
-    ];
+    mocks.polls = [{ data: [{ id: "one", title: "One", status: "queued" }] }, { data: [] }, { data: null }];
     const result = render(<Library />);
     await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(true));
     cleanup();
@@ -222,12 +212,7 @@ describe("library page", () => {
     fireEvent.click(open);
     fireEvent.click(open);
     await vi.advanceTimersByTimeAsync(920);
-    verify([
-      mocks.navigate,
-      "toHaveBeenCalledWith",
-      "/karaoke",
-      { state: { songId: "one", autoPlay: true } }
-    ]);
+    verify([mocks.navigate, "toHaveBeenCalledWith", "/karaoke", { state: { songId: "one", autoPlay: true } }]);
     cleanup();
     mocks.sharedRoom.room = { host: false };
     mocks.sharedRoom.openKaraoke.mockResolvedValueOnce(false);
@@ -300,10 +285,7 @@ describe("library page", () => {
   test("connects import and action hooks to page state", async () => {
     const result = render(<Library />);
     act(() => mocks.importOptions.onStarted(songs[1]));
-    verify(
-      [mocks.actionOptions.processingSongId, "toBe", "two"],
-      [mocks.roomOptions.localSongs, "toHaveLength", 2]
-    );
+    verify([mocks.actionOptions.processingSongId, "toBe", "two"], [mocks.roomOptions.localSongs, "toHaveLength", 2]);
     fireEvent.click(result.getAllByTestId("song-settings")[0]);
     await waitFor(() => expect(result.getByTestId("song-settings-modal").textContent).toBe("one"));
     fireEvent.click(result.getByTestId("song-settings-modal"));
@@ -375,11 +357,7 @@ describe("library page", () => {
     expect(result.getByTestId("processing-modal")).toBeTruthy();
     cleanup();
     mocks.pollIndex = 0;
-    mocks.polls = [
-      { data: [songs[0], processingSong] },
-      { data: [] },
-      { data: null, error: { status: 404 } }
-    ];
+    mocks.polls = [{ data: [songs[0], processingSong] }, { data: [] }, { data: null, error: { status: 404 } }];
     render(<Library />);
     await act(async () => Promise.resolve());
   });
@@ -392,11 +370,7 @@ describe("library page", () => {
         })
     );
     mocks.settings = null;
-    mocks.polls = [
-      { data: [{ title: "Working", status: "processing" }], refresh },
-      { data: null },
-      { data: null }
-    ];
+    mocks.polls = [{ data: [{ title: "Working", status: "processing" }], refresh }, { data: null }, { data: null }];
     const result = render(<Library />);
     act(() => mocks.importOptions.onStarted(null));
     fireEvent.click(result.getByTestId("open-room"));

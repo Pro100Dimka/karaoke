@@ -6,8 +6,7 @@ const installer = read("../scripts/karaoke-studio.iss");
 const electronMain = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 const matches = (source, patterns) => patterns.forEach((pattern) => assert.match(source, pattern));
-const excludes = (source, patterns) =>
-  patterns.forEach((pattern) => assert.doesNotMatch(source, pattern));
+const excludes = (source, patterns) => patterns.forEach((pattern) => assert.doesNotMatch(source, pattern));
 test("installer theme and optional-model handoff remain wired", () => {
   matches(installer, [
     /InstallModelsCheck\.Checked := True/,
@@ -32,10 +31,7 @@ test("installer theme and optional-model handoff remain wired", () => {
     /Check: EnsureApplicationExecutable/,
     /function EnsureApplicationExecutable: Boolean/
   ]);
-  excludes(installer, [
-    /\{localappdata\}\\A&D Voice|\{userappdata\}\\A&D Voice/,
-    /ThemeIconPreviewsDir|TBitmapImage/
-  ]);
+  excludes(installer, [/\{localappdata\}\\A&D Voice|\{userappdata\}\\A&D Voice/, /ThemeIconPreviewsDir|TBitmapImage/]);
   matches(electronMain, [/--advoice-theme=\$\{initialTheme\}/]);
   matches(preload, [/initialTheme/]);
 });
@@ -53,8 +49,5 @@ test("installer window toggles native fullscreen through the trusted IPC boundar
     /"enter-full-screen"/,
     /"leave-full-screen"/
   ]);
-  matches(preload, [
-    /toggleFullscreen: \(\) => ipcRenderer\.invoke\("window:toggleFullscreen"\)/,
-    /onFullscreenChange/
-  ]);
+  matches(preload, [/toggleFullscreen: \(\) => ipcRenderer\.invoke\("window:toggleFullscreen"\)/, /onFullscreenChange/]);
 });

@@ -14,7 +14,8 @@ import { Button, Modal, Stack } from "../theme/ui";
 import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "./dialog-utils";
 
 const key = Symbol.for("advoice.app-dialog-context");
-const DialogContext = (globalThis[key] ??= createContext(null));
+if (!globalThis[key]) globalThis[key] = createContext(null);
+const DialogContext = globalThis[key];
 export const resolveDialog = (dialog, result) => dialog?.resolve(result);
 
 function DialogModal({ dialog, close }) {
@@ -55,7 +56,7 @@ export function AppDialogProvider({ children }) {
   const [dialog, setDialog] = useState(null);
   const active = useRef(null);
   const close = useCallback((result) => {
-    const current = active.current;
+    const { current } = active;
     active.current = null;
     setDialog(null);
     resolveDialog(current, result);
@@ -78,7 +79,7 @@ export function AppDialogProvider({ children }) {
   );
   useEffect(
     () => () => {
-      const current = active.current;
+      const { current } = active;
       active.current = null;
       resolveDialog(current, getDialogCloseResult(current?.kind));
     },

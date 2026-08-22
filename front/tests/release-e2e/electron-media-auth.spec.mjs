@@ -30,7 +30,9 @@ test("real Electron media element authenticates localhost playback and preserves
   const token = "release-e2e-launch-secret";
   const wav = waveBuffer();
   let resolveRequest;
-  const requestSeen = new Promise((resolve) => { resolveRequest = resolve; });
+  const requestSeen = new Promise((resolve) => {
+    resolveRequest = resolve;
+  });
 
   const server = http.createServer((request, response) => {
     if (request.url !== "/songs/release-song/audio/instrumental") {

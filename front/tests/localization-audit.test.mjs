@@ -5,18 +5,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { violationsFor } from "../scripts/audit-localization.mjs";
 const directories = [];
 const inspect = (source) => {
-  const directory = fs.mkdtempSync( path.join(os.tmpdir(), "localization-audit-")
-  );
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "localization-audit-"));
   directories.push(directory);
   const file = path.join(directory, "fixture.jsx");
   fs.writeFileSync(file, source);
   return violationsFor(file);
 };
 afterEach(() => {
-  directories
-    .splice(0)
-    .forEach((directory) => fs.rmSync(directory, { force: true, recursive: true })
-    );
+  directories.splice(0).forEach((directory) => fs.rmSync(directory, { force: true, recursive: true }));
 });
 describe("localization audit", () => {
   it("accepts direct, wrapped and exclusively translated messages", () => {

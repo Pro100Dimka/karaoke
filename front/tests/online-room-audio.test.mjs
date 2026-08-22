@@ -41,7 +41,7 @@ test("closes the participant notification AudioContext when playback actually en
   expect(oscillators[1].onended).toBeTypeOf("function");
   oscillators[1].onended();
   await Promise.resolve();
-  verify([close, 'toHaveBeenCalledTimes', 1], [oscillators[1].onended, 'toBeNull']);
+  verify([close, "toHaveBeenCalledTimes", 1], [oscillators[1].onended, "toBeNull"]);
 });
 test("notification sound stays optional when Web Audio is unavailable or fails", () => {
   expect(() => playParticipantJoinedSound()).not.toThrow();

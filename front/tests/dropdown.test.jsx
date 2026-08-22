@@ -1,9 +1,7 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import Select from "../src/theme/ui/Select/index.jsx";
-
-afterEach(cleanup);
 const options = [
   { value: "a", label: "Alpha" },
   { value: "b", label: "Beta" }
