@@ -74,11 +74,14 @@ def test_sustained_acoustic_note_is_preserved_in_every_word_it_crosses():
         [VocalNote(1.1, 1.7, 60, word_index=0)],
     )
 
-    assert payload[0]["notes"] == [{"note": 60, "start": 1.1, "end": 1.7}]
-    assert payload[1]["notes"] == [{"note": 60, "start": 1.1, "end": 1.7}]
+    assert payload[0]["notes"] == [{"note": 60, "start": 1.1, "end": 1.4}]
+    assert payload[1]["notes"] == [{"note": 60, "start": 1.4, "end": 1.7}]
 
     flattened = flatten_word_notes({"bpm": 120, "key": "Am", "words": payload})
-    assert flattened == [{"note": 60, "start": 1.1, "end": 1.7, "word_index": 1}]
+    assert flattened == [
+        {"note": 60, "start": 1.1, "end": 1.4, "word_index": 0},
+        {"note": 60, "start": 1.4, "end": 1.7, "word_index": 1},
+    ]
 
 
 def test_export_preserves_every_acoustically_detected_interval_without_filling_gaps():

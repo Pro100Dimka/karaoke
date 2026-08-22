@@ -1,5 +1,5 @@
 class AICoreError(RuntimeError):
-    pass
+    """Base error exposed by the AI boundary."""
 
 
 class EngineUnavailableError(AICoreError):

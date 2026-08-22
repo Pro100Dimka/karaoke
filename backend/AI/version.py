@@ -1,1 +1,1 @@
-AI_BUILD_ID = "canonical-vocal-reference-20260820"
+AI_BUILD_ID = "2026.38-clean"

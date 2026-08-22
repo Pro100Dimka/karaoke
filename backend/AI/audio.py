@@ -1,227 +1,56 @@
 from __future__ import annotations
 
-import math
 import os
 import subprocess
 import tempfile
-import time
 from contextlib import contextmanager
-from contextvars import ContextVar
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from scipy.signal import resample_poly
-
-import config
 
 from .errors import AICoreError
-from .profiler import profile_operation, record_operation
-
-DEFAULT_FFMPEG_TIMEOUT_SEC = 30 * 60
 
 
-def run_ffmpeg(
-    command: list[str],
-    *,
-    timeout_sec: float,
-    not_found_message: str,
-    timeout_message: str,
-    failed_message: str,
-) -> None:
-    try:
-        subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
-    except FileNotFoundError as exc:
-        raise AICoreError(not_found_message) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise AICoreError(timeout_message) from exc
-    except subprocess.CalledProcessError as exc:
-        detail = exc.stderr.decode("utf-8", "replace").strip()
-        raise AICoreError(detail or failed_message) from exc
-_AUDIO_CACHE: ContextVar[dict[tuple[str, int, int, int | None], tuple[np.ndarray, int]] | None] = (
-    ContextVar("ai_audio_cache", default=None)
-)
+def run_ffmpeg(arguments: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess:
+    command = [os.getenv("FFMPEG_BINARY", "ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", *arguments]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    if result.returncode:
+        raise AICoreError(result.stderr.strip() or f"ffmpeg exited with {result.returncode}")
+    return result
 
 
 @contextmanager
 def audio_buffer_cache():
-    token = _AUDIO_CACHE.set({})
+    yield
+
+
+def _render(source: str | Path, target: Path, sample_rate: int, channels: int) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(suffix=target.suffix, dir=target.parent)
+    os.close(handle)
     try:
-        yield
+        run_ffmpeg(["-i", str(source), "-vn", "-ar", str(sample_rate), "-ac", str(channels), temporary])
+        os.replace(temporary, target)
     finally:
-        _AUDIO_CACHE.reset(token)
+        Path(temporary).unlink(missing_ok=True)
+    return target
 
 
-
-def render_wav_atomic(
-    source: str | Path,
-    target: str | Path,
-    arguments: list[str],
-    *,
-    timeout_sec: float,
-    not_found_message: str,
-    timeout_message: str,
-    failed_message: str,
-    validate=None,
-    profile_name: str | None = None,
-) -> Path:
-    source_path, target_path = Path(source), Path(target)
-    if not source_path.is_file():
-        raise FileNotFoundError(source_path)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f"{target_path.name}.",
-        suffix=".wav.tmp",
-        dir=target_path.parent,
-    )
-    os.close(descriptor)
-    temporary = Path(temporary_name)
-    command = [
-        config.FFMPEG_EXE,
-        "-y",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        str(source_path),
-        *arguments,
-        str(temporary),
-    ]
-    try:
-        if profile_name:
-            with profile_operation(profile_name, byte_count=source_path.stat().st_size):
-                run_ffmpeg(
-                    command,
-                    timeout_sec=timeout_sec,
-                    not_found_message=not_found_message,
-                    timeout_message=timeout_message,
-                    failed_message=failed_message,
-                )
-        else:
-            run_ffmpeg(
-                command,
-                timeout_sec=timeout_sec,
-                not_found_message=not_found_message,
-                timeout_message=timeout_message,
-                failed_message=failed_message,
-            )
-        if validate:
-            validate(temporary)
-        os.replace(temporary, target_path)
-        return target_path
-    finally:
-        temporary.unlink(missing_ok=True)
-
-def decode_audio(
-    source: str | Path,
-    target: str | Path,
-    sample_rate: int = 44_100,
-    *,
-    timeout_sec: int = DEFAULT_FFMPEG_TIMEOUT_SEC,
-) -> Path:
-    source_path, target_path = Path(source), Path(target)
-    if not source_path.is_file():
-        raise FileNotFoundError(source_path)
-    if sample_rate <= 0:
-        raise ValueError("sample_rate must be positive")
-
-    def validate(path: Path) -> None:
-        if not path.is_file() or path.stat().st_size < 44:
-            raise AICoreError("FFmpeg finished but did not create a valid WAV file")
-        info = sf.info(path)
-        if info.frames <= 0 or info.samplerate != sample_rate:
-            raise AICoreError("FFmpeg created an empty WAV or unexpected sample rate")
-
-    started = time.perf_counter()
-    try:
-        result = render_wav_atomic(
-            source_path,
-            target_path,
-            ["-vn", "-ac", "2", "-ar", str(sample_rate), "-c:a", "pcm_s24le", "-f", "wav"],
-            timeout_sec=timeout_sec,
-            not_found_message="FFmpeg is required but was not found in PATH",
-            timeout_message=f"FFmpeg exceeded the {timeout_sec}-second safety timeout",
-            failed_message="FFmpeg failed without an error message",
-            validate=validate,
-            profile_name="decode.ffmpeg",
-        )
-    except (OSError, RuntimeError) as exc:
-        if isinstance(exc, AICoreError):
-            raise
-        raise AICoreError(f"Could not validate decoded WAV: {exc}") from exc
-    record_operation(
-        "decode.output",
-        elapsed_sec=time.perf_counter() - started,
-        byte_count=target_path.stat().st_size,
-    )
-    return result
+def decode_audio(source: str | Path, target: str | Path, sample_rate: int = 44100, channels: int = 2) -> Path:
+    return _render(source, Path(target), sample_rate, channels)
 
 
-def encode_flac(
-    source: str | Path,
-    target: str | Path,
-    *,
-    timeout_sec: int = DEFAULT_FFMPEG_TIMEOUT_SEC,
-) -> Path:
-    source_path, target_path = Path(source), Path(target)
-    if not source_path.is_file(): raise FileNotFoundError(source_path)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f"{target_path.name}.", suffix=".flac.tmp", dir=target_path.parent
-    )
-    os.close(descriptor)
-    temporary = Path(temporary_name)
-    try:
-        run_ffmpeg(
-            [
-                config.FFMPEG_EXE, "-y", "-hide_banner", "-loglevel", "error",
-                "-i", str(source_path), "-c:a", "flac", "-compression_level", "5",
-                "-f", "flac", str(temporary),
-            ],
-            timeout_sec=timeout_sec,
-            not_found_message="FFmpeg is required but was not found in PATH",
-            timeout_message=f"FFmpeg exceeded the {timeout_sec}-second safety timeout",
-            failed_message="FFmpeg failed to encode FLAC",
-        )
-        if not temporary.is_file() or temporary.stat().st_size <= 0:
-            raise AICoreError("FFmpeg produced an empty FLAC file")
-        os.replace(temporary, target_path)
-        return target_path
-    finally:
-        temporary.unlink(missing_ok=True)
+def encode_flac(source: str | Path, target: str | Path, sample_rate: int = 44100, channels: int = 2) -> Path:
+    return _render(source, Path(target), sample_rate, channels)
 
 
-def load_mono(
-    path: str | Path,
-    target_sample_rate: int | None = None,
-) -> tuple[np.ndarray, int]:
-    source = Path(path).resolve()
-    stat = source.stat()
-    key, cache = (str(source), stat.st_size, stat.st_mtime_ns, target_sample_rate), _AUDIO_CACHE.get()
-    if cache is not None and key in cache:
-        audio, sample_rate = cache[key]
-        record_operation("audio.cache_hit", byte_count=audio.nbytes)
-        return audio.copy(), sample_rate
+def load_mono(path: str | Path, sample_rate: int = 16000) -> tuple[np.ndarray, int]:
+    import librosa
 
-    with profile_operation("audio.read", byte_count=stat.st_size): audio, sample_rate = sf.read(source, dtype="float32", always_2d=True)
-    mono = np.mean(audio, axis=1, dtype=np.float32)
-
-    if target_sample_rate is not None:
-        if target_sample_rate <= 0: raise ValueError("target_sample_rate must be positive")
-        if sample_rate != target_sample_rate:
-            divisor = math.gcd(sample_rate, target_sample_rate)
-            with profile_operation("audio.resample", byte_count=mono.nbytes):
-                mono = resample_poly(
-                    mono,
-                    target_sample_rate // divisor,
-                    sample_rate // divisor,
-                ).astype(np.float32, copy=False)
-            sample_rate = target_sample_rate
-
-    result, rate = np.ascontiguousarray(mono, dtype=np.float32), int(sample_rate)
-    if cache is not None: cache[key] = (result, rate)
-    record_operation("audio.load_mono", byte_count=stat.st_size)
-    return result.copy() if cache is not None else result, rate
+    audio, _ = librosa.load(path, sr=sample_rate, mono=True)
+    return np.asarray(audio, dtype=np.float32), sample_rate
 
 
-def duration(path: str | Path) -> float: return float(sf.info(path).duration)
+def duration(path: str | Path) -> float:
+    return float(sf.info(path).duration)

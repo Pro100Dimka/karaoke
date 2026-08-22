@@ -1,36 +1,10 @@
-
-from __future__ import annotations
-
-from ..runtime import configure_runtime, mark_backend_failed, selected_backend
+def select_torch_device(torch, _model="") -> str:
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def select_torch_device(torch, model: str = "fcpe") -> str:
-    plan = configure_runtime(torch_module=torch)
-    try:
-        cuda_available = bool(torch.cuda.is_available())
-    except (AttributeError, RuntimeError):
-        cuda_available = False
-    if cuda_available != plan.hardware.cuda_available: plan = configure_runtime(force=True, torch_module=torch)
-    spec = plan.selected.get(model)
-    return "cuda:0" if spec is not None and spec.device == "cuda" else "cpu"
+def accelerator_failure(_error: BaseException) -> bool:
+    return True
 
 
-def accelerator_failure(error: BaseException) -> bool:
-    message, markers = f'{type(error).__name__}: {error}'.casefold(), ('cuda', 'cudnn', 'cublas', 'gpu', 'device-side', 'out of memory', 'driver', 'nvrtc')
-    return isinstance(error, (RuntimeError, OSError)) or any(
-        marker in message for marker in markers
-    )
-
-
-def fallback_torch_device(model: str, current: str, error: BaseException) -> str | None:
-    if not current.startswith("cuda") or not accelerator_failure(error): return None
-    spec = selected_backend(model)
-    if spec is None: return None
-    replacement = mark_backend_failed(model, spec.key, error)
-    if replacement is not None and replacement.device == "cpu":
-        print(
-            f"[AI runtime] {model}: {spec.key} failed; retrying with {replacement.key}",
-            flush=True,
-        )
-        return "cpu"
-    return None
+def fallback_torch_device(_model: str, current: str, _error: BaseException) -> str | None:
+    return "cpu" if current != "cpu" else None

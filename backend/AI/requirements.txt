@@ -1,32 +1,12 @@
-# AI Core 2026 runtime. Install PyTorch with the CUDA wheel appropriate for the
-# target machine before this file when GPU acceleration is required.
 numpy>=1.26,<2
-ml-dtypes>=0.5.1,<0.6
-# Keep the shared numerical ABI consistent with the inference-only Windows runtime.
 scipy>=1.11,<1.15
 soundfile>=0.12,<1
 librosa>=0.10,<1
-psutil>=5.9,<8
 torchfcpe==0.0.4
-# Model-free, time-preserving late-reverb and echo suppression for vocals.
-nara_wpe==0.0.11
-# Praat PSOLA resynthesis for time-preserving vocal pitch locking.
-praat-parselmouth==0.4.7
-# Minimal inference-only dependencies for the bundled Mel-Band RoFormer.
-# The former standalone MSST environment duplicated PyTorch/CUDA and pulled in
-# training/UI packages that the application never executes.
 omegaconf==2.2.3
 ml-collections==1.1.0
 beartype==0.14.1
 rotary-embedding-torch==0.3.5
-matplotlib>=3.10,<4
-# The protobuf floor includes the upstream fix for PYSEC-2026-1805.
-protobuf>=5.29.6,<8; python_version < "3.13"
 qwen-asr==0.0.6
-# qwen-asr 0.0.6 imports private Transformers APIs and currently hard-pins
-# this version. Models are bundled and trusted; never load user-supplied models.
 transformers==4.57.6
-# Security floor for the image dependency pulled by the ASR/UI stack.
-pillow>=12.3,<13
-# One dependency declaration for dev, recovery and packaged model downloads.
 huggingface_hub[hf_xet]>=0.34,<1.0

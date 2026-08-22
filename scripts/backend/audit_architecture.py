@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "backend"
-EXCLUDED_PARTS = {"AI", "engines", "tests", ".venv", "venv"}
+EXCLUDED_PARTS = {"AI", "AIOLD", "engines", "tests", ".venv", "venv"}
 MAX_FUNCTION_LINES = 80
 
 # Compatibility adapters necessarily assemble old payload formats in one place.

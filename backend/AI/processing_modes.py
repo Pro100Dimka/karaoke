@@ -1,12 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal
 
-from .runtime import RuntimePlan, get_runtime_plan
-
-ProcessingMode = Literal["auto", "fast", "quality"]
-PROCESSING_MODES = frozenset({"auto", "fast", "quality"})
+ProcessingMode = Literal["fast", "balanced", "quality"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,43 +11,30 @@ class ProcessingProfile:
     separation_batch_size: int
     wpe_iterations: int
 
-    def fingerprint(self) -> dict[str, float | int | str]:
-        return {
-            "mode": self.mode,
-            "separation_overlap": self.separation_overlap,
-            "separation_batch_size": self.separation_batch_size,
-            "wpe_iterations": self.wpe_iterations,
-        }
+    def fingerprint(self) -> dict[str, object]:
+        return {"mode": self.mode, "separation_overlap": self.separation_overlap, "separation_batch_size": self.separation_batch_size, "wpe_iterations": self.wpe_iterations}
 
 
 def normalize_processing_mode(value: str | None) -> ProcessingMode:
-    normalized = (value or "auto").strip().lower()
-    if normalized not in PROCESSING_MODES:
-        raise ValueError(f"Unsupported processing mode: {value!r}")
-    return cast(ProcessingMode, normalized)
+    mode = str(value or "auto").strip().lower()
+    if mode == "auto":
+        return "balanced"
+    if mode not in {"fast", "balanced", "quality"}:
+        raise ValueError(f"Unsupported processing mode: {value}")
+    return mode  # type: ignore[return-value]
 
 
-def _adaptive_batch_size(plan: RuntimePlan) -> int:
-    backend = plan.selected.get("separation")
-    if backend is not None and backend.device.startswith("cuda"):
-        memory = max((gpu.memory_bytes for gpu in plan.hardware.gpus), default=0)
-        if memory >= 8 * 1024**3: return 4
-        if memory >= 4 * 1024**3: return 2
-        return 1
-    if plan.hardware.logical_cores >= 8 and plan.hardware.ram_bytes >= 16 * 1024**3:
-        return 2
-    return 1
-
-
-def resolve_processing_profile(
-    mode: str | None,
-    plan: RuntimePlan | None = None,
-) -> ProcessingProfile:
-    selected = normalize_processing_mode(mode)
-    runtime = plan or get_runtime_plan()
-    batch_size = _adaptive_batch_size(runtime)
-    if selected == "fast":
-        return ProcessingProfile(selected, 1.0526315789473684, batch_size, 1)
-    if selected == "quality":
-        return ProcessingProfile(selected, 4, min(batch_size, 4), 6)
-    return ProcessingProfile(selected, 2, batch_size, 3)
+def resolve_processing_profile(value: str | None, runtime=None, **_context) -> ProcessingProfile:
+    mode = normalize_processing_mode(value)
+    hardware = getattr(runtime, "hardware", None)
+    separation = getattr(runtime, "selected", {}).get("separation") if runtime else None
+    if getattr(separation, "device", "cpu") == "cuda":
+        memory = max((getattr(gpu, "memory_bytes", 0) for gpu in getattr(hardware, "gpus", ())), default=0)
+        batch = 4 if memory >= 8 * 1024**3 else 2 if memory >= 4 * 1024**3 else 1
+    else:
+        batch = 2 if getattr(hardware, "logical_cores", 0) >= 8 and getattr(hardware, "ram_bytes", 0) >= 16 * 1024**3 else 1
+    if mode == "fast":
+        return ProcessingProfile(mode, 20 / 19, max(batch, 4) if getattr(separation, "device", "") == "cuda" else batch, 1)
+    if mode == "quality":
+        return ProcessingProfile(mode, 4, batch, 6)
+    return ProcessingProfile(mode, 2, batch, 3)

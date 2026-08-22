@@ -10,102 +10,51 @@ from .runtime import get_runtime_plan
 
 
 class AICoreService:
-
     def __init__(self, config: CoreConfig | None = None):
         self.config = config or CoreConfig.from_env()
         self.pipeline = KaraokePipeline(self.config)
-        self._inference_lock = threading.RLock()
+        self._lock = threading.RLock()
 
-    def process_song(
-        self,
-        source_path,
-        output_dir,
-        language=None,
-        lyrics_path=None,
-        title=None,
-        progress=None,
-        cancelled=None,
-        bpm_override=None,
-        key_override=None,
-        processing_mode="auto",
-    ) -> PipelineResult:
-        with self._inference_lock:
-            return self.pipeline.run(
-                PipelineRequest(
-                    source_path=source_path,
-                    output_dir=output_dir,
-                    language=language,
-                    lyrics_path=lyrics_path,
-                    title=title,
-                    bpm_override=bpm_override,
-                    key_override=key_override,
-                    processing_mode=processing_mode,
-                    progress=progress,
-                    cancelled=cancelled,
-                )
-            )
+    def process_song(self, source_path, output_dir, **options) -> PipelineResult:
+        with self._lock:
+            return self.pipeline.run(PipelineRequest(source_path, output_dir, **options))
 
     def analyze_pitch(self, audio_path):
-        with self._inference_lock:
-            frames = self.pipeline.engines.pitch.estimate(audio_path)
-            return stabilize_pitch(frames)
+        with self._lock:
+            return stabilize_pitch(self.pipeline.engines.pitch.estimate(audio_path))
 
-    def close(self) -> None:
-        with self._inference_lock: self.pipeline.close()
+    def close(self):
+        with self._lock:
+            self.pipeline.close()
 
     def health(self) -> dict:
         engines = self.pipeline.engines
-        return {
-            "version": self.pipeline.VERSION,
-            "separator": engines.separator.name,
-            "melody": getattr(getattr(engines, "melody", None), "name", None),
-            "melody_configured": bool(
-                getattr(getattr(engines, "melody", None), "available", lambda: False)()
-            ),
-            "pitch": engines.pitch.name,
-            "transcriber": engines.transcriber.name,
-            "aligner": engines.aligner.name,
-            "ctc_alignment_models": dict(
-                getattr(getattr(engines.aligner, "_ctc", None), "models", {}) or {}
-            ),
-            "ctc_ru_configured": bool(
-                getattr(getattr(engines.aligner, "_ctc", None), "models", {}).get("ru")
-            ),
-            "ctc_uk_configured": bool(
-                getattr(getattr(engines.aligner, "_ctc", None), "models", {}).get("uk")
-            ),
-            "separation_configured": bool(getattr(engines.separator, "available", lambda: True)()),
-            "fallback_enabled": self.config.allow_fallback,
-            "runtime": get_runtime_plan().describe(),
-        }
+        return {"version": self.pipeline.VERSION, "separator": engines.separator.name, "pitch": engines.pitch.name, "transcriber": engines.transcriber.name, "aligner": engines.aligner.name, "runtime": get_runtime_plan().describe()}
 
 
-_service: AICoreService | None = None
-_service_config: CoreConfig | None = None
-_service_lock = threading.Lock()
+_service = None
+_config = None
+_lock = threading.Lock()
 
 
 def get_ai_service(config: CoreConfig | None = None) -> AICoreService:
-    global _service, _service_config
+    global _service, _config
     requested = config or CoreConfig.from_env()
-    with _service_lock:
+    with _lock:
         if _service is None:
-            _service = AICoreService(requested)
-            _service_config = requested
-        elif _service_config != requested:
-            raise ConfigurationError(
-                "AI service is already initialized with another configuration. "
-                "Create AICoreService(config) explicitly or restart the backend."
-            )
+            _service, _config = AICoreService(requested), requested
+        elif _config != requested:
+            raise ConfigurationError("AI service is already configured")
         return _service
 
 
 def reset_ai_service() -> None:
-    global _service, _service_config
-    with _service_lock:
-        if _service is not None: _service.close()
-        _service = None
-        _service_config = None
+    global _service, _config
+    with _lock:
+        if _service:
+            _service.close()
+        _service = _config = None
 
 
-def process_song(*args, **kwargs) -> PipelineResult: return get_ai_service().process_song(*args, **kwargs)
+def process_song(*args, **kwargs):
+    return get_ai_service().process_song(*args, **kwargs)
