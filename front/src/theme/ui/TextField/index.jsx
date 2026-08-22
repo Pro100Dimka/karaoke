@@ -20,6 +20,8 @@ const TextField = forwardRef(({
   tone = "default",
   start,
   end,
+  startAdornment,
+  endAdornment,
   className,
   fieldClassName,
   sx,
@@ -37,7 +39,9 @@ const TextField = forwardRef(({
   const hintId = hint ? `${controlId}-hint` : undefined;
   const errorId = error ? `${controlId}-error` : undefined;
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
-  const hasFrame = Boolean(label || hint || error || start || end);
+  const startSlot = startAdornment ?? start;
+  const endSlot = endAdornment ?? end;
+  const hasFrame = Boolean(label || hint || error || startSlot || endSlot);
   const Control = multiline ? "textarea" : "input";
 
   const control = (
@@ -75,30 +79,35 @@ const TextField = forwardRef(({
     <FloatingLabel id={controlId} label={label} required={required} tooltip={tooltip} />
   );
 
+  const framedControl = (
+    <OutlinedInput
+      label={label}
+      labelAccessory={Boolean(tooltip)}
+      labelNode={labelNode}
+      required={required}
+      disabled={disabled}
+      error={!!error}
+      size={size}
+      tone={tone}
+      start={startSlot}
+      end={endSlot}
+      className={cx(className, !label && "ui-text-field-no-label")}
+      sx={sx}
+      style={style}
+    >
+      {control}
+    </OutlinedInput>
+  );
+
+  if (!label && !hint && !error) return framedControl;
+
   return (
     <div
       className={cx("ui-field", fieldClassName)}
       data-disabled={disabled || undefined}
       data-error={!!error || undefined}
     >
-      <OutlinedInput
-        label={label}
-        labelAccessory={Boolean(tooltip)}
-        labelNode={labelNode}
-        required={required}
-        disabled={disabled}
-        error={!!error}
-        size={size}
-        tone={tone}
-        start={start}
-        end={end}
-        className={className}
-        sx={sx}
-        style={style}
-      >
-        {control}
-      </OutlinedInput>
-
+      {framedControl}
       {error ? (
         <small id={errorId} className="ui-field-message" data-error>{error}</small>
       ) : hint ? (

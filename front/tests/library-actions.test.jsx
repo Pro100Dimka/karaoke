@@ -18,7 +18,9 @@ test("library search applies sorting from the theme popover", () => {
     />
   );
 
-  fireEvent.change(screen.getByRole("textbox", { name: "Поиск" }), {
+  const search = screen.getByRole("textbox", { name: "Поиск" });
+  expect(search.closest(".ui-text-field").querySelectorAll(".ui-text-field-slot")).toHaveLength(2);
+  fireEvent.change(search, {
     target: { value: "Нервы" }
   });
   fireEvent.click(screen.getByRole("button", { name: "Фильтры и сортировка" }));

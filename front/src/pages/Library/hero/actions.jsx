@@ -14,10 +14,10 @@ import {
   Button,
   Card,
   IconButton,
-  InputBase,
   Popover,
   Select,
   Stack,
+  TextField,
   Typography
 } from "../../../theme/ui";
 import { defaultLibraryFilters } from "../utils";
@@ -81,46 +81,27 @@ export default function LibraryActions({
       aria-label={tr("Зона добавления песен")}
       data-drop-active={dropzone.isDragActive || undefined}
     >
-      <Card
-        variant="laser"
-        tilt={false}
-        sx={{ containerType: "normal", flex: 1 }}
-        cardContent={{
-          style: {
-            display: "flex",
-            alignItems: "center",
-            padding: "var(--space-3) var(--space-4)",
-            gap: "var(--space-4)"
-          }
-        }}
-      >
-        <Search aria-hidden="true" />
-        <InputBase
-          component="input"
+      <Card variant="laser" tilt={false} sx={{ containerType: "normal", flex: 1 }}>
+        <TextField
           aria-label={tr("Поиск")}
           placeholder={tr("Поиск песен, исполнителей, жанров…")}
           value={query}
-          onChange={(event) => setQuery(event.target.value, event)}
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            border: 0,
-            outline: 0,
-            background: "transparent",
-            color: "var(--ui-text)",
-            font: "inherit"
-          }}
-        />
-        <IconButton
-          icon={SlidersHorizontal}
-          variant={open ? "contained" : "outline"}
-          label={tr("Фильтры и сортировка")}
-          sx={{ borderColor: "transparent" }}
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          onChange={setQuery}
+          startAdornment={<Search aria-hidden="true" />}
+          endAdornment={
+            <IconButton
+              icon={SlidersHorizontal}
+              variant={open ? "contained" : "outline"}
+              label={tr("Фильтры и сортировка")}
+              size="sm"
+              sx={{ borderColor: "transparent", backgroundColor: "transparent", boxShadow: "none" }}
+              aria-expanded={open}
+              onClick={() => setOpen((value) => !value)}
+            />
+          }
+          sx={{ flex: 1 }}
         />
       </Card>
-
       <Stack direction="row" gap="var(--space-4)" sx={{ flex: 1 }}>
         {!roomActive && (
           <Button

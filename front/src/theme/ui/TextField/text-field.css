@@ -158,6 +158,10 @@
     color: var(--field-placeholder);
   }
 
+  .ui-text-field-no-label .ui-text-field-input::placeholder {
+    color: var(--field-placeholder);
+  }
+
   .ui-text-field-slot {
     position: relative;
     z-index: 1;
