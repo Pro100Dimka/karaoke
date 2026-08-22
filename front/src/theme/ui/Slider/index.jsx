@@ -71,7 +71,7 @@ const Slider = forwardRef(
         ref={ref}
         id={controlId}
         type="range"
-        className={cx("ui-slider", "ui-disabled", className)}
+        className={cx("ui-slider", "ui-control", "ui-disabled", className)}
         data-size={size}
         min={min}
         max={max}
@@ -95,7 +95,8 @@ const Slider = forwardRef(
     );
     const control = (
       <span
-        className="ui-slider-control"
+        className="ui-slider-control ui-control"
+        data-size={size}
         data-disabled={disabled || undefined}
         data-orientation={orientation}
         style={mergeSx(controlSx, controlStyle)}

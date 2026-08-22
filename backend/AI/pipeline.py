@@ -134,14 +134,15 @@ class KaraokePipeline:
             )
             self._stage(reports, "separate", self.engines.separator.name, started)
 
+            music_started = time.perf_counter()
+            music_future = parallel.submit(analyze_music, instrumental)
+
             self._notify(request, "vocal", 42, "Очистка и перевод голоса в моно")
             started = time.perf_counter()
             prepare_vocal_reference(raw_vocals, vocals, self.config.sample_rate)
             self._stage(reports, "vocal", "ffmpeg-mono-clean", started)
 
             self._notify(request, "analysis", 48, "Анализ музыки и мелодии по vocals.flac")
-            music_started = time.perf_counter()
-            music_future = parallel.submit(analyze_music, instrumental)
             pitch_started = time.perf_counter()
             pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
             self._stage(reports, "pitch", self.engines.pitch.name, pitch_started)

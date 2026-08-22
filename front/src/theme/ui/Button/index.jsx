@@ -8,7 +8,7 @@ const Button = forwardRef(
     {
       as = "button",
       type = "button",
-      variant = "solid",
+      variant = "contained",
       tone = "primary",
       size = "md",
       unstyled = false,

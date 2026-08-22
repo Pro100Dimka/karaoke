@@ -215,7 +215,7 @@ function Memory() {
         {actions.map(([label, request]) => (
           <Button
             key={label}
-            variant="outline"
+            variant="outlined"
             startIcon={<Trash2 />}
             onClick={() =>
               run(request, (result) => `${tr("Освобождено")}: ${formatBytes(result?.freed_bytes)}`)
@@ -228,6 +228,7 @@ function Memory() {
       <Grid columns={2} gap="var(--space-2)" align="end">
         <Select label={tr("Песня")} value={song} options={options} onChange={setSong} />
         <Button
+          variant="contained"
           disabled={!song}
           onClick={() =>
             run(

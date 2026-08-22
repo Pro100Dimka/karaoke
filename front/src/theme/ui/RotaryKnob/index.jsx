@@ -18,7 +18,8 @@ export default function RotaryKnob({
   defaultValue = min,
   onChange,
   onCommit,
-  accent = "primary"
+  accent = "primary",
+  size = "lg"
 }) {
   const inputId = `rotary-knob-${normalizeId(useId())}`;
   const dragRef = useRef(null);
@@ -61,7 +62,8 @@ export default function RotaryKnob({
 
   return (
     <label
-      className={`karaoke-effect-dial karaoke-effect-dial--${accent}`}
+      className={`karaoke-effect-dial karaoke-effect-dial--${accent} ui-control`}
+      data-size={size}
       htmlFor={inputId}
       style={{
         display: "flex",
@@ -139,6 +141,8 @@ export default function RotaryKnob({
       {editing ? (
         <span className="karaoke-effect-dial__value-editor">
           <input
+            className="ui-control"
+            data-size="xs"
             ref={editorRef}
             aria-label={`${label}, ${percent}%`}
             inputMode="decimal"

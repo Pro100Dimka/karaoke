@@ -29,6 +29,7 @@ export default function MelodyEditor() {
     notes: controller.notes,
     notify,
     playbackRate: controller.playbackRate,
+    playheadRef: controller.playheadRef,
     shellRef: controller.shellRef,
     songId: editor.song?.id,
     volumes: controller.volumes,

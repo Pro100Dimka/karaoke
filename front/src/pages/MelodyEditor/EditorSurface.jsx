@@ -1,129 +1,6 @@
-import "konva/lib/shapes/Line";
-import "konva/lib/shapes/Rect";
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
-import { Layer, Line, Rect, Stage } from "react-konva/lib/ReactKonvaCore";
+import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { translateSaved as t } from "../../i18n/runtime";
-import {
-  Box,
-  isBlackPianoKey,
-  PianoKeyboard,
-  pianoNoteName,
-  StudioScrollbars,
-  Typography
-} from "../../theme/ui";
-
-const FALLBACK_PALETTE = {
-  background: "#120006",
-  grid: "#4f1020",
-  highlight: "#ffffff",
-  primary: "#ff174f",
-  hover: "#ff6b86"
-};
-
-function useKonvaPalette(root) {
-  const [palette, setPalette] = useState(FALLBACK_PALETTE);
-  useLayoutEffect(() => {
-    const element = root.current;
-    if (!element) return;
-    const style = getComputedStyle(element);
-    const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
-    setPalette({
-      background: read("--color-bg-deep", FALLBACK_PALETTE.background),
-      grid: read("--color-primary", FALLBACK_PALETTE.grid),
-      highlight: read("--color-highlight", FALLBACK_PALETTE.highlight),
-      primary: read("--color-primary", FALLBACK_PALETTE.primary),
-      hover: read("--color-primary-hover", FALLBACK_PALETTE.hover)
-    });
-  }, [root]);
-  return palette;
-}
-
-function KonvaSurface({ controller, palette }) {
-  const rows = useMemo(
-    () =>
-      Array.from(
-        { length: controller.maxMidi - controller.minMidi + 1 },
-        (_, index) => controller.maxMidi - index
-      ),
-    [controller.maxMidi, controller.minMidi]
-  );
-  const beats = useMemo(
-    () =>
-      Array.from(
-        { length: Math.ceil((controller.laneWidth - controller.keyboardWidth) / controller.zoom) },
-        (_, index) => controller.keyboardWidth + index * controller.zoom
-      ),
-    [controller.keyboardWidth, controller.laneWidth, controller.zoom]
-  );
-  if (globalThis.navigator?.userAgent?.includes("jsdom")) return null;
-  return (
-    <Stage
-      width={controller.laneWidth}
-      height={controller.laneHeight}
-      listening={false}
-      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-    >
-      <Layer listening={false}>
-        <Rect
-          width={controller.laneWidth}
-          height={controller.laneHeight}
-          fill={palette.background}
-        />
-        {rows.map((midi, index) => (
-          <Rect
-            key={midi}
-            x={controller.keyboardWidth}
-            y={index * controller.rowHeight}
-            width={controller.laneWidth - controller.keyboardWidth}
-            height={controller.rowHeight}
-            fill={isBlackPianoKey(midi) ? palette.background : undefined}
-            opacity={isBlackPianoKey(midi) ? 0.7 : 0}
-            stroke={palette.grid}
-            strokeWidth={0.35}
-          />
-        ))}
-        {beats.map((x) => (
-          <Line
-            key={x}
-            points={[x, 0, x, controller.laneHeight]}
-            stroke={palette.grid}
-            strokeWidth={0.5}
-            opacity={0.35}
-          />
-        ))}
-        {controller.notes.map((note) => {
-          const selected = controller.selected.includes(note._id);
-          return (
-            <Rect
-              key={note._id}
-              x={controller.keyboardWidth + note.start * controller.zoom}
-              y={
-                (controller.maxMidi - note.note) * controller.rowHeight +
-                controller.rowHeight * 0.12
-              }
-              width={Math.max(controller.rowHeight / 2, (note.end - note.start) * controller.zoom)}
-              height={controller.rowHeight * 0.76}
-              cornerRadius={controller.rowHeight}
-              fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-              fillLinearGradientEndPoint={{ x: 0, y: controller.rowHeight }}
-              fillLinearGradientColorStops={[
-                0,
-                selected ? palette.highlight : palette.hover,
-                1,
-                selected ? palette.hover : palette.primary
-              ]}
-              stroke={palette.highlight}
-              strokeWidth={selected ? 1.5 : 0.75}
-              shadowColor={palette.primary}
-              shadowBlur={selected ? 12 : 5}
-              shadowOpacity={selected ? 0.9 : 0.45}
-            />
-          );
-        })}
-      </Layer>
-    </Stage>
-  );
-}
+import { Box, PianoKeyboard, pianoNoteName, StudioScrollbars, Typography } from "../../theme/ui";
 
 function NoteHitTarget({ controller, note }) {
   const selected = controller.selected.includes(note._id);
@@ -144,8 +21,14 @@ function NoteHitTarget({ controller, note }) {
         inlineSize: `${width}px`,
         blockSize: `${controller.rowHeight * 0.76}px`,
         padding: 0,
-        border: 0,
-        background: "transparent",
+        border: "var(--hairline) solid var(--color-highlight)",
+        borderRadius: "var(--shape-round)",
+        background: selected
+          ? "linear-gradient(var(--color-highlight), var(--color-primary-hover))"
+          : "linear-gradient(var(--color-primary-hover), var(--color-primary))",
+        boxShadow: selected
+          ? "0 0 var(--space-3) var(--color-primary)"
+          : "0 0 var(--space-1) color-mix(in srgb, var(--color-primary) 45%, transparent)",
         cursor: "grab",
         touchAction: "none",
         zIndex: selected ? 5 : 4
@@ -169,7 +52,8 @@ function NoteHitTarget({ controller, note }) {
   );
 }
 
-export default function EditorSurface({ controller, transport }) {
+function EditorScrollbars({ controller }) {
+  const frameRef = useRef(0);
   const [scrollState, setScrollState] = useState({
     clientHeight: 1,
     clientWidth: 1,
@@ -178,17 +62,22 @@ export default function EditorSurface({ controller, transport }) {
     scrollTop: 0,
     scrollWidth: 1
   });
-  const palette = useKonvaPalette(controller.surfaceRef);
   const syncScroll = useCallback(() => {
     const shell = controller.shellRef.current;
     if (!shell) return;
-    setScrollState({
-      clientHeight: shell.clientHeight,
-      clientWidth: shell.clientWidth,
-      scrollHeight: shell.scrollHeight,
-      scrollLeft: shell.scrollLeft,
-      scrollTop: shell.scrollTop,
-      scrollWidth: shell.scrollWidth
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => {
+      const next = {
+        clientHeight: shell.clientHeight,
+        clientWidth: shell.clientWidth,
+        scrollHeight: shell.scrollHeight,
+        scrollLeft: shell.scrollLeft,
+        scrollTop: shell.scrollTop,
+        scrollWidth: shell.scrollWidth
+      };
+      setScrollState((current) =>
+        Object.keys(next).every((key) => current[key] === next[key]) ? current : next
+      );
     });
   }, [controller.shellRef]);
   useLayoutEffect(() => {
@@ -196,9 +85,14 @@ export default function EditorSurface({ controller, transport }) {
     const shell = controller.shellRef.current;
     if (!shell || !globalThis.ResizeObserver) return undefined;
     const observer = new globalThis.ResizeObserver(syncScroll);
+    shell.addEventListener("scroll", syncScroll, { passive: true });
     observer.observe(shell);
     if (controller.surfaceRef.current) observer.observe(controller.surfaceRef.current);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frameRef.current);
+      shell.removeEventListener("scroll", syncScroll);
+      observer.disconnect();
+    };
   }, [
     controller.laneHeight,
     controller.laneWidth,
@@ -207,11 +101,30 @@ export default function EditorSurface({ controller, transport }) {
     syncScroll
   ]);
   return (
+    <StudioScrollbars
+      keyboardWidth={controller.keyboardWidth}
+      scrollRef={controller.shellRef}
+      scrollState={scrollState}
+      sync={syncScroll}
+      horizontalZoom={controller.zoom}
+      verticalZoom={controller.rowHeight}
+      onHorizontalZoom={controller.setZoom}
+      onVerticalZoom={controller.setRowHeight}
+    />
+  );
+}
+
+function EditorSurface({ controller, transport }) {
+  useLayoutEffect(() => {
+    if (!controller.playheadRef.current) return;
+    controller.playheadRef.current.style.transform = `translate3d(${transport.timeRef.current * controller.zoom}px, 0, 0) translateX(-50%)`;
+  }, [controller.playheadRef, controller.zoom, transport.timeRef]);
+
+  return (
     <Box sx={{ position: "relative", flex: 1, minBlockSize: 0, overflow: "hidden" }}>
       <Box
         ref={controller.shellRef}
         data-role="editor-scroll-area"
-        onScroll={syncScroll}
         onWheel={(event) => {
           if (!event.ctrlKey) return;
           event.preventDefault();
@@ -255,7 +168,6 @@ export default function EditorSurface({ controller, transport }) {
             userSelect: "none"
           }}
         >
-          <KonvaSurface controller={controller} palette={palette} />
           <Box
             sx={{
               position: "sticky",
@@ -328,12 +240,13 @@ export default function EditorSurface({ controller, transport }) {
             />
           )}
           <Box
+            ref={controller.playheadRef}
             data-role="editor-playhead"
             role="slider"
             aria-label={t("Позиция воспроизведения")}
             aria-valuemin={0}
             aria-valuemax={controller.duration}
-            aria-valuenow={transport.time}
+            aria-valuenow={transport.timeRef.current}
             tabIndex={0}
             onPointerDown={(event) => {
               event.stopPropagation();
@@ -353,11 +266,13 @@ export default function EditorSurface({ controller, transport }) {
             onKeyDown={(event) => {
               if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
               event.preventDefault();
-              transport.seek(transport.time + (event.key === "ArrowRight" ? 0.05 : -0.05));
+              transport.seek(
+                transport.timeRef.current + (event.key === "ArrowRight" ? 0.05 : -0.05)
+              );
             }}
             sx={{
               position: "absolute",
-              inset: `0 auto 0 ${controller.keyboardWidth + transport.time * controller.zoom}px`,
+              inset: `0 auto 0 ${controller.keyboardWidth}px`,
               inlineSize: "var(--space-3)",
               transform: "translateX(-50%)",
               borderInlineStart: "calc(var(--hairline) * 2) solid var(--color-primary-hover)",
@@ -369,16 +284,30 @@ export default function EditorSurface({ controller, transport }) {
           />
         </Box>
       </Box>
-      <StudioScrollbars
-        keyboardWidth={controller.keyboardWidth}
-        scrollRef={controller.shellRef}
-        scrollState={scrollState}
-        sync={syncScroll}
-        horizontalZoom={controller.zoom}
-        verticalZoom={controller.rowHeight}
-        onHorizontalZoom={controller.setZoom}
-        onVerticalZoom={controller.setRowHeight}
-      />
+      <EditorScrollbars controller={controller} />
     </Box>
   );
 }
+
+const SURFACE_KEYS = [
+  "keyboardWidth",
+  "duration",
+  "laneHeight",
+  "laneWidth",
+  "maxMidi",
+  "minMidi",
+  "notes",
+  "rowHeight",
+  "selected",
+  "selectionBox",
+  "words",
+  "zoom"
+];
+
+export default memo(
+  EditorSurface,
+  (previous, next) =>
+    SURFACE_KEYS.every((key) => previous.controller[key] === next.controller[key]) &&
+    previous.transport.seek === next.transport.seek &&
+    previous.transport.tone === next.transport.tone
+);

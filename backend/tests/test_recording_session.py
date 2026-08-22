@@ -236,6 +236,22 @@ def test_stop_recording_handles_missing_session_song_and_save_failure(monkeypatc
     database.rollback.assert_called()
 
 
+def test_stop_recording_returns_recently_completed_recording(monkeypatch):
+    saved = models.Recording(id="recording", song_id="song", filename="take.wav", path="take.wav", duration_sec=3, sample_rate=48_000)
+    database, lookup = Mock(), Mock(return_value=saved)
+    patch_many(
+        monkeypatch,
+        (recording_service, "_sessions", {}),
+        (recording_service, "_completed_recordings", {"completed": "recording"}),
+        (recording_service, "SessionLocal", Mock(return_value=database)),
+        (recording_service.repositories, "get_recording", lookup),
+    )
+
+    assert recording_service.stop_recording("completed") is saved
+    lookup.assert_called_once_with(database, "recording")
+    database.close.assert_called_once_with()
+
+
 def test_create_performance_mix_runs_ffmpeg_and_cleans_failure(monkeypatch, tmp_path):
     executable = tmp_path / "ffmpeg.exe"
     executable.write_bytes(b"binary")

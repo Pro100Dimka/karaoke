@@ -46,7 +46,7 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
         description: service ? t(`settings.service.${service}.text`) : t("settings.description"),
         actions: service && (
           <Button
-            variant="outline"
+            variant="outlined"
             startIcon={<ArrowLeft />}
             onClick={() => setService(null)}
             className="modal-title-action"

@@ -1,12 +1,24 @@
 @layer ui.base {
   :root {
+    --control-xs: 1.75rem;
     --control-sm: 2rem;
     --control-md: 2.5rem;
     --control-lg: 3rem;
 
+    --control-pad-xs: .5rem;
     --control-pad-sm: .625rem;
     --control-pad-md: .75rem;
     --control-pad-lg: .875rem;
+
+    --control-font-xs: .75rem;
+    --control-font-sm: .8125rem;
+    --control-font-md: .875rem;
+    --control-font-lg: 1rem;
+
+    --control-icon-xs: .875rem;
+    --control-icon-sm: 1rem;
+    --control-icon-md: 1.125rem;
+    --control-icon-lg: 1.25rem;
 
     --focus-width: .125rem;
     --focus-offset: .125rem;
@@ -18,12 +30,37 @@
   .ui-control {
     box-sizing: border-box;
     min-inline-size: 0;
-    font: inherit;
+    font-family: inherit;
+    font-size: var(--control-font, var(--control-font-md));
   }
 
-  .ui-control[data-size="sm"] { --control-size: var(--control-sm); --control-pad: var(--control-pad-sm); }
-  .ui-control[data-size="md"] { --control-size: var(--control-md); --control-pad: var(--control-pad-md); }
-  .ui-control[data-size="lg"] { --control-size: var(--control-lg); --control-pad: var(--control-pad-lg); }
+  .ui-control[data-size="xs"] {
+    --control-size: var(--control-xs);
+    --control-pad: var(--control-pad-xs);
+    --control-font: var(--control-font-xs);
+    --control-icon: var(--control-icon-xs);
+  }
+
+  .ui-control[data-size="sm"] {
+    --control-size: var(--control-sm);
+    --control-pad: var(--control-pad-sm);
+    --control-font: var(--control-font-sm);
+    --control-icon: var(--control-icon-sm);
+  }
+
+  .ui-control[data-size="md"] {
+    --control-size: var(--control-md);
+    --control-pad: var(--control-pad-md);
+    --control-font: var(--control-font-md);
+    --control-icon: var(--control-icon-md);
+  }
+
+  .ui-control[data-size="lg"] {
+    --control-size: var(--control-lg);
+    --control-pad: var(--control-pad-lg);
+    --control-font: var(--control-font-lg);
+    --control-icon: var(--control-icon-lg);
+  }
 
   .ui-focus-ring:focus-visible {
     outline: var(--focus-width) solid var(--ui-focus);

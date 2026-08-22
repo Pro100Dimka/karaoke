@@ -54,6 +54,13 @@
     transform: translate(var(--switch-shift, 1.25rem), -50%);
   }
 
+  .ui-switch[data-size="xs"] {
+    --switch-width: 2rem;
+    --switch-height: 1.125rem;
+    --switch-thumb: .75rem;
+    --switch-shift: .8125rem;
+  }
+
   .ui-switch[data-size="sm"] {
     --switch-width: 2.25rem;
     --switch-height: 1.25rem;
@@ -94,7 +101,7 @@
   .ui-switch-status {
     margin-inline-end: auto;
     color: var(--ui-text-muted);
-    font: 700 .75rem / 1 var(--font-display);
+    font: 700 var(--control-font, var(--control-font-md)) / 1 var(--font-display);
   }
 
   .ui-switch-label {

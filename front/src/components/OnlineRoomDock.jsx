@@ -109,8 +109,8 @@ export function OnlineRoomDock() {
               <Box role="alert">
                 <Typography tone="danger">{online.voiceError}</Typography>
                 <Button
-                  variant="outline"
-                  startIcon={<ShieldCheck size={18} />}
+                  variant="outlined"
+                  startIcon={<ShieldCheck />}
                   disabled={pending}
                   onClick={() => run(() => online.requestMicrophoneAccess())}
                 >
@@ -122,15 +122,18 @@ export function OnlineRoomDock() {
         </Card>
       )}
       {collapsed && (
-        <Button
-          variant="outline"
-          startIcon={<PanelLeftOpen size={18} />}
-          aria-label={t("room.showPanel")}
-          onClick={() => setCollapsed(false)}
+        <Box
           sx={{ position: "fixed", inset: "auto auto var(--space-5) var(--space-5)", zIndex: 20 }}
         >
-          {online.room.id}
-        </Button>
+          <Button
+            variant="outlined"
+            startIcon={<PanelLeftOpen />}
+            aria-label={t("room.showPanel")}
+            onClick={() => setCollapsed(false)}
+          >
+            {online.room.id}
+          </Button>
+        </Box>
       )}
     </>
   );

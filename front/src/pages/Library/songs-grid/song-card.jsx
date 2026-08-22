@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
+  Box,
   Button,
   Card,
   Chip,
@@ -80,11 +81,11 @@ const LibrarySongCard = memo(
             sx={{ flex: 4, padding: "var(--space-4)" }}
           >
             <Stack direction="row" justify="space-between" align="start" gap="var(--space-3)">
-              <Stack gap="var(--space-1)" sx={{ minWidth: 0 }}>
-                <Typography as="h3" variant="body1">
+              <Stack gap="var(--space-2)" sx={{ minWidth: 0 }}>
+                <Typography variant="h3">
                   <strong>{song.title}</strong>
                 </Typography>
-                <Typography variant="body2" tone="muted">
+                <Typography variant="h5" tone="muted" sx={{ fontWeight: "normal" }}>
                   {song.artist || tr("Исполнитель не указан")}
                 </Typography>
               </Stack>
@@ -92,18 +93,21 @@ const LibrarySongCard = memo(
             </Stack>
             <Stack direction="row" align="center" justify="space-between" wrap gap="var(--space-3)">
               {isWorking || transferStatus ? (
-                <Button
-                  variant="ghost"
-                  sx={{ flex: 1 }}
-                  onClick={isWorking ? () => onOpenProcessing(song) : undefined}
-                >
-                  <ProcessingSignal
-                    progress={transferStatus?.percent ?? song.progress_percent}
-                    compact
-                  />
-                </Button>
+                <Box sx={{ flex: 1 }}>
+                  <Button
+                    variant="outlined"
+                    sx={{ background: "unset", border: "unset", boxShadow: "unset" }}
+                    fullWidth
+                    onClick={isWorking ? () => onOpenProcessing(song) : undefined}
+                  >
+                    <ProcessingSignal
+                      progress={transferStatus?.percent ?? song.progress_percent}
+                      compact
+                    />
+                  </Button>
+                </Box>
               ) : (
-                <Typography variant="caption" tone="muted">
+                <Typography variant="body2" tone="muted">
                   {metadata}
                 </Typography>
               )}
@@ -120,7 +124,6 @@ const LibrarySongCard = memo(
                       key={label}
                       icon={Icon}
                       variant={variant}
-                      size="sm"
                       label={label}
                       title={label}
                       disabled={disabled}

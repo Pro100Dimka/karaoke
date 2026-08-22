@@ -27,6 +27,7 @@ export default function FieldInput({
     error: bare ? undefined : field.error,
     required: field.required,
     disabled: field.disabled,
+    size: field.size ?? "md",
     fieldClassName: field.wrapperClassName,
     className: field.className,
     onKeyDown

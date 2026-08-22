@@ -31,7 +31,7 @@ export default function ToolsPanel({
           <Button
             key={label}
             size="sm"
-            variant={active ? "solid" : "outline"}
+            variant={active ? "contained" : "outline"}
             tone={active ? "success" : "primary"}
             startIcon={<Icon />}
             aria-pressed={typeof active === "boolean" ? active : undefined}
@@ -46,7 +46,7 @@ export default function ToolsPanel({
           <Button
             key={id}
             size="sm"
-            variant={effectPreset === id ? "solid" : "outline"}
+            variant={effectPreset === id ? "contained" : "outline"}
             title={t("{0}: эхо {1}%, реверб {2}%", {
               0: label,
               1: Math.round(echo * 100),

@@ -59,7 +59,7 @@ export default function KaraokeStageActions({
               label={label}
               title={label}
               aria-pressed={active}
-              variant={active ? "solid" : "outline"}
+              variant={active ? "contained" : "outline"}
               size="lg"
               onClick={onClick}
             />

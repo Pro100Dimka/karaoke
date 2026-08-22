@@ -28,6 +28,15 @@ def _segments(frames: list[PitchFrame], gap: float, split: float):
         yield current
 
 
+def _owner(words: list[Word], midpoint: float, tolerance: float) -> Word | None:
+    candidates = [
+        (max(word.start - midpoint, midpoint - word.end, 0.0), word)
+        for word in words
+        if word.start - tolerance <= midpoint <= word.end + tolerance
+    ]
+    return min(candidates, key=lambda item: item[0])[1] if candidates else None
+
+
 def build_vocal_notes(
     pitch: list[PitchFrame],
     _syllables=(),
@@ -37,6 +46,7 @@ def build_vocal_notes(
     max_gap=0.05,
     min_confidence=0.38,
     words: list[Word] | None = None,
+    word_boundary_tolerance=0.12,
     **_context,
 ) -> list[VocalNote]:
     frames = [frame for frame in pitch if frame.voiced and frame.confidence >= min_confidence]
@@ -56,10 +66,13 @@ def build_vocal_notes(
         if end - start < min_note:
             continue
         midi = round(median(hz_to_midi(frame.frequency) for frame in segment))
-        owner = next((word for word in words or [] if word.start <= (start + end) / 2 <= word.end), None)
+        owner = _owner(words or [], (start + end) / 2, word_boundary_tolerance)
         if owner is None:
             continue
-        notes.append(VocalNote(start, end, midi, word_index=owner.index))
+        note_start, note_end = max(start, owner.start), min(end, owner.end)
+        if note_end - note_start < min_note:
+            continue
+        notes.append(VocalNote(note_start, note_end, midi, word_index=owner.index))
     return notes
 
 

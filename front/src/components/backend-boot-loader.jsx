@@ -82,6 +82,7 @@ export default function BackendBootLoader({ children }) {
         </Typography>
         {state.failed && (
           <Button
+            variant="contained"
             onClick={() =>
               setState((value) => ({ ...value, failed: false, retry: value.retry + 1 }))
             }

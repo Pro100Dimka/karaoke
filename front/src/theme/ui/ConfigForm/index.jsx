@@ -83,7 +83,7 @@ const DEFAULT_RENDERERS = {
     const pending = field.isPending?.(context) ?? false;
 
     return (
-      <Button {...props} onClick={() => field.run?.(context)}>
+      <Button variant={field.variant ?? "contained"} {...props} onClick={() => field.run?.(context)}>
         {pending ? field.pendingText : (field.idleText ?? field.label)}
       </Button>
     );

@@ -132,10 +132,10 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
               </Stack>
             </Card>
             <Stack direction="row" justify="flex-end" gap={0.75}>
-              <Button variant="ghost" type="button" onClick={onCancel}>
+              <Button variant="outlined" type="button" onClick={onCancel}>
                 {tr("Пропустить")}
               </Button>
-              <Button type="submit" disabled={!item.title.trim()}>
+              <Button variant="contained" type="submit" disabled={!item.title.trim()}>
                 {tr("Подтвердить")}
               </Button>
             </Stack>
@@ -199,17 +199,28 @@ export function ProcessingModal({
   const index = queue.findIndex(({ id }) => id === song.id);
   const actions = [
     active && (
-      <Button key="cancel" tone="danger" startIcon={<OctagonX />} onClick={onCancel}>
+      <Button
+        key="cancel"
+        variant="contained"
+        tone="danger"
+        startIcon={<OctagonX />}
+        onClick={onCancel}
+      >
         {tr("Отменить")}
       </Button>
     ),
     state === "done" && (
-      <Button key="library" variant="ghost" startIcon={<Library />} onClick={onClose}>
+      <Button key="library" variant="outlined" startIcon={<Library />} onClick={onClose}>
         {tr("В библиотеку")}
       </Button>
     ),
     state === "done" && (
-      <Button key="open" startIcon={<Play />} onClick={() => onOpenKaraoke(song.id)}>
+      <Button
+        key="open"
+        variant="contained"
+        startIcon={<Play />}
+        onClick={() => onOpenKaraoke(song.id)}
+      >
         {tr("Открыть")}
       </Button>
     )
@@ -297,7 +308,7 @@ export function ProcessingModal({
                 {failure.hint}
               </Typography>
               <Button
-                variant="outline"
+                variant="outlined"
                 onClick={() => globalThis.electronAPI?.openApplicationLog?.()}
               >
                 {tr("Открыть журнал выполнения")}

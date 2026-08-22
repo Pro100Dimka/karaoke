@@ -156,6 +156,12 @@
     color: var(--ui-primary);
   }
 
+  .ui-select-option-mark > svg,
+  .ui-select-option-icon > svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
   .ui-select-option-icon {
     color: var(--ui-text-muted);
   }

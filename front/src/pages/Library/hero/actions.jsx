@@ -106,7 +106,7 @@ export default function LibraryActions({
         {!roomActive && (
           <Button
             size="lg"
-            variant="outline"
+            variant="outlined"
             fullWidth
             startIcon={<UsersRound />}
             onClick={onOpenRoom}
@@ -148,7 +148,7 @@ export default function LibraryActions({
               {SORTS.map(([value, label]) => (
                 <Button
                   key={value}
-                  variant={draft.sort === value ? "soft" : "outline"}
+                  variant={draft.sort === value ? "contained" : "outlined"}
                   aria-pressed={draft.sort === value}
                   onClick={() => update("sort")(value)}
                 >
@@ -163,7 +163,7 @@ export default function LibraryActions({
               <Typography variant="caption" tone="muted">
                 {tr("Фильтры")}
               </Typography>
-              <Button variant="ghost" onClick={() => setDraft(defaultLibraryFilters)}>
+              <Button variant="outlined" onClick={() => setDraft(defaultLibraryFilters)}>
                 {tr("Сбросить всё")}
               </Button>
             </Stack>

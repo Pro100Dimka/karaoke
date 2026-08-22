@@ -40,6 +40,7 @@ export default function useEditorController({ document, dispatch, payload, save,
   const clipboardRef = useRef([]);
   const shellRef = useRef(null);
   const surfaceRef = useRef(null);
+  const playheadRef = useRef(null);
   const { notes } = document;
   const lyricsSync = payload?.lyrics_sync || {};
   const duration = Number(lyricsSync.duration) || Math.max(1, ...notes.map(({ end }) => end));
@@ -115,7 +116,7 @@ export default function useEditorController({ document, dispatch, payload, save,
       Math.max(...copied.map(({ end }) => end)) - Math.min(...copied.map(({ start }) => start));
     insertCopies(
       copied,
-      clamp(transportRef.current.time || 0, 0, Math.max(0, duration - span)),
+      clamp(transportRef.current.timeRef?.current || 0, 0, Math.max(0, duration - span)),
       "paste"
     );
   }, [duration, insertCopies, transportRef]);
@@ -339,6 +340,7 @@ export default function useEditorController({ document, dispatch, payload, save,
     movePointer,
     notes,
     playbackRate,
+    playheadRef,
     redo,
     remove,
     rowHeight,

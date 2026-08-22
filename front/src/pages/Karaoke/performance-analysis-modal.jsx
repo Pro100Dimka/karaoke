@@ -151,7 +151,7 @@ export default function PerformanceAnalysisModal({
         title: t("Анализ выступления"),
         description: t("Точность нот, ритм и рекомендации по исполнению."),
         actions: (result || error) && (
-          <Button onClick={result ? (onDone ?? onClose) : onClose}>
+          <Button variant="contained" onClick={result ? (onDone ?? onClose) : onClose}>
             {result ? t("Готово") : t("Закрыть")}
           </Button>
         )
@@ -191,6 +191,7 @@ export default function PerformanceAnalysisModal({
             <Summary result={result} />
             <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
             <Button
+              variant="contained"
               data-role="delete-recording"
               tone="danger"
               startIcon={<Trash2 />}

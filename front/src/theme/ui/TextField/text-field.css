@@ -90,7 +90,7 @@
     min-inline-size: 0;
     overflow: hidden;
     color: inherit;
-    font: 750 .875rem / 1.2 var(--font-display);
+    font: 750 var(--control-font, var(--control-font-md)) / 1.2 var(--font-display);
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -138,18 +138,6 @@
     resize: vertical;
   }
 
-  .ui-text-field-input[data-size="sm"] {
-    font-size: .8125rem;
-  }
-
-  .ui-text-field-input[data-size="md"] {
-    font-size: .875rem;
-  }
-
-  .ui-text-field-input[data-size="lg"] {
-    font-size: 1rem;
-  }
-
   .ui-text-field-input::placeholder {
     color: transparent;
   }
@@ -174,7 +162,7 @@
   }
 
   .ui-text-field-slot>svg {
-    inline-size: 1.1em;
-    block-size: 1.1em;
+    inline-size: var(--control-icon, var(--control-icon-md));
+    block-size: var(--control-icon, var(--control-icon-md));
   }
 }

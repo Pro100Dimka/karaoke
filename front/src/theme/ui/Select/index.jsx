@@ -31,6 +31,7 @@ const Select = forwardRef(
       error,
       required = false,
       disabled = false,
+      size = "md",
       options = [],
       value,
       defaultValue,
@@ -169,6 +170,7 @@ const Select = forwardRef(
             required={required}
             disabled={disabled}
             error={!!error}
+            size={size}
             className={cx("ui-select-field", className)}
             data-filled={Boolean(selected) || undefined}
             sx={sx}
@@ -179,7 +181,8 @@ const Select = forwardRef(
               ref={mergeRefs(triggerRef, ref)}
               id={controlId}
               type="button"
-              variant="ghost"
+              unstyled
+              size={size}
               className="ui-select-trigger ui-text-field-input"
               data-open={open || undefined}
               disabled={disabled}
@@ -293,7 +296,7 @@ const Select = forwardRef(
                       <Button
                         key={item.value}
                         type="button"
-                        variant="ghost"
+                        unstyled
                         role="option"
                         aria-selected={active}
                         disabled={item.disabled}
@@ -303,7 +306,7 @@ const Select = forwardRef(
                         onClick={(event) => selectOption(item, event)}
                       >
                         <span className="ui-select-option-mark">
-                          {active && <Check size={15} />}
+                          {active && <Check />}
                         </span>
 
                         {item.icon && (

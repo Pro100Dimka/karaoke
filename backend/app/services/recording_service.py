@@ -229,7 +229,9 @@ class RecordingSession:
 
 
 _sessions: dict[str, RecordingSession] = {}
+_completed_recordings: dict[str, str] = {}
 _sessions_lock = threading.Lock()
+_COMPLETED_RECORDING_LIMIT = 64
 
 
 def _capture_attempts(
@@ -356,8 +358,21 @@ def resume_recording(session_id: str) -> None: _require_session(session_id).resu
 
 
 def stop_recording(session_id: str) -> models.Recording:
-    with _sessions_lock: session = _sessions.pop(session_id, None)
-    if session is None: raise KeyError(f"Сессия записи {session_id} не найдена (уже остановлена?)")
+    with _sessions_lock:
+        session = _sessions.pop(session_id, None)
+        completed_id = _completed_recordings.get(session_id)
+    if session is None:
+        if completed_id is None:
+            raise KeyError(f"Сессия записи {session_id} не найдена (уже остановлена?)")
+        db = SessionLocal()
+        try:
+            recording = repositories.get_recording(db, completed_id)
+            if recording is None:
+                with _sessions_lock: _completed_recordings.pop(session_id, None)
+                raise KeyError(f"Сессия записи {session_id} не найдена (уже остановлена?)")
+            return recording
+        finally:
+            db.close()
 
     db = SessionLocal()
     try:
@@ -391,6 +406,11 @@ def stop_recording(session_id: str) -> models.Recording:
             session.music_gain,
             session.effects,
         )
+        if recording.id:
+            with _sessions_lock:
+                _completed_recordings[session_id] = str(recording.id)
+                while len(_completed_recordings) > _COMPLETED_RECORDING_LIMIT:
+                    _completed_recordings.pop(next(iter(_completed_recordings)))
         return recording
     finally:
         session.close()

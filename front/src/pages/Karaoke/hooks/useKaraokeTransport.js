@@ -22,6 +22,7 @@ const writePending = (ids) =>
   );
 const rememberPending = (id) => writePending([...new Set([...pendingRecordingIds(), id])]);
 const forgetPending = (id) => writePending(pendingRecordingIds().filter((value) => value !== id));
+const isMissingSession = (error) => Number(error?.status) === 404;
 function finalizeRecording(id) {
   if (finalizingRecordings.has(id)) return finalizingRecordings.get(id);
   const pending = (async () => {
@@ -30,6 +31,10 @@ function finalizeRecording(id) {
       forgetPending(id);
       return { recording };
     } catch (error) {
+      if (isMissingSession(error)) {
+        forgetPending(id);
+        return { missing: true };
+      }
       rememberPending(id);
       await api.pauseRecording(id).catch(() => {});
       return { error };
@@ -110,10 +115,10 @@ export default function useKaraokeTransport({
     };
   }, [setAnalysisRecordingId, setRecordingSessionId, song?.id]);
 
-  const clearSession = (id) => {
+  const clearSession = (id, forget = true) => {
     if (sessionRef.current !== id) return;
     sessionRef.current = null;
-    forgetPending(id);
+    if (forget) forgetPending(id);
     setRecordingSessionId(null);
   };
 
@@ -306,7 +311,8 @@ export default function useKaraokeTransport({
       const { recording, error } = await finalizeRecording(id);
       if (error) {
         setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
-        return false;
+        clearSession(id, false);
+        return true;
       }
       if (recording?.id) setAnalysisRecordingId(recording.id);
       clearSession(id);
@@ -326,8 +332,14 @@ export default function useKaraokeTransport({
 
   const skip = (delta) => seekTo(clampPlaybackPosition(currentTime + delta, duration));
   const returnToLibrary = async () => {
-    if (!(await stop({ broadcast: false }))) return false;
-    if (onlineRoom?.room) onlineRoom.syncCommand({ type: "open-library" });
+    try {
+      await stop({ broadcast: false });
+    } catch (error) {
+      setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
+    }
+    if (onlineRoom?.room) {
+      await Promise.resolve(onlineRoom.syncCommand({ type: "open-library" })).catch(() => {});
+    }
     navigate("/");
     return true;
   };

@@ -35,7 +35,11 @@ function DialogModal({ dialog, close }) {
         title: dialog.title,
         description: dialog.message,
         actions: (
-          <Button className={dialog.confirmClassName} onClick={() => close(true)}>
+          <Button
+            variant="contained"
+            className={dialog.confirmClassName}
+            onClick={() => close(true)}
+          >
             {dialog.confirmText}
           </Button>
         )
@@ -43,7 +47,7 @@ function DialogModal({ dialog, close }) {
     >
       {confirm && (
         <Stack align="end" sx={{ padding: "var(--space-4)" }}>
-          <Button data-role="dialog-cancel" variant="ghost" onClick={() => close(false)}>
+          <Button data-role="dialog-cancel" variant="outlined" onClick={() => close(false)}>
             {dialog.cancelText}
           </Button>
         </Stack>

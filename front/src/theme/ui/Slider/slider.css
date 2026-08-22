@@ -93,11 +93,12 @@
     border-radius: var(--shape-round);
     background: color-mix(in srgb, var(--ui-primary) 11%, transparent);
     color: var(--ui-text);
-    font: 750 .75rem / 1 var(--font-display);
+    font: 750 var(--control-font, var(--control-font-md)) / 1 var(--font-display);
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
 
+  .ui-slider[data-size="xs"] { --slider-track: .1875rem; --slider-thumb: .875rem; }
   .ui-slider[data-size="sm"] { --slider-track: .25rem; --slider-thumb: 1rem; }
   .ui-slider[data-size="md"] { --slider-track: .3125rem; --slider-thumb: 1.125rem; }
   .ui-slider[data-size="lg"] { --slider-track: .375rem; --slider-thumb: 1.25rem; }

@@ -20,7 +20,7 @@ function Step({ icon, label, onClick }) {
       label={label}
       title={label}
       size="sm"
-      variant="ghost"
+      variant="outline"
       onClick={onClick}
     />
   ) : null;

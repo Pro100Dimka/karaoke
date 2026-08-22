@@ -53,7 +53,7 @@ const NumberField = forwardRef(function NumberField(
     <span className="ui-number-field-controls" aria-hidden="true">
       <Button
         className="ui-number-field-step"
-        variant="ghost"
+        unstyled
         size="sm"
         tabIndex={-1}
         disabled={disabled || readOnly}
@@ -66,7 +66,7 @@ const NumberField = forwardRef(function NumberField(
 
       <Button
         className="ui-number-field-step"
-        variant="ghost"
+        unstyled
         size="sm"
         tabIndex={-1}
         disabled={disabled || readOnly}

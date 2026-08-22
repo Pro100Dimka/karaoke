@@ -36,7 +36,9 @@ export default class ErrorBoundary extends Component {
           description: getErrorMessage(this.state.error, t("error.screen.body"))
         }}
       >
-        <Button onClick={() => window.location.reload()}>{t("error.screen.restart")}</Button>
+        <Button variant="contained" onClick={() => window.location.reload()}>
+          {t("error.screen.restart")}
+        </Button>
       </Modal>
     );
   }

@@ -15,11 +15,10 @@ const RENDERERS = {
   speaker: ({ props, context }) => (
     <Button
       {...cleanButtonProps(props)}
-      variant="outline"
+      variant="outlined"
       startIcon={<Volume2 />}
       disabled={context.audio.busy}
       onClick={context.audio.speaker}
-      sx={{ gap: ".6rem", borderRadius: "var(--shape-lg)" }}
     >
       {context.audio.busy ? tr("Проверяем…") : tr("Проверить динамики")}
     </Button>

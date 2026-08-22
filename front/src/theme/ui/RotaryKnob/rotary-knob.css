@@ -14,7 +14,7 @@
 
   .karaoke-effect-dial__label {
     color: var(--ui-text);
-    font-size: var(--font-size-xs);
+    font-size: var(--control-font, var(--control-font-md));
     font-weight: 800;
     line-height: 1;
   }
@@ -22,7 +22,7 @@
   .karaoke-effect-dial__control {
     position: relative;
     display: block;
-    inline-size: var(--control-lg);
+    inline-size: var(--control-size, var(--control-lg));
     aspect-ratio: 1;
     flex: none;
     border-radius: var(--shape-round);
@@ -79,7 +79,7 @@
   .karaoke-effect-dial strong,
   .karaoke-effect-dial__value-editor {
     color: var(--dial-color);
-    font-size: var(--font-size-xs);
+    font-size: var(--control-font, var(--control-font-md));
     font-weight: 800;
     line-height: 1;
   }
@@ -90,9 +90,9 @@
   }
 
   .karaoke-effect-dial__value-editor input {
-    inline-size: var(--control-md);
-    min-block-size: var(--control-sm);
-    padding-inline: var(--space-1);
+    inline-size: var(--control-size, var(--control-xs));
+    min-block-size: var(--control-size, var(--control-xs));
+    padding-inline: var(--control-pad, var(--control-pad-xs));
     border: 1px solid var(--dial-color);
     border-radius: var(--shape-md);
     outline: 0;

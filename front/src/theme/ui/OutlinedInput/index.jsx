@@ -27,7 +27,7 @@ const OutlinedInput = forwardRef((
       ref={ref}
       component="div"
       disableNativeDisabled
-      className={cx("ui-text-field", className)}
+      className={cx("ui-text-field", "ui-control", className)}
       disabled={disabled}
       error={error}
       size={size}

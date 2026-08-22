@@ -4,7 +4,7 @@ import { api } from "../../api/client";
 import { usePolling } from "../../hooks/usePolling";
 import { useI18n } from "../../i18n";
 import { POLLING_INTERVALS } from "../../runtime-config";
-import { Button, Card, Progress, Stack, Typography } from "../../theme/ui";
+import { Box, Button, Card, Progress, Stack, Typography } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 
 export default function ModelStatus() {
@@ -63,14 +63,16 @@ export default function ModelStatus() {
           </Typography>
         )}
         {!loading && !ready && (
-          <Button
-            startIcon={<Download />}
-            disabled={downloading}
-            onClick={download}
-            sx={{ alignSelf: "start" }}
-          >
-            {t(`settings.ai.models.${downloading ? "buttonDownloading" : "button"}`)}
-          </Button>
+          <Box sx={{ alignSelf: "start" }}>
+            <Button
+              variant="contained"
+              startIcon={<Download />}
+              disabled={downloading}
+              onClick={download}
+            >
+              {t(`settings.ai.models.${downloading ? "buttonDownloading" : "button"}`)}
+            </Button>
+          </Box>
         )}
       </Stack>
     </Card>

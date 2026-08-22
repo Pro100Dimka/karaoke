@@ -139,7 +139,7 @@ export default function SongSettings({ songId, onClose }) {
       <Typography role="alert" tone="danger">
         {tr("Не удалось загрузить песню:")} {getErrorMessage(query.error)}
       </Typography>
-      <Button variant="outline" onClick={query.refresh}>
+      <Button variant="outlined" onClick={query.refresh}>
         {tr("Повторить")}
       </Button>
     </Stack>
@@ -176,7 +176,7 @@ export default function SongSettings({ songId, onClose }) {
         title: tr("Настройки песни"),
         description: song?.title || tr("Загружаем данные песни…"),
         actions: song && form && (
-          <Button startIcon={<Save />} disabled={pending} onClick={save}>
+          <Button variant="contained" startIcon={<Save />} disabled={pending} onClick={save}>
             {tr(pending ? "Сохранение…" : "Сохранить")}
           </Button>
         )
@@ -193,7 +193,7 @@ const CardEditor = ({ onClick }) => (
     <Typography variant="body2" tone="muted">
       {tr("Откройте piano-roll редактор, чтобы исправить ноты, длительность и привязку текста.")}
     </Typography>
-    <Button variant="outline" startIcon={<Piano />} onClick={onClick}>
+    <Button variant="outlined" startIcon={<Piano />} onClick={onClick}>
       {tr("Открыть редактор")}
     </Button>
   </Stack>

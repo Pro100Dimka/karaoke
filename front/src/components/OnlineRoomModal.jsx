@@ -53,6 +53,7 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
         description: t("room.description"),
         actions: (
           <Button
+            variant="contained"
             disabled={form.busy || (form.join && form.roomId.length < 4)}
             onClick={() => connect(!form.join)}
           >
@@ -98,9 +99,9 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
           </Typography>
         )}
         <Button
-          variant="outline"
+          variant="outlined"
           disabled={form.busy}
-          startIcon={form.join ? <ArrowLeft size={18} /> : undefined}
+          startIcon={form.join ? <ArrowLeft /> : undefined}
           onClick={() => set({ join: !form.join, error: "" })}
         >
           {t(form.join ? "room.back" : "room.joinByCode")}

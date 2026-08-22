@@ -230,17 +230,34 @@ describe("karaoke transport", () => {
     await expect(hook.result.current.stop()).resolves.toBe(true);
     verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", { type: "karaoke-player", action: "stop", songId: "song", position: 0 }]);
   });
-  test("falls back to pausing when saving a recording fails", async () => {
+  test("keeps a failed recording pending without blocking stop or exit", async () => {
     const props = createProps({ recordingSessionId: "existing" });
     api.stopRecording.mockRejectedValueOnce(new Error("disk full"));
     const { result } = renderHook(() => useKaraokeTransport(props));
-    await expect(result.current.stop()).resolves.toBe(false);
+    await expect(result.current.stop()).resolves.toBe(true);
     expect(api.pauseRecording).toHaveBeenCalledWith("existing");
     verify([JSON.parse(localStorage.getItem("karaoke-pending-recording-session")), "toEqual", { id: "existing" }]);
     verify(
       [props.setRecordingError, "toHaveBeenCalledWith", expect.stringContaining("disk full")],
-      [props.setRecordingSessionId, "not.toHaveBeenCalledWith", null]
+      [props.setRecordingSessionId, "toHaveBeenCalledWith", null]
     );
+    await expect(result.current.returnToLibrary()).resolves.toBe(true);
+    expect(props.navigate).toHaveBeenCalledWith("/");
+  });
+  test("treats an already stopped recording session as finalized", async () => {
+    const missing = Object.assign(new Error("session missing"), { status: 404 });
+    api.stopRecording.mockRejectedValueOnce(missing);
+    const props = createProps({ recordingSessionId: "stale" });
+    localStorage.setItem("karaoke-pending-recording-session", JSON.stringify({ id: "stale" }));
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await expect(hook.result.current.returnToLibrary()).resolves.toBe(true);
+    verify(
+      [api.pauseRecording, "not.toHaveBeenCalled"],
+      [props.setRecordingError, "not.toHaveBeenCalled"],
+      [props.setRecordingSessionId, "toHaveBeenCalledWith", null],
+      [props.navigate, "toHaveBeenCalledWith", "/"]
+    );
+    expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({});
   });
   test("applies synchronized room player commands", async () => {
     const props = createProps();

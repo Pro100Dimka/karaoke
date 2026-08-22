@@ -9,7 +9,8 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2, .5rem);
-    padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
+    min-block-size: var(--control-size, var(--control-md));
+    padding-inline: var(--control-pad, var(--control-pad-md));
     border: 0;
     overflow: hidden;
     isolation: isolate;
@@ -43,18 +44,6 @@
     transition: inline-size var(--motion-duration-normal) var(--motion-easing-standard);
   }
 
-  .ui-button[data-size="sm"] {
-    font-size: .8125rem;
-  }
-
-  .ui-button[data-size="md"] {
-    font-size: .875rem;
-  }
-
-  .ui-button[data-size="lg"] {
-    font-size: 1rem;
-  }
-
   .ui-button-full-width {
     width: 100%;
   }
@@ -64,14 +53,14 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    inline-size: 1.25em;
-    block-size: 1.25em;
+    inline-size: var(--control-icon, var(--control-icon-md));
+    block-size: var(--control-icon, var(--control-icon-md));
     line-height: 0;
   }
 
   .ui-button-start-icon>svg {
-    inline-size: 1.1em;
-    block-size: 1.1em;
+    inline-size: 100%;
+    block-size: 100%;
     display: block;
     stroke-width: 2;
   }
@@ -88,17 +77,8 @@
     --_button-accent: var(--ui-danger);
   }
 
-  .ui-button[data-variant="soft"] {
-    --_button-bg: color-mix(in srgb, var(--ui-primary) 14%, transparent);
-    --_button-fg: var(--ui-primary-hover);
-  }
-
-  .ui-button[data-variant="ghost"] {
-    --_button-bg: transparent;
-    --_button-fg: var(--ui-text);
-  }
-
-  .ui-button[data-variant="outline"] {
+  .ui-button[data-variant="outlined"],
+  .ui-icon-button[data-variant="outline"] {
     --_button-bg: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
     --_button-fg: var(--ui-text);
     border: 1px solid color-mix(in srgb, var(--_button-accent) 62%, var(--ui-border));
@@ -107,7 +87,8 @@
       0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 16%, transparent);
   }
 
-  .ui-button[data-variant="outline"]:hover {
+  .ui-button[data-variant="outlined"]:hover,
+  .ui-icon-button[data-variant="outline"]:hover {
     --_button-bg: linear-gradient(180deg,
         color-mix(in srgb, var(--_button-accent) 28%, var(--color-bg-elevated)),
         color-mix(in srgb, var(--color-bg-deep) 82%, transparent));
@@ -119,6 +100,11 @@
       0 0 var(--space-3) color-mix(in srgb, var(--_button-accent) 44%, transparent);
   }
 
+  .ui-icon-button[data-variant="ghost"] {
+    --_button-bg: transparent;
+    --_button-fg: var(--ui-text);
+  }
+
   .ui-button[data-variant="contained"] {
     --_button-bg:
       linear-gradient(104deg,
@@ -126,7 +112,6 @@
         color-mix(in srgb, var(--color-bg-elevated) 80%, var(--_button-accent)) 100%);
     --_button-fg: var(--ui-text);
 
-    gap: var(--space-4);
     border: 1px solid var(--_button-accent);
     box-shadow:
       inset 0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 35%, transparent),
@@ -167,22 +152,10 @@
     pointer-events: none;
   }
 
-  .ui-button[data-variant="contained"] .ui-button-start-icon {
+  .ui-button[data-variant="contained"] .ui-button-start-icon,
+  .ui-button[data-variant="contained"]> :not(.ui-button-start-icon) {
     position: relative;
     z-index: 1;
-    inline-size: auto;
-    block-size: auto;
-    padding: var(--space-2);
-  }
-
-  .ui-button[data-variant="contained"] .ui-button-start-icon::after {
-    content: "";
-    position: absolute;
-    inset-inline-start: calc(100% + var(--space-3));
-    inset-block: var(--space-1);
-    inline-size: 1px;
-    background: linear-gradient(transparent, var(--_button-accent), transparent);
-    opacity: .65;
   }
 
   @keyframes ui-contained-plasma {

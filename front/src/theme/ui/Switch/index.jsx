@@ -39,7 +39,7 @@ const Switch = forwardRef(({
       id={controlId}
       type="checkbox"
       role="switch"
-      className={cx("ui-switch", "ui-focus-ring", "ui-disabled", "ui-motion", className)}
+      className={cx("ui-switch", "ui-control", "ui-focus-ring", "ui-disabled", "ui-motion", className)}
       data-size={size}
       checked={Boolean(current)}
       disabled={disabled}
@@ -55,7 +55,11 @@ const Switch = forwardRef(({
   if (!label) return input;
   if (variant === "plain") {
     return (
-      <label className="ui-switch-label" data-disabled={disabled || undefined}>
+      <label
+        className="ui-switch-label ui-control"
+        data-size={size}
+        data-disabled={disabled || undefined}
+      >
         {input}
         <span>{label}</span>
       </label>
