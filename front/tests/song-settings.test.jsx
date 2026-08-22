@@ -16,19 +16,14 @@ vi.mock("../src/hooks/usePolling", () => ({
   usePolling: () => ({ refresh: mocks.refresh, ...mocks.poll })
 }));
 vi.mock("../src/api/client", () => ({ api: { listSongs: vi.fn(), updateSong: mocks.updateSong } }));
-vi.mock("../src/components/modal", () => ({
-  default: ({ children, titleProps }) => (
+vi.mock("../src/theme/ui", () => ({
+  Modal: ({ children, titleProps }) => (
     <section>
       <span data-testid="description">{titleProps?.description}</span>
       {titleProps?.actions}
       {children}
     </section>
-  )
-}));
-vi.mock("../src/components/fields/button", () => ({
-  default: ({ children, icon: _icon, ...props }) => <button {...props}>{children}</button>
-}));
-vi.mock("../src/theme/ui", () => ({
+  ),
   Button: ({ children, startIcon: _icon, ...props }) => <button {...props}>{children}</button>,
   Stack: passthrough("div"),
   Typography: passthrough("p"),

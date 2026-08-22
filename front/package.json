@@ -13,7 +13,7 @@
     "build": "vite build",
     "build:electron": "npm run release:check && electron-builder",
     "preview": "vite preview",
-    "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern src/pages/SettingsOLD",
+    "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern **/*OLD/**",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\"",
@@ -50,7 +50,7 @@
     "verify:release": "python ../scripts/release_gate.py",
     "audit:release-gate": "node scripts/audit-release-gate.mjs",
     "audit:portability": "node scripts/audit-portability.mjs",
-    "release:normalize": "prettier --write \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\" && eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern src/pages/SettingsOLD --fix"
+    "release:normalize": "prettier --write \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\" && eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern **/*OLD/** --fix"
   },
   "dependencies": {
     "lucide-react": "^0.383.0",

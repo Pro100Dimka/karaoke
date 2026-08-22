@@ -15,7 +15,6 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
 import { toggleAudioPlayback } from "../../components/audio-player-utils";
-import Modal from "../../components/modal";
 import { translateSaved as tr } from "../../i18n/runtime";
 import {
   Box,
@@ -23,6 +22,7 @@ import {
   Card,
   Chip,
   IconButton,
+  Modal,
   Select,
   Stack,
   TextField,

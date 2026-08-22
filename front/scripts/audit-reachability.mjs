@@ -10,7 +10,7 @@ const entryFiles = ["main.jsx", "index.css"].map((name) => path.join(sourceRoot,
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const absolutePath = path.join(directory, entry.name);
-    if (absolutePath === path.join(sourceRoot, "pages", "SettingsOLD")) return [];
+    if (entry.name.endsWith("OLD")) return [];
     return entry.isDirectory() ? walk(absolutePath) : [absolutePath];
   });
 }

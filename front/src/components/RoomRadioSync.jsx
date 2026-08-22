@@ -2,68 +2,69 @@ import { useEffect, useRef } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import { useRadio } from "../contexts/radio";
 
-const REMOTE_SETTLE_TIMEOUT_MS = 5000;
+const SETTLE_MS = 5000;
+const signature = ({ stationId, isPlaying, volume }) =>
+  `${stationId}:${Boolean(isPlaying)}:${Number(volume).toFixed(3)}`;
 
 export default function RoomRadioSync() {
   const { room, roomUi, syncUi } = useOnlineRoom();
-  const { isPlaying, stationId, stations, setStation, setVolume, turnOff, turnOn, volume } =
-    useRadio();
-  const remoteTargetRef = useRef(null);
-  const lastSentRef = useRef("");
-  const radioStateRef = useRef({ isPlaying, stationId, volume });
-  radioStateRef.current = { isPlaying, stationId, volume };
+  const radio = useRadio();
+  const current = useRef(radio);
+  const target = useRef(null);
+  const sent = useRef("");
+  current.current = radio;
 
-  // Remote events are declared first so an already-present room state wins on
-  // mount and cannot be overwritten by stale local radio state.
   useEffect(() => {
     if (!room || !roomUi?.radio) return;
-    const { current } = radioStateRef;
-    const remote = roomUi.radio;
-    const nextStationId = remote.stationId || current.stationId;
-    const nextVolume = Number.isFinite(Number(remote.volume))
-      ? Number(remote.volume)
-      : current.volume;
-    const signature = `${nextStationId}:${Boolean(remote.isPlaying)}:${nextVolume.toFixed(3)}`;
-    const currentSignature = `${current.stationId}:${current.isPlaying}:${current.volume.toFixed(3)}`;
-    if (signature === currentSignature) {
-      remoteTargetRef.current = null;
-      lastSentRef.current = signature;
+    const local = current.current;
+    const remote = {
+      stationId: roomUi.radio.stationId || local.stationId,
+      isPlaying: roomUi.radio.isPlaying,
+      volume: Number.isFinite(Number(roomUi.radio.volume))
+        ? Number(roomUi.radio.volume)
+        : local.volume
+    };
+    const next = signature(remote);
+    if (next === signature(local)) {
+      target.current = null;
+      sent.current = next;
       return;
     }
-
-    remoteTargetRef.current = { signature, startedAt: Date.now() };
-    if (remote.stationId && remote.stationId !== current.stationId) setStation(remote.stationId);
-    if (Math.abs(nextVolume - current.volume) > 0.001) setVolume(nextVolume);
-    if (remote.isPlaying && !current.isPlaying) {
+    target.current = { signature: next, startedAt: Date.now() };
+    if (roomUi.radio.stationId && remote.stationId !== local.stationId)
+      radio.setStation(remote.stationId);
+    if (Math.abs(remote.volume - local.volume) > 0.001) radio.setVolume(remote.volume);
+    if (remote.isPlaying && !local.isPlaying) {
       Promise.resolve(
-        turnOn({
+        radio.turnOn({
           remember: false,
           fadeIn: true,
-          targetStation: stations.find(({ id }) => id === nextStationId) || stations[0]
+          targetStation:
+            radio.stations.find(({ id }) => id === remote.stationId) || radio.stations[0]
         })
       ).catch(() => {
-        remoteTargetRef.current = null;
+        target.current = null;
       });
-    } else if (!remote.isPlaying && current.isPlaying) turnOff({ remember: false });
-  }, [room, roomUi?.__eventId, roomUi?.radio, setStation, setVolume, stations, turnOff, turnOn]);
+    } else if (!remote.isPlaying && local.isPlaying) radio.turnOff({ remember: false });
+  }, [radio, room, roomUi?.__eventId, roomUi?.radio]);
 
   useEffect(() => {
     if (!room) return;
-    const signature = `${stationId}:${isPlaying}:${volume.toFixed(3)}`;
-    const target = remoteTargetRef.current;
-    if (target) {
-      if (signature === target.signature) {
-        remoteTargetRef.current = null;
-        lastSentRef.current = signature;
+    const next = signature(radio);
+    if (target.current) {
+      if (next === target.current.signature) {
+        target.current = null;
+        sent.current = next;
         return;
       }
-      if (Date.now() - target.startedAt < REMOTE_SETTLE_TIMEOUT_MS) return;
-      remoteTargetRef.current = null;
+      if (Date.now() - target.current.startedAt < SETTLE_MS) return;
+      target.current = null;
     }
-    if (lastSentRef.current === signature) return;
-    lastSentRef.current = signature;
-    syncUi({ radio: { isPlaying, stationId, volume } });
-  }, [isPlaying, room, stationId, syncUi, volume]);
-
+    if (sent.current === next) return;
+    sent.current = next;
+    syncUi({
+      radio: { isPlaying: radio.isPlaying, stationId: radio.stationId, volume: radio.volume }
+    });
+  }, [radio.isPlaying, radio.stationId, radio.volume, room, syncUi]);
   return null;
 }

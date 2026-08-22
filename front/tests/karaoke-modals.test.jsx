@@ -19,8 +19,9 @@ vi.mock("../src/api/client", () => ({
   }
 }));
 vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ confirm: mocks.confirm }) }));
-vi.mock("../src/components/modal", () => ({
-  default: ({ children, titleProps }) => (
+vi.mock("../src/theme/ui", async (importOriginal) => ({
+  ...(await importOriginal()),
+  Modal: ({ children, titleProps }) => (
     <section>
       <h1>{titleProps?.title}</h1>
       {titleProps?.actions}
@@ -30,14 +31,6 @@ vi.mock("../src/components/modal", () => ({
 }));
 vi.mock("../src/components/AudioPlayer", () => ({
   AudioPlayer: ({ src }) => <audio data-testid="audio" src={src} />
-}));
-vi.mock("../src/components/fields", () => ({
-  Button: ({ children, icon: _icon, ...props }) => <button {...props}>{children}</button>
-}));
-vi.mock("../src/components/fields/button", () => ({
-  default: ({ children, icon: _icon, unstyled: _unstyled, ...props }) => (
-    <button {...props}>{children}</button>
-  )
 }));
 beforeEach(() => {
   mocks.runAnalysis.mockReset();

@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { MOCK_API_ENABLED } from "../api/core";
 import darkIcon from "../assets/icons/dark.png";
@@ -8,26 +7,27 @@ import lightIcon from "../assets/icons/light.png";
 import violetIcon from "../assets/icons/violet.png";
 import { translateMessage } from "../i18n";
 import { BACKEND_BOOT_RETRY_MS } from "../runtime-config";
+import { Button, Box, Stack, Typography } from "../theme/ui";
 import { getSavedLanguage } from "../utils/language";
 import { getSavedTheme } from "../utils/theme";
 import { hydrateUiPreferences } from "../utils/ui-preferences";
 
-const ICONS = { dark: darkIcon, green: greenIcon, light: lightIcon, violet: violetIcon };
-const sleep = (ms) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const icons = { dark: darkIcon, green: greenIcon, light: lightIcon, violet: violetIcon };
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function BackendBootLoader({ children }) {
-  const [ready, setReady] = useState(MOCK_API_ENABLED);
-  const [failed, setFailed] = useState(false);
-  const [retryToken, setRetryToken] = useState(0);
-  const [theme, setTheme] = useState(() => getSavedTheme());
-  const icon = useMemo(() => ICONS[theme] || ICONS.dark, [theme]);
-
+  const [state, setState] = useState({
+    failed: false,
+    ready: MOCK_API_ENABLED,
+    retry: 0,
+    theme: getSavedTheme()
+  });
   useEffect(() => {
     const observer = new MutationObserver(() =>
-      setTheme(document.documentElement.dataset.theme || getSavedTheme())
+      setState((value) => ({
+        ...value,
+        theme: document.documentElement.dataset.theme || getSavedTheme()
+      }))
     );
     observer.observe(document.documentElement, {
       attributes: true,
@@ -35,110 +35,61 @@ export default function BackendBootLoader({ children }) {
     });
     return () => observer.disconnect();
   }, []);
-
   useEffect(() => {
-    if (ready) return undefined;
-    let cancelled = false;
-    const waitForBackend = async () => {
-      for (let attempt = 0; !cancelled && attempt < 40; attempt += 1) {
+    if (state.ready) return undefined;
+    let active = true;
+    (async () => {
+      for (let attempt = 0; active && attempt < 40; attempt += 1) {
         try {
           await api.getHealth();
           await hydrateUiPreferences(api).catch(() => {});
-          if (!cancelled) setReady(true);
+          if (active) setState((value) => ({ ...value, ready: true }));
           return;
         } catch {
-          await sleep(BACKEND_BOOT_RETRY_MS);
+          await wait(BACKEND_BOOT_RETRY_MS);
         }
       }
-      if (!cancelled) setFailed(true);
-    };
-    waitForBackend();
+      if (active) setState((value) => ({ ...value, failed: true }));
+    })();
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [ready, retryToken]);
-
-  if (ready) return children;
-
+  }, [state.ready, state.retry]);
+  if (state.ready) return children;
+  const t = (key) => translateMessage(getSavedLanguage(), key);
   return (
-    <div className="backend-boot-loader" role="status" aria-live="polite">
-      <div className="backend-boot-loader__aurora" aria-hidden="true" />
-      <svg className="backend-boot-loader__logo" viewBox="0 0 220 220" aria-hidden="true">
-        <defs>
-          <filter id="backend-loader-glow" x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur stdDeviation="7" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <radialGradient id="backend-loader-ring" cx="50%" cy="50%" r="50%">
-            <stop offset="0" stopColor="var(--color-primary-hover)" stopOpacity=".95" />
-            <stop offset=".66" stopColor="var(--color-primary)" stopOpacity=".5" />
-            <stop offset="1" stopColor="var(--color-primary)" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <circle
-          className="backend-boot-loader__halo"
-          cx="110"
-          cy="110"
-          r="88"
-          fill="none"
-          stroke="url(#backend-loader-ring)"
-          strokeWidth="3"
-        />
-        <circle
-          className="backend-boot-loader__orbit"
-          cx="110"
-          cy="110"
-          r="101"
-          fill="none"
-          stroke="var(--color-primary)"
-          strokeOpacity=".28"
-          strokeWidth="1.5"
-          strokeDasharray="8 14"
-        />
-        <image
-          href={icon}
-          x="45"
-          y="45"
-          width="130"
-          height="130"
-          preserveAspectRatio="xMidYMid meet"
-          filter="url(#backend-loader-glow)"
-        />
-        <circle
-          className="backend-boot-loader__spark"
-          cx="110"
-          cy="9"
-          r="4.5"
-          fill="var(--color-primary-hover)"
-        />
-      </svg>
-      <div className="backend-boot-loader__copy">
-        <strong>A&amp;D Voice</strong>
-        <span>
-          {failed
-            ? translateMessage(getSavedLanguage(), "backend.failed")
-            : translateMessage(getSavedLanguage(), "backend.starting")}
-        </span>
-        {failed ? (
-          <button
-            type="button"
-            onClick={() => {
-              setFailed(false);
-              setRetryToken((value) => value + 1);
-            }}
+    <Stack
+      role="status"
+      aria-live="polite"
+      align="center"
+      justify="center"
+      gap="var(--space-5)"
+      sx={{ minBlockSize: "100vh", background: "var(--color-bg-deep)" }}
+    >
+      <Box
+        as="img"
+        src={icons[state.theme] || icons.dark}
+        alt=""
+        sx={{
+          inlineSize: "min(24vw, 10rem)",
+          filter: "drop-shadow(0 0 var(--space-5) var(--color-primary))"
+        }}
+      />
+      <Stack align="center" gap="var(--space-2)">
+        <Typography variant="h1">A&amp;D Voice</Typography>
+        <Typography tone="muted">
+          {t(state.failed ? "backend.failed" : "backend.starting")}
+        </Typography>
+        {state.failed && (
+          <Button
+            onClick={() =>
+              setState((value) => ({ ...value, failed: false, retry: value.retry + 1 }))
+            }
           >
-            {translateMessage(getSavedLanguage(), "backend.retry")}
-          </button>
-        ) : null}
-      </div>
-      <div className="backend-boot-loader__dots" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </div>
-    </div>
+            {t("backend.retry")}
+          </Button>
+        )}
+      </Stack>
+    </Stack>
   );
 }

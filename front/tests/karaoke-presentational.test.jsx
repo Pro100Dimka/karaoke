@@ -4,11 +4,6 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 const apiMocks = vi.hoisted(() => ({ getAudioTrackBlob: vi.fn() }));
-vi.mock("../src/components/fields", () => ({
-  RangeInput: ({ onChange, ...props }) => (
-    <input {...props} type="range" onChange={(event) => onChange?.(event.target.value)} />
-  )
-}));
 vi.mock("../src/api/client", () => ({
   api: {
     getAudioTrackUrl: (id, track) => `${id}/${track}`,

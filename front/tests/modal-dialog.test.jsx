@@ -2,8 +2,12 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { stubFrameQueue, stubImmediateAnimationFrame, suppressWindowErrors } from "./helpers/browser.mjs";
-import Modal from "../src/components/modal";
+import {
+  stubFrameQueue,
+  stubImmediateAnimationFrame,
+  suppressWindowErrors
+} from "./helpers/browser.mjs";
+import { Modal } from "../src/theme/ui";
 import { AppDialogProvider, resolveDialog, useAppDialog } from "../src/contexts/AppDialog";
 import { same, verify } from "./helpers/assertions.mjs";
 vi.mock("../src/i18n", async (importOriginal) => ({
@@ -54,11 +58,15 @@ describe("modal", () => {
       </Modal>
     );
     const dialog = screen.getByRole("dialog");
-    same([document.body.style.overflow, "hidden"], [dialog.style.maxWidth, "30rem"]);
-    verify([document.querySelectorAll(".custom"), 'toHaveLength', 1], [screen.getByTestId("title-icon"), 'not.toBeNull'], [screen.getByText("Description"), 'not.toBeNull']);
+    same([document.body.style.overflow, "hidden"], [dialog.style.maxInlineSize, "30rem"]);
+    verify(
+      [document.querySelectorAll(".custom"), "toHaveLength", 1],
+      [screen.getByTestId("title-icon"), "not.toBeNull"],
+      [screen.getByText("Description"), "not.toBeNull"]
+    );
     fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(screen.getByLabelText("Dismiss"));
-    const backdrop = document.querySelector(".app-modal-backdrop");
+    const backdrop = document.querySelector(".ui-modal-backdrop");
     fireEvent.mouseDown(backdrop);
     fireEvent.mouseDown(dialog);
     expect(close).toHaveBeenCalledTimes(3);
@@ -81,7 +89,7 @@ describe("modal", () => {
     );
     const first = screen.getByText("Top first");
     const topDialog = screen.getByRole("dialog", { name: "Top" });
-    const last = topDialog.querySelector(".app-modal-close");
+    const last = topDialog.querySelector(".ui-modal-close");
     first.focus();
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(last);
@@ -103,20 +111,30 @@ describe("modal", () => {
       </>
     );
     act(() => frames.forEach((callback) => callback()));
-    verify([screen .getByRole("dialog", { name: "Top delayed" }) .contains(document.activeElement), 'toBe', true]);
+    verify([
+      screen.getByRole("dialog", { name: "Top delayed" }).contains(document.activeElement),
+      "toBe",
+      true
+    ]);
   });
   test("keeps focus in a dialog without controls", () => {
-    render( <Modal isOpen ariaLabel="Empty"> Content </Modal>
+    render(
+      <Modal isOpen ariaLabel="Empty">
+        {" "}
+        Content{" "}
+      </Modal>
     );
     const dialog = screen.getByRole("dialog");
-    dialog.querySelector(".app-modal-close").remove();
+    dialog.querySelector(".ui-modal-close").remove();
     fireEvent.keyDown(document, { key: "Tab" });
     expect(document.activeElement).toBe(dialog);
   });
 });
 function DialogDriver({ run, onValue }) {
   const dialog = useAppDialog();
-  useEffect(() => { run(dialog).then(onValue); }, [dialog, onValue, run]);
+  useEffect(() => {
+    run(dialog).then(onValue);
+  }, [dialog, onValue, run]);
   return null;
 }
 describe("application dialog provider", () => {
@@ -128,20 +146,30 @@ describe("application dialog provider", () => {
   });
   test("resolves alert confirmation", async () => {
     const onValue = vi.fn();
-    const run = vi.fn(({ alert }) => alert("Saved", { title: "Notice", confirmClassName: "" })
-    );
-    render( <AppDialogProvider> <DialogDriver run={run} onValue={onValue} /> </AppDialogProvider>
+    const run = vi.fn(({ alert }) => alert("Saved", { title: "Notice", confirmClassName: "" }));
+    render(
+      <AppDialogProvider>
+        {" "}
+        <DialogDriver run={run} onValue={onValue} />{" "}
+      </AppDialogProvider>
     );
     expect(screen.getByText("Saved")).not.toBeNull();
-    const closeButton = document.querySelector(".modal-title-action");
-    verify([closeButton.className, 'toBe', "modal-title-action"], [document.querySelector(".app-dialog-body"), 'toBeNull']);
-    act(() => { closeButton.click(); closeButton.click(); });
+    const closeButton = document.querySelector(".ui-modal-title-actions button");
+    verify([closeButton, "not.toBeNull"], [screen.queryByText("Отмена"), "toBeNull"]);
+    act(() => {
+      closeButton.click();
+      closeButton.click();
+    });
     await act(async () => Promise.resolve());
     expect(onValue).toHaveBeenCalledWith(true);
   });
   test("requires the application dialog provider", () => {
     const { log, restore } = suppressWindowErrors();
-    verify([() => renderHook(() => useAppDialog()), 'toThrow', "useAppDialog повинен використовуватися всередині AppDialogProvider"]);
+    verify([
+      () => renderHook(() => useAppDialog()),
+      "toThrow",
+      "useAppDialog повинен використовуватися всередині AppDialogProvider"
+    ]);
     restore();
   });
   test("resolves confirmation cancellation and replacement", async () => {
@@ -151,20 +179,26 @@ describe("application dialog provider", () => {
       controls = useAppDialog();
       return null;
     }
-    render( <AppDialogProvider> <Consumer /> </AppDialogProvider>
+    render(
+      <AppDialogProvider>
+        {" "}
+        <Consumer />{" "}
+      </AppDialogProvider>
     );
     await act(async () => {
-      controls
-        .confirm("First", "Custom title")
-        .then((value) => values.push(value));
+      controls.confirm("First", "Custom title").then((value) => values.push(value));
     });
-    await act(async () => { controls.alert("Replacement").then((value) => values.push(value)); });
+    await act(async () => {
+      controls.alert("Replacement").then((value) => values.push(value));
+    });
     expect(values).toEqual([false]);
-    fireEvent.mouseDown(document.querySelector(".app-modal-backdrop"));
+    fireEvent.mouseDown(document.querySelector(".ui-modal-backdrop"));
     await act(async () => Promise.resolve());
     expect(values).toEqual([false, true]);
-    await act(async () => { controls.confirm("Cancel me").then((value) => values.push(value)); });
-    fireEvent.click(document.querySelector(".app-dialog-actions button"));
+    await act(async () => {
+      controls.confirm("Cancel me").then((value) => values.push(value));
+    });
+    fireEvent.click(document.querySelector('[data-role="dialog-cancel"]'));
     await act(async () => Promise.resolve());
     expect(values.at(-1)).toBe(false);
   });
@@ -175,9 +209,15 @@ describe("application dialog provider", () => {
       controls = useAppDialog();
       return null;
     }
-    const view = render( <AppDialogProvider> <Consumer /> </AppDialogProvider>
+    const view = render(
+      <AppDialogProvider>
+        {" "}
+        <Consumer />{" "}
+      </AppDialogProvider>
     );
-    act(() => { controls.confirm("Pending").then(value); });
+    act(() => {
+      controls.confirm("Pending").then(value);
+    });
     view.unmount();
     await act(async () => Promise.resolve());
     expect(value).toHaveBeenCalledWith(false);

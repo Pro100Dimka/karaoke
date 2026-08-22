@@ -9,13 +9,20 @@ vi.mock("../src/i18n", async (importOriginal) => {
   return { ...actual, useI18n: mockUseI18nWithFallback };
 });
 import { AudioPlayer } from "../src/components/AudioPlayer.jsx";
-import Button from "../src/components/fields/button.jsx";
+import {
+  clampFinite,
+  formatAudioTime,
+  normalizeAudioDuration,
+  normalizeAudioPosition,
+  normalizeAudioVolume,
+  toggleAudioPlayback
+} from "../src/components/audio-player-utils.js";
 import FieldInput from "../src/theme/ui/FieldInput/index.jsx";
 import FieldList from "../src/theme/ui/FieldList/index.jsx";
 import RangeInput from "../src/theme/ui/RangeInput/index.jsx";
 import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
 import StatusBadge from "../src/components/ui/StatusBadge.jsx";
-import { Card, IconButton } from "../src/theme/ui";
+import { Button, Card, IconButton } from "../src/theme/ui";
 const Icon = (props) => <svg data-testid="icon" {...props} />;
 beforeAll(() => {
   Object.defineProperties(HTMLMediaElement.prototype, {
@@ -30,7 +37,7 @@ describe("primitive UI components", () => {
     const clicked = vi.fn();
     render(
       <>
-        <Button icon={Icon} iconSize={12} variant="primary" onClick={clicked}>
+        <Button startIcon={<Icon />} tone="primary" onClick={clicked}>
           Save
         </Button>
         <Button unstyled className="raw">
@@ -44,7 +51,7 @@ describe("primitive UI components", () => {
     fireEvent.click(screen.getByText("Save"));
     expect(clicked).toHaveBeenCalledOnce();
     verify(
-      [screen.getByText("Save").className, "toContain", "btn-primary"],
+      [screen.getByText("Save").className, "toContain", "ui-button"],
       [screen.getByText("Raw").className, "toBe", "raw"],
       [screen.getByText("Bare").getAttribute("class"), "toBeNull"],
       [screen.getByLabelText("Icon action").title, "toBe", "Custom"],
@@ -53,11 +60,11 @@ describe("primitive UI components", () => {
   });
   test("renders statuses", () => {
     const { rerender } = render(<StatusBadge status="done" />);
-    expect(document.querySelector(".badge-done")).not.toBeNull();
+    expect(document.querySelector('[data-status="done"]')).not.toBeNull();
     rerender(<StatusBadge status="custom" />);
-    expect(document.querySelector(".badge-pending")).not.toBeNull();
+    expect(document.querySelector('[data-status="custom"]')).not.toBeNull();
     rerender(<StatusBadge />);
-    expect(screen.getByText("status.unknown")).not.toBeNull();
+    expect(screen.getByText("unknown")).not.toBeNull();
   });
   test("applies neon card pointer effects and delegates handlers", () => {
     const moved = vi.fn();
@@ -227,6 +234,56 @@ describe("field controls", () => {
   });
 });
 describe("AudioPlayer and error boundary", () => {
+  test("normalizes every audio value boundary", () => {
+    expect([
+      clampFinite(0.5, 0, 1),
+      clampFinite(-2, 0, 1),
+      clampFinite(3, 0, 1),
+      clampFinite("bad", 0, 1, 0.25)
+    ]).toEqual([0.5, 0, 1, 0.25]);
+    expect([
+      normalizeAudioDuration(3),
+      normalizeAudioDuration(0),
+      normalizeAudioDuration(-1),
+      normalizeAudioDuration("bad")
+    ]).toEqual([3, 0, 0, 0]);
+    expect([
+      normalizeAudioPosition("bad"),
+      normalizeAudioPosition(0),
+      normalizeAudioPosition(-1),
+      normalizeAudioPosition(4),
+      normalizeAudioPosition(4, 10),
+      normalizeAudioPosition(12, 10),
+      normalizeAudioPosition(4, 0)
+    ]).toEqual([0, 0, 0, 4, 4, 10, 0]);
+    expect([
+      normalizeAudioVolume(null),
+      normalizeAudioVolume(true),
+      normalizeAudioVolume({}),
+      normalizeAudioVolume(" "),
+      normalizeAudioVolume("bad"),
+      normalizeAudioVolume("0.4"),
+      normalizeAudioVolume(-1),
+      normalizeAudioVolume(0.4),
+      normalizeAudioVolume(2)
+    ]).toEqual([1, 1, 1, 1, 1, 0.4, 0, 0.4, 1]);
+    expect(formatAudioTime(5)).toBe("00:05");
+  });
+  test("toggles absent, playing, successful and rejected audio", async () => {
+    expect(await toggleAudioPlayback(null)).toBe(false);
+    const playing = { paused: false, pause: vi.fn() };
+    expect(await toggleAudioPlayback(playing)).toBe(false);
+    expect(playing.pause).toHaveBeenCalledOnce();
+    expect(await toggleAudioPlayback({ paused: true, play: vi.fn().mockResolvedValue() })).toBe(
+      true
+    );
+    expect(
+      await toggleAudioPlayback({
+        paused: true,
+        play: vi.fn().mockRejectedValue(new Error("blocked"))
+      })
+    ).toBe(false);
+  });
   test("handles playback, media events, seeking and volume", async () => {
     render(<AudioPlayer src="one.wav" initialDuration={10} className="extra" />);
     const audio = document.querySelector("audio");

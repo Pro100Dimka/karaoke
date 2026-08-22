@@ -5,57 +5,47 @@ import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
 import { normalizeRoomId } from "../services/onlineRoom";
-import { Button, FieldInput } from "../theme/ui";
+import { Button, FieldInput, Modal, Stack, Typography } from "../theme/ui";
 import { getErrorMessage } from "../utils/errors";
-import Modal from "./modal";
 
 export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
   const { t } = useI18n();
   const room = useOnlineRoom();
-  const [joinMode, setJoinMode] = useState(false);
-  const [name, setName] = useState(onlineName || "");
-  const [roomId, setRoomId] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const mountedRef = useMountedRef();
-  const actionKey = busy ? "room.connecting" : `room.${joinMode ? "join" : "create"}`;
-
+  const mounted = useMountedRef();
+  const [form, setForm] = useState({
+    busy: false,
+    error: "",
+    join: false,
+    name: onlineName || "",
+    roomId: ""
+  });
+  const set = (values) => setForm((current) => ({ ...current, ...values }));
   const connect = async (host) => {
-    const normalizedRoomId = normalizeRoomId(roomId);
-    const onlineNameValue = name.trim();
-    if (!onlineNameValue) {
-      setError(t("room.nameRequired"));
-      return;
-    }
-    setBusy(true);
-    setError("");
+    if (form.busy) return;
+    const name = form.name.trim();
+    if (!name) return set({ error: t("room.nameRequired") });
+    set({ busy: true, error: "" });
     try {
-      if (onlineNameValue !== onlineName) {
-        const saved = await api.updateAppSettings({ online_name: onlineNameValue });
-        onOnlineNameChange?.(saved?.online_name || onlineNameValue);
+      if (name !== onlineName) {
+        const saved = await api.updateAppSettings({ online_name: name });
+        onOnlineNameChange?.(saved?.online_name || name);
       }
-      if (host) await room.createRoom(onlineNameValue);
-      else await room.joinRoom(normalizedRoomId, onlineNameValue);
-      if (mountedRef.current) onClose();
-    } catch (connectError) {
-      if (mountedRef.current) setError(getErrorMessage(connectError, t("room.join.failed")));
+      await (host ? room.createRoom(name) : room.joinRoom(normalizeRoomId(form.roomId), name));
+      if (mounted.current) onClose();
+    } catch (error) {
+      if (mounted.current) set({ error: getErrorMessage(error, t("room.join.failed")) });
     } finally {
-      if (mountedRef.current) setBusy(false);
+      if (mounted.current) set({ busy: false });
     }
   };
-
+  const action = form.busy ? "room.connecting" : `room.${form.join ? "join" : "create"}`;
   return (
     <Modal
       isOpen
+      portal
+      size="sm"
       onClose={onClose}
       ariaLabel={t("room.performance")}
-      portal
-      backdropClassName="app-modal-backdrop"
-      modalClassName="app-modal modal-card online-room-modal"
-      closeClassName="app-modal-close"
-      closeIconSize={18}
-      cardVariant="neon"
-      tilt
       titleProps={{
         icon: UsersRound,
         eyebrow: t("room.eyebrow"),
@@ -63,74 +53,59 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
         description: t("room.description"),
         actions: (
           <Button
-            variant="primary"
-            disabled={busy || (joinMode && roomId.length < 4)}
-            onClick={() => connect(!joinMode)}
-            className="modal-title-action"
+            disabled={form.busy || (form.join && form.roomId.length < 4)}
+            onClick={() => connect(!form.join)}
           >
-            {t(actionKey)}
+            {t(action)}
           </Button>
         )
       }}
     >
-      <div className="modal-scroll online-room-modal__content">
+      <Stack gap="var(--space-4)">
         <FieldInput
-          id="online-room-name"
           field={{
             name: "onlineName",
             label: t("room.name"),
             placeholder: t("room.namePlaceholder"),
             maxLength: 80
           }}
-          value={name}
-          onChange={setName}
+          value={form.name}
+          onChange={(name) => set({ name })}
         />
-        {!joinMode ? (
-          <div className="online-room-form u-stack-4">
-            <p>{t("room.instructions")}</p>
-            {error && <p className="karaoke-recording-error">{error}</p>}
-            <div className="online-room-actions u-actions-end">
-              <Button variant="ghost" disabled={busy} onClick={() => setJoinMode(true)}>
-                {t("room.joinByCode")}
-              </Button>
-            </div>
-          </div>
+        {form.join ? (
+          <FieldInput
+            field={{
+              name: "roomId",
+              label: t("room.code"),
+              placeholder: t("room.codeExample"),
+              maxLength: 32
+            }}
+            value={form.roomId}
+            onChange={(roomId) => set({ roomId: normalizeRoomId(roomId) })}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && form.roomId.length >= 4 && !form.busy) {
+                event.preventDefault();
+                connect(false);
+              }
+            }}
+          />
         ) : (
-          <div className="online-room-form u-stack-4">
-            <FieldInput
-              id="online-room-code"
-              field={{
-                name: "roomId",
-                label: t("room.code"),
-                placeholder: t("room.codeExample"),
-                maxLength: 32
-              }}
-              value={roomId}
-              onChange={(value) => setRoomId(normalizeRoomId(value))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && roomId.length >= 4) {
-                  event.preventDefault();
-                  connect(false);
-                }
-              }}
-            />
-            {error && <p className="karaoke-recording-error">{error}</p>}
-            <div className="online-room-actions u-actions-end">
-              <Button
-                icon={ArrowLeft}
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  setJoinMode(false);
-                  setError("");
-                }}
-              >
-                {t("room.back")}
-              </Button>
-            </div>
-          </div>
+          <Typography tone="muted">{t("room.instructions")}</Typography>
         )}
-      </div>
+        {form.error && (
+          <Typography role="alert" tone="danger">
+            {form.error}
+          </Typography>
+        )}
+        <Button
+          variant="outline"
+          disabled={form.busy}
+          startIcon={form.join ? <ArrowLeft size={18} /> : undefined}
+          onClick={() => set({ join: !form.join, error: "" })}
+        >
+          {t(form.join ? "room.back" : "room.joinByCode")}
+        </Button>
+      </Stack>
     </Modal>
   );
 }

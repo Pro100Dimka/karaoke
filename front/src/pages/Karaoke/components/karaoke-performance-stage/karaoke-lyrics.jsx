@@ -1,1 +1,3 @@
-export { default } from "../../../../theme/features/KaraokeLyrics";
+import KaraokeLyrics from "../../../../theme/features/KaraokeLyrics";
+
+export default KaraokeLyrics;

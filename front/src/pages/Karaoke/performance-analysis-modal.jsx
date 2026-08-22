@@ -2,13 +2,19 @@ import { BarChart3, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
-import Modal from "../../components/modal";
-import ModalCarouselNavigation from "../../components/modal/carousel-navigation";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../../hooks/useMountedRef";
 import { translateSaved as t } from "../../i18n/runtime";
-import { Button, Card, Grid, Stack, Typography } from "../../theme/ui";
+import {
+  Button,
+  Card,
+  Grid,
+  Modal,
+  ModalCarouselNavigation,
+  Stack,
+  Typography
+} from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 import { getAnalysisFeedback, normalizeAnalysisResult } from "./utils/analysis";
 

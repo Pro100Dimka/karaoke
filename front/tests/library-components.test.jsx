@@ -11,8 +11,9 @@ vi.mock("../src/hooks/useAppSettings", () => ({
 vi.mock("../src/components/ui/StatusBadge", () => ({
   default: ({ status }) => <span data-testid="status">{status}</span>
 }));
-vi.mock("../src/components/modal", () => ({
-  default: ({ children, titleProps }) => {
+vi.mock("../src/theme/ui", async (importOriginal) => ({
+  ...(await importOriginal()),
+  Modal: ({ children, titleProps }) => {
     const Icon = titleProps?.icon;
     return (
       <section>
@@ -32,11 +33,6 @@ vi.mock("../src/components/modal", () => ({
       </section>
     );
   }
-}));
-vi.mock("../src/components/fields/button", () => ({
-  default: ({ children, icon: _icon, iconProps: _iconProps, ...props }) => (
-    <button {...props}>{children}</button>
-  )
 }));
 vi.mock("../src/components/AudioPlayer", () => ({
   AudioPlayer: ({ src }) => <audio data-testid="player" src={src} />

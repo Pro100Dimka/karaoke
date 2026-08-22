@@ -209,12 +209,7 @@ export function LibraryHero({ songCount, readyCount, ...actions }) {
                 sx={{
                   position: "relative",
                   color: "var(--ui-primary)",
-                  padding: "var(--space-3)",
-                  borderRadius: "var(--shape-md)",
-                  background: "color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))",
-                  boxShadow:
-                    "inset 0 0 0 var(--hairline) color-mix(in srgb, var(--color-primary) 38%, transparent), 0 0 var(--space-4) color-mix(in srgb, var(--color-primary) 22%, transparent)",
-                  filter: "drop-shadow(0 0 var(--space-2) currentColor)"
+                  padding: "var(--space-3)"
                 }}
               >
                 <Icon />

@@ -1,18 +1,19 @@
 import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useI18n } from "../i18n";
-import { IconButton, RangeInput } from "../theme/ui";
+import { Box, IconButton, Slider, Stack, Typography } from "../theme/ui";
 
-const SPEAKING_THRESHOLDS = [0.18, 0.38, 0.6, 0.82];
+const LEVELS = [0.18, 0.38, 0.6, 0.82];
+const key = (enabled, on, off) => `room.person.${enabled ? on : off}`;
 
 export default function OnlineRoomParticipant({
   person,
   room,
-  localSpeakingLevel,
+  localSpeakingLevel = 0,
   speakingLevel = 0,
-  microphoneMuted,
-  roomSoundMuted,
-  isLocallyMuted,
-  effectsEnabled,
+  microphoneMuted = false,
+  roomSoundMuted = false,
+  isLocallyMuted = false,
+  effectsEnabled = false,
   participantVolume = 1,
   transferStatus,
   onLeave,
@@ -23,109 +24,116 @@ export default function OnlineRoomParticipant({
   onTogglePersonEffects
 }) {
   const { t } = useI18n();
-  const isSelf = person.id === room.selfId;
-  const rawLevel = isSelf ? localSpeakingLevel : speakingLevel;
-  const microphoneInactive = isSelf ? microphoneMuted || roomSoundMuted : person.micMuted;
-  const activeSpeakingLevel = microphoneInactive ? 0 : rawLevel;
-  const isSpeaking = activeSpeakingLevel > 0.08;
-  const microphoneLabel = t(microphoneMuted ? "room.microphone.enable" : "room.microphone.disable");
-  const applicationSoundLabel = t(roomSoundMuted ? "room.sound.enable" : "room.sound.disable");
-  const participantSoundLabel = isLocallyMuted
-    ? t("room.person.enable", { name: person.name })
-    : t("room.person.disable", { name: person.name });
-
+  const self = person.id === room.selfId;
+  const inactive = self ? microphoneMuted || roomSoundMuted : person.micMuted;
+  const level = inactive ? 0 : self ? localSpeakingLevel : speakingLevel;
+  const speaking = level > 0.08;
+  const selfActions = [
+    [
+      microphoneMuted ? MicOff : Mic,
+      t(microphoneMuted ? "room.microphone.enable" : "room.microphone.disable"),
+      () => onSetMicrophoneMuted(!microphoneMuted),
+      roomSoundMuted
+    ],
+    [
+      roomSoundMuted ? VolumeX : Volume2,
+      t(roomSoundMuted ? "room.sound.enable" : "room.sound.disable"),
+      () => onSetRoomSoundMuted(!roomSoundMuted)
+    ],
+    [LogOut, t("room.leave"), onLeave]
+  ];
   return (
-    <div
-      className={`online-room-person ${isSelf ? "is-self" : ""} ${isSpeaking ? "is-speaking" : ""}`}
-      style={{ "--voice-level": activeSpeakingLevel }}
+    <Stack
+      direction="row"
+      align="center"
+      justify="space-between"
+      gap="var(--space-3)"
+      data-self={self || undefined}
+      data-speaking={speaking || undefined}
+      sx={{
+        padding: "var(--space-3)",
+        borderRadius: "var(--radius-md)",
+        background: "var(--color-surface-glass)"
+      }}
     >
-      <span className="online-room-person-name">
-        <span className="online-room-person-identity">
-          <b>{person.name}</b>
-          {person.role === "host" && <small>{t("room.role.host")}</small>}
-        </span>
-        {transferStatus && transferStatus.stage !== "error" && (
-          <small className="online-room-person-transfer">
-            {Math.round(transferStatus.percent || 0)}%
-          </small>
+      <Stack direction="row" align="center" gap="var(--space-2)" sx={{ minInlineSize: 0 }}>
+        <Typography as="strong" noWrap>
+          {person.name}
+        </Typography>
+        {person.role === "host" && (
+          <Typography variant="caption" tone="muted">
+            {t("room.role.host")}
+          </Typography>
         )}
-        <span
-          className="online-room-speaking-meter"
-          aria-label={t(isSpeaking ? "room.person.speaking" : "room.person.silent", {
-            name: person.name
-          })}
-          title={t(isSpeaking ? "room.person.speakingNow" : "room.person.noSignal")}
+        {transferStatus && transferStatus.stage !== "error" && (
+          <Typography variant="caption" tone="muted">
+            {Math.round(transferStatus.percent || 0)}%
+          </Typography>
+        )}
+        <Stack
+          as="span"
+          direction="row"
+          gap="var(--space-1)"
+          aria-label={t(key(speaking, "speaking", "silent"), { name: person.name })}
+          title={t(key(speaking, "speakingNow", "noSignal"))}
         >
-          {SPEAKING_THRESHOLDS.map((threshold) => (
-            <i key={threshold} className={activeSpeakingLevel >= threshold ? "is-active" : ""} />
+          {LEVELS.map((threshold) => (
+            <Box
+              as="i"
+              key={threshold}
+              data-active={level >= threshold || undefined}
+              sx={{
+                inlineSize: "var(--space-1)",
+                blockSize: "var(--space-3)",
+                borderRadius: "var(--radius-pill)",
+                background: level >= threshold ? "var(--color-primary)" : "var(--color-border)"
+              }}
+            />
           ))}
-        </span>
-      </span>
-      <div className="online-room-person-actions">
-        {isSelf ? (
-          <>
+        </Stack>
+      </Stack>
+      <Stack direction="row" align="center" gap="var(--space-2)" sx={{ inlineSize: "auto" }}>
+        {self ? (
+          selfActions.map(([icon, label, onClick, disabled]) => (
             <IconButton
-              icon={microphoneMuted ? MicOff : Mic}
+              key={label}
+              icon={icon}
+              label={label}
               variant="outline"
-              label={microphoneLabel}
-              className={microphoneMuted ? "is-off" : ""}
-              disabled={roomSoundMuted}
-              onClick={() => onSetMicrophoneMuted(!microphoneMuted)}
+              disabled={disabled}
+              onClick={onClick}
             />
-            <IconButton
-              icon={roomSoundMuted ? VolumeX : Volume2}
-              variant="outline"
-              label={applicationSoundLabel}
-              className={roomSoundMuted ? "is-off" : ""}
-              onClick={() => onSetRoomSoundMuted(!roomSoundMuted)}
-            />
-            <IconButton
-              icon={LogOut}
-              variant="outline"
-              label={t("room.leave")}
-              className="is-leave"
-              onClick={onLeave}
-            />
-          </>
+          ))
         ) : (
           <>
             <IconButton
-              variant="outline"
               icon={Sparkles}
-              label={t(
-                effectsEnabled ? "room.person.effects.disable" : "room.person.effects.enable",
-                { name: person.name }
-              )}
+              variant="outline"
               aria-pressed={effectsEnabled}
-              className={effectsEnabled ? "is-active" : ""}
+              label={t(key(effectsEnabled, "effects.disable", "effects.enable"), {
+                name: person.name
+              })}
               onClick={() => onTogglePersonEffects(person.id)}
             />
-            <div className="online-room-person-volume-control">
-              <div
-                className="online-room-person-volume"
-                title={t("room.person.volume", { name: person.name })}
-              >
-                <RangeInput
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={participantVolume}
-                  aria-label={t("room.person.volume", { name: person.name })}
-                  onChange={(value) => onSetParticipantVolume(person.id, value)}
-                />
-                <span>{Math.round(participantVolume * 100)}%</span>
-              </div>
-              <IconButton
-                variant="outline"
-                icon={isLocallyMuted ? VolumeX : Volume2}
-                label={participantSoundLabel}
-                className={isLocallyMuted ? "is-off" : ""}
-                onClick={() => onTogglePersonMuted(person.id)}
-              />
-            </div>
+            <Slider
+              min={0}
+              max={1}
+              step={0.05}
+              value={participantVolume}
+              formatValue={(value) => `${Math.round(value * 100)}%`}
+              aria-label={t("room.person.volume", { name: person.name })}
+              onChange={(value) => onSetParticipantVolume?.(person.id, value)}
+              controlSx={{ inlineSize: "var(--space-24)" }}
+            />
+            <IconButton
+              icon={isLocallyMuted ? VolumeX : Volume2}
+              variant="outline"
+              label={t(key(isLocallyMuted, "enable", "disable"), { name: person.name })}
+              onClick={() => onTogglePersonMuted(person.id)}
+            />
           </>
         )}
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }

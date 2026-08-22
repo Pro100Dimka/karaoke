@@ -1,8 +1,7 @@
 import { ArrowLeft, Settings2 } from "lucide-react";
 import { useState } from "react";
-import Modal from "../../components/modal";
 import { useI18n } from "../../i18n";
-import { Button, Stack, Tabs, Typography } from "../../theme/ui";
+import { Button, Modal, Stack, Tabs, Typography } from "../../theme/ui";
 import ModelStatus from "./ModelStatus";
 import { Service, ServiceCards, SERVICE_ICONS } from "./Services";
 import SettingsForm from "./SettingsForm";
@@ -39,15 +38,12 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="100vw"
       ariaLabel={t("settings.title")}
       titleProps={{
         icon: ServiceIcon ?? Settings2,
         eyebrow: t("settings.eyebrow"),
         title: service ? t(`settings.service.${service}.title`) : t("settings.title"),
-        description: service
-          ? t(`settings.service.${service}.text`)
-          : t("settings.description"),
+        description: service ? t(`settings.service.${service}.text`) : t("settings.description"),
         actions: service && (
           <Button
             variant="outline"

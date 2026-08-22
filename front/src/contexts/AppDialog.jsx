@@ -8,9 +8,8 @@ import {
   useRef,
   useState
 } from "react";
-import Modal from "../components/modal";
 import { translateSaved } from "../i18n/runtime";
-import { Button } from "../theme/ui";
+import { Button, Modal, Stack } from "../theme/ui";
 import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "./dialog-utils";
 
 const DIALOG_CONTEXT_KEY = Symbol.for("advoice.app-dialog-context");
@@ -28,11 +27,9 @@ function DialogModal({ dialog, onClose }) {
       isOpen
       onClose={() => onClose(closeResult)}
       ariaLabel={dialog.title}
-      backdropClassName="app-modal-backdrop app-dialog-backdrop"
-      modalClassName="app-modal modal-card app-dialog"
-      closeClassName="app-modal-close app-dialog-close"
       cardVariant="neon"
       closeIconSize={18}
+      size="sm"
       portal
       titleProps={{
         icon: Icon,
@@ -40,24 +37,18 @@ function DialogModal({ dialog, onClose }) {
         title: dialog.title,
         description: dialog.message,
         actions: (
-          <Button
-            unstyled
-            className={`${dialog.confirmClassName} modal-title-action`.trim()}
-            onClick={() => onClose(true)}
-          >
+          <Button className={dialog.confirmClassName} onClick={() => onClose(true)}>
             {dialog.confirmText}
           </Button>
         )
       }}
     >
       {isConfirmation && (
-        <div className="app-dialog-body">
-          <div className="app-dialog-actions u-actions-end">
-            <Button variant="ghost" onClick={() => onClose(false)}>
-              {dialog.cancelText}
-            </Button>
-          </div>
-        </div>
+        <Stack align="end" sx={{ padding: "var(--space-4)" }}>
+          <Button data-role="dialog-cancel" variant="ghost" onClick={() => onClose(false)}>
+            {dialog.cancelText}
+          </Button>
+        </Stack>
       )}
     </Modal>
   );

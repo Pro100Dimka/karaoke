@@ -1,7 +1,7 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { IconButton, RangeInput, Stack } from "../theme/ui";
+import { IconButton, Slider, Stack, Typography } from "../theme/ui";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -10,131 +10,119 @@ import {
   toggleAudioPlayback
 } from "./audio-player-utils";
 
+const setMedia = (media, key, value) => {
+  try {
+    media[key] = value;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const { t } = useI18n();
-  const audioRef = useRef(null);
-  const previousVolumeRef = useRef(1);
-  const [playing, setPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const fallbackDuration = normalizeAudioDuration(initialDuration);
-  const [duration, setDuration] = useState(fallbackDuration);
-  const [volume, setVolume] = useState(1);
+  const media = useRef(null);
+  const rememberedVolume = useRef(1);
+  const fallback = normalizeAudioDuration(initialDuration);
+  const [state, setState] = useState({
+    duration: fallback,
+    playing: false,
+    position: 0,
+    volume: 1
+  });
+  const update = (value) => setState((current) => ({ ...current, ...value }));
 
   useEffect(() => {
-    const audio = audioRef.current;
-    audio.pause();
-    try {
-      audio.currentTime = 0;
-      audio.load();
-    } catch {
-      // The previous media resource may already be detached.
+    media.current?.pause();
+    if (media.current) {
+      setMedia(media.current, "currentTime", 0);
+      try {
+        media.current.load();
+      } catch {
+        // Some test and embedded media implementations do not expose load().
+      }
     }
-    setPlaying(false);
-    setPosition(0);
-    setDuration(fallbackDuration);
-  }, [fallbackDuration, src]);
+    setState((current) => ({ ...current, duration: fallback, playing: false, position: 0 }));
+  }, [fallback, src]);
 
-  const toggle = async () => {
-    await toggleAudioPlayback(audioRef.current);
-  };
   const seek = (value) => {
-    const positionValue = normalizeAudioPosition(value, duration);
-    try {
-      audioRef.current.currentTime = positionValue;
-    } catch {
-      return;
-    }
-    setPosition(positionValue);
+    const position = normalizeAudioPosition(value, state.duration);
+    if (setMedia(media.current, "currentTime", position)) update({ position });
   };
-  const changeVolume = (value) => {
-    const volumeValue = normalizeAudioVolume(value);
-    if (volumeValue > 0) previousVolumeRef.current = volumeValue;
-    try {
-      audioRef.current.volume = volumeValue;
-    } catch {
-      return;
-    }
-    setVolume(volumeValue);
-  };
-
-  const toggleMuted = () => {
-    changeVolume(volume > 0 ? 0 : previousVolumeRef.current);
+  const setVolume = (value) => {
+    const volume = normalizeAudioVolume(value);
+    if (volume) rememberedVolume.current = volume;
+    if (setMedia(media.current, "volume", volume)) update({ volume });
   };
 
   return (
     <Stack
       direction="row"
       align="center"
-      gap={0.5}
-      justify="space-between"
+      gap="var(--space-2)"
       className={`performance-player ${className}`.trim()}
+      sx={{
+        padding: "var(--space-2)",
+        borderRadius: "var(--radius-pill)",
+        background: "var(--color-surface-glass)"
+      }}
     >
       <audio
-        ref={audioRef}
+        ref={media}
         preload="metadata"
         src={src}
-        onLoadedMetadata={(event) => {
-          const mediaDuration = normalizeAudioDuration(event.currentTarget.duration);
-          setDuration(mediaDuration || fallbackDuration);
-        }}
-        onTimeUpdate={(event) =>
-          setPosition(
-            normalizeAudioPosition(
-              event.currentTarget.currentTime,
-              normalizeAudioDuration(event.currentTarget.duration) || duration
-            )
-          )
+        onLoadedMetadata={(event) =>
+          update({ duration: normalizeAudioDuration(event.currentTarget.duration) || fallback })
         }
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onTimeUpdate={(event) =>
+          update({
+            position: normalizeAudioPosition(
+              event.currentTarget.currentTime,
+              normalizeAudioDuration(event.currentTarget.duration) || state.duration
+            )
+          })
+        }
+        onPlay={() => update({ playing: true })}
+        onPause={() => update({ playing: false })}
         onEnded={(event) => {
-          try {
-            event.currentTarget.currentTime = 0;
-          } catch {
-            // Media can be detached while the ended event is being delivered.
-          }
-          setPlaying(false);
-          setPosition(0);
+          setMedia(event.currentTarget, "currentTime", 0);
+          update({ playing: false, position: 0 });
         }}
       />
       <IconButton
-        unstyled
-        className="performance-player-play"
-        icon={playing ? Pause : Play}
-        iconSize={18}
-        label={t(playing ? "audio.pause" : "audio.playRecording")}
-        onClick={toggle}
+        icon={state.playing ? Pause : Play}
+        label={t(state.playing ? "audio.pause" : "audio.playRecording")}
+        onClick={() => toggleAudioPlayback(media.current)}
       />
-      <div className="performance-player-track u-muted-xs">
-        <RangeInput
+      <Stack gap="var(--space-1)" sx={{ flex: 1 }}>
+        <Slider
           aria-label={t("audio.recordingPosition")}
-          min="0"
-          max={duration || 0}
-          step="0.01"
-          value={Math.min(position, duration || 0)}
+          min={0}
+          max={state.duration || 0}
+          step={0.01}
+          value={Math.min(state.position, state.duration || 0)}
+          showValue={false}
           onChange={seek}
         />
-        <span>
-          {formatAudioTime(position)} / {formatAudioTime(duration)}
-        </span>
-      </div>
-      <div className="performance-player-volume">
-        <IconButton
-          unstyled
-          icon={volume ? Volume2 : VolumeX}
-          iconSize={16}
-          label={t(volume ? "audio.mute" : "audio.unmute")}
-          onClick={toggleMuted}
-        />
-        <RangeInput
-          aria-label={t("audio.recordingVolume")}
-          min="0"
-          max="1"
-          step="0.05"
-          value={volume}
-          onChange={changeVolume}
-        />
-      </div>
+        <Typography variant="caption" tone="muted">
+          {formatAudioTime(state.position)} / {formatAudioTime(state.duration)}
+        </Typography>
+      </Stack>
+      <IconButton
+        icon={state.volume ? Volume2 : VolumeX}
+        label={t(state.volume ? "audio.mute" : "audio.unmute")}
+        onClick={() => setVolume(state.volume ? 0 : rememberedVolume.current)}
+      />
+      <Slider
+        aria-label={t("audio.recordingVolume")}
+        min={0}
+        max={1}
+        step={0.05}
+        value={state.volume}
+        showValue={false}
+        onChange={setVolume}
+        controlSx={{ inlineSize: "var(--space-16)" }}
+      />
     </Stack>
   );
 }

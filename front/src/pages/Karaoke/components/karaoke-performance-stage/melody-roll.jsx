@@ -1,1 +1,3 @@
-export { default } from "../../../../theme/features/PianoRoll";
+import PianoRoll from "../../../../theme/features/PianoRoll";
+
+export default PianoRoll;

@@ -38,7 +38,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   );
 
   expect(view.getAllByRole("textbox")).toHaveLength(2);
-  expect(view.container.querySelector(".modal-title__image")?.src).toContain(
+  expect(view.container.querySelector(".ui-modal-title-media img")?.src).toContain(
     "data:image/png;base64,cover"
   );
   expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(3);

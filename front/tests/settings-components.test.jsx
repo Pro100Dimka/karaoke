@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({ data: { ready: true }, settings: null }));
 vi.mock("../src/hooks/usePolling", () => ({ usePolling: () => ({ data: mocks.data }) }));
 vi.mock("../src/i18n", () => ({ useI18n: () => ({ t: (key) => key }) }));
 vi.mock("../src/pages/Settings/use-settings", () => ({ default: () => mocks.settings }));
-vi.mock("../src/components/modal", () => ({ default: ({ children }) => <main>{children}</main> }));
+vi.mock("../src/theme/ui", async (importOriginal) => ({
+  ...(await importOriginal()),
+  Modal: ({ children }) => <main>{children}</main>
+}));
 
 import ModelStatus from "../src/pages/Settings/ModelStatus.jsx";
 import Settings from "../src/pages/Settings/index.jsx";

@@ -11,6 +11,11 @@ export { default as FieldInput } from "./FieldInput";
 export { default as FieldList } from "./FieldList";
 export { default as IconButton } from "./IconButton";
 export { default as InputBase } from "./InputBase";
+export {
+  default as Modal,
+  ModalCarouselNavigation,
+  ModalTitle
+} from "./Modal";
 export { default as NumberField } from "./NumberField";
 export { default as OutlinedInput } from "./OutlinedInput";
 export { default as Popover } from "./Popover";

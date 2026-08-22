@@ -1,24 +1,20 @@
 import { useI18n } from "../../i18n";
+import { Chip } from "../../theme/ui";
 
-const STATUS_CLASS = {
-  pending: "badge-pending",
-  queued: "badge-pending",
-  processing: "badge-processing",
-  cancelling: "badge-processing",
-  cancelled: "badge-cancelled",
-  done: "badge-done",
-  error: "badge-error"
+const tones = {
+  cancelled: "default",
+  cancelling: "warning",
+  done: "success",
+  error: "danger",
+  processing: "primary"
 };
 
 export default function StatusBadge({ status }) {
   const { t } = useI18n();
-  const className = STATUS_CLASS[status] ?? "badge-pending";
-  const label = status ? t(`status.${status}`, {}, status) : t("status.unknown");
-
+  const value = status || "unknown";
   return (
-    <span className={`badge ${className}`}>
-      <span className="badge-dot" aria-hidden="true" />
-      {label}
-    </span>
+    <Chip data-status={value} tone={tones[value] || "warning"} size="sm">
+      {t(value === "unknown" ? "status.unknown" : `status.${value}`, {}, value)}
+    </Chip>
   );
 }

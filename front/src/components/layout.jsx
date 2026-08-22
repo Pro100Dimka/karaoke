@@ -4,79 +4,85 @@ import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useI18n } from "../i18n";
-import { IconButton, RangeInput, Stack } from "../theme/ui";
-import cx from "../utils/cx";
+import { Box, IconButton, Slider, Stack } from "../theme/ui";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
 const Settings = lazy(() => import("../pages/Settings"));
-
-const ROUTES = {
-  karaoke: "/karaoke",
-  editor: "/editor/"
+const useBlackout = () => {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const listener = ({ detail }) => setVisible(Boolean(detail?.visible));
+    window.addEventListener("app:route-blackout", listener);
+    return () => window.removeEventListener("app:route-blackout", listener);
+  }, []);
+  return visible;
 };
 
-const Lazy = ({ children }) => <Suspense fallback={null}>{children}</Suspense>;
-
-function useRouteBlackout() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const handle = ({ detail }) => setVisible(Boolean(detail?.visible));
-
-    window.addEventListener("app:route-blackout", handle);
-    return () => window.removeEventListener("app:route-blackout", handle);
-  }, []);
-
-  return visible;
-}
-
-function AppFloatingControls({ onOpenSettings }) {
+function FloatingControls({ openSettings }) {
   const { t } = useI18n();
-  const { error, isLoading, isPlaying, station, toggle, volume, setVolume } = useRadio();
-
+  const radio = useRadio();
+  const radioLabel =
+    radio.error ||
+    t(radio.isPlaying ? "radio.disable" : "radio.enable", { station: radio.station.name });
   return (
-    <Stack className="app-floating-controls" direction="row" gap="0.5rem" sx={{ width: "auto" }}>
-      <div className="app-radio-fab-wrap">
+    <Stack
+      className="app-floating-controls"
+      direction="row"
+      align="end"
+      gap="var(--space-2)"
+      sx={{
+        position: "fixed",
+        inset: "auto var(--space-5) var(--space-5) auto",
+        inlineSize: "auto",
+        zIndex: 20
+      }}
+    >
+      <Stack
+        className="app-radio-fab-wrap"
+        align="end"
+        gap="var(--space-2)"
+        sx={{ inlineSize: "auto" }}
+      >
         <IconButton
-          unstyled
-          className={cx(
-            "app-settings-fab",
-            "app-radio-fab",
-            isPlaying && "is-playing",
-            isLoading && "is-loading"
-          )}
           icon={Radio}
           iconSize={28}
-          label={
-            error ||
-            t(isPlaying ? "radio.disable" : "radio.enable", {
-              station: station.name
-            })
-          }
-          onClick={toggle}
+          label={radioLabel}
+          onClick={radio.toggle}
+          className={`app-settings-fab app-radio-fab${radio.isPlaying ? " is-playing" : ""}${radio.isLoading ? " is-loading" : ""}`}
         />
-
-        <div className="app-radio-volume" aria-label={t("radio.volume")}>
+        <Stack
+          className="app-radio-volume"
+          direction="row"
+          align="center"
+          gap="var(--space-2)"
+          aria-label={t("radio.volume")}
+          sx={{
+            inlineSize: "auto",
+            padding: "var(--space-2)",
+            borderRadius: "var(--radius-pill)",
+            background: "var(--color-surface-glass)"
+          }}
+        >
           <Volume2 size={15} />
-          <RangeInput
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(value) => setVolume(value)}
+          <Slider
+            min={0}
+            max={1}
+            step={0.01}
+            value={radio.volume}
+            showValue={false}
+            onChange={(value) => radio.setVolume(value)}
+            controlSx={{ inlineSize: "var(--space-16)" }}
           />
-          <span>{Math.round(volume * 100)}%</span>
-        </div>
-      </div>
-
+          <span>{Math.round(radio.volume * 100)}%</span>
+        </Stack>
+      </Stack>
       <IconButton
-        unstyled
-        className="app-settings-fab"
         icon={Cog}
         iconSize={28}
         label={t("settings.open")}
-        onClick={onOpenSettings}
+        onClick={openSettings}
+        className="app-settings-fab"
       />
     </Stack>
   );
@@ -84,45 +90,40 @@ function AppFloatingControls({ onOpenSettings }) {
 
 export default function AppLayout() {
   const { pathname } = useLocation();
-  const [isSettingsOpen, setSettingsOpen] = useState(false);
-  const routeBlackout = useRouteBlackout();
-
-  const isKaraoke = pathname === ROUTES.karaoke;
-  const isEditor = pathname.startsWith(ROUTES.editor);
-  const showFloatingControls = !isKaraoke && !isEditor;
-
-  const openSettings = () => setSettingsOpen(true);
-
+  const [settings, setSettings] = useState(false);
+  const blackout = useBlackout();
+  const karaoke = pathname === "/karaoke";
+  const editor = pathname.startsWith("/editor/");
   useOnlineRoomNavigation();
-
   return (
-    <div
-      className={cx(
-        "app-shell",
-        isKaraoke && "karaoke-app-shell",
-        isEditor && "melody-editor-app-shell"
-      )}
+    <Box
+      className={`app-shell${karaoke ? " karaoke-app-shell" : ""}${editor ? " melody-editor-app-shell" : ""}`}
+      sx={{ display: "flex", flexDirection: "column", minBlockSize: "100vh" }}
     >
-      <TitleBar hideActions={isEditor} />
-
-      <div className="app-body">
-        <main className="app-main">
-          <AppRoutes onOpenAppSettings={openSettings} />
-        </main>
-
-        {showFloatingControls && <AppFloatingControls onOpenSettings={openSettings} />}
-
-        <div
-          className={cx("app-route-blackout", routeBlackout && "is-visible")}
+      <TitleBar hideActions={editor} />
+      <Box className="app-body" sx={{ position: "relative", flex: 1, minBlockSize: 0 }}>
+        <Box as="main" className="app-main" sx={{ blockSize: "100%" }}>
+          <AppRoutes onOpenAppSettings={() => setSettings(true)} />
+        </Box>
+        {!karaoke && !editor && <FloatingControls openSettings={() => setSettings(true)} />}
+        <Box
+          className={`app-route-blackout${blackout ? " is-visible" : ""}`}
           aria-hidden="true"
+          sx={{
+            position: "fixed",
+            inset: 0,
+            pointerEvents: "none",
+            opacity: blackout ? 1 : 0,
+            background: "var(--color-bg-deep)",
+            transition: "opacity var(--duration-fast)"
+          }}
         />
-
-        {isSettingsOpen && (
-          <Lazy>
-            <Settings isOpen onClose={() => setSettingsOpen(false)} />
-          </Lazy>
+        {settings && (
+          <Suspense fallback={null}>
+            <Settings isOpen onClose={() => setSettings(false)} />
+          </Suspense>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

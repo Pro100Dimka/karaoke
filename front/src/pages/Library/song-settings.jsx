@@ -2,13 +2,12 @@ import { Music2, Piano, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import Modal from "../../components/modal";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved as tr } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
-import { Button, ConfigForm, NumberField, Stack, Typography } from "../../theme/ui";
+import { Button, ConfigForm, Modal, NumberField, Stack, Typography } from "../../theme/ui";
 import Field from "../../theme/ui/_internal/Field";
 import { getErrorMessage } from "../../utils/errors";
 
