@@ -145,12 +145,21 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
 
 
 _COPY_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
+_SOURCE_MARKER_RE = re.compile(
+    r"\s*(?:\(\s*sefon\.pro\s*\)|\[\s*sefon\.pro\s*])\s*",
+    re.IGNORECASE,
+)
 _WINDOWS_FORBIDDEN_RE = re.compile(r'[<>:"/\\|?*]+')
 _RELEASE_WORD_RE = re.compile(r"\b(?:single|album|ep)\b", re.IGNORECASE)
 _YEAR_RE = re.compile(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]")
 
 
-def _clean_copy_suffix(value: str) -> str: return _COPY_SUFFIX_RE.sub('', value).strip()
+def _clean_identity(value: str) -> str:
+    return " ".join(_SOURCE_MARKER_RE.sub(" ", value).split())
+
+
+def _clean_copy_suffix(value: str) -> str:
+    return _clean_identity(_COPY_SUFFIX_RE.sub('', value)).strip()
 
 
 def _identity_words(value: str | None) -> list[str]: return [part for part in re.split('\\s+', str(value or '').strip()) if part]
@@ -159,7 +168,8 @@ def _identity_words(value: str | None) -> list[str]: return [part for part in re
 def _normalize_artist_title(
     artist: str | None, title: str | None, album: str | None = None
 ) -> tuple[str | None, str]:
-    raw_artist, clean_title = str(artist or '').strip(), str(title or '').strip()
+    raw_artist = _clean_identity(str(artist or '').strip())
+    clean_title = _clean_identity(str(title or '').strip())
     value = raw_artist
     if album:
         value = re.sub(re.escape(str(album).strip()),
@@ -274,7 +284,8 @@ def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
             f"Неподдерживаемый формат файла: {extension or '(нет расширения)'}. "
             f"Разрешено: {', '.join(sorted(config.ALLOWED_AUDIO_EXTENSIONS))}"
         )
-    clean_title = title.strip() or Path(safe_original_name).stem
+    fallback_title = _clean_identity(Path(safe_original_name).stem) or "song"
+    clean_title = _clean_identity(title.strip()) or fallback_title
     return clean_title, safe_original_name, extension
 
 

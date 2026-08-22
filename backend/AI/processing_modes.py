@@ -30,11 +30,11 @@ def resolve_processing_profile(value: str | None, runtime=None, **_context) -> P
     separation = getattr(runtime, "selected", {}).get("separation") if runtime else None
     if getattr(separation, "device", "cpu") == "cuda":
         memory = max((getattr(gpu, "memory_bytes", 0) for gpu in getattr(hardware, "gpus", ())), default=0)
-        batch = 4 if memory >= 8 * 1024**3 else 2 if memory >= 4 * 1024**3 else 1
+        batch = 4 if memory >= 12 * 1024**3 else 2 if memory >= 6 * 1024**3 else 1
     else:
         batch = 2 if getattr(hardware, "logical_cores", 0) >= 8 and getattr(hardware, "ram_bytes", 0) >= 16 * 1024**3 else 1
     if mode == "fast":
-        return ProcessingProfile(mode, 20 / 19, max(batch, 4) if getattr(separation, "device", "") == "cuda" else batch, 1)
+        return ProcessingProfile(mode, 20 / 19, batch, 1)
     if mode == "quality":
         return ProcessingProfile(mode, 4, batch, 6)
     return ProcessingProfile(mode, 2, batch, 3)

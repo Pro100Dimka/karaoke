@@ -126,7 +126,7 @@ if "%PREPARE_ONLY%"=="0" (
     echo Stopping processes on development ports 18000 and 5173...
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$p=18000,5173;$c=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue;foreach($x in $c){if($p -contains $x.LocalPort){Stop-Process -Id $x.OwningProcess -Force -ErrorAction SilentlyContinue}}"
+    "$p=18000,5173;$ids=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue ^| Where-Object {$p -contains $_.LocalPort} ^| Select-Object -ExpandProperty OwningProcess -Unique;foreach($owner in $ids){taskkill.exe /PID $owner /T /F 2^>^&1 ^| Out-Null}"
 
     if errorlevel 1 echo [WARN] Could not fully clean development ports.
 )

@@ -5,7 +5,9 @@ import pytest
 import soundfile as sf
 
 from AI.artifacts import publish_files_atomically
+from AI.engines.separation import MSSTMelRoformerSeparator
 from AI.engines.text import Qwen3ForcedAligner, resolve_alignment_language, tokenize
+from AI.errors import ProcessingCancelledError
 from AI.lyrics_sources import TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
@@ -15,7 +17,7 @@ class Separator:
     name = "test-separator"
 
     @staticmethod
-    def separate(mix, vocals, instrumental, *, profile=None):
+    def separate(mix, vocals, instrumental, *, profile=None, cancelled=None):
         audio, rate = sf.read(mix, dtype="float32", always_2d=True)
         sf.write(vocals, audio, rate)
         sf.write(instrumental, audio * 0, rate)
@@ -163,6 +165,86 @@ def test_long_alignment_realigns_collapsed_ranges_acoustically(tmp_path, monkeyp
     assert [(round(word.start, 3), round(word.end, 3)) for word in words] == [
         (0, 0.4), (0.8, 1.2), (1.6, 2), (2.4, 2.8)
     ]
+
+
+def test_long_alignment_uses_model_window_and_acoustic_confidence(tmp_path):
+    audio = tmp_path / "vocals.flac"
+    sf.write(audio, np.zeros(1880, dtype=np.float32), 10)
+    tokens = [f"word{index}" for index in range(10)]
+
+    def align(audio, text, **_kwargs):
+        assert all(len(segment) == 1800 for segment, _rate in audio)
+        assert text == [" ".join(tokens), " ".join(tokens)]
+        return [
+            SimpleNamespace(items=[
+                {"text": token, "start_time": index + 0.5, "end_time": index + 0.9,
+                 "confidence": confidence}
+                for index, token in enumerate(tokens)
+            ])
+            for confidence in (0.1, 0.9)
+        ]
+
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = SimpleNamespace(align=align)
+
+    words = aligner.align_long_text(audio, " ".join(tokens), "en")
+
+    assert words[0].start == 8.5
+    assert all(word.confidence == 0.9 for word in words)
+
+
+def test_six_minute_alignment_uses_two_model_windows(tmp_path):
+    audio = tmp_path / "vocals.flac"
+    sf.write(audio, np.zeros(3600, dtype=np.float32), 10)
+    tokens = [f"word{index}" for index in range(36)]
+    calls = []
+
+    def align(audio, text, **_kwargs):
+        calls.append((audio, text))
+        return [
+            SimpleNamespace(items=[
+                {
+                    "text": token,
+                    "start_time": index * 5 + 0.1,
+                    "end_time": index * 5 + 0.5,
+                }
+                for index, token in enumerate(line.split())
+            ])
+            for line in text
+        ]
+
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = SimpleNamespace(align=align)
+    aligner.align_long_text(audio, " ".join(tokens), "en")
+
+    assert len(calls) == 1
+    assert len(calls[0][0]) == 2
+    assert all(len(segment) == 1800 for segment, _rate in calls[0][0])
+
+
+def test_separation_cancel_stops_worker_immediately():
+    class Process:
+        alive = True
+        exitcode = None
+
+        def is_alive(self): return self.alive
+        def join(self, timeout=None): del timeout
+        def terminate(self): self.alive = False
+
+    class Queue:
+        def put(self, _value): pass
+        def put_nowait(self, _value): pass
+        def close(self): pass
+        def cancel_join_thread(self): pass
+
+    separator = MSSTMelRoformerSeparator()
+    process = Process()
+    separator._process, separator._requests, separator._results = process, Queue(), Queue()
+
+    with pytest.raises(ProcessingCancelledError):
+        separator._run("input", "output", {}, cancelled=lambda: True)
+
+    assert process.alive is False
 
 
 def test_long_ukrainian_alignment_uses_acoustic_ctc_when_qwen_remains_invalid(

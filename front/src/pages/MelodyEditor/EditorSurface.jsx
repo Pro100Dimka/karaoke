@@ -1,4 +1,7 @@
-import { useCallback, useLayoutEffect, useState } from "react";
+import "konva/lib/shapes/Line";
+import "konva/lib/shapes/Rect";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { Layer, Line, Rect, Stage } from "react-konva/lib/ReactKonvaCore";
 import { translateSaved as t } from "../../i18n/runtime";
 import {
   Box,
@@ -9,7 +12,120 @@ import {
   Typography
 } from "../../theme/ui";
 
-function Note({ controller, note }) {
+const FALLBACK_PALETTE = {
+  background: "#120006",
+  grid: "#4f1020",
+  highlight: "#ffffff",
+  primary: "#ff174f",
+  hover: "#ff6b86"
+};
+
+function useKonvaPalette(root) {
+  const [palette, setPalette] = useState(FALLBACK_PALETTE);
+  useLayoutEffect(() => {
+    const element = root.current;
+    if (!element) return;
+    const style = getComputedStyle(element);
+    const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+    setPalette({
+      background: read("--color-bg-deep", FALLBACK_PALETTE.background),
+      grid: read("--color-primary", FALLBACK_PALETTE.grid),
+      highlight: read("--color-highlight", FALLBACK_PALETTE.highlight),
+      primary: read("--color-primary", FALLBACK_PALETTE.primary),
+      hover: read("--color-primary-hover", FALLBACK_PALETTE.hover)
+    });
+  }, [root]);
+  return palette;
+}
+
+function KonvaSurface({ controller, palette }) {
+  const rows = useMemo(
+    () =>
+      Array.from(
+        { length: controller.maxMidi - controller.minMidi + 1 },
+        (_, index) => controller.maxMidi - index
+      ),
+    [controller.maxMidi, controller.minMidi]
+  );
+  const beats = useMemo(
+    () =>
+      Array.from(
+        { length: Math.ceil((controller.laneWidth - controller.keyboardWidth) / controller.zoom) },
+        (_, index) => controller.keyboardWidth + index * controller.zoom
+      ),
+    [controller.keyboardWidth, controller.laneWidth, controller.zoom]
+  );
+  if (globalThis.navigator?.userAgent?.includes("jsdom")) return null;
+  return (
+    <Stage
+      width={controller.laneWidth}
+      height={controller.laneHeight}
+      listening={false}
+      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+    >
+      <Layer listening={false}>
+        <Rect
+          width={controller.laneWidth}
+          height={controller.laneHeight}
+          fill={palette.background}
+        />
+        {rows.map((midi, index) => (
+          <Rect
+            key={midi}
+            x={controller.keyboardWidth}
+            y={index * controller.rowHeight}
+            width={controller.laneWidth - controller.keyboardWidth}
+            height={controller.rowHeight}
+            fill={isBlackPianoKey(midi) ? palette.background : undefined}
+            opacity={isBlackPianoKey(midi) ? 0.7 : 0}
+            stroke={palette.grid}
+            strokeWidth={0.35}
+          />
+        ))}
+        {beats.map((x) => (
+          <Line
+            key={x}
+            points={[x, 0, x, controller.laneHeight]}
+            stroke={palette.grid}
+            strokeWidth={0.5}
+            opacity={0.35}
+          />
+        ))}
+        {controller.notes.map((note) => {
+          const selected = controller.selected.includes(note._id);
+          return (
+            <Rect
+              key={note._id}
+              x={controller.keyboardWidth + note.start * controller.zoom}
+              y={
+                (controller.maxMidi - note.note) * controller.rowHeight +
+                controller.rowHeight * 0.12
+              }
+              width={Math.max(controller.rowHeight / 2, (note.end - note.start) * controller.zoom)}
+              height={controller.rowHeight * 0.76}
+              cornerRadius={controller.rowHeight}
+              fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+              fillLinearGradientEndPoint={{ x: 0, y: controller.rowHeight }}
+              fillLinearGradientColorStops={[
+                0,
+                selected ? palette.highlight : palette.hover,
+                1,
+                selected ? palette.hover : palette.primary
+              ]}
+              stroke={palette.highlight}
+              strokeWidth={selected ? 1.5 : 0.75}
+              shadowColor={palette.primary}
+              shadowBlur={selected ? 12 : 5}
+              shadowOpacity={selected ? 0.9 : 0.45}
+            />
+          );
+        })}
+      </Layer>
+    </Stage>
+  );
+}
+
+function NoteHitTarget({ controller, note }) {
   const selected = controller.selected.includes(note._id);
   const top = (controller.maxMidi - note.note) * controller.rowHeight;
   const left = controller.keyboardWidth + note.start * controller.zoom;
@@ -28,14 +144,8 @@ function Note({ controller, note }) {
         inlineSize: `${width}px`,
         blockSize: `${controller.rowHeight * 0.76}px`,
         padding: 0,
-        border: `1px solid ${selected ? "var(--color-highlight)" : "color-mix(in srgb, var(--color-highlight) 78%, transparent)"}`,
-        borderRadius: "var(--radius-pill)",
-        background: selected
-          ? "linear-gradient(180deg, var(--color-highlight), var(--color-primary-hover))"
-          : "linear-gradient(180deg, var(--color-primary-hover), var(--color-primary))",
-        boxShadow: selected
-          ? "0 0 var(--space-3) var(--color-primary), inset 0 1px 0 var(--color-text)"
-          : "0 0 var(--space-2) color-mix(in srgb, var(--color-primary) 45%, transparent)",
+        border: 0,
+        background: "transparent",
         cursor: "grab",
         touchAction: "none",
         zIndex: selected ? 5 : 4
@@ -68,6 +178,7 @@ export default function EditorSurface({ controller, transport }) {
     scrollTop: 0,
     scrollWidth: 1
   });
+  const palette = useKonvaPalette(controller.surfaceRef);
   const syncScroll = useCallback(() => {
     const shell = controller.shellRef.current;
     if (!shell) return;
@@ -95,10 +206,6 @@ export default function EditorSurface({ controller, transport }) {
     controller.surfaceRef,
     syncScroll
   ]);
-  const rows = Array.from(
-    { length: controller.maxMidi - controller.minMidi + 1 },
-    (_, index) => controller.maxMidi - index
-  );
   return (
     <Box sx={{ position: "relative", flex: 1, minBlockSize: 0, overflow: "hidden" }}>
       <Box
@@ -148,18 +255,7 @@ export default function EditorSurface({ controller, transport }) {
             userSelect: "none"
           }}
         >
-          {rows.filter(isBlackPianoKey).map((midi) => (
-            <Box
-              key={midi}
-              aria-hidden="true"
-              sx={{
-                position: "absolute",
-                inset: `${(controller.maxMidi - midi) * controller.rowHeight}px 0 auto ${controller.keyboardWidth}px`,
-                blockSize: `${controller.rowHeight}px`,
-                background: "color-mix(in srgb, var(--color-bg-deep) 35%, transparent)"
-              }}
-            />
-          ))}
+          <KonvaSurface controller={controller} palette={palette} />
           <Box
             sx={{
               position: "sticky",
@@ -214,7 +310,7 @@ export default function EditorSurface({ controller, transport }) {
             ))}
           </Box>
           {controller.notes.map((note) => (
-            <Note key={note._id} controller={controller} note={note} />
+            <NoteHitTarget key={note._id} controller={controller} note={note} />
           ))}
           {controller.selectionBox && (
             <Box

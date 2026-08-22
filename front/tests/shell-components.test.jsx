@@ -82,11 +82,11 @@ describe("application shell", () => {
     error.mockRestore();
   });
   test("layout opens global settings, radio and blackout state", async () => {
-    const { container, getByLabelText, getByTestId } = render(<AppLayout />);
+    const { container, getByLabelText, getByRole, getByTestId } = render(<AppLayout />);
     verify([container.querySelector(".app-shell").classList.contains("karaoke-app-shell"), "toBe", false]);
     fireEvent.click(getByLabelText("radio.enable:Radio"));
     expect(mocks.radio.toggle).toHaveBeenCalled();
-    fireEvent.change(container.querySelector(".app-radio-volume input"), {
+    fireEvent.change(getByRole("slider"), {
       target: { value: "0.7" }
     });
     expect(mocks.radio.setVolume).toHaveBeenCalledWith(0.7);

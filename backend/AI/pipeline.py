@@ -131,7 +131,10 @@ class KaraokePipeline:
 
             self._notify(request, "separate", 10, "Разделение голоса и минуса")
             started = time.perf_counter()
-            self.engines.separator.separate(mix, raw_vocals, instrumental, profile=profile)
+            self.engines.separator.separate(
+                mix, raw_vocals, instrumental,
+                profile=profile, cancelled=request.cancelled,
+            )
             self._stage(reports, "separate", self.engines.separator.name, started)
 
             self._notify(request, "vocal", 42, "Очистка и перевод голоса в моно")

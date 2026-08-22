@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { queryClient } from "../query/client";
+import { queryClient } from "../query-client";
 
 export function shouldSchedulePoll({
   active,

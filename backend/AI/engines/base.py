@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 class Separator(ABC):
     @abstractmethod
-    def separate(self, mix, vocals, instrumental, *, profile=None): ...
+    def separate(self, mix, vocals, instrumental, *, profile=None, cancelled=None): ...
 
 
 class PitchEstimator(ABC):

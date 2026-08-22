@@ -9,7 +9,7 @@ from typing import Any
 from AI.lyrics_document import flatten_word_notes, validate_lyrics_document
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
-from AI.service import get_ai_service
+from AI.service import get_ai_service, reset_ai_service
 from app.utils.json_files import read_json
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -42,6 +42,10 @@ def process_song(
         cancelled=cancelled,
     )
     return result
+
+
+def release_ai_resources() -> None:
+    reset_ai_service()
 
 
 

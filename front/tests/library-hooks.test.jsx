@@ -106,6 +106,16 @@ describe("library file import", () => {
     );
     expect(api.addSong).not.toHaveBeenCalled();
   });
+  test("accepts files dropped directly without a synthetic input event", async () => {
+    const file = new File(["audio"], "Artist - Track.flac", { type: "audio/flac" });
+    api.inspectSongIdentity.mockResolvedValue({ title: "Track", artist: "Artist" });
+    const hook = renderHook(() => useLibraryFileImport({ fileInputRef: { current: null }, notify: vi.fn(), onStarted: vi.fn() }));
+
+    await act(() => hook.result.current.importFile([file]));
+
+    expect(api.inspectSongIdentity).toHaveBeenCalledWith(file);
+    expect(hook.result.current.review.items).toEqual([expect.objectContaining({ file, title: "Track", artist: "Artist" })]);
+  });
   test("ignores empty and concurrent selection and reports failures", async () => {
     const click = vi.fn();
     const notify = vi.fn().mockResolvedValue(undefined);

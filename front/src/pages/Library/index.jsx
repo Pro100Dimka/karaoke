@@ -3,7 +3,8 @@ import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { translateSaved as tr } from "../../i18n/runtime";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
-import { LibraryBackdrop, LibraryHero, LibraryResults, SongGrid } from "./components";
+import { LibraryBackdrop, LibraryResults, SongGrid } from "./components";
+import LibraryHero from "./hero";
 import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";
 import useLibrary from "./use-library";
 
@@ -20,10 +21,10 @@ export default function Library() {
           songCount={state.totalCount}
           readyCount={state.readyCount}
           canManageLibrary={state.canManageLibrary}
-          fileInputRef={state.fileInputRef}
           importing={fileImport.importing}
-          onAdd={fileImport.openFilePicker}
           onFileChosen={fileImport.importFile}
+          fileInputRef={state.fileInputRef}
+          onAdd={fileImport.openFilePicker}
           onOpenRoom={online.openRoom}
           roomActive={online.roomActive}
           query={state.query}
@@ -31,6 +32,10 @@ export default function Library() {
         />
         <LibraryResults
           error={state.songsError}
+          onFileChosen={fileImport.importFile}
+          fileInputRef={state.fileInputRef}
+          importing={fileImport.importing}
+          canManageLibrary={state.canManageLibrary}
           songs={state.filteredSongs}
           errorText={`${tr("Не удалось загрузить список:")} ${state.songsError?.message || state.songsError || ""}`}
         >

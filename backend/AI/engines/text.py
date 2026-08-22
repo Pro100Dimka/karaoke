@@ -302,10 +302,10 @@ class Qwen3ForcedAligner(Aligner):
         return self._validate([word for word in words if word is not None], tokens, span)
 
     def _align_windows(self, samples, rate, tokens: list[str], span: float, language: str) -> list[Word]:
-        window = 150.0
-        count = ceil(max(0, span - window) / 120) + 1
+        window = 180.0
+        count = max(1, ceil(span / window))
         starts = [index * max(0, span - window) / max(1, count - 1) for index in range(count)]
-        margin = max(8, ceil(len(tokens) * 0.08))
+        margin = max(8, ceil(len(tokens) * min(30.0, span) / span))
         requests = []
         for start in starts:
             end = min(span, start + window)
@@ -330,7 +330,11 @@ class Qwen3ForcedAligner(Aligner):
                     candidates[index].append((edge, absolute))
         words, previous = [], 0.0
         for index, options in enumerate(candidates):
-            ordered = sorted(options, key=lambda item: item[0], reverse=True)
+            ordered = sorted(
+                options,
+                key=lambda item: (item[1].confidence, item[0]),
+                reverse=True,
+            )
             selected = next((word for _, word in ordered if word.start + 1e-6 >= previous), None)
             selected = selected or Word(previous, previous, tokens[index], 0, index)
             words.append(selected)

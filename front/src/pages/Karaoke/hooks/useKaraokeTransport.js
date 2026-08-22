@@ -65,10 +65,20 @@ export default function useKaraokeTransport({
   syncSecondaryMedia,
   setCurrentTime,
   setIsPlaying,
+  playback,
   setRecordingError,
   setRecordingSessionId,
   setAnalysisRecordingId
 }) {
+  const lifecycle = playback ?? {
+    start: () => {},
+    played: () => setIsPlaying(true),
+    pause: () => {},
+    paused: () => setIsPlaying(false),
+    stop: () => {},
+    stopped: () => setIsPlaying(false),
+    fail: () => setIsPlaying(false)
+  };
   const operationRef = useRef(Symbol("karaoke-operation"));
   const sessionRef = useRef(recordingSessionId);
   const pendingRecordingStartRef = useRef(null);
@@ -219,15 +229,18 @@ export default function useKaraokeTransport({
     const stopVersion = stopVersionRef.current;
 
     if (!shouldPlay) {
+      lifecycle.pause();
       const pendingStart = pendingRecordingStartRef.current;
       if (!sessionRef.current && pendingStart && pendingStart.songId === song.id)
         pendingStart.settle = "pause";
       pauseMedia();
-      setIsPlaying(false);
+      lifecycle.paused();
       if (sessionRef.current) await api.pauseRecording(sessionRef.current).catch(() => {});
       if (shouldBroadcast) broadcast("pause", instrumental.currentTime);
       return true;
     }
+
+    lifecycle.start();
 
     const melodyStart = Promise.resolve()
       .then(startMelodyGuide)
@@ -258,7 +271,7 @@ export default function useKaraokeTransport({
       pauseMedia();
       const activeSession = sessionRef.current;
       if (activeSession) await discardSession(activeSession);
-      setIsPlaying(false);
+      lifecycle.fail();
       setRecordingError(translateSaved("Не удалось запустить воспроизведение"));
       return false;
     }
@@ -267,7 +280,7 @@ export default function useKaraokeTransport({
       pauseMedia();
       return stopVersionRef.current === stopVersion;
     }
-    setIsPlaying(true);
+    lifecycle.played();
     if (shouldBroadcast) broadcast("play", instrumental.currentTime);
     return true;
   };
@@ -275,6 +288,7 @@ export default function useKaraokeTransport({
   const stop = async ({ broadcast: shouldBroadcast = true } = {}) => {
     const instrumental = instrumentalRef.current;
     if (!instrumental || !song?.id) return undefined;
+    lifecycle.stop();
     stopVersionRef.current += 1;
     beginOperation();
     const pendingStart = pendingRecordingStartRef.current;
@@ -283,7 +297,7 @@ export default function useKaraokeTransport({
     pauseMedia();
     instrumental.currentTime = 0;
     syncSecondaryMedia(0, true);
-    setIsPlaying(false);
+    lifecycle.stopped();
     setCurrentTime(0);
     if (shouldBroadcast) broadcast("stop", 0);
 

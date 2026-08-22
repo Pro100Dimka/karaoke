@@ -13,6 +13,7 @@ const Button = forwardRef(
       size = "md",
       unstyled = false,
       disabled = false,
+      fullWidth = false,
       startIcon,
       children,
       className,
@@ -32,7 +33,9 @@ const Button = forwardRef(
       }
       onClick?.(event);
     };
-
+if (fullWidth) {
+      className = cx(className, "ui-button-full-width");
+    }
     return (
       <Primitive
         ref={ref}

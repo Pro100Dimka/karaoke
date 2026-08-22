@@ -25,7 +25,7 @@ def test_processing_modes_have_distinct_workloads():
     assert fast.fingerprint() == {
         "mode": "fast",
         "separation_overlap": 1.0526315789473684,
-        "separation_batch_size": 4,
+        "separation_batch_size": 2,
         "wpe_iterations": 1,
     }
     assert automatic.separation_overlap == 2 and automatic.wpe_iterations == 3
@@ -41,7 +41,7 @@ def test_processing_modes_have_distinct_workloads():
     ("plan", "expected"),
     [
         (runtime(device="cuda", gpu_gib=3), 1),
-        (runtime(device="cuda", gpu_gib=4), 2),
+        (runtime(device="cuda", gpu_gib=6), 2),
         (runtime(cores=8, ram_gib=16), 2),
         (runtime(cores=4, ram_gib=8), 1),
     ],

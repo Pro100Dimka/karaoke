@@ -27,18 +27,8 @@ export default class ErrorBoundary extends Component {
     if (!this.state.error) return this.props.children;
     const t = (key) => translateMessage(getSavedLanguage(), key);
     return (
-      <Stack
-        as="main"
-        role="alert"
-        align="center"
-        justify="center"
-        sx={{ minBlockSize: "100vh", padding: "var(--space-8)" }}
-      >
-        <Card
-          variant="neon"
-          tilt={false}
-          sx={{ maxInlineSize: "var(--content-max)", padding: "var(--space-8)" }}
-        >
+      <Stack as="main" role="alert" align="center" justify="center">
+        <Card variant="neon" sx={{ containerType: "normal" }}>
           <Stack gap="var(--space-4)">
             <Typography variant="caption">A&amp;D Voice</Typography>
             <Typography variant="h1">{t("error.screen.title")}</Typography>

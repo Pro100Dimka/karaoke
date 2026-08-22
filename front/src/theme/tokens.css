@@ -1,5 +1,7 @@
 :root {
   --z-titlebar: 1000;
+  --z-index-modal: 1300;
+  --z-index-popover: 1400;
   --shadow-sm: 0 0.5rem 1.5rem color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
   --shadow-md: 0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
   --shadow-lg: 0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent);

@@ -32,6 +32,21 @@
     font-weight: var(--typography-h3-weight, 750);
     line-height: var(--typography-h3-line-height, 1.1);
   }
+  .ui-typography[data-variant="h4"] {
+    font-size: var(--typography-h4-size, clamp( 1.25rem, 1.5vw, 1.5rem));
+    font-weight: var(--typography-h4-weight, 750);
+    line-height: var(--typography-h4-line-height, 1.1);
+  }
+  .ui-typography[data-variant="h5"] {
+    font-size: var(--typography-h5-size, clamp(1rem, 1.25vw, 1.25rem));
+    font-weight: var(--typography-h5-weight, 750);
+    line-height: var(--typography-h5-line-height, 1.1);
+  }
+  .ui-typography[data-variant="h6"] {
+    font-size: var(--typography-h6-size, clamp(0.875rem, 1vw, 1rem));
+    font-weight: var(--typography-h6-weight, 750);
+    line-height: var(--typography-h6-line-height, 1.1);
+  }
 
   .ui-typography[data-variant="body1"] {
     font-size: var(--typography-body1-size, 1rem);

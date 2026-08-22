@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   testInfo.errorsInPage = errors;
 });
 
-test.afterEach(async ({}, testInfo) => {
+test.afterEach(async (_fixtures, testInfo) => {
   expect(testInfo.errorsInPage).toEqual([]);
 });
 
@@ -73,6 +73,10 @@ test("settings load persisted values and remain navigable", async ({ page }) => 
   const tabs = dialog.getByRole("tab");
   await expect(tabs).toHaveCount(3);
   await expect(dialog.getByRole("textbox", { name: /Ім'я у мережі|Имя в сети/ })).toHaveValue("Тестовый пользователь");
+  const theme = dialog.getByRole("button", { name: /Тема/ });
+  await theme.click();
+  await page.getByRole("option", { name: /Зелена|Зелёная/ }).click();
+  await expect(theme).toContainText(/Зелена|Зелёная/);
   await tabs.last().click();
   await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
   await expect(dialog.getByRole("spinbutton")).toBeVisible();

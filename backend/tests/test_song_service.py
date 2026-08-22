@@ -54,6 +54,7 @@ def test_first_audio_tag(tags, expected):
         ("Artist-Title-Part.mp3", ("Artist", "Title-Part")),
         ("123-Title.mp3", (None, "123-Title")),
         ("Title.mp3", (None, "Title")),
+        ("Artist - Title (Sefon.Pro).mp3", ("Artist", "Title")),
     ],
 )
 def test_filename_identity(filename, expected):
@@ -108,6 +109,9 @@ def test_song_input_sanitizes_name_and_validates_extension():
         "Artist - Song.MP3",
         ".mp3",
     )
+    assert song_service._song_input(
+        "Title (Sefon.Pro)", "Artist - Title (Sefon.Pro).mp3"
+    )[0] == "Title"
     raises(ValueError, lambda: song_service._song_input('Song', 'song.exe'), match='формат')
     raises(ValueError, lambda: song_service._song_input('Song', 'song'), match='расширения')
 

@@ -1,9 +1,9 @@
 import { forwardRef } from "react";
 
-import useCardTilt from "./useCardTilt";
 import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./card.css";
+import useCardTilt from "./useCardTilt";
 
 const Card = forwardRef(
   (
@@ -20,6 +20,7 @@ const Card = forwardRef(
       overlay,
       className,
       sx,
+      disablePadding,
       style,
       children,
       onPointerMove,
@@ -54,7 +55,8 @@ const Card = forwardRef(
         sx={sx}
         style={{
           "--card-shadow": `var(--shadows-${elevation})`,
-          ...style
+          ...style,
+          ...disablePadding && { padding: 0 },
         }}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}

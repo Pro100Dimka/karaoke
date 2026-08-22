@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { called, same, verify } from "./helpers/assertions.mjs";
@@ -42,7 +42,7 @@ afterEach(() => {
   cleanup();
   mocks.noSettings = false;
 });
-test("library actions cover search, room, adding and file selection", () => {
+test("library actions cover search, room, adding and file selection", async () => {
   const setQuery = vi.fn();
   const onRoom = vi.fn();
   const onAdd = vi.fn();
@@ -63,9 +63,12 @@ test("library actions cover search, room, adding and file selection", () => {
   fireEvent.change(view.getByRole("textbox", { name: "Поиск" }), { target: { value: "song" } });
   fireEvent.click(view.getByRole("button", { name: /Петь вместе|Співати разом/ }));
   fireEvent.click(view.getByRole("button", { name: /Добавить песню|Додати пісню/ }));
-  fireEvent.change(view.container.querySelector("input[type=file]"));
+  fireEvent.change(view.container.querySelector("input[type=file]"), {
+    target: { files: [new File(["audio"], "song.mp3", { type: "audio/mpeg" })] }
+  });
   expect(setQuery).toHaveBeenCalledWith("song", expect.any(Object));
-  called(onRoom, onAdd, onFile);
+  called(onRoom, onAdd);
+  await waitFor(() => called(onFile));
   view.rerender(<LibraryActions canManageLibrary importing onAdd={onAdd} onOpenRoom={onRoom} query="" setQuery={setQuery} />);
 });
 test("hero and cover reflect saved theme and song counts", () => {

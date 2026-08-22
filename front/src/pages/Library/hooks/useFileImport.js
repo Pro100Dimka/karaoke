@@ -73,10 +73,10 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
   );
 
   const importFile = useCallback(
-    (event) => {
-      const input = event.currentTarget;
-      const files = [...(input.files || [])];
-      input.value = "";
+    (source) => {
+      const input = Array.isArray(source) ? null : source.currentTarget;
+      const files = Array.isArray(source) ? source : [...(input.files || [])];
+      if (input) input.value = "";
       if (!files.length) return undefined;
       return run(async () => {
         const items = [];

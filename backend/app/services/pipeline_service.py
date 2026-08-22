@@ -375,7 +375,8 @@ def _job_entrypoint(song_id: str, target) -> None:
     try:
         target(song_id)
     finally:
-        if _is_cancelled(song_id):
+        cancelled = _is_cancelled(song_id)
+        if cancelled:
             try:
                 _update_progress(
                     song_id,
@@ -386,6 +387,8 @@ def _job_entrypoint(song_id: str, target) -> None:
             except Exception:
                 logger.exception(
                     "Could not persist terminal cancellation for %s", song_id)
+            with contextlib.suppress(Exception):
+                ai_bridge.release_ai_resources()
         with _active_jobs_lock: _cancelled_jobs.discard(song_id)
         _release_active_job(song_id)
         gc.collect()

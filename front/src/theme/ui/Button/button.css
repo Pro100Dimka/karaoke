@@ -43,7 +43,7 @@
   .ui-button[data-size="sm"] { font-size: .8125rem; }
   .ui-button[data-size="md"] { font-size: .875rem; }
   .ui-button[data-size="lg"] { font-size: 1rem; }
-
+  .ui-button-full-width { width: 100%; }
   .ui-button-start-icon {
     display: inline-flex;
     align-items: center;

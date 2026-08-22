@@ -27,63 +27,38 @@ function FloatingControls({ openSettings }) {
     t(radio.isPlaying ? "radio.disable" : "radio.enable", { station: radio.station.name });
   return (
     <Stack
-      className="app-floating-controls"
       direction="row"
-      align="end"
+      justify="end"
+      align="center"
       gap="var(--space-2)"
-      sx={{
-        position: "fixed",
-        inset: "auto var(--space-5) var(--space-5) auto",
-        inlineSize: "auto",
-        zIndex: 20
-      }}
+      sx={{ position: "fixed", bottom: "var(--space-4)", right: "var(--space-4)", zIndex: 20 }}
     >
-      <Stack
-        className="app-radio-fab-wrap"
-        align="end"
-        gap="var(--space-2)"
-        sx={{ inlineSize: "auto" }}
-      >
-        <IconButton
-          icon={Radio}
-          iconSize={28}
-          label={radioLabel}
-          onClick={radio.toggle}
-          className={`app-settings-fab app-radio-fab${radio.isPlaying ? " is-playing" : ""}${radio.isLoading ? " is-loading" : ""}`}
-        />
-        <Stack
-          className="app-radio-volume"
-          direction="row"
-          align="center"
-          gap="var(--space-2)"
-          aria-label={t("radio.volume")}
-          sx={{
-            inlineSize: "auto",
-            padding: "var(--space-2)",
-            borderRadius: "var(--radius-pill)",
-            background: "var(--color-surface-glass)"
-          }}
-        >
-          <Volume2 size={15} />
-          <Slider
-            min={0}
-            max={1}
-            step={0.01}
-            value={radio.volume}
-            showValue={false}
-            onChange={(value) => radio.setVolume(value)}
-            controlSx={{ inlineSize: "var(--space-16)" }}
-          />
-          <span>{Math.round(radio.volume * 100)}%</span>
-        </Stack>
-      </Stack>
       <IconButton
-        icon={Cog}
+        icon={Radio}
         iconSize={28}
-        label={t("settings.open")}
-        onClick={openSettings}
-        className="app-settings-fab"
+        label={radioLabel}
+        onClick={radio.toggle}
+        className={`app-settings-fab app-radio-fab${radio.isPlaying ? " is-playing" : ""}${radio.isLoading ? " is-loading" : ""}`}
       />
+      <Stack sx={{ width: "auto" }} gap="var(--space-2)">
+        <Slider
+          min={0}
+          label={<Volume2 size={15} />}
+          max={1}
+          step={0.01}
+          value={radio.volume}
+          formatValue={(value) => `${Math.round(value * 100)}%`}
+          onChange={(value) => radio.setVolume(value)}
+          controlSx={{ inlineSize: "var(--space-16)" }}
+        />
+        <IconButton
+          icon={Cog}
+          iconSize={28}
+          label={t("settings.open")}
+          onClick={openSettings}
+          className="app-settings-fab"
+        />
+      </Stack>
     </Stack>
   );
 }

@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { translateSaved as t } from "../../../i18n/runtime";
-import { Box, Stack, Typography } from "../../ui";
+import Box from "../../ui/Box";
+import Stack from "../../ui/Stack";
+import Typography from "../../ui/Typography";
 import { buildLyricLines, lyricLineIndex, lyricWordFill } from "./timeline";
 
 function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying = false }) {

@@ -7,7 +7,7 @@ import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { getOnlineNameMessage } from "../../hooks/useRequireOnlineName";
 import { translateSaved as tr } from "../../i18n/runtime";
-import { queryKeys } from "../../query/client";
+import { queryKeys } from "../../query-client";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import { setProcessingLoadActive } from "../../utils/performance-profile";

@@ -1,10 +1,22 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  memo,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { translateSaved as t } from "../../../i18n/runtime";
-import { Box, PianoKeyboard } from "../../ui";
+import Box from "../../ui/Box";
+import PianoKeyboard from "../../ui/PianoKeyboard";
 import { drawPianoRoll } from "./draw";
 import { normalizePianoNotes, pianoRollFrame, PIANO_ROLL_VIEW } from "./geometry";
 
 const color = (style, name, fallback) => style.getPropertyValue(name).trim() || fallback;
+const PixiPianoRoll = lazy(() => import("./pixi-scene"));
 
 function PianoRoll({
   notes = [],
@@ -18,6 +30,14 @@ function PianoRoll({
   const rootRef = useRef(null);
   const canvasRef = useRef(null);
   const [size, setSize] = useState(PIANO_ROLL_VIEW);
+  const [palette, setPalette] = useState({
+    highlight: "#fff",
+    hover: "#ff6b86",
+    primary: "#ff174f",
+    success: "#32e9a0",
+    text: "#fff"
+  });
+  const usePixi = typeof globalThis.WebGLRenderingContext === "function";
   const normalized = useMemo(
     () => normalizePianoNotes(notes, Number(keyShift) || 0),
     [keyShift, notes]
@@ -46,15 +66,11 @@ function PianoRoll({
       canvas.height = Math.round(size.height * ratio);
     }
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    const style = getComputedStyle(rootRef.current);
-    drawPianoRoll(context, pianoRollFrame(normalized, time, size, sung), {
-      highlight: color(style, "--color-highlight", "#fff"),
-      hover: color(style, "--color-primary-hover", "#ff6b86"),
-      primary: color(style, "--color-primary", "#ff174f"),
-      success: color(style, "--color-success", "#32e9a0"),
-      text: color(style, "--color-text", "#fff")
-    }, { detected: isPitchDetected, midi: sung });
-  }, [isPitchDetected, normalized, size, sung]);
+    drawPianoRoll(context, pianoRollFrame(normalized, time, size, sung), palette, {
+      detected: isPitchDetected,
+      midi: sung
+    });
+  }, [isPitchDetected, normalized, palette, size, sung]);
 
   useLayoutEffect(
     () => draw(Number(currentTimeRef?.current ?? currentTime) || 0),
@@ -69,6 +85,16 @@ function PianoRoll({
     });
     observer.observe(root);
     return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const style = getComputedStyle(rootRef.current);
+    setPalette({
+      highlight: color(style, "--color-highlight", "#fff"),
+      hover: color(style, "--color-primary-hover", "#ff6b86"),
+      primary: color(style, "--color-primary", "#ff174f"),
+      success: color(style, "--color-success", "#32e9a0"),
+      text: color(style, "--color-text", "#fff")
+    });
   }, []);
   useEffect(() => {
     if (!isPlaying || !currentTimeRef) return undefined;
@@ -98,12 +124,30 @@ function PianoRoll({
       }}
     >
       <Box
-        as="canvas"
-        ref={canvasRef}
         data-role="piano-roll-canvas"
         aria-label={t("Ноты мелодии")}
-        sx={{ display: "block", inlineSize: "100%", blockSize: "100%" }}
-      />
+        sx={{ position: "absolute", inset: 0 }}
+      >
+        {usePixi ? (
+          <Suspense fallback={null}>
+            <PixiPianoRoll
+              currentTime={currentTime}
+              currentTimeRef={isPlaying ? currentTimeRef : null}
+              isPitchDetected={isPitchDetected}
+              notes={normalized}
+              palette={palette}
+              size={size}
+              sung={sung}
+            />
+          </Suspense>
+        ) : (
+          <Box
+            as="canvas"
+            ref={canvasRef}
+            sx={{ display: "block", inlineSize: "100%", blockSize: "100%" }}
+          />
+        )}
+      </Box>
       <Box
         sx={{
           position: "absolute",

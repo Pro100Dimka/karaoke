@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import multiprocessing
 import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from queue import Empty
@@ -13,13 +15,27 @@ from types import ModuleType
 import numpy as np
 import soundfile as sf
 
-from ..errors import AICoreError, EngineUnavailableError
+from ..errors import AICoreError, EngineUnavailableError, ProcessingCancelledError
 from .base import Separator
 
 
-def _worker(engine_dir, config_path, checkpoint, requests, results, device):
+def _worker(engine_dir, config_path, checkpoint, requests, results, device, parent_pid):
     sys.path.insert(0, engine_dir)
     try:
+        try:
+            import psutil
+
+            process = psutil.Process()
+            if os.name == "nt":
+                process.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+            def stop_with_parent():
+                while psutil.pid_exists(parent_pid):
+                    time.sleep(1)
+                os._exit(1)
+
+            threading.Thread(target=stop_with_parent, daemon=True).start()
+        except (ImportError, OSError):
+            pass
         engine_root = Path(engine_dir).resolve()
         for name, module in tuple(sys.modules.items()):
             if name.split(".", 1)[0] not in {"models", "utils"}:
@@ -49,7 +65,20 @@ def _worker(engine_dir, config_path, checkpoint, requests, results, device):
         load_start_checkpoint(arguments, model, weights, type_="inference")
         model = model.to(device)
         results.put(("ready", None))
-        while request := requests.get():
+        while True:
+            try:
+                request = requests.get(timeout=1)
+            except Empty:
+                try:
+                    import psutil
+
+                    if not psutil.pid_exists(parent_pid):
+                        return
+                except ImportError:
+                    pass
+                continue
+            if request is None:
+                return
             job, input_dir, output_dir, tuning = request
             started = time.perf_counter()
             try:
@@ -93,7 +122,7 @@ class MSSTMelRoformerSeparator(Separator):
     def available(self) -> bool:
         return not self.missing_resources()
 
-    def separate(self, mix, vocals, instrumental, *, profile=None):
+    def separate(self, mix, vocals, instrumental, *, profile=None, cancelled=None):
         if missing := self.missing_resources():
             raise EngineUnavailableError("Missing MSST resources: " + ", ".join(missing))
         with tempfile.TemporaryDirectory(prefix="karaoke-msst-", dir=Path(mix).parent) as temporary:
@@ -106,7 +135,7 @@ class MSSTMelRoformerSeparator(Separator):
                 "batch_size": profile.separation_batch_size,
             } if profile else {}
             try:
-                self._run(source, output, tuning)
+                self._run(source, output, tuning, cancelled=cancelled)
             except AICoreError as error:
                 if not any(marker in str(error).lower() for marker in ("cuda", "cudnn", "accelerator")):
                     raise
@@ -114,7 +143,7 @@ class MSSTMelRoformerSeparator(Separator):
                 self.close()
                 output = Path(temporary) / "output-cpu"
                 output.mkdir()
-                self._run(source, output, tuning, device="cpu")
+                self._run(source, output, tuning, device="cpu", cancelled=cancelled)
             files = list(output.rglob("*.wav"))
             vocal = next((item for item in files if "vocal" in item.name.lower() and "no_vocal" not in item.name.lower()), None)
             backing = next((item for item in files if any(name in item.name.lower() for name in ("instrumental", "no_vocal"))), None)
@@ -130,24 +159,41 @@ class MSSTMelRoformerSeparator(Separator):
             sf.write(instrumental, np.clip(backing_audio, -1, 1), rate, subtype="PCM_24")
 
     def close(self) -> None:
-        process, requests = self._process, self._requests
+        process, requests, results = self._process, self._requests, self._results
         self._process = self._requests = self._results = None
         self._device = None
         if process and process.is_alive():
-            requests.put(None)
-            process.join(timeout=10)
+            with contextlib.suppress(Exception):
+                requests.put_nowait(None)
+            process.join(timeout=1)
         if process and process.is_alive():
             process.terminate()
+            process.join(timeout=1)
+        if process and process.is_alive() and hasattr(process, "kill"):
+            process.kill()
+            process.join(timeout=1)
+        for queue in (requests, results):
+            try:
+                queue.close()
+                queue.cancel_join_thread()
+            except (AttributeError, OSError, ValueError):
+                pass
 
-    def _run(self, source, output, tuning, device=None):
-        self._ensure_worker(device)
+    def _run(self, source, output, tuning, device=None, cancelled=None):
+        self._ensure_worker(device, cancelled)
         job = os.urandom(8).hex()
         self._requests.put((job, str(source), str(output), tuning))
+        last_report = time.monotonic()
         while self._process.is_alive():
+            if callable(cancelled) and cancelled():
+                self.close()
+                raise ProcessingCancelledError("Song processing cancelled")
             try:
-                response, value = self._results.get(timeout=10)
+                response, value = self._results.get(timeout=0.25)
             except Empty:
-                print("[MSST] separation is active", flush=True)
+                if time.monotonic() - last_report >= 10:
+                    print("[MSST] separation is active", flush=True)
+                    last_report = time.monotonic()
                 continue
             if response != job:
                 continue
@@ -156,7 +202,7 @@ class MSSTMelRoformerSeparator(Separator):
             return
         raise AICoreError(f"MSST worker exited with {self._process.exitcode}")
 
-    def _ensure_worker(self, device=None):
+    def _ensure_worker(self, device=None, cancelled=None):
         if self._process and self._process.is_alive() and (device is None or device == self._device):
             return
         self.close()
@@ -168,15 +214,29 @@ class MSSTMelRoformerSeparator(Separator):
         self._device = device
         self._process = context.Process(
             target=_worker,
-            args=(str(self.engine_dir), str(self.config), str(self.checkpoint), self._requests, self._results, device),
+            args=(
+                str(self.engine_dir), str(self.config), str(self.checkpoint),
+                self._requests, self._results, device, os.getpid(),
+            ),
             daemon=True,
         )
         self._process.start()
-        try:
-            status, detail = self._results.get(timeout=300)
-        except Empty as error:
-            self.close()
-            raise AICoreError("MSST initialization timed out") from error
+        deadline = time.monotonic() + 300
+        while True:
+            if callable(cancelled) and cancelled():
+                self.close()
+                raise ProcessingCancelledError("Song processing cancelled")
+            if not self._process.is_alive():
+                code = self._process.exitcode
+                self.close()
+                raise AICoreError(f"MSST initialization process exited with {code}")
+            try:
+                status, detail = self._results.get(timeout=0.25)
+                break
+            except Empty:
+                if time.monotonic() >= deadline:
+                    self.close()
+                    raise AICoreError("MSST initialization timed out") from None
         if status != "ready":
             self.close()
             raise AICoreError(detail or "MSST initialization failed")
@@ -185,7 +245,9 @@ class MSSTMelRoformerSeparator(Separator):
 class CenterChannelFallbackSeparator(Separator):
     name = "center-channel-fallback"
 
-    def separate(self, mix, vocals, instrumental, *, profile=None):
+    def separate(self, mix, vocals, instrumental, *, profile=None, cancelled=None):
+        if callable(cancelled) and cancelled():
+            raise ProcessingCancelledError("Song processing cancelled")
         audio, rate = sf.read(mix, dtype="float32", always_2d=True)
         center = np.mean(audio[:, :2], axis=1, keepdims=True)
         vocal = np.repeat(center, audio.shape[1], axis=1)

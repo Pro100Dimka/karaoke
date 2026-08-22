@@ -3,17 +3,13 @@ import {
   AudioWaveform,
   FolderOpen,
   Headphones,
-  Mic2,
   Music2,
-  Plus,
   RotateCcw,
-  Search,
   Settings2,
-  Sparkles,
-  Trash2,
-  UsersRound
+  Trash2
 } from "lucide-react";
 import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../i18n/runtime";
 import {
   Box,
@@ -22,7 +18,6 @@ import {
   Chip,
   Grid,
   IconButton,
-  InputBase,
   ProcessingSignal,
   Stack,
   Typography
@@ -33,18 +28,15 @@ import { formatSongKey, getSongCardState } from "./utils";
 
 const statusTone = { done: "success", error: "danger", processing: "primary", queued: "default" };
 const statusText = {
-  done: () => tr("Готово"),
-  error: () => tr("Ошибка"),
-  processing: () => tr("Обрабатывается"),
-  queued: () => tr("В очереди"),
-  cancelling: () => tr("Отменяется"),
-  cancelled: () => tr("Отменено"),
-  pending: () => tr("Ожидает обработки")
+  done: tr("Готово"),
+  error: tr("Ошибка"),
+  processing: tr("Обрабатывается"),
+  queued: tr("В очереди"),
+  cancelling: tr("Отменяется"),
+  cancelled: tr("Отменено"),
+  pending: tr("Ожидает обработки")
 };
-const STAT_CARDS = [
-  [Music2, "songCount", () => tr("всего песен")],
-  [Mic2, "readyCount", () => tr("готово к караоке")]
-];
+
 const EQUALIZER_BARS = Array.from({ length: 16 }, (_, index) => ({
   level: 0.28 + ((index * 37 + 19) % 61) / 100,
   speed: 720 + ((index * 113 + 47) % 620)
@@ -68,160 +60,6 @@ export function LibraryBackdrop() {
     >
       <AnimatedLibraryBackdrop />
     </Box>
-  );
-}
-
-export function LibraryActions({
-  canManageLibrary,
-  fileInputRef,
-  importing,
-  onAdd,
-  onFileChosen,
-  onOpenRoom,
-  roomActive,
-  query,
-  setQuery
-}) {
-  return (
-    <Grid minItemWidth="min(100%, var(--content-sm))" gap="var(--space-4)" align="center">
-      <Card
-        variant="laser"
-        tilt={false}
-        cardContent={{
-          style: {
-            display: "flex",
-            alignItems: "center",
-            padding: "var(--space-4) var(--space-5)",
-            gap: "var(--space-4)"
-          }
-        }}
-      >
-        <Search aria-hidden="true" />
-        <InputBase
-          component="input"
-          aria-label={tr("Поиск")}
-          placeholder={tr("Поиск...")}
-          value={query}
-          onChange={(event) => setQuery(event.target.value, event)}
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            border: 0,
-            outline: 0,
-            background: "transparent",
-            color: "var(--ui-text)",
-            font: "inherit"
-          }}
-        />
-      </Card>
-      <Stack direction="row" justify="flex-end" wrap gap="var(--space-2)">
-        {!roomActive && (
-          <Button size="lg" variant="outline" startIcon={<UsersRound />} onClick={onOpenRoom}>
-            {tr("Петь вместе")}
-          </Button>
-        )}
-        {canManageLibrary && (
-          <Button
-            size="lg"
-            startIcon={<Plus />}
-            disabled={importing}
-            onClick={onAdd}
-            sx={{ boxShadow: "var(--shadow-neon-primary)" }}
-          >
-            {tr("Добавить песню")}
-          </Button>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg"
-          onChange={onFileChosen}
-          disabled={importing}
-          style={{
-            position: "fixed",
-            display: "none",
-            opacity: 0,
-            pointerEvents: "none"
-          }}
-        />
-      </Stack>
-    </Grid>
-  );
-}
-
-export function LibraryHero({ songCount, readyCount, ...actions }) {
-  const values = { songCount, readyCount };
-  return (
-    <Stack
-      gap="var(--space-12)"
-      sx={{ paddingBlock: "var(--space-16)" }}
-      justify="center"
-      align="center"
-    >
-      <Grid minItemWidth="min(100%, var(--content-sm))" gap="var(--space-8)" align="center">
-        <Stack direction="row" align="center" gap="var(--space-5)">
-          <Box
-            aria-hidden="true"
-            sx={{
-              aspectRatio: 1,
-              flex: "none",
-              padding: "var(--space-12)",
-              background: "var(--app-icon-image) center / contain no-repeat",
-              filter:
-                "drop-shadow(0 0 var(--space-5) color-mix(in srgb, var(--ui-primary) 28%, transparent))"
-            }}
-          />
-          <Stack gap="var(--space-1)" sx={{ minWidth: 0 }}>
-            <Typography variant="caption" tone="muted">
-              {tr("Ваша музыкальная коллекция")}
-            </Typography>
-            <Typography variant="h2">{tr("Библиотека песен")}</Typography>
-            <Typography variant="body1" tone="muted">
-              {tr("Добавляйте треки, управляйте обработкой и открывайте их в караоке.")}
-            </Typography>
-          </Stack>
-        </Stack>
-        <Grid minItemWidth="min(100%, calc(var(--content-sm) / 2))" gap="var(--space-4)">
-          {STAT_CARDS.map(([Icon, key, getLabel]) => (
-            <Card
-              key={key}
-              variant="laser"
-              tilt={false}
-              sx={{ minWidth: 0 }}
-              cardContent={{
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  gap: "var(--space-5)",
-                  padding: "var(--space-6) var(--space-6)"
-                }
-              }}
-            >
-              <Box
-                aria-hidden="true"
-                sx={{
-                  position: "relative",
-                  color: "var(--ui-primary)",
-                  padding: "var(--space-3)"
-                }}
-              >
-                <Icon />
-                <Sparkles style={{ position: "absolute", inset: "auto auto 70% 70%" }} />
-              </Box>
-              <Stack gap="var(--space-1)">
-                <Typography variant="h3">{values[key]}</Typography>
-                <Typography variant="body2" tone="muted">
-                  {getLabel()}
-                </Typography>
-              </Stack>
-            </Card>
-          ))}
-        </Grid>
-      </Grid>
-      <LibraryActions {...actions} />
-    </Stack>
   );
 }
 
@@ -405,21 +243,23 @@ export const LibrarySongCard = memo(
               </Stack>
               <Chip tone={statusTone[status] ?? "default"}>{tr(statusText[status] ?? status)}</Chip>
             </Stack>
-            {(isWorking || transferStatus) && (
-              <Button
-                variant="ghost"
-                onClick={isWorking ? () => onOpenProcessing(song) : undefined}
-              >
-                <ProcessingSignal
-                  progress={transferStatus?.percent ?? song.progress_percent}
-                  compact
-                />
-              </Button>
-            )}
             <Stack direction="row" align="center" justify="space-between" wrap gap="var(--space-3)">
-              <Typography variant="caption" tone="muted">
-                {metadata}
-              </Typography>
+              {isWorking || transferStatus ? (
+                <Button
+                  variant="ghost"
+                  sx={{ flex: 1 }}
+                  onClick={isWorking ? () => onOpenProcessing(song) : undefined}
+                >
+                  <ProcessingSignal
+                    progress={transferStatus?.percent ?? song.progress_percent}
+                    compact
+                  />
+                </Button>
+              ) : (
+                <Typography variant="caption" tone="muted">
+                  {metadata}
+                </Typography>
+              )}
               <Stack
                 direction="row"
                 justify="flex-end"
@@ -450,7 +290,24 @@ export const LibrarySongCard = memo(
   }
 );
 
-export function LibraryResults({ error, songs, children, errorText }) {
+export function LibraryResults({
+  canManageLibrary,
+  error,
+  songs,
+  children,
+  errorText,
+  fileInputRef,
+  importing,
+  onFileChosen
+}) {
+  const dropzone = useDropzone({
+    accept: { "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"] },
+    disabled: importing || !canManageLibrary,
+    multiple: true,
+    noClick: true,
+    noKeyboard: true,
+    onDropAccepted: onFileChosen
+  });
   if (error)
     return (
       <Typography role="alert" tone="danger">
@@ -463,7 +320,17 @@ export function LibraryResults({ error, songs, children, errorText }) {
         <Typography tone="muted">{tr("Пока нет ни одной песни — добавьте первую")}</Typography>
       </Card>
     );
-  return children;
+
+  return (
+    <Box
+      {...dropzone.getRootProps()}
+      aria-label={tr("Зона добавления песен")}
+      data-drop-active={dropzone.isDragActive || undefined}
+    >
+      {children}
+      <input {...dropzone.getInputProps()} ref={fileInputRef} />
+    </Box>
+  );
 }
 
 export function SongGrid({ songs, transferStatuses, ...handlers }) {

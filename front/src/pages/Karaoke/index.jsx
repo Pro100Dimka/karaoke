@@ -5,7 +5,7 @@ import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
-import { queryKeys } from "../../query/client";
+import { queryKeys } from "../../query-client";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import { flattenLyricsNotes } from "../../utils/lyrics-sync";
@@ -22,6 +22,7 @@ import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
+import usePlaybackMachine from "./hooks/usePlaybackMachine";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
 import { getYouTubeVideoId, transposeKey } from "./utils/data";
@@ -57,7 +58,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   const videoRef = useRef(null);
   const youTubeClipRef = useRef(null);
   const containerRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const playback = usePlaybackMachine();
+  const { isPlaying } = playback;
+  const resetPlayback = playback.reset;
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const {
@@ -160,10 +163,10 @@ export default function Karaoke({ onOpenAppSettings }) {
     vocalsRef
   });
   useEffect(() => {
-    setIsPlaying(false);
+    resetPlayback();
     setCurrentTime(0);
     setDuration(0);
-  }, [song?.id]);
+  }, [resetPlayback, song?.id]);
 
   const lyricsSync = result?.lyrics_sync;
   const notes = useMemo(() => flattenLyricsNotes(lyricsSync), [lyricsSync]);
@@ -186,7 +189,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     onPlaybackEndedRef: playbackEndedRef,
     setCurrentTime,
     setDuration,
-    setIsPlaying,
+    setIsPlaying: playback.setPlaying,
     silenceMelodyGuide,
     songId: song?.id,
     speed,
@@ -217,7 +220,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     sendYouTubeCommand,
     setAnalysisRecordingId: updateAnalysisRecordingId,
     setCurrentTime,
-    setIsPlaying,
+    setIsPlaying: playback.setPlaying,
+    playback,
     setRecordingError,
     setRecordingSessionId,
     silenceMelodyGuide,

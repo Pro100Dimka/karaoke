@@ -40,9 +40,13 @@ function collectSpecifiers(source, extension) {
   const specifiers = [];
   const javascriptImportPattern =
     /(?:import\s+(?:[^"']*?\s+from\s+)?|export\s+[^"']*?\s+from\s+|import\s*\()\s*["']([^"']+)["']/g;
+  const moduleUrlPattern = /new\s+URL\s*\(\s*["']([^"']+)["']\s*,\s*import\.meta\.url\s*\)/g;
   const cssImportPattern = /@import\s+(?:url\()?\s*["']([^"']+)["']/g;
 
   for (const match of source.matchAll(javascriptImportPattern)) {
+    specifiers.push(match[1]);
+  }
+  for (const match of source.matchAll(moduleUrlPattern)) {
     specifiers.push(match[1]);
   }
   if (extension === ".css") {
