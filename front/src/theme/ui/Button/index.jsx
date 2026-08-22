@@ -33,7 +33,7 @@ const Button = forwardRef(
       }
       onClick?.(event);
     };
-if (fullWidth) {
+    if (fullWidth) {
       className = cx(className, "ui-button-full-width");
     }
     return (

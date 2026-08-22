@@ -5,6 +5,7 @@ import {
   getRotaryPointerValue,
   getRotaryWheelValue
 } from "./utils";
+import "./rotary-knob.css";
 
 const normalizeId = (id) => id.replace(/:/g, "");
 
@@ -68,6 +69,7 @@ export default function RotaryKnob({
         touchAction: "none",
         userSelect: "none",
         "--dial-value": `${percent}%`,
+        "--dial-progress": `${ratio * 75}%`,
         "--dial-angle": `${-135 + ratio * 270}deg`
       }}
       onPointerDown={(event) => {

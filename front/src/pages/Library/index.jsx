@@ -14,7 +14,7 @@ export default function Library() {
   const state = useLibrary();
   const { fileImport, online, processing, recordings } = state;
   return (
-    <Stack align="center" sx={{ position: "relative", overflow: "hidden" }}>
+    <Stack align="center" sx={{ position: "relative" }}>
       <LibraryBackdrop />
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
@@ -29,6 +29,9 @@ export default function Library() {
           roomActive={online.roomActive}
           query={state.query}
           setQuery={state.setQuery}
+          filters={state.filters}
+          filterOptions={state.filterOptions}
+          setFilters={state.setFilters}
         />
         <LibraryResults
           error={state.songsError}

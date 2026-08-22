@@ -34,6 +34,7 @@ const Slider = forwardRef(
       defaultValue,
       disabled = false,
       size = "md",
+      orientation = "horizontal",
       showValue = true,
       formatValue = String,
       className,
@@ -80,6 +81,8 @@ const Slider = forwardRef(
         required={required}
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
+        aria-orientation={orientation}
+        data-orientation={orientation}
         style={mergeSx({ "--slider-value": `${percent}%`, ...sx }, style)}
         onInput={(event) => onInput?.(Number(event.currentTarget.value), event)}
         onChange={(event) => setCurrent(Number(event.currentTarget.value), event)}
@@ -94,6 +97,7 @@ const Slider = forwardRef(
       <span
         className="ui-slider-control"
         data-disabled={disabled || undefined}
+        data-orientation={orientation}
         style={mergeSx(controlSx, controlStyle)}
       >
         {input}

@@ -2,6 +2,7 @@
   .ui-button {
     --_button-bg: var(--button-bg);
     --_button-fg: var(--button-fg);
+    --_button-accent: var(--ui-primary);
 
     position: relative;
     display: inline-flex;
@@ -64,11 +65,13 @@
   .ui-button[data-tone="secondary"] {
     --_button-bg: var(--ui-secondary);
     --_button-fg: var(--button-fg);
+    --_button-accent: var(--ui-secondary);
   }
 
   .ui-button[data-tone="danger"] {
     --_button-bg: var(--ui-danger);
     --button-fg: #fff;
+    --_button-accent: var(--ui-danger);
   }
 
   .ui-button[data-variant="soft"] {
@@ -82,15 +85,104 @@
   }
 
   .ui-button[data-variant="outline"] {
-    --_button-bg: var(--color-surface);
+    --_button-bg: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
     --_button-fg: var(--ui-text);
-    box-shadow: inset 0 0 0 1px var(--ui-border);
+    border: 1px solid color-mix(in srgb, var(--_button-accent) 62%, var(--ui-border));
     border-radius: var(--shape-lg, var(--shape-md));
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--ui-text) 8%, transparent),
+      0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 16%, transparent);
   }
   .ui-button[data-variant="outline"]:hover {
-    --_button-bg: transparent;
+    --_button-bg: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--_button-accent) 28%, var(--color-bg-elevated)),
+      color-mix(in srgb, var(--color-bg-deep) 82%, transparent)
+    );
     --_button-fg: var(--ui-text);
-    box-shadow: inset 0 0 0 1px var(--ui-border);
+    border-color: color-mix(in srgb, var(--_button-accent) 88%, var(--ui-text));
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--ui-text) 22%, transparent),
+      inset 0 0 var(--space-3) color-mix(in srgb, var(--_button-accent) 18%, transparent),
+      0 0 var(--space-3) color-mix(in srgb, var(--_button-accent) 44%, transparent);
+  }
+
+  .ui-button[data-variant="contained"] {
+    --_button-bg:
+      linear-gradient(
+        104deg,
+        color-mix(in srgb, var(--color-bg-deep) 96%, var(--_button-accent)) 0 46%,
+        color-mix(in srgb, var(--color-bg-elevated) 80%, var(--_button-accent)) 100%
+      );
+    --_button-fg: var(--ui-text);
+
+    gap: var(--space-4);
+    border: 1px solid var(--_button-accent);
+    border-radius: var(--shape-lg, var(--shape-md));
+    box-shadow:
+      inset 0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 35%, transparent),
+      0 0 var(--space-1) color-mix(in srgb, var(--_button-accent) 92%, transparent),
+      0 0 var(--space-4) color-mix(in srgb, var(--_button-accent) 48%, transparent);
+    text-shadow: 0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 42%, transparent);
+  }
+
+  .ui-button[data-variant="contained"]::before {
+    inset: 0 0 0 38%;
+    z-index: 0;
+    inline-size: auto;
+    opacity: .78;
+    background:
+      radial-gradient(circle at 72% 28%, var(--_button-accent) 0 2%, transparent 4%),
+      radial-gradient(circle at 88% 68%, color-mix(in srgb, var(--_button-accent) 78%, white) 0 2%, transparent 5%),
+      radial-gradient(circle at 58% 76%, var(--_button-accent) 0 3%, transparent 7%),
+      repeating-conic-gradient(
+        from 24deg at 82% 52%,
+        transparent 0 7deg,
+        color-mix(in srgb, var(--_button-accent) 42%, transparent) 8deg 10deg,
+        transparent 12deg 19deg
+      ),
+      radial-gradient(ellipse at 82% 50%, color-mix(in srgb, var(--_button-accent) 56%, transparent), transparent 65%);
+    mask-image: linear-gradient(90deg, transparent, #000 28%, #000);
+    animation: ui-contained-plasma 7s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  .ui-button[data-variant="contained"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      112deg,
+      transparent 30%,
+      color-mix(in srgb, white 38%, transparent) 48%,
+      transparent 66%
+    );
+    transform: translateX(-130%);
+    pointer-events: none;
+  }
+
+  .ui-button[data-variant="contained"] .ui-button-start-icon {
+    position: relative;
+    z-index: 1;
+    inline-size: auto;
+    block-size: auto;
+    padding: var(--space-2);
+  }
+
+  .ui-button[data-variant="contained"] .ui-button-start-icon::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: calc(100% + var(--space-3));
+    inset-block: var(--space-1);
+    inline-size: 1px;
+    background: linear-gradient(transparent, var(--_button-accent), transparent);
+    opacity: .65;
+  }
+
+  @keyframes ui-contained-plasma {
+    from { transform: translate3d(-3%, -2%, 0) scale(1.05); filter: saturate(120%); }
+    to { transform: translate3d(3%, 2%, 0) scale(1.16); filter: saturate(170%); }
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -98,9 +190,27 @@
       transform: translateY(-.0625rem);
       filter: brightness(1.06);
     }
+
+    .ui-button[data-variant="contained"]:not(:disabled):not([aria-disabled="true"]):hover {
+      box-shadow:
+        inset 0 0 var(--space-3) color-mix(in srgb, var(--_button-accent) 42%, transparent),
+        0 0 var(--space-2) color-mix(in srgb, var(--_button-accent) 100%, transparent),
+        0 0 var(--space-6) color-mix(in srgb, var(--_button-accent) 64%, transparent);
+      filter: brightness(1.12) saturate(1.12);
+    }
+
+    .ui-button[data-variant="contained"]:not(:disabled):not([aria-disabled="true"]):hover::after {
+      transform: translateX(130%);
+      transition: transform var(--motion-duration-slow) var(--motion-easing-standard);
+    }
   }
 
   .ui-button:not(:disabled):not([aria-disabled="true"]):active {
     transform: scale(var(--motion-press));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-button[data-variant="contained"]::before { animation: none; }
+    .ui-button[data-variant="contained"]::after { display: none; }
   }
 }

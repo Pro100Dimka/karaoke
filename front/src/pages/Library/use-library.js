@@ -17,7 +17,9 @@ import useLibraryRoomSync from "./hooks/useRoomSync";
 import useLibrarySongActions from "./hooks/useSongActions";
 import {
   countReadySongs,
-  filterSongs,
+  arrangeSongs,
+  defaultLibraryFilters,
+  getLibraryFilterOptions,
   getLocalVisibleSongs,
   getProcessingSongs,
   hasActiveSongProcessing,
@@ -36,6 +38,7 @@ export default function useLibrary() {
   const app = useAppSettings();
   const returning = Boolean(location.state?.fromKaraokeFade);
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState(defaultLibraryFilters);
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
   const [settingsSongId, setSettingsSongId] = useState(null);
@@ -259,7 +262,9 @@ export default function useLibrary() {
     canManageLibrary: !room?.room || room.room.host,
     fileImport,
     fileInputRef,
-    filteredSongs: filterSongs(visibleSongs, query),
+    filteredSongs: arrangeSongs(visibleSongs, query, filters),
+    filterOptions: getLibraryFilterOptions(visibleSongs),
+    filters,
     online: {
       open: onlineRoomOpen,
       setOpen: setOnlineRoomOpen,
@@ -292,6 +297,7 @@ export default function useLibrary() {
     room,
     setAnalysis,
     setQuery,
+    setFilters,
     settingsSongId,
     setSettingsSongId,
     songActions,

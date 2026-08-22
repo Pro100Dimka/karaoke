@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { describe, test } from "vitest";
 import { translateSaved as tr } from "../src/i18n/runtime.js";
 import {
+  arrangeSongs,
   countReadySongs,
   filterSongs,
   formatEta,
   formatLibraryDate,
   formatSongKey,
+  getLibraryFilterOptions,
   getLocalVisibleSongs,
   getProcessingProgress,
   getProcessingSongs,
@@ -96,7 +98,8 @@ describe("library domain utilities", () => {
       }),
       [one, two]
     );
-    assert.deepEqual(resolveVisibleSongs({ localSongs: local, room: { host: false }, roomSongs: [] }), local);
+    const guest = { localSongs: local, room: { host: false }, roomSongs: [] };
+    assert.deepEqual(resolveVisibleSongs(guest), local);
   });
 
   test("searches all metadata case-insensitively", () => {
@@ -107,6 +110,23 @@ describe("library domain utilities", () => {
     assert.deepEqual(filterSongs(songs, "весна indie"), [songs[1]]);
     assert.deepEqual(filterSongs(songs, "missing"), []);
     assert.deepEqual(filterSongs(null, "x"), []);
+  });
+
+  test("filters and sorts using only persisted song metadata", () => {
+    const songs = [
+      { title: "Beta", artist: "Zed", genre: "Rock", key: "Am", status: "done", created_at: "2026-01-01" },
+      { title: "Alpha", artist: "Ann", genre: "Pop", key_override: "C", status: "processing", created_at: "2026-02-01" },
+      { title: "Gamma", artist: "Bob", genre: "Rock", key: "C", status: "done", created_at: "2026-03-01" }
+    ];
+    assert.deepEqual(getLibraryFilterOptions(songs), { genres: ["Pop", "Rock"], keys: ["Am", "C"] });
+    assert.deepEqual(
+      arrangeSongs(songs, "", { sort: "title", genre: "Rock", key: "", status: "done" }).map(({ title }) => title),
+      ["Beta", "Gamma"]
+    );
+    assert.deepEqual(
+      arrangeSongs(songs, "", { sort: "recent", genre: "", key: "C", status: "" }).map(({ title }) => title),
+      ["Gamma", "Alpha"]
+    );
   });
 
   test("counts ready songs and derives safe card state", () => {

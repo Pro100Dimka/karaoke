@@ -35,3 +35,12 @@ test("slider accepts compact control geometry without leaking native field sizin
   expect(control.style.inlineSize).toBe("5rem");
   expect(control.querySelector("output")).toBeNull();
 });
+
+test("slider exposes vertical channel orientation to layout and accessibility", () => {
+  render(<Slider aria-label="Мик" orientation="vertical" value={0.5} showValue={false} />);
+
+  const slider = screen.getByRole("slider", { name: "Мик" });
+  expect(slider.dataset.orientation).toBe("vertical");
+  expect(slider.getAttribute("aria-orientation")).toBe("vertical");
+  expect(slider.parentElement.dataset.orientation).toBe("vertical");
+});

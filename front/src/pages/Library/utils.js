@@ -70,6 +70,45 @@ export const filterSongs = (songs, query) => {
     : array(songs);
 };
 
+export const defaultLibraryFilters = Object.freeze({
+  sort: "relevance",
+  genre: "",
+  key: "",
+  status: ""
+});
+
+const songKey = (song) => String(song?.key_override ?? song?.key ?? "").trim();
+const normalized = (value) =>
+  String(value || "")
+    .trim()
+    .toLocaleLowerCase();
+const unique = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const timestamp = (value) => Date.parse(value) || 0;
+
+export const getLibraryFilterOptions = (songs) => ({
+  genres: unique(array(songs).map((song) => String(song?.genre || "").trim())),
+  keys: unique(array(songs).map(songKey))
+});
+
+export const arrangeSongs = (songs, query, filters = defaultLibraryFilters) => {
+  const result = filterSongs(songs, query).filter(
+    (song) =>
+      (!filters.genre || normalized(song?.genre) === normalized(filters.genre)) &&
+      (!filters.key || normalized(songKey(song)) === normalized(filters.key)) &&
+      (!filters.status ||
+        (filters.status === "active"
+          ? isProcessingActive(song?.status)
+          : song?.status === filters.status))
+  );
+  const text = (value) => String(value || "");
+  const compare = {
+    title: (left, right) => text(left.title).localeCompare(text(right.title)),
+    artist: (left, right) => text(left.artist).localeCompare(text(right.artist)),
+    recent: (left, right) => timestamp(right.created_at) - timestamp(left.created_at)
+  }[filters.sort];
+  return compare ? [...result].sort(compare) : result;
+};
+
 export const countReadySongs = (songs) =>
   array(songs).filter(({ status }) => status === "done").length;
 export const getSongCardState = (song) => {

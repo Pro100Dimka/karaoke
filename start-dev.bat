@@ -55,8 +55,8 @@ for %%F in ("%AI%" "%ASIO%") do if not exist "%%~F" (
 
 mkdir "%JOBS%" >nul 2>&1 || goto :err
 
-call :start front "%FRONT%" "" "%FRONT_LOG%" "%FRONT_RC%"
-call :start asio "%ASIO%" "%ROOT%" "%ASIO_LOG%" "%ASIO_RC%"
+call :start_job front "%FRONT%" "" "%FRONT_LOG%" "%FRONT_RC%"
+call :start_job asio "%ASIO%" "%ROOT%" "%ASIO_LOG%" "%ASIO_RC%"
 
 rem ============================================================================
 rem PYTHON
@@ -116,7 +116,7 @@ echo Venv:
 echo   %VIRTUAL_ENV%
 echo.
 
-call :start ai "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%"
+call :start_job ai "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%"
 
 rem ============================================================================
 rem PORTS
@@ -126,7 +126,7 @@ if "%PREPARE_ONLY%"=="0" (
     echo Stopping processes on development ports 18000 and 5173...
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$p=18000,5173;$ids=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue ^| Where-Object {$p -contains $_.LocalPort} ^| Select-Object -ExpandProperty OwningProcess -Unique;foreach($owner in $ids){taskkill.exe /PID $owner /T /F 2^>^&1 ^| Out-Null}"
+    "$p=18000,5173;$seen=@{};foreach($x in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)){if($p -contains $x.LocalPort){$owner=[string]$x.OwningProcess;if(-not $seen.ContainsKey($owner)){$seen[$owner]=$true;taskkill.exe /PID $owner /T /F}}}"
 
     if errorlevel 1 echo [WARN] Could not fully clean development ports.
 )
@@ -183,7 +183,7 @@ rem ============================================================================
 rem START JOB
 rem ============================================================================
 
-:start
+:start_job
 echo Starting %~1 preparation...
 start "" /b cmd.exe /c call "%~f0" --job "%~1" "%~2" "%~3" "%~4" "%~5"
 exit /b 0
@@ -288,7 +288,7 @@ if !MOD!==0 (
     for %%J in (FRONT AI ASIO) do call :tail %%J
 )
 
-timeout /t 1 /nobreak >nul
+ping.exe 127.0.0.1 -n 2 >nul
 set /a SEC+=1
 goto :wait_loop
 
