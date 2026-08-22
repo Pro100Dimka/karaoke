@@ -33,3 +33,17 @@ test("library search applies sorting from the theme popover", () => {
     sort: "title"
   });
 });
+
+test("library filter popover closes only after an outside click", () => {
+  render(<LibraryActions canManageLibrary filters={defaultLibraryFilters} query="" setQuery={vi.fn()} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Фильтры и сортировка" }));
+  const popover = document.querySelector(".ui-popover");
+  expect(popover.dataset.open).not.toBeUndefined();
+
+  fireEvent.click(screen.getByText("Сортировка"));
+  expect(popover.dataset.open).not.toBeUndefined();
+
+  fireEvent.click(document.body);
+  expect(popover.dataset.open).toBeUndefined();
+});

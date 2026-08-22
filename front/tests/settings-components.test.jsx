@@ -37,7 +37,7 @@ describe("new settings components", () => {
   test("renders all primary tabs", () => {
     mocks.settings = { app: { form: null }, audio: {}, radio: {} };
     render(<Settings />);
-    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    expect(screen.getAllByRole("tab")).toHaveLength(4);
     expect(screen.getByText("settings.loading")).not.toBeNull();
   });
 });

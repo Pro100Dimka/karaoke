@@ -20,6 +20,8 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
     icon: <Icon size={17} />,
     content: service ? (
       <Service id={service} />
+    ) : id === "advanced" ? (
+      <ServiceCards open={setService} />
     ) : (
       <Stack gap={1}>
         {settings.app.form ? (
@@ -30,7 +32,6 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
           </Typography>
         )}
         {id === "ai" && <ModelStatus />}
-        {id === "appearance" && <ServiceCards open={setService} />}
       </Stack>
     )
   }));

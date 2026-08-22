@@ -50,12 +50,6 @@ export default function LibraryActions({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(filters);
   useEffect(() => setDraft(filters), [filters]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (event) => event.key === "Escape" && setOpen(false);
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [open]);
 
   const dropzone = useDropzone({
     accept: { "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"] },
@@ -86,6 +80,7 @@ export default function LibraryActions({
           aria-label={tr("Поиск")}
           placeholder={tr("Поиск песен, исполнителей, жанров…")}
           value={query}
+          size="lg"
           onChange={setQuery}
           startAdornment={<Search aria-hidden="true" />}
           endAdornment={
@@ -131,6 +126,7 @@ export default function LibraryActions({
 
       <Popover
         open={open}
+        onClose={() => setOpen(false)}
         role="dialog"
         aria-label={tr("Фильтры и сортировка")}
         style={{

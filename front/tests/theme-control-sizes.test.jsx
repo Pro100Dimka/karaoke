@@ -24,3 +24,19 @@ test("theme controls share the xs, sm, md and lg size contract", () => {
   expect(screen.getByRole("switch", { name: "Флаг" }).dataset.size).toBe("sm");
   expect(screen.getByText("Эффект").closest("label")?.dataset.size).toBe("md");
 });
+
+test("buttons and input fields use md by default", () => {
+  render(
+    <>
+      <Button>Кнопка</Button>
+      <TextField label="Поле" />
+      <NumberField label="Число" controls={false} />
+      <Select label="Выбор" options={[]} />
+    </>
+  );
+
+  expect(screen.getByRole("button", { name: "Кнопка" }).dataset.size).toBe("md");
+  expect(screen.getByRole("textbox", { name: "Поле" }).dataset.size).toBe("md");
+  expect(screen.getByRole("spinbutton", { name: "Число" }).dataset.size).toBe("md");
+  expect(screen.getByRole("button", { name: "Выбор" }).dataset.size).toBe("md");
+});

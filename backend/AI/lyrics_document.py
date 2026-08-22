@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import VocalNote, Word, to_compact_dict
+from .models import VocalNote, Word, to_dict
 
 
 def validate_lyrics_document(payload: Any) -> dict[str, Any]:
@@ -21,6 +21,12 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
             note_start, note_end = float(note.get("start", -1)), float(note.get("end", -1))
             midi = int(note.get("note", -1))
             if note_end <= note_start or note_end <= start or note_start >= end or not 0 <= midi <= 127:
+                print(
+                    f"[lyrics_document] word {index} {word.get('text')!r} "
+                    f"[{start!r}..{end!r}] rejects note {note!r}; "
+                    f"full word.notes={word.get('notes')!r}",
+                    flush=True,
+                )
                 raise ValueError(f"Invalid note interval in word {index}")
             if note_start < previous_note_end - 1e-6:
                 raise ValueError(f"Overlapping notes in word {index}")
@@ -32,14 +38,19 @@ def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str
     result = []
     for word in words:
         owned = [note for note in notes if note.end > word.start and note.start < word.end]
-        result.append({**to_compact_dict(word), "notes": [
-            {
-                "note": note.midi_note,
-                "start": max(note.start, word.start),
-                "end": min(note.end, word.end),
-            }
-            for note in owned
-        ]})
+        clipped = []
+        for note in owned:
+            start, end = max(note.start, word.start), min(note.end, word.end)
+            if end <= start:
+                print(
+                    f"[notes] dropping degenerate clip: word#{word.index} "
+                    f"[{word.start:.6f}..{word.end:.6f}] note(word_index={note.word_index}) "
+                    f"[{note.start:.6f}..{note.end:.6f}] -> clipped [{start:.6f}..{end:.6f}]",
+                    flush=True,
+                )
+                continue
+            clipped.append({"note": note.midi_note, "start": start, "end": end})
+        result.append({**to_dict(word), "notes": clipped})
     return result
 
 

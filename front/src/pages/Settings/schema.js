@@ -1,4 +1,4 @@
-import { Cpu, Palette, SlidersHorizontal } from "lucide-react";
+import { Cpu, Palette, SlidersHorizontal, Wrench } from "lucide-react";
 import { translateSaved as tr } from "../../i18n/runtime";
 
 const options = (items) => items.map(([value, label]) => ({ value, label }));
@@ -15,7 +15,8 @@ const field = (source, type, name, label, tooltip, extra = {}) => ({
 export const TABS = [
   ["appearance", tr("Общее"), Palette],
   ["audio", tr("Звук"), SlidersHorizontal],
-  ["ai", tr("Обработка"), Cpu]
+  ["ai", tr("Обработка"), Cpu],
+  ["advanced", tr("Дополнительно"), Wrench]
 ];
 
 export const FIELDS = {
@@ -169,7 +170,8 @@ export const FIELDS = {
         browseLabel: tr("Выбрать папку: {0}", { 0: label })
       })
     )
-  ]
+  ],
+  advanced: []
 };
 
 export const SERVICES = ["memory", "history", "diagnostics", "about"];

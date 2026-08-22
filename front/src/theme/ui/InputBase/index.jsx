@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import cx from "../_internal/cx";
 import mergeSx from "../_internal/sx";
 
-const InputBase = forwardRef(function InputBase(
+const InputBase = forwardRef((
   {
     component: Component = "input",
     className,
@@ -10,19 +10,19 @@ const InputBase = forwardRef(function InputBase(
     style,
     disabled,
     error,
-    size,
+    size = "md",
     tone,
     disableNativeDisabled = false,
     ...props
   },
   ref
-) {
+) => {
   return (
     <Component
       ref={ref}
       className={cx(className)}
       style={mergeSx(sx, style)}
-      {...(size !== undefined && { "data-size": size })}
+      data-size={size}
       {...(tone !== undefined && { "data-tone": tone })}
       {...(disabled && { "data-disabled": true })}
       {...(error && { "data-error": true })}

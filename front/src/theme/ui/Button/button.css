@@ -30,7 +30,7 @@
   }
 
   .ui-button:not(.ui-icon-button) {
-    border-radius: var(--shape-lg, var(--shape-md));
+    border-radius: var(--control-radius);
   }
 
   .ui-button::before {

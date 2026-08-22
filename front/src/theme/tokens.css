@@ -71,6 +71,13 @@
   --radius-xl: 1.65rem;
   --radius-pill: 62.4375rem;
   --radius-round: var(--radius-pill);
+
+  --shape-xs: calc(var(--radius-sm) * .6);
+  --shape-sm: var(--radius-sm);
+  --shape-md: var(--radius-md);
+  --shape-lg: var(--radius-lg);
+  --shape-xl: var(--radius-xl);
+  --shape-round: var(--radius-round);
   --content-max: 90rem;
   --content-sm: 28rem;
   --titlebar-height: 2.125rem;

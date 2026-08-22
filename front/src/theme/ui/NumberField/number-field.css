@@ -30,21 +30,31 @@
   }
 
   .ui-number-field-step {
+    appearance: none;
     inline-size: 100%;
     min-inline-size: 0;
     min-block-size: 0;
     block-size: 100%;
     padding: 0;
+    border: 0;
     border-radius: 0;
+    background: transparent;
     color: var(--field-placeholder);
+    font: inherit;
+    cursor: pointer;
   }
 
   .ui-number-field-step:first-child {
-    border-start-end-radius: calc(var(--shape-md) - 1px);
+    border-start-end-radius: calc(var(--control-radius) - 1px);
   }
 
   .ui-number-field-step:last-child {
-    border-end-end-radius: calc(var(--shape-md) - 1px);
+    border-end-end-radius: calc(var(--control-radius) - 1px);
+  }
+
+  .ui-number-field-step:disabled {
+    cursor: not-allowed;
+    opacity: var(--states-disabled-opacity);
   }
 
   .ui-number-field-step + .ui-number-field-step {

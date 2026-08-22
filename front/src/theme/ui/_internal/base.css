@@ -28,6 +28,8 @@
   }
 
   .ui-control {
+    --control-radius: calc(var(--control-size, var(--control-md)) / 2);
+
     box-sizing: border-box;
     min-inline-size: 0;
     font-family: inherit;
