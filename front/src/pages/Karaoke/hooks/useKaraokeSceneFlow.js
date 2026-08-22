@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import useLatestRef from "../../../hooks/useLatestRef";
 import { setGlobalRouteBlackout } from "../../../utils/route-blackout";
 
 const waitForScene = (milliseconds) =>
   new Promise((resolve) => {
     window.setTimeout(resolve, milliseconds);
   });
+
+const AUTO_START_POLL_MS = 120;
+const AUTO_START_READY_TIMEOUT_MS = 30_000;
+const AUTO_START_RETRIES = 2;
 
 const waitForMediaReady = (element) => {
   if (!element || element.readyState >= 3) return Promise.resolve();
@@ -45,6 +50,7 @@ export default function useKaraokeSceneFlow({
   const hasStartedPlaybackRef = useRef(false);
   const stageActionTimerRef = useRef(null);
   const autoStartedSongRef = useRef(null);
+  const autoStartInFlightRef = useRef(null);
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
   const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
   const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
@@ -53,6 +59,7 @@ export default function useKaraokeSceneFlow({
   useEffect(() => {
     hasStartedPlaybackRef.current = false;
     autoStartedSongRef.current = null;
+    autoStartInFlightRef.current = null;
   }, [songId]);
 
   useEffect(() => {
@@ -139,6 +146,7 @@ export default function useKaraokeSceneFlow({
       turnOnRadio({ remember: false, fadeIn: true }).catch(() => {});
     return started;
   }, [isRadioPlaying, runIntroTransition, togglePlay, turnOffRadio, turnOnRadio]);
+  const startSongWithIntroRef = useLatestRef(startSongWithIntro);
 
   const handleTogglePlay = useCallback(async () => {
     if (isPlaying) {
@@ -195,21 +203,37 @@ export default function useKaraokeSceneFlow({
     if (!autoStartRequested || !songId || autoStartedSongRef.current === songId) return undefined;
     let cancelled = false;
     let attempts = 0;
+    let failures = 0;
     let timerId = null;
+    const schedule = (delay = AUTO_START_POLL_MS) => {
+      timerId = window.setTimeout(tryAutoStart, delay);
+    };
     const tryAutoStart = () => {
       if (cancelled) return;
-      if (instrumentalRef.current) {
+      const instrumental = instrumentalRef.current;
+      if (instrumental?.readyState >= 3) {
+        if (autoStartInFlightRef.current === songId) return;
         timerId = null;
-        autoStartedSongRef.current = songId;
-        startSongWithIntro();
+        autoStartInFlightRef.current = songId;
+        startSongWithIntroRef.current().then((started) => {
+          if (autoStartInFlightRef.current === songId) autoStartInFlightRef.current = null;
+          if (cancelled) return;
+          if (started) {
+            autoStartedSongRef.current = songId;
+            return;
+          }
+          failures += 1;
+          if (failures <= AUTO_START_RETRIES) schedule(600);
+        });
         return;
       }
       attempts += 1;
-      if (attempts < 40) timerId = window.setTimeout(tryAutoStart, 120);
+      if (attempts * AUTO_START_POLL_MS < AUTO_START_READY_TIMEOUT_MS) schedule();
       else {
         timerId = null;
         setSceneBlackout(false);
         setSceneTransitioning(false);
+        showControls();
       }
     };
     timerId = window.setTimeout(tryAutoStart, 80);
@@ -217,7 +241,7 @@ export default function useKaraokeSceneFlow({
       cancelled = true;
       if (timerId) window.clearTimeout(timerId);
     };
-  }, [autoStartRequested, instrumentalRef, songId, startSongWithIntro]);
+  }, [autoStartRequested, instrumentalRef, showControls, songId, startSongWithIntroRef]);
 
   return {
     handleStop,

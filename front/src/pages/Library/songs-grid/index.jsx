@@ -32,7 +32,6 @@ export default function LibrarySongsGrid({ state, fileImport, processing, record
     <LibraryResults
       error={state.songsError}
       onFileChosen={fileImport.importFile}
-      fileInputRef={state.fileInputRef}
       importing={fileImport.importing}
       canManageLibrary={state.canManageLibrary}
       songs={state.filteredSongs}

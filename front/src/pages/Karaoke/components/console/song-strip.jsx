@@ -68,7 +68,12 @@ export default function SongStrip({ song, currentTime, duration, onSeek, disable
         </>
       )}
       <Typography variant="caption">{formatTime(currentTime)}</Typography>
-      <WaveformTimeline value={currentTime} duration={duration} onChange={onSeek} />
+      <WaveformTimeline
+        songId={song.id}
+        value={currentTime}
+        duration={duration}
+        onChange={onSeek}
+      />
       <Typography variant="caption">{formatTime(duration)}</Typography>
     </Stack>
   );

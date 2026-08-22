@@ -9,7 +9,7 @@ const BARS = Array.from({ length: COUNT }, (_, index) => [
   8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
 ]);
 
-export default function Waveform({ value = 0, duration = 0, onChange, label, url }) {
+export default function Waveform({ value = 0, duration = 0, onChange, label, url, fetchParams }) {
   const gradient = `wave-${useId().replace(/:/g, "")}`;
   const host = useRef(null);
   const instance = useRef(null);
@@ -24,17 +24,23 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
       .then(({ default: WaveSurfer }) => {
         if (!active || !host.current) return;
         const styles = getComputedStyle(host.current);
+        const color = (name) => styles.getPropertyValue(name).trim();
         const wavesurfer = WaveSurfer.create({
+          barGap: 2,
+          barMinHeight: 1,
+          barRadius: 2,
+          barWidth: 2,
           container: host.current,
-          cursorColor: styles.getPropertyValue("--color-primary-hover"),
+          cursorColor: color("--color-primary-hover"),
           cursorWidth: 1,
+          fetchParams,
           height: "auto",
           hideScrollbar: true,
           interact: false,
           normalize: true,
-          progressColor: styles.getPropertyValue("--color-highlight"),
+          progressColor: [color("--color-highlight"), color("--color-primary-hover")],
           url,
-          waveColor: styles.getPropertyValue("--color-primary")
+          waveColor: [color("--color-primary"), color("--color-secondary")]
         });
         instance.current = wavesurfer;
         wavesurfer.once("ready", () => active && setReal(true));
@@ -48,7 +54,7 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
       instance.current?.destroy();
       instance.current = null;
     };
-  }, [url]);
+  }, [fetchParams, url]);
   useEffect(() => {
     const wavesurfer = instance.current;
     if (wavesurfer && Math.abs(wavesurfer.getCurrentTime() - value) > 0.08)
@@ -84,7 +90,13 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
         viewBox={`0 0 ${WIDTH} 44`}
         preserveAspectRatio="none"
         aria-hidden="true"
-        sx={{ display: real ? "none" : "block", inlineSize: "100%", blockSize: "var(--control-md)" }}
+        sx={{
+          display: real ? "none" : "block",
+          position: url ? "absolute" : "relative",
+          inset: url ? 0 : undefined,
+          inlineSize: "100%",
+          blockSize: "var(--control-md)"
+        }}
       >
         <defs>
           <linearGradient id={gradient}>

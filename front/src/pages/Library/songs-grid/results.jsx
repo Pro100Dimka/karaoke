@@ -8,7 +8,6 @@ export default function LibraryResults({
   songs,
   children,
   errorText,
-  fileInputRef,
   importing,
   onFileChosen
 }) {
@@ -40,7 +39,6 @@ export default function LibraryResults({
       data-drop-active={dropzone.isDragActive || undefined}
     >
       {children}
-      <input {...dropzone.getInputProps()} ref={fileInputRef} />
     </Box>
   );
 }

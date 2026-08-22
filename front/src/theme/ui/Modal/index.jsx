@@ -5,8 +5,8 @@ import Card from "../Card";
 import IconButton from "../IconButton";
 import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
-import ModalTitle from "./title";
 import "./modal.css";
+import ModalTitle from "./title";
 
 const FOCUSABLE =
   "button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
@@ -145,3 +145,4 @@ export default function Modal({
 
 export { default as ModalCarouselNavigation } from "./carousel-navigation";
 export { default as ModalTitle } from "./title";
+

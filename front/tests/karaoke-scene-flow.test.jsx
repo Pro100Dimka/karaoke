@@ -232,6 +232,42 @@ describe("karaoke scene flow", () => {
     same([scene.sceneBlackout, false], [scene.sceneTransitioning, false]);
     window.removeEventListener("app:route-blackout", listener);
   });
+  test("radio state changes during autostart cannot restart a manually paused song", async () => {
+    let resolvePlayback;
+    const togglePlay = vi.fn(() => new Promise((resolve) => (resolvePlayback = resolve)));
+    let input = props({
+      autoStartRequested: true,
+      isRadioPlaying: true,
+      togglePlay
+    });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    await runTimersFor(2600);
+    expect(togglePlay).toHaveBeenCalledOnce();
+
+    input = { ...input, isRadioPlaying: false };
+    hook.rerender();
+    await act(async () => resolvePlayback(true));
+    input = { ...input, isRadioPlaying: true };
+    hook.rerender();
+    await runTimersFor(1000);
+
+    expect(togglePlay).toHaveBeenCalledOnce();
+  });
+  test("autostart waits for Electron media data instead of playing an empty element", async () => {
+    const instrumental = media({ readyState: 0 });
+    const input = props({
+      autoStartRequested: true,
+      instrumentalRef: { current: instrumental },
+      togglePlay: vi.fn().mockResolvedValue(true)
+    });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    await runTimersFor(2000);
+    expect(input.togglePlay).not.toHaveBeenCalled();
+    instrumental.readyState = 4;
+    await act(async () => vi.runAllTimersAsync());
+    expect(input.togglePlay).toHaveBeenCalledOnce();
+    expect(hook.result.current.sceneTransitioning).toBe(false);
+  });
   test("autostart gives up deterministically when media never becomes available", async () => {
     const input = props({
       autoStartRequested: true,

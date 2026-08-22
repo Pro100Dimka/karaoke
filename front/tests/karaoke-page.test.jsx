@@ -370,6 +370,10 @@ describe("karaoke page", () => {
   });
   test("auto-starts after route handoff and clears its timers on unmount", async () => {
     vi.useFakeTimers();
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+      configurable: true,
+      get: () => 4
+    });
     mocks.location = { state: { songId: "song", autoPlay: true } };
     const events = [];
     const listener = (event) => events.push(event.detail.visible);

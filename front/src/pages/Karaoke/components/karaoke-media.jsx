@@ -34,16 +34,10 @@ function useTrack(songId, track) {
 function AudioTrack({ audioRef, songId, track, volume }) {
   const source = useTrack(songId, track);
   const element = useRef(null);
-  useEffect(
-    () => () => {
-      const audio = element.current;
-      if (!audio) return;
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
-    },
-    []
-  );
+  useEffect(() => {
+    const audio = element.current;
+    return () => audio?.pause();
+  }, []);
   return (
     <Box
       as="audio"

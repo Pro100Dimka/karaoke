@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { createRef } from "react";
+import { createRef, StrictMode } from "react";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
@@ -27,7 +27,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-test("karaoke media keeps direct authenticated URLs inside Electron and releases them", () => {
+test("karaoke media preserves direct Electron URLs through StrictMode cleanup", () => {
   globalThis.electronAPI = { isElectron: true };
   const props = {
     instrumentalRef: createRef(),
@@ -42,20 +42,27 @@ test("karaoke media keeps direct authenticated URLs inside Electron and releases
     sendYouTubeCommand: vi.fn(),
     syncSecondaryMedia: vi.fn()
   };
-  const { container, rerender, unmount } = render(<KaraokeMedia {...props} song={{ id: "electron-song", title: "Title" }} />);
+  const view = (song) => (
+    <StrictMode>
+      <KaraokeMedia {...props} song={song} />
+    </StrictMode>
+  );
+  const { container, rerender, unmount } = render(
+    view({ id: "electron-song", title: "Title" })
+  );
   expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
     "electron-song/instrumental",
     "electron-song/vocals"
   ]);
-  rerender(<KaraokeMedia {...props} song={{ id: "next-song", title: "Next" }} />);
+  rerender(view({ id: "next-song", title: "Next" }));
   expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
     "next-song/instrumental",
     "next-song/vocals"
   ]);
   expect(apiMocks.getAudioTrackBlob).not.toHaveBeenCalled();
   unmount();
-  expect(HTMLMediaElement.prototype.pause).toHaveBeenCalledTimes(4);
-  expect(HTMLMediaElement.prototype.load).toHaveBeenCalledTimes(4);
+  expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+  expect(HTMLMediaElement.prototype.load).not.toHaveBeenCalled();
 });
 test("karaoke media releases authenticated files resolved after unmount", async () => {
   const resolvers = [];

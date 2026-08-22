@@ -28,7 +28,13 @@ test("room self-monitor reuses the existing WebRTC stream", () => {
   const karaoke = read("src/pages/Karaoke/index.jsx");
   expect(karaoke).toContain("onlineRoom.setLocalMonitoring(enabled)");
 });
-test("waveform progress uses a single moving clip instead of per-bar progress branches", () => {
-  const source = read("src/pages/Karaoke/components/waveform-timeline.jsx");
-  verify([source, "toContain", "clipPath"], [source, "not.toContain", "index / BAR_COUNT <= progress"]);
+test("karaoke waveform loads the real instrumental through WaveSurfer", () => {
+  const timeline = read("src/pages/Karaoke/components/waveform-timeline.jsx");
+  const waveform = read("src/theme/ui/Waveform/index.jsx");
+  verify(
+    [timeline, "toContain", 'api.getAudioTrackUrl(songId, "instrumental")'],
+    [waveform, "toContain", 'import("wavesurfer.js")'],
+    [waveform, "toContain", "fetchParams"],
+    [waveform, "not.toContain", "index / BAR_COUNT <= progress"]
+  );
 });

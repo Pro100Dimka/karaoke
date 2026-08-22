@@ -121,23 +121,23 @@ export function getSongActions({
 }) {
   return [
     isReady
-      ? [Headphones, tr("Прослушать записи"), "outline", () => onOpenRecordings(song)]
+      ? [Headphones, tr("Прослушать записи"), "contained", () => onOpenRecordings(song)]
       : canManageLibrary && [
           AudioWaveform,
           tr("Обработать песню"),
-          "outline",
+          "contained",
           () => onProcess(song),
           isWorking
         ],
     canManageLibrary && [
       Settings2,
       tr("Настройки песни"),
-      "outline",
+      "contained",
       () => onOpenSettings(song.id)
     ],
-    canManageLibrary && [FolderOpen, tr("Открыть папку"), "outline", () => onOpenFolder(song)],
+    canManageLibrary && [FolderOpen, tr("Открыть папку"), "contained", () => onOpenFolder(song)],
     canManageLibrary &&
-      isReady && [RotateCcw, tr("Переобработать мелодию"), "outline", () => onReprocess(song)],
+      isReady && [RotateCcw, tr("Переобработать мелодию"), "contained", () => onReprocess(song)],
     canManageLibrary && [Trash2, tr("Удалить песню"), "danger", () => onDelete(song)]
   ].filter(Boolean);
 }
