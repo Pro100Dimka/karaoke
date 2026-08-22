@@ -159,6 +159,22 @@ def _repair_bounds(words: list[Word], start: int, end: int, span: float, context
     return lower, upper, crop_start, crop_end, left, right
 
 
+def _enforce_monotonic_starts(words: list[Word], span: float) -> None:
+    """Clamp any word whose start regressed behind its predecessor's start.
+
+    Repair passes (notably CTC repair) rewrite a sub-range in isolation and
+    only check consistency against words immediately adjacent to that range,
+    not the full downstream chain, so a later word's start can end up before
+    an earlier word's start. `_validate` requires non-decreasing starts, so
+    fix that up front instead of failing the whole song over it.
+    """
+    for index in range(1, len(words)):
+        if words[index].start + 1e-6 < words[index - 1].start:
+            new_start = min(words[index - 1].start, span)
+            new_end = words[index].end if words[index].end > new_start else min(span, new_start + 0.05)
+            words[index] = Word(new_start, new_end, words[index].text, words[index].confidence, words[index].index)
+
+
 def _load(model_class, name, role):
     import torch
 
@@ -516,6 +532,7 @@ class Qwen3ForcedAligner(Aligner):
         try:
             if structural:
                 self._ctc_repair(words, tokens, samples, rate, span, resolved, structural)
+                _enforce_monotonic_starts(words, span)
             validated = self._validate(words, tokens, span)
         except (EngineUnavailableError, InvalidArtifactError) as error:
             raise InvalidArtifactError(f"Qwen acoustic alignment failed: {error}") from error
@@ -525,6 +542,7 @@ class Qwen3ForcedAligner(Aligner):
             repaired = self._ctc_repair(
                 validated.copy(), tokens, samples, rate, span, resolved, suspicious
             )
+            _enforce_monotonic_starts(repaired, span)
             return self._validate(repaired, tokens, span)
         except (EngineUnavailableError, InvalidArtifactError):
             return validated

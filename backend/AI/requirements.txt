@@ -2,6 +2,7 @@ numpy>=1.26,<2
 scipy>=1.11,<1.15
 soundfile>=0.12,<1
 librosa>=0.10,<1
+nara_wpe>=0.0.11,<1
 torchfcpe==0.0.4
 omegaconf==2.2.3
 ml-collections==1.1.0

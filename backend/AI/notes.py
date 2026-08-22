@@ -69,10 +69,7 @@ def build_vocal_notes(
         owner = _owner(words or [], (start + end) / 2, word_boundary_tolerance)
         if owner is None:
             continue
-        note_start, note_end = max(start, owner.start), min(end, owner.end)
-        if note_end - note_start < min_note:
-            continue
-        notes.append(VocalNote(note_start, note_end, midi, word_index=owner.index))
+        notes.append(VocalNote(start, end, midi, word_index=owner.index))
     return notes
 
 

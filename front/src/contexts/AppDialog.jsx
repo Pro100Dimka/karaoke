@@ -10,7 +10,7 @@ import {
 } from "react";
 
 import { translateSaved as t } from "../i18n/runtime";
-import { Button, Modal, Stack } from "../theme/ui";
+import { Button, Modal } from "../theme/ui";
 import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "./dialog-utils";
 
 const key = Symbol.for("advoice.app-dialog-context");
@@ -35,24 +35,23 @@ function DialogModal({ dialog, close }) {
         title: dialog.title,
         description: dialog.message,
         actions: (
-          <Button
-            variant="contained"
-            className={dialog.confirmClassName}
-            onClick={() => close(true)}
-          >
-            {dialog.confirmText}
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              className={dialog.confirmClassName}
+              onClick={() => close(true)}
+            >
+              {dialog.confirmText}
+            </Button>
+            {confirm && (
+              <Button data-role="dialog-cancel" variant="outlined" onClick={() => close(false)}>
+                {dialog.cancelText}
+              </Button>
+            )}
+          </>
         )
       }}
-    >
-      {confirm && (
-        <Stack align="end" sx={{ padding: "var(--space-4)" }}>
-          <Button data-role="dialog-cancel" variant="outlined" onClick={() => close(false)}>
-            {dialog.cancelText}
-          </Button>
-        </Stack>
-      )}
-    </Modal>
+    />
   );
 }
 
