@@ -10,11 +10,7 @@ export { default as FolderField } from "./FolderField";
 export { default as FieldInput } from "./FieldInput";
 export { default as IconButton } from "./IconButton";
 export { default as InputBase } from "./InputBase";
-export {
-  default as Modal,
-  ModalCarouselNavigation,
-  ModalTitle
-} from "./Modal";
+export { default as Modal, ModalCarouselNavigation, ModalTitle } from "./Modal";
 export { default as NumberField } from "./NumberField";
 export { default as OutlinedInput } from "./OutlinedInput";
 export { default as Popover } from "./Popover";
@@ -33,8 +29,5 @@ export { default as Waveform } from "./Waveform";
 export { default as StudioScrollbars } from "./StudioScrollbars";
 export { default as KaraokeLyrics } from "../features/KaraokeLyrics";
 export { default as PianoRoll } from "../features/PianoRoll";
-export {
-  default as PianoKeyboard,
-  isBlackPianoKey,
-  pianoNoteName
-} from "./PianoKeyboard";
+export { default as ProcessingSignal } from "../features/ProcessingSignal";
+export { default as PianoKeyboard, isBlackPianoKey, pianoNoteName } from "./PianoKeyboard";

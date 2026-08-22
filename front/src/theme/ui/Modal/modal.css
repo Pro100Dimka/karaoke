@@ -44,22 +44,44 @@
     z-index: 10;
     inset-block-start: 0;
     inset-inline-end: 0;
+    display: grid;
+    inline-size: var(--control-md);
+    padding: 0;
+    aspect-ratio: 1;
+    place-items: center;
     transform: translate(30%, -30%);
+    border: var(--hairline) solid var(--color-border-strong);
     border-color: var(--color-border-strong);
     border-radius: 50%;
+    color: var(--color-text);
     background: var(--color-bg-elevated);
     box-shadow: var(--shadow-neon-soft);
+    cursor: pointer;
+    transition:
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      color var(--motion-duration-fast) var(--motion-easing-standard),
+      background var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
   .ui-modal-close:hover {
-    transform: translate(30%, -30%) scale(1.06);
+    border-color: var(--color-primary-hover);
+    color: var(--color-primary-hover);
+    background: var(--color-surface-hover);
+  }
+
+  .ui-modal-close:active {
+    transform: translate(30%, -30%);
   }
 
   .ui-modal-title {
     min-inline-size: 0;
     padding: var(--space-5) var(--space-8) var(--space-4) var(--space-5);
     border-block-end: var(--hairline) solid var(--color-border);
-    background: linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-primary) 10%, transparent),
+      transparent
+    );
   }
 
   .ui-modal-title-media {

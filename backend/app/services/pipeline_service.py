@@ -113,15 +113,14 @@ _STEP_PLAN = {
 # Each entry describes the next observable boundary, a conservative duration
 # and text intended for a person rather than an internal engine log.
 _AI_STAGE_PLAN = {
-    "decode": (8.0, 5, "Подготавливаем аудио"),
-    "separation": (48.0, 120, "Отделяем голос исполнителя от музыки"),
-    "tempo": (52.0, 8, "Определяем темп и тональность"),
-    "pitch": (70.0, 45, "Определяем мелодию голоса"),
-    "transcription": (82.0, 75, "Распознаём слова песни"),
-    "alignment": (82.0, 75, "Синхронизируем слова с голосом"),
-    "notes": (96.0, 15, "Строим вокальные ноты"),
-    "manifest": (99.7, 4, "Проверяем результат"),
-    "complete": (100.0, 2, "Завершаем обработку"),
+    "decode": (10.0, 5, "Подготавливаем аудио"),
+    "separate": (42.0, 35, "Отделяем голос исполнителя от музыки"),
+    "vocal": (48.0, 8, "Очищаем голос и переводим его в моно"),
+    "analysis": (70.0, 35, "Определяем темп, тональность и мелодию голоса"),
+    "lyrics": (84.0, 55, "Синхронизируем слова с голосом"),
+    "notes": (98.0, 12, "Строим вокальные ноты"),
+    "validate": (99.7, 3, "Проверяем результат"),
+    "complete": (100.0, 1, "Завершаем обработку"),
 }
 
 
@@ -275,7 +274,7 @@ def get_processing_telemetry(song_id: str) -> dict:
         scale = max(1.0, expected * speed_factor)
         fraction = 1.0 - math.exp(-2.0 * elapsed / scale)
         percent = base + (next_percent - base) * fraction
-        percent = min(next_percent - 0.05,
+        percent = min(next_percent - 0.1,
                       percent) if next_percent > base else base
         stage_names = list(_AI_STAGE_PLAN)
         try:
@@ -532,6 +531,14 @@ def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> N
         )
 
 
+def _write_stage_reports(capture: _ProgressCapture, reports) -> None:
+    for report in reports:
+        capture.write(
+            f"[AI] stage {report.stage} completed in {report.elapsed_sec:.2f}s "
+            f"with {report.engine}\n"
+        )
+
+
 def _create_ai_progress_callback(
     song_id: str, capture: _ProgressCapture
 ) -> Callable[[str, float, str], None]:
@@ -645,6 +652,7 @@ def _run_job(song_id: str, processing_mode: str = "auto") -> None:
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
             logger.warning("Song processing warning: %s", warning)
+        _write_stage_reports(capture, getattr(result, "reports", ()))
         pipeline_succeeded = True
     except ProcessingCancelled:
         _update_progress(

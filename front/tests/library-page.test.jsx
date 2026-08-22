@@ -261,6 +261,14 @@ describe("library page", () => {
     const result = render(<Library />);
     expect(result.queryByTestId("processing-modal")).toBeNull();
   });
+  test("closes an active processing modal without immediately reopening it", async () => {
+    const processingSong = { ...songs[1], status: "processing" };
+    mocks.polls = [{ data: [songs[0], processingSong] }, { data: [] }, { data: null }];
+    const result = render(<Library />);
+    await waitFor(() => expect(result.getByTestId("processing-modal")).not.toBeNull());
+    fireEvent.click(result.getByTestId("close-processing"));
+    expect(result.queryByTestId("processing-modal")).toBeNull();
+  });
   test("opens recordings, deletes with confirmation and enters analysis", async () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("recordings")[0]);

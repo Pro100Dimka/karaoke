@@ -110,14 +110,14 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
 
     pipeline_service._progress_runtime["semantic"] = {
         "step": 4,
-        "stage": "pitch",
-        "direct_percent": 55,
+        "stage": "analysis",
+        "direct_percent": 48,
         "stage_started_at": 10,
         "detail": "pitch",
         "completed_stage_seconds": {"decode": 10},
     }
     semantic = pipeline_service.get_processing_telemetry("semantic")
-    assert semantic["semantic"] is True and 55 < semantic["progress_percent"] < 70
+    assert semantic["semantic"] is True and 48 < semantic["progress_percent"] < 70
     pipeline_service._progress_runtime["unknown"] = {
         "stage": "other",
         "direct_percent": 99,
@@ -131,17 +131,17 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
 def test_semantic_progress_keeps_advancing_for_long_separation(monkeypatch):
     monkeypatch.setattr(pipeline_service, "_progress_runtime", {})
     pipeline_service._progress_runtime["song"] = {
-        "stage": "separation",
-        "direct_percent": 8.0,
+        "stage": "separate",
+        "direct_percent": 10.0,
         "stage_started_at": 0.0,
         "detail": "separation",
         "completed_stage_seconds": {},
     }
-    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=140.0))
-    at_140 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
-    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=220.0))
-    at_220 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
-    assert (8.0 < at_140 < 48.0) and (at_140 < at_220 < 48.0)
+    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=20.0))
+    at_20 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
+    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=40.0))
+    at_40 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
+    assert (10.0 < at_20 < 42.0) and (at_20 < at_40 < 42.0)
 
 def test_update_progress_persists_fields_and_closes_database(monkeypatch):
     current = SimpleNamespace()

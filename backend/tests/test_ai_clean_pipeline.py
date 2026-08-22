@@ -6,7 +6,7 @@ import soundfile as sf
 
 from AI.artifacts import publish_files_atomically
 from AI.engines.text import Qwen3ForcedAligner, resolve_alignment_language, tokenize
-from AI.lyrics_sources import TimedLine
+from AI.lyrics_sources import TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
 
@@ -89,6 +89,33 @@ def test_lyrics_tokens_match_qwen_space_language_contract():
     ]
     assert resolve_alignment_language("текст", "ru-RU") == "Russian"
     assert resolve_alignment_language("український текст") == "Ukrainian"
+
+
+def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
+    search = '<a href="/songs/42.html">Лови момент</a>'
+    detail = '''
+        <h1>Лови момент</h1>
+        <a href="/persons/7.html">АнтитілА</a>
+        <pre class="songwords">Куплет один тут є\nПриспів:\nРядок приспіву один\nРядок приспіву два\n\nПриспів.</pre>
+    '''
+
+    def response(url, encoding="utf-8"):
+        del encoding
+        if "lrclib.net" in url:
+            return "[]"
+        return detail if "/songs/42.html" in url else search
+
+    monkeypatch.setattr("AI.lyrics_sources._request", response)
+
+    result = discover_lyrics("Антитiла - Лови момент")
+
+    assert result is not None
+    assert result.source == "pisni.org.ua"
+    assert result.text.count("Рядок приспіву один") == 2
+
+
+def test_source_repeat_notation_is_expanded_without_leaking_markers():
+    assert _expand_notation("Лови момент | (3)") == "\n".join(["Лови момент"] * 3)
 
 
 def test_forced_aligner_does_not_expect_timestamps_for_punctuation(monkeypatch):

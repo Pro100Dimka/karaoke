@@ -8,7 +8,8 @@ import cx from "../_internal/cx";
 import ModalTitle from "./title";
 import "./modal.css";
 
-const FOCUSABLE = "button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+const FOCUSABLE =
+  "button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
 const dialogs = [];
 const sizes = { sm: "32rem", md: "42rem", lg: "52rem" };
 let locks = 0;
@@ -38,7 +39,7 @@ export default function Modal({
   closeAriaLabel = "Закрыть",
   closeIconSize = 18,
   portal = false,
-  tilt = false,
+  tilt = true,
   titleProps,
   cardVariant = "neon",
   size = "md",
@@ -51,7 +52,9 @@ export default function Modal({
   const dialog = useRef(null);
   const token = useRef(Symbol("modal"));
   const titleId = useId();
-  useEffect(() => { close.current = onClose; }, [onClose]);
+  useEffect(() => {
+    close.current = onClose;
+  }, [onClose]);
 
   useLayoutEffect(() => {
     if (!isOpen) return undefined;
@@ -118,17 +121,20 @@ export default function Modal({
           "--ui-modal-size": sizes[size] || sizes.md,
           maxInlineSize: maxWidth || "calc(100vw - var(--space-8))"
         }}
-        overlay={(
+        overlay={
           <IconButton
             icon={X}
             iconSize={closeIconSize}
+            unstyled
             className={cx("ui-modal-close", closeClassName)}
             onClick={() => close.current?.()}
             label={closeAriaLabel}
           />
-        )}
+        }
       >
-        <Primitive as="span" id={titleId} className="ui-visually-hidden">{ariaLabel}</Primitive>
+        <Primitive as="span" id={titleId} className="ui-visually-hidden">
+          {ariaLabel}
+        </Primitive>
         {titleProps && <ModalTitle {...titleProps} />}
         <Primitive className="ui-modal-body">{children}</Primitive>
       </Card>

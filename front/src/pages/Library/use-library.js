@@ -70,6 +70,7 @@ export default function useLibrary() {
     setProcessingSong(song);
     setTrackedSongId(song?.id || null);
   }, []);
+  const closeProcessing = useCallback(() => setProcessingSong(null), []);
   const closeAnalysis = useCallback(() => setAnalysis(closeAnalysisState), []);
 
   useEffect(() => {
@@ -270,6 +271,7 @@ export default function useLibrary() {
     },
     processing: {
       cancel: cancelProcessing,
+      close: closeProcessing,
       song: processingSong,
       songs: processingSongs,
       status: statusQuery.data?.song_id === processingSong?.id ? statusQuery.data : null,

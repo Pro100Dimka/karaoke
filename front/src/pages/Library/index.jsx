@@ -111,7 +111,7 @@ export default function Library() {
           songs={processing.songs}
           status={processing.status}
           onSelectSong={processing.track}
-          onClose={() => processing.track(null)}
+          onClose={processing.close}
           onCancel={processing.cancel}
           onOpenKaraoke={(songId) => state.navigate("/karaoke", { state: { songId } })}
         />

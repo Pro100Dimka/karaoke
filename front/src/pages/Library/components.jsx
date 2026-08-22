@@ -22,7 +22,7 @@ import {
   Grid,
   IconButton,
   InputBase,
-  Progress,
+  ProcessingSignal,
   Stack,
   Typography
 } from "../../theme/ui";
@@ -306,24 +306,7 @@ export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
   );
 }
 
-export const ProcessingSignal = ({ progress = 0, compact = false }) => {
-  const value = Math.min(100, Math.max(0, Number(progress) || 0));
-  return (
-    <Stack direction="row" align="center" gap="var(--space-3)">
-      <Progress
-        value={value}
-        size={compact ? "sm" : "md"}
-        aria-label={tr("Обработка: {0}%", { 0: Math.round(value) })}
-      />
-      <Typography
-        variant={compact ? "caption" : "body2"}
-        sx={{ minInlineSize: "max-content", textAlign: "right" }}
-      >
-        {Math.round(value)}%
-      </Typography>
-    </Stack>
-  );
-};
+export { ProcessingSignal };
 
 export function getSongActions({
   canManageLibrary,

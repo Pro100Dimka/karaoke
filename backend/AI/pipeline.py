@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from .engines.registry import EngineRegistry
 from .engines.text import UniformTextFallback
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .lyrics_document import validate_lyrics_document, words_with_notes
-from .lyrics_sources import discover_lyrics
+from .lyrics_sources import LyricsDiscovery, discover_lyrics
 from .models import StageReport, Word
 from .music import analyze_music
 from .notes import build_vocal_notes
@@ -71,11 +72,16 @@ class KaraokePipeline:
     def _stage(reports: list[StageReport], name: str, engine: str, started: float) -> None:
         reports.append(StageReport(name, time.perf_counter() - started, False, engine))
 
-    def _lyrics(self, request: PipelineRequest, vocals: Path) -> tuple[str, list[Word], tuple]:
-        found = discover_lyrics(request.title)
+    def _lyrics(
+        self,
+        request: PipelineRequest,
+        vocals: Path,
+        discovery: Future[LyricsDiscovery | None] | None = None,
+    ) -> tuple[str, list[Word], tuple]:
         if request.lyrics_path and Path(request.lyrics_path).is_file():
             text = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
-            return text, [], found.lines if found else ()
+            return text, [], ()
+        found = discovery.result() if discovery else discover_lyrics(request.title)
         if found:
             print(f"[lyrics] FOUND via {found.source}: {found.query}", flush=True)
             return found.text, [], found.lines
@@ -106,10 +112,17 @@ class KaraokePipeline:
         warnings: list[str] = []
         profile = resolve_processing_profile(request.processing_mode, get_runtime_plan())
 
-        with tempfile.TemporaryDirectory(prefix=".ai-clean-", dir=output) as temporary:
+        with (
+            tempfile.TemporaryDirectory(prefix=".ai-clean-", dir=output) as temporary,
+            ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai-independent") as parallel,
+        ):
             work = Path(temporary)
             mix, raw_vocals = work / "mix.wav", work / "vocals.raw.flac"
             vocals, instrumental, lyrics = work / "vocals.flac", work / "instrumental.flac", work / "lyricsSync.json"
+            discovery = (
+                parallel.submit(discover_lyrics, request.title)
+                if request.title and not request.lyrics_path else None
+            )
 
             self._notify(request, "decode", 3, "Декодирование исходной записи")
             started = time.perf_counter()
@@ -126,19 +139,18 @@ class KaraokePipeline:
             prepare_vocal_reference(raw_vocals, vocals, self.config.sample_rate)
             self._stage(reports, "vocal", "ffmpeg-mono-clean", started)
 
-            self._notify(request, "music", 48, "Определение темпа и тональности")
-            started = time.perf_counter()
-            music = analyze_music(instrumental)
-            self._stage(reports, "music", "librosa", started)
-
-            self._notify(request, "pitch", 55, "Анализ мелодии по vocals.flac")
-            started = time.perf_counter()
+            self._notify(request, "analysis", 48, "Анализ музыки и мелодии по vocals.flac")
+            music_started = time.perf_counter()
+            music_future = parallel.submit(analyze_music, instrumental)
+            pitch_started = time.perf_counter()
             pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
-            self._stage(reports, "pitch", self.engines.pitch.name, started)
+            self._stage(reports, "pitch", self.engines.pitch.name, pitch_started)
+            music = music_future.result()
+            self._stage(reports, "music", "librosa", music_started)
 
             self._notify(request, "lyrics", 70, "Поиск и синхронизация текста")
             started = time.perf_counter()
-            text, direct, lines = self._lyrics(request, vocals)
+            text, direct, lines = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
             words = self._align(vocals, text, request.language, direct, lines)

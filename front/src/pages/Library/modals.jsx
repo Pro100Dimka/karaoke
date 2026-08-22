@@ -111,14 +111,13 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
                 value={item.title}
                 onChange={(title) => onUpdate({ title })}
               />
+              <Select
+                label={tr("Режим обработки")}
+                value={item.processingMode}
+                options={getProcessingModeOptions()}
+                onChange={(processingMode) => onUpdate({ processingMode })}
+              />
             </Stack>
-            <Select
-              label={tr("Режим обработки")}
-              value={item.processingMode}
-              options={getProcessingModeOptions()}
-              hint={tr("Авто выбирает сбалансированный профиль для вашего железа")}
-              onChange={(processingMode) => onUpdate({ processingMode })}
-            />
             <Card sx={{ padding: "var(--space-3) var(--space-4)" }}>
               <Stack direction="row" align="center" gap={0.75}>
                 <SelectedFilePreview file={item.file} />
