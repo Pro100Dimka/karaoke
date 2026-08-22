@@ -42,6 +42,8 @@ const Slider = forwardRef(
       style,
       onInput,
       onChange,
+      controlSx,
+      controlStyle,
       fieldSx,
       fieldStyle,
       onCommit,
@@ -89,7 +91,11 @@ const Slider = forwardRef(
       />
     );
     const control = (
-      <span className="ui-slider-control" data-disabled={disabled || undefined}>
+      <span
+        className="ui-slider-control"
+        data-disabled={disabled || undefined}
+        style={mergeSx(controlSx, controlStyle)}
+      >
         {input}
         {showValue && (
           <output className="ui-slider-value" htmlFor={controlId}>

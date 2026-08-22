@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { sameDeep, called, calledWith, verify } from "./helpers/assertions.mjs";
 import { passthrough } from "./helpers/mocks.mjs";
 vi.mock("../src/theme/ui", () => ({
+  Box: ({ as: Component = "div", sx: _sx, ...props }) => <Component {...props} />,
   RangeInput: ({ onChange, onCommit, ...props }) => (
     <input
       {...props}
@@ -23,15 +24,44 @@ vi.mock("../src/theme/ui", () => ({
       />
     </label>
   ),
+  Slider: ({
+    label,
+    value,
+    onChange,
+    onCommit,
+    formatValue: _format,
+    showValue: _show,
+    sx,
+    ...props
+  }) => (
+    <input
+      {...props}
+      type="range"
+      aria-label={label}
+      style={sx}
+      value={value}
+      onChange={(event) => onChange?.(Number(event.target.value))}
+      onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
+    />
+  ),
   Stack: passthrough("div"),
   Grid: passthrough("div"),
   Typography: passthrough("span"),
-  Card: ({ children, surface: _surface, tilt: _tilt, sx: _sx, ...props }) => (
-    <div {...props}>{children}</div>
+  Card: ({
+    children,
+    surface: _surface,
+    tilt: _tilt,
+    sx: _sx,
+    cardContent: _content,
+    ...props
+  }) => <div {...props}>{children}</div>,
+  Button: ({ children, sx: _sx, startIcon: _startIcon, ...props }) => (
+    <button {...props}>{children}</button>
   ),
-  Button: ({ children, sx: _sx, ...props }) => <button {...props}>{children}</button>,
-  IconButton: ({ icon: Icon, sx: _sx, ...props }) => (
-    <button {...props}>{Icon ? <Icon /> : null}</button>
+  IconButton: ({ icon: Icon, sx: _sx, label, ...props }) => (
+    <button aria-label={label} {...props}>
+      {Icon ? <Icon /> : null}
+    </button>
   )
 }));
 vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({

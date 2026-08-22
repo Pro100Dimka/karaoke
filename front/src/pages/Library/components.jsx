@@ -158,14 +158,14 @@ export function LibraryActions({
 export function LibraryHero({ songCount, readyCount, ...actions }) {
   const values = { songCount, readyCount };
   return (
-    <Stack gap="var(--space-8)" sx={{ paddingBlock: "var(--space-10) 0" }}>
-      <Grid columns={4} gap="var(--space-5)" align="stretch">
-        <Stack
-          direction="row"
-          align="center"
-          gap="var(--space-5)"
-          sx={{ gridColumn: "span 2", paddingBlock: "var(--space-4)" }}
-        >
+    <Stack
+      gap="var(--space-12)"
+      sx={{ paddingBlock: "var(--space-16)" }}
+      justify="center"
+      align="center"
+    >
+      <Stack direction="row" justify="space-between" align="center">
+        <Stack direction="row" align="center" gap="var(--space-5)">
           <Box
             aria-hidden="true"
             sx={{
@@ -187,46 +187,49 @@ export function LibraryHero({ songCount, readyCount, ...actions }) {
             </Typography>
           </Stack>
         </Stack>
-        {STAT_CARDS.map(([Icon, key, label]) => (
-          <Card
-            key={key}
-            variant="laser"
-            tilt={false}
-            cardContent={{
-              style: {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-start",
-                gap: "var(--space-5)",
-                padding: "var(--space-6) var(--space-5)"
-              }
-            }}
-          >
-            <Box
-              aria-hidden="true"
-              sx={{
-                position: "relative",
-                color: "var(--ui-primary)",
-                padding: "var(--space-3)",
-                borderRadius: "var(--shape-md)",
-                background: "color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))",
-                boxShadow:
-                  "inset 0 0 0 var(--hairline) color-mix(in srgb, var(--color-primary) 38%, transparent), 0 0 var(--space-4) color-mix(in srgb, var(--color-primary) 22%, transparent)",
-                filter: "drop-shadow(0 0 var(--space-2) currentColor)"
+        <Stack direction="row" gap="1rem" sx={{ width: "40%" }}>
+          {STAT_CARDS.map(([Icon, key, label]) => (
+            <Card
+              key={key}
+              variant="laser"
+              tilt={false}
+              sx={{ flex: 1, width: "100%" }}
+              cardContent={{
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  gap: "var(--space-5)",
+                  padding: "var(--space-6) var(--space-6)"
+                }
               }}
             >
-              <Icon />
-              <Sparkles style={{ position: "absolute", inset: "auto auto 70% 70%" }} />
-            </Box>
-            <Stack gap="var(--space-1)">
-              <Typography variant="h2">{values[key]}</Typography>
-              <Typography variant="body2" tone="muted">
-                {tr(label)}
-              </Typography>
-            </Stack>
-          </Card>
-        ))}
-      </Grid>
+              <Box
+                aria-hidden="true"
+                sx={{
+                  position: "relative",
+                  color: "var(--ui-primary)",
+                  padding: "var(--space-3)",
+                  borderRadius: "var(--shape-md)",
+                  background: "color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))",
+                  boxShadow:
+                    "inset 0 0 0 var(--hairline) color-mix(in srgb, var(--color-primary) 38%, transparent), 0 0 var(--space-4) color-mix(in srgb, var(--color-primary) 22%, transparent)",
+                  filter: "drop-shadow(0 0 var(--space-2) currentColor)"
+                }}
+              >
+                <Icon />
+                <Sparkles style={{ position: "absolute", inset: "auto auto 70% 70%" }} />
+              </Box>
+              <Stack gap="var(--space-1)">
+                <Typography variant="h3">{values[key]}</Typography>
+                <Typography variant="body2" tone="muted">
+                  {tr(label)}
+                </Typography>
+              </Stack>
+            </Card>
+          ))}
+        </Stack>
+      </Stack>
       <LibraryActions {...actions} />
     </Stack>
   );
@@ -404,18 +407,19 @@ export const LibrarySongCard = memo(
                 color-mix(in srgb, var(--ui-bg-deep) 94%, transparent))`
           }
         }}
-        cardContent={{ style: { padding: "var(--space-4)" } }}
       >
-        <Grid columns={4} gap="var(--space-5)" align="stretch">
-          <SongCoverArt
-            cardIndex={cardIndex}
-            song={song}
-            sx={{ borderRadius: "var(--shape-lg)" }}
-          />
+        <Stack direction="row">
+          <Stack sx={{ flex: 1 }}>
+            <SongCoverArt
+              cardIndex={cardIndex}
+              song={song}
+              sx={{ borderRadius: "var(--shape-lg)" }}
+            />
+          </Stack>
           <Stack
             gap="var(--space-2)"
             justify="space-between"
-            sx={{ gridColumn: "span 3", padding: "var(--space-4)" }}
+            sx={{ flex: 3.5, padding: "var(--space-4)" }}
           >
             <Stack direction="row" justify="space-between" align="start" gap="var(--space-3)">
               <Stack gap="var(--space-1)" sx={{ minWidth: 0 }}>
@@ -439,18 +443,24 @@ export const LibrarySongCard = memo(
                 />
               </Button>
             )}
-            <Stack direction="row" align="end" justify="space-between" wrap gap="var(--space-3)">
+            <Stack direction="row" align="center" justify="space-between" wrap gap="var(--space-3)">
               <Typography variant="caption" tone="muted">
                 {metadata}
               </Typography>
-              <Stack direction="row" justify="flex-end" gap="var(--space-2)">
+              <Stack
+                direction="row"
+                justify="flex-end"
+                align="center"
+                gap="var(--space-2)"
+                sx={{ width: "auto" }}
+              >
                 {getSongActions({ ...handlers, isReady, isWorking, song }).map(
                   ([Icon, label, variant, onClick, disabled]) => (
                     <IconButton
                       key={label}
                       icon={Icon}
                       variant={variant}
-                      size="md"
+                      size="sm"
                       label={label}
                       title={label}
                       disabled={disabled}
@@ -461,7 +471,7 @@ export const LibrarySongCard = memo(
               </Stack>
             </Stack>
           </Stack>
-        </Grid>
+        </Stack>
       </Card>
     );
   }
@@ -485,12 +495,7 @@ export function LibraryResults({ error, songs, children, errorText }) {
 
 export function SongGrid({ songs, transferStatuses, ...handlers }) {
   return (
-    <Grid
-      columns={3}
-      gap="var(--space-6)"
-      align="start"
-      sx={{ paddingBlock: "var(--space-4) var(--space-10)" }}
-    >
+    <Grid columns={3} gap="var(--space-6)" align="start">
       {songs.map((song, cardIndex) => (
         <LibrarySongCard
           key={song.id}

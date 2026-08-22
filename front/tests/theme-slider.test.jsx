@@ -24,3 +24,21 @@ test("slider is an outlined field with a formatted live value", () => {
   fireEvent.change(slider, { target: { value: "0.8" } });
   expect(change).toHaveBeenCalledWith(0.8, expect.anything());
 });
+
+test("slider accepts compact control geometry without leaking native field sizing", () => {
+  render(
+    <Slider
+      aria-label="Масштаб"
+      min={10}
+      max={36}
+      value={14}
+      showValue={false}
+      controlSx={{ minBlockSize: 0, inlineSize: "5rem" }}
+    />
+  );
+
+  const control = screen.getByRole("slider", { name: "Масштаб" }).parentElement;
+  expect(control.style.minBlockSize).toBe("0px");
+  expect(control.style.inlineSize).toBe("5rem");
+  expect(control.querySelector("output")).toBeNull();
+});

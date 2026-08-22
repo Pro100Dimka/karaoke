@@ -34,6 +34,11 @@
   --card-panel-shadow: 0 1.875rem 5rem color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
   --color-white: #fff;
   --color-black: #000;
+  --color-studio-history: #55a8ff;
+  --color-studio-follow: #55e2e8;
+  --color-studio-transport: #42e38b;
+  --color-studio-edit: #ffbd4a;
+  --color-studio-danger: #ff3d5f;
   --font-sans: "Bahnschrift", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-display: "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", sans-serif;
   --font-mono: Consolas, "SFMono-Regular", monospace;

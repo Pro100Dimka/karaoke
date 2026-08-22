@@ -63,10 +63,12 @@ test("analysis modal renders normalized result and deletes recording", async () 
   );
   expect(result.container.textContent).toMatch(/Аналізуємо|Анализируем/);
   await waitFor(() => expect(result.getByTestId("audio")).not.toBeNull());
-  expect(result.container.querySelectorAll(".analysis-confetti i")).toHaveLength(26);
-  fireEvent.click(result.container.querySelector(".modal-title-action"));
+  await waitFor(() =>
+    expect(result.container.querySelector('[data-role="analysis-score"]')).not.toBeNull()
+  );
+  fireEvent.click(result.getByRole("button", { name: /Готово/ }));
   expect(done).toHaveBeenCalled();
-  fireEvent.click(result.container.querySelector(".performance-analysis-actions button"));
+  fireEvent.click(result.container.querySelector('[data-role="delete-recording"]'));
   await waitFor(() => expect(mocks.deleteRecording).toHaveBeenCalledWith("rec"));
   expect(deleted).toHaveBeenCalled();
 });
@@ -98,10 +100,10 @@ test("analysis recording carousel starts on the active recording without restart
   expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/first");
   expect(previous.disabled).toBe(true);
   expect(view.container.textContent).toMatch(/продолжает выполняться|продовжує виконуватися/);
-  expect(view.container.querySelector(".performance-analysis-score")).toBeNull();
+  expect(view.container.querySelector('[data-role="analysis-score"]')).toBeNull();
   expect(mocks.runAnalysis).toHaveBeenCalledTimes(1);
   fireEvent.click(next);
-  expect(view.container.querySelector(".performance-analysis-score")).not.toBeNull();
+  expect(view.container.querySelector('[data-role="analysis-score"]')).not.toBeNull();
   fireEvent.click(next);
   expect(view.getByTestId("audio").getAttribute("src")).toBe("performance/third");
   expect(next.disabled).toBe(true);
@@ -145,31 +147,23 @@ test("analysis modal reports analysis and deletion failures", async () => {
   const close = vi.fn();
   mocks.runAnalysis.mockRejectedValueOnce(new Error("analysis failed"));
   const result = render(<PerformanceAnalysisModal recordingId="bad" onClose={close} />);
-  await waitFor(() =>
-    expect(result.container.querySelector(".song-lyrics-error").textContent).toContain(
-      "analysis failed"
-    )
-  );
-  fireEvent.click(result.container.querySelector(".modal-title-action"));
+  await waitFor(() => expect(result.getByRole("alert").textContent).toContain("analysis failed"));
+  fireEvent.click(result.getByRole("button", { name: /Закрити|Закрыть/ }));
   expect(close).toHaveBeenCalled();
   cleanup();
   mocks.runAnalysis.mockResolvedValueOnce({ accuracy_percent: 50 });
   mocks.deleteRecording.mockRejectedValueOnce(new Error("delete failed"));
   const deletion = render(<PerformanceAnalysisModal recordingId="rec" onClose={vi.fn()} />);
   await waitFor(() => expect(deletion.getByTestId("audio")).not.toBeNull());
-  fireEvent.click(deletion.container.querySelector(".performance-analysis-actions button"));
-  await waitFor(() =>
-    expect(deletion.container.querySelector(".song-lyrics-error").textContent).toContain(
-      "delete failed"
-    )
-  );
+  fireEvent.click(deletion.container.querySelector('[data-role="delete-recording"]'));
+  await waitFor(() => expect(deletion.getByRole("alert").textContent).toContain("delete failed"));
 });
 test("analysis deletion respects cancellation and stale modal lifetimes", async () => {
   mocks.runAnalysis.mockResolvedValue({ accuracy_percent: 50 });
   mocks.confirm.mockResolvedValueOnce(false);
   const cancelled = render(<PerformanceAnalysisModal recordingId="cancel" onClose={vi.fn()} />);
   await waitFor(() => expect(cancelled.getByTestId("audio")).not.toBeNull());
-  fireEvent.click(cancelled.container.querySelector(".performance-analysis-actions button"));
+  fireEvent.click(cancelled.container.querySelector('[data-role="delete-recording"]'));
   await act(async () => Promise.resolve());
   expect(mocks.deleteRecording).not.toHaveBeenCalled();
   cancelled.unmount();
@@ -181,7 +175,7 @@ test("analysis deletion respects cancellation and stale modal lifetimes", async 
   );
   const staleConfirm = render(<PerformanceAnalysisModal recordingId="stale" onClose={vi.fn()} />);
   await waitFor(() => expect(staleConfirm.getByTestId("audio")).not.toBeNull());
-  fireEvent.click(staleConfirm.container.querySelector(".performance-analysis-actions button"));
+  fireEvent.click(staleConfirm.container.querySelector('[data-role="delete-recording"]'));
   staleConfirm.unmount();
   await act(async () => resolveConfirm(true));
   let rejectDelete;
@@ -195,7 +189,7 @@ test("analysis deletion respects cancellation and stale modal lifetimes", async 
     <PerformanceAnalysisModal recordingId="stale-delete" onClose={vi.fn()} />
   );
   await waitFor(() => expect(staleDelete.getByTestId("audio")).not.toBeNull());
-  fireEvent.click(staleDelete.container.querySelector(".performance-analysis-actions button"));
+  fireEvent.click(staleDelete.container.querySelector('[data-role="delete-recording"]'));
   await act(async () => Promise.resolve());
   staleDelete.unmount();
   await act(async () => rejectDelete(new Error("late")));
@@ -238,7 +232,7 @@ test("analysis ignores stale requests and completed deletion after unmount", asy
     <PerformanceAnalysisModal recordingId="late-success" onClose={vi.fn()} onDeleted={vi.fn()} />
   );
   await waitFor(() => expect(deleting.getByTestId("audio")).not.toBeNull());
-  fireEvent.click(deleting.container.querySelector(".performance-analysis-actions button"));
+  fireEvent.click(deleting.container.querySelector('[data-role="delete-recording"]'));
   await act(async () => Promise.resolve());
   deleting.unmount();
   await act(async () => resolveDelete());

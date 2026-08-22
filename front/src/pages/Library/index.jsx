@@ -15,14 +15,7 @@ export default function Library() {
   return (
     <Stack align="center" sx={{ position: "relative", overflow: "hidden" }}>
       <LibraryBackdrop />
-      <Stack
-        gap="var(--space-4)"
-        sx={{
-          maxWidth: "var(--content-max)",
-          paddingInline: "var(--library-gutter)",
-          position: "relative"
-        }}
-      >
+      <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
           songCount={state.totalCount}
           readyCount={state.readyCount}

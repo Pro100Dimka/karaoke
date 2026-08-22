@@ -25,3 +25,12 @@ export { default as Tabs } from "./Tabs";
 export { default as TextField } from "./TextField";
 export { default as Tooltip } from "./Tooltip";
 export { default as Typography } from "./Typography";
+export { default as Waveform } from "./Waveform";
+export { default as StudioScrollbars } from "./StudioScrollbars";
+export { default as KaraokeLyrics } from "../features/KaraokeLyrics";
+export { default as PianoRoll } from "../features/PianoRoll";
+export {
+  default as PianoKeyboard,
+  isBlackPianoKey,
+  pianoNoteName
+} from "./PianoKeyboard";

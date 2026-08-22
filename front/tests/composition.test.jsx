@@ -3,6 +3,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 vi.mock("../src/theme/ui", () => ({
+  Card: ({ children }) => <div>{children}</div>,
   Stack: ({ children }) => <div>{children}</div>,
   Grid: ({ children }) => <div>{children}</div>
 }));

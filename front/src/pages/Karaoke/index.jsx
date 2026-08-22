@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
@@ -161,7 +161,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   }, [song?.id]);
 
   const lyricsSync = result?.lyrics_sync;
-  const notes = flattenLyricsNotes(lyricsSync);
+  const notes = useMemo(() => flattenLyricsNotes(lyricsSync), [lyricsSync]);
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } = useMelodyGuide({
     notes,
     volume: melodyVolume,
@@ -328,7 +328,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   return (
     <KaraokeView
       containerRef={containerRef}
-      className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible || sceneTransitioning ? "karaoke-ui-hidden" : ""}`}
+      isPlaying={isPlaying}
+      controlsVisible={controlsVisible && !sceneTransitioning}
       onMouseMove={(event) => {
         if (sceneTransitioning) return;
         if (!revealControls(event)) return;
@@ -365,6 +366,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       }}
       performanceProps={{
         currentTime: lyricTime,
+        currentTimeRef,
         isPitchDetected,
         isPlaying,
         keyShift,

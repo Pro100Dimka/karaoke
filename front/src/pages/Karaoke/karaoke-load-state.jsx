@@ -1,73 +1,58 @@
-import { translateSaved } from "../../i18n/runtime";
+import { AlertCircle, LoaderCircle, Music2 } from "lucide-react";
+import { translateSaved as t } from "../../i18n/runtime";
+import { Card, Stack, Typography } from "../../theme/ui";
 
-export default function KaraokeLoadState({
-  songs,
-  songsError,
-  song,
-  songId,
-  result,
-  resultLoading,
-  resultError
-}) {
-  if (songsError) {
-    return (
-      <div className="panel">
-        <p className="field-error">
-          {translateSaved("Не удалось загрузить библиотеку:")}{" "}
-          {songsError.message || translateSaved("ошибка соединения")}.
-        </p>
-      </div>
-    );
-  }
-  if (!songs) {
-    return (
-      <div className="panel">
-        <p className="text-muted">{translateSaved("Загружаем песню…")}</p>
-      </div>
-    );
-  }
-  if (!song) {
-    return (
-      <div className="panel">
-        <p className="text-muted">
-          {songId
-            ? translateSaved(
-                "Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова."
-              )
-            : translateSaved(
-                "Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке."
-              )}
-        </p>
-      </div>
-    );
-  }
-  if (song.status !== "done") {
-    return (
-      <div className="panel">
-        <p className="text-muted">
-          «{song.title}
-          {translateSaved("» ещё не обработана — статус:")}
-          {song.status}.
-        </p>
-      </div>
-    );
-  }
-  if (resultLoading) {
-    return (
-      <div className="panel">
-        <p className="text-muted">{translateSaved("Загружаем данные караоке…")}</p>
-      </div>
-    );
-  }
-  if (resultError || !result) {
-    return (
-      <div className="panel">
-        <p className="field-error">
-          {translateSaved("Не удалось загрузить данные караоке:")}{" "}
-          {resultError?.message || translateSaved("результат обработки отсутствует")}.
-        </p>
-      </div>
-    );
-  }
-  return null;
+const STATES = [
+  [
+    (state) => state.songsError,
+    "danger",
+    AlertCircle,
+    (state) =>
+      `${t("Не удалось загрузить библиотеку:")} ${state.songsError?.message || t("ошибка соединения")}.`
+  ],
+  [(state) => !state.songs, "muted", LoaderCircle, () => t("Загружаем песню…")],
+  [
+    (state) => !state.song,
+    "muted",
+    Music2,
+    (state) =>
+      state.songId
+        ? t("Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова.")
+        : t("Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке.")
+  ],
+  [
+    (state) => state.song?.status !== "done",
+    "muted",
+    Music2,
+    (state) => `«${state.song.title}» ${t("ещё не обработана — статус:")} ${state.song.status}.`
+  ],
+  [(state) => state.resultLoading, "muted", LoaderCircle, () => t("Загружаем данные караоке…")],
+  [
+    (state) => state.resultError || !state.result,
+    "danger",
+    AlertCircle,
+    (state) =>
+      `${t("Не удалось загрузить данные караоке:")} ${state.resultError?.message || t("результат обработки отсутствует")}.`
+  ]
+];
+
+export default function KaraokeLoadState(props) {
+  const [, tone, Icon, message] = STATES.find(([matches]) => matches(props)) || [];
+  if (!Icon) return null;
+  return (
+    <Stack
+      align="center"
+      justify="center"
+      sx={{ position: "fixed", inset: 0, padding: "var(--space-6)" }}
+    >
+      <Card variant="laser" tilt={false} cardContent={{ style: { padding: "var(--space-8)" } }}>
+        <Stack align="center" gap="var(--space-4)">
+          <Icon aria-hidden="true" />
+          <Typography role={tone === "danger" ? "alert" : "status"} tone={tone} align="center">
+            {message(props)}
+          </Typography>
+        </Stack>
+      </Card>
+    </Stack>
+  );
 }

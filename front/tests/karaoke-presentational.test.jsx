@@ -200,7 +200,7 @@ test("waveform supports click, drag and range seeking", () => {
   const { container, rerender } = render(
     <WaveformTimeline value={2} duration={10} onChange={change} />
   );
-  const timeline = container.querySelector(".waveform-timeline");
+  const timeline = container.querySelector('[data-role="waveform"]');
   timeline.getBoundingClientRect = () => ({ left: 10, width: 100 });
   fireEvent.pointerDown(timeline, { clientX: 60 });
   fireEvent.pointerMove(timeline, { clientX: 80, buttons: 1 });
@@ -208,10 +208,10 @@ test("waveform supports click, drag and range seeking", () => {
   fireEvent.change(container.querySelector("input"), { target: { value: "7" } });
   expect(change).toHaveBeenCalledTimes(3);
   rerender(<WaveformTimeline value={0} duration={0} onChange={change} />);
-  fireEvent.pointerDown(container.querySelector(".waveform-timeline"), { clientX: 10 });
+  fireEvent.pointerDown(container.querySelector('[data-role="waveform"]'), { clientX: 10 });
   expect(change).toHaveBeenCalledTimes(3);
   rerender(<WaveformTimeline value={0} duration={10} onChange={change} />);
-  const zeroWidth = container.querySelector(".waveform-timeline");
+  const zeroWidth = container.querySelector('[data-role="waveform"]');
   zeroWidth.getBoundingClientRect = () => ({ left: 0, width: 0 });
   fireEvent.pointerDown(zeroWidth, { clientX: 0 });
   expect(change).toHaveBeenCalledTimes(3);
@@ -241,11 +241,15 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
       }}
     />
   );
-  expect(container.textContent).toBe("Яне");
-  expect(container.querySelectorAll(".karaoke-lyric-syllable")).toHaveLength(0);
+  expect(
+    [...container.querySelectorAll('[data-role="lyric-word"]')]
+      .map(({ dataset }) => dataset.text)
+      .join("")
+  ).toBe("Яне");
+  expect(container.querySelectorAll('[data-role="lyric-syllable"]')).toHaveLength(0);
   expect(
     container
-      .querySelectorAll(".karaoke-lyric-character")[0]
+      .querySelectorAll('[data-role="lyric-word"]')[0]
       .style.getPropertyValue("--character-fill")
   ).toBe("0%");
   rerender(
@@ -258,7 +262,7 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
     />
   );
   expect(
-    container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
+    container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")
   ).toBe("100%");
   rerender(
     <KaraokeLyricLine
@@ -271,7 +275,7 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
   );
   expect(
     Number.parseFloat(
-      container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
+      container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")
     )
   ).toBeCloseTo(50, 10);
 });
@@ -292,8 +296,14 @@ test("lyrics keep a readable constant pace across the exact acoustic note envelo
   );
   const fill = () =>
     Number.parseFloat(
-      container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
+      container.querySelector('[data-role="lyric-word"]').style.getPropertyValue("--character-fill")
     );
+  const renderedWord = container.querySelector('[data-role="lyric-word"]');
+  expect(renderedWord.style.background).toBe("");
+  expect(renderedWord.style.filter).toBe("");
+  expect(renderedWord.querySelector('[data-role="lyric-word-fill"]').style.clipPath).toContain(
+    "--character-fill"
+  );
   expect(fill()).toBeCloseTo(20, 10);
   rerender(<KaraokeLyrics lyricsSync={{ text: "тяну", words: [word] }} currentTime={0.9} />);
   expect(fill()).toBeCloseTo(46.6666667, 6);
@@ -321,18 +331,22 @@ test("lyrics show only the current and next source lines", () => {
     <KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />
   );
 
-  let lines = container.querySelectorAll(".karaoke-lyric");
+  let lines = container.querySelectorAll('[data-role="lyric-line"]');
   expect(lines).toHaveLength(2);
-  expect(lines[0].textContent).toBe("Перваястрока");
-  expect(lines[1].textContent).toBe("Втораястрока");
+  const lineText = (line) =>
+    [...line.querySelectorAll(':scope > [data-role="lyric-word"]')]
+      .map(({ dataset }) => dataset.text)
+      .join("");
+  expect(lineText(lines[0])).toBe("Перваястрока");
+  expect(lineText(lines[1])).toBe("Втораястрока");
   expect(container.textContent).not.toContain("Третья");
   expect(lines[0].querySelector("[data-start]").dataset.start).toBe("1.01");
   expect(lines[0].querySelector("[data-end]").dataset.end).toBe("1.41");
 
   rerender(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={2.5} />);
-  lines = container.querySelectorAll(".karaoke-lyric");
+  lines = container.querySelectorAll('[data-role="lyric-line"]');
   expect(lines).toHaveLength(2);
-  expect(lines[0].textContent).toBe("Втораястрока");
-  expect(lines[1].textContent).toBe("Третьястрока");
+  expect(lineText(lines[0])).toBe("Втораястрока");
+  expect(lineText(lines[1])).toBe("Третьястрока");
   expect(container.textContent).not.toContain("Первая");
 });

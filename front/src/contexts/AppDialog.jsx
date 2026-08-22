@@ -8,9 +8,9 @@ import {
   useRef,
   useState
 } from "react";
-import { Button } from "../components/fields";
 import Modal from "../components/modal";
 import { translateSaved } from "../i18n/runtime";
+import { Button } from "../theme/ui";
 import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "./dialog-utils";
 
 const DIALOG_CONTEXT_KEY = Symbol.for("advoice.app-dialog-context");

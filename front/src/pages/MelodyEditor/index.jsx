@@ -1,290 +1,103 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../../api/client";
 import { useAppDialog } from "../../contexts/AppDialog";
-import { translateSaved } from "../../i18n/runtime";
-import MelodyEditorControls from "./melody-editor-controls";
-import MelodyEditorHeader from "./melody-editor-header";
-import { canMergeSelectedNotes } from "./melody-editor-operations";
-import MelodyEditorRoll from "./melody-editor-roll";
-import { useEditorHistory } from "./melody-editor-state";
-import useMelodyEditorDocument from "./useMelodyEditorDocument";
-import useMelodyEditorEditing from "./useMelodyEditorEditing";
-import useMelodyEditorLayout from "./useMelodyEditorLayout";
-import useMelodyEditorPreferences from "./useMelodyEditorPreferences";
-import useMelodyEditorTransport from "./useMelodyEditorTransport";
+import { translateSaved as t } from "../../i18n/runtime";
+import { Box, Progress, Stack, Typography } from "../../theme/ui";
+import EditorControls from "./EditorControls";
+import EditorSurface from "./EditorSurface";
+import useEditorAudio from "./useEditorAudio";
+import useEditorController from "./useEditorController";
+import useEditorDocument from "./useEditorDocument";
 
 export default function MelodyEditor() {
   const { songId } = useParams();
   const navigate = useNavigate();
-  const [song, setSong] = useState(null);
-  useEffect(() => {
-    if (songId) {
-      let alive = true;
-      api
-        .listSongs()
-        .then((songs) => {
-          if (!alive) return;
-          setSong(
-            (songs || []).find((item) => String(item.id) === String(songId)) || {
-              id: songId,
-              title: translateSaved("Редактор мелодии")
-            }
-          );
-        })
-        .catch(() => alive && setSong({ id: songId, title: translateSaved("Редактор мелодии") }));
-      return () => {
-        alive = false;
-      };
-    }
-  }, [songId]);
-  const { alert: notify, confirm: confirmDialog } = useAppDialog();
-  const [selected, setSelected] = useState([]);
-  const [audioUrls, setAudioUrls] = useState({ vocals: "", instrumental: "" });
-  useEffect(() => {
-    if (!song?.id) return;
-    let alive = true;
-    const urls = [];
-    const blobs = [];
-    Promise.all([
-      api.getAudioTrackBlob(song.id, "vocals"),
-      api.getAudioTrackBlob(song.id, "instrumental")
-    ])
-      .then(([vocals, instrumental]) => {
-        if (!alive) return;
-        blobs.push(vocals, instrumental);
-        const next = {
-          vocals: URL.createObjectURL(vocals),
-          instrumental: URL.createObjectURL(instrumental)
-        };
-        urls.push(next.vocals, next.instrumental);
-        setAudioUrls(next);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-      urls.forEach((url) => URL.revokeObjectURL(url));
-      blobs.forEach((blob) => blob?.cleanup?.());
-    };
-  }, [song?.id]);
-  const {
-    autoScroll,
-    playbackRate,
-    setAutoScroll,
-    setPlaybackRate,
-    setVerticalZoom,
-    setVolumes,
-    setZoom,
-    verticalZoom,
-    volumes,
-    zoom
-  } = useMelodyEditorPreferences();
-  const { notes, replace, reset, remember, undo, redo } = useEditorHistory([]);
-  const workspaceRef = useRef(null);
-  const saveRef = useRef(null);
-  const { loading, payload, restoreAi, save, saving } = useMelodyEditorDocument({
-    confirmDialog,
-    notes,
+  const { alert: notify, confirm } = useAppDialog();
+  const editor = useEditorDocument({ songId, confirm, notify });
+  const transportRef = useRef({});
+  const controller = useEditorController({
+    document: editor.document,
+    dispatch: editor.dispatch,
+    payload: editor.payload,
+    save: editor.save,
+    transportRef
+  });
+  const transport = useEditorAudio({
+    autoScroll: controller.autoScroll,
+    duration: controller.duration,
+    keyboardWidth: controller.keyboardWidth,
+    notes: controller.notes,
     notify,
-    onSaved: null,
-    reset,
-    saveRef,
-    setSelected,
-    song
+    playbackRate: controller.playbackRate,
+    shellRef: controller.shellRef,
+    songId: editor.song?.id,
+    volumes: controller.volumes,
+    zoom: controller.zoom
   });
-  const {
-    duration,
-    keyboardWidth,
-    laneHeight,
-    laneWidth,
-    lyricProjection,
-    maxMidi,
-    minMidi,
-    noteAtTime,
-    rowHeight,
-    whiteKeyGeometry
-  } = useMelodyEditorLayout({ notes, payload, verticalZoom, zoom });
-  const transport = useMelodyEditorTransport({
-    autoScroll,
-    setAutoScroll,
-    duration,
-    keyboardWidth,
-    laneHeight,
-    laneWidth,
-    maxMidi,
-    minMidi,
-    noteAtTime,
-    notes,
-    notify,
-    playbackRate,
-    setVerticalZoom,
-    setZoom,
-    verticalZoom,
-    volumes,
-    zoom
-  });
-  const {
-    auditionNote,
-    endPlayheadDrag,
-    endScrollThumbDrag,
-    handleInstrumentalPause,
-    handleInstrumentalTimeUpdate,
-    instrumentalRef,
-    movePlayheadDrag,
-    moveScrollThumbDrag,
-    pause,
-    play,
-    playing,
-    rollCanvasRef,
-    rollShellRef,
-    scrollState,
-    seek,
-    setHorizontalZoomAnchored,
-    setVerticalZoomAnchored,
-    startPlayheadDrag,
-    startScrollThumbDrag,
-    syncScrollState,
-    time,
-    toggleAutoScroll,
-    vocalsRef
-  } = transport;
-  const editing = useMelodyEditorEditing({
-    auditionNote,
-    duration,
-    keyboardWidth,
-    maxMidi,
-    notes,
-    pause,
-    play,
-    playing,
-    redo,
-    remember,
-    replace,
-    rollCanvasRef,
-    rowHeight,
-    saveRef,
-    seek,
-    selected,
-    setSelected,
-    time,
-    undo,
-    workspaceRef,
-    zoom
-  });
-  const {
-    deleteSelected,
-    drag,
-    endDrag,
-    endMarquee,
-    mergeSelected,
-    selectionBox,
-    startDrag,
-    startMarquee,
-    updateMarquee
-  } = editing;
-  const onClose = () => navigate("/");
-  if (!song)
+  transportRef.current = transport;
+
+  if (!editor.song)
     return (
-      <div className="melody-editor-route-loading">{translateSaved("Открываем редактор…")}</div>
+      <Stack align="center" justify="center" sx={{ position: "absolute", inset: 0 }}>
+        <Typography tone="muted">{t("Открываем редактор…")}</Typography>
+        <Progress />
+      </Stack>
     );
-  const onBack = () => {
-    pause();
-    onClose?.();
+
+  const back = () => {
+    transport.pause();
+    navigate("/");
   };
 
   return (
-    <section
-      ref={workspaceRef}
-      className="melody-editor-workspace"
-      aria-label={translateSaved("Редактор мелодии {0}", { 0: song?.title || "" })}
+    <Stack
+      as="main"
+      aria-label={t("Редактор мелодии {0}", { 0: editor.song.title || "" })}
+      gap={0}
+      sx={{
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+        background: "var(--color-bg-deep)"
+      }}
     >
-      <MelodyEditorHeader
-        duration={duration}
-        selectedCount={selected.length}
-        songTitle={song?.title}
-        time={time}
+      <EditorControls
+        controller={controller}
+        onBack={back}
+        payload={editor.payload}
+        restore={editor.restore}
+        save={editor.save}
+        saving={editor.saving}
+        song={editor.song}
+        transport={transport}
       />
-
-      {loading ? (
-        <div className="melody-editor-loading">{translateSaved("Загружаем lyricsSync.json…")}</div>
+      <Box
+        as="audio"
+        ref={transport.vocalsRef}
+        src={transport.urls.vocals}
+        preload="metadata"
+        sx={{ display: "none" }}
+      />
+      <Box
+        as="audio"
+        ref={transport.instrumentalRef}
+        src={transport.urls.instrumental}
+        preload="metadata"
+        onEnded={transport.pause}
+        sx={{ display: "none" }}
+      />
+      {editor.loading ? (
+        <Stack align="center" justify="center" sx={{ flex: 1 }}>
+          <Typography tone="muted">{t("Загружаем lyricsSync.json…")}</Typography>
+          <Progress />
+        </Stack>
+      ) : editor.payload ? (
+        <EditorSurface controller={controller} transport={transport} />
       ) : (
-        <div className="melody-editor-layout">
-          <div className="melody-editor-stage">
-            <MelodyEditorControls
-              autoScroll={autoScroll}
-              canMerge={canMergeSelectedNotes(notes, selected)}
-              deleteSelected={deleteSelected}
-              duration={duration}
-              mergeSelected={mergeSelected}
-              onBack={onBack}
-              payload={payload}
-              pause={pause}
-              play={play}
-              playbackRate={playbackRate}
-              playing={playing}
-              redo={redo}
-              restoreAi={restoreAi}
-              save={save}
-              saving={saving}
-              seek={seek}
-              selected={selected}
-              setPlaybackRate={setPlaybackRate}
-              setVolumes={setVolumes}
-              song={song}
-              time={time}
-              toggleAutoScroll={toggleAutoScroll}
-              undo={undo}
-              volumes={volumes}
-            />
-            <audio ref={vocalsRef} preload="metadata" src={audioUrls.vocals || undefined} />
-            <audio
-              ref={instrumentalRef}
-              preload="metadata"
-              src={audioUrls.instrumental || undefined}
-              onEnded={pause}
-              onPause={handleInstrumentalPause}
-              onTimeUpdate={handleInstrumentalTimeUpdate}
-            />
-            <MelodyEditorRoll
-              auditionNote={auditionNote}
-              drag={drag}
-              duration={duration}
-              endDrag={endDrag}
-              endMarquee={endMarquee}
-              endPlayheadDrag={endPlayheadDrag}
-              endScrollThumbDrag={endScrollThumbDrag}
-              keyboardWidth={keyboardWidth}
-              laneHeight={laneHeight}
-              laneWidth={laneWidth}
-              lyricProjection={lyricProjection}
-              maxMidi={maxMidi}
-              minMidi={minMidi}
-              movePlayheadDrag={movePlayheadDrag}
-              moveScrollThumbDrag={moveScrollThumbDrag}
-              notes={notes}
-              rollCanvasRef={rollCanvasRef}
-              rollShellRef={rollShellRef}
-              rowHeight={rowHeight}
-              scrollState={scrollState}
-              seek={seek}
-              selected={selected}
-              selectionBox={selectionBox}
-              setHorizontalZoomAnchored={setHorizontalZoomAnchored}
-              setVerticalZoomAnchored={setVerticalZoomAnchored}
-              startDrag={startDrag}
-              startMarquee={startMarquee}
-              startPlayheadDrag={startPlayheadDrag}
-              startScrollThumbDrag={startScrollThumbDrag}
-              syncScrollState={syncScrollState}
-              time={time}
-              updateMarquee={updateMarquee}
-              verticalZoom={verticalZoom}
-              whiteKeyGeometry={whiteKeyGeometry}
-              zoom={zoom}
-            />
-          </div>
-        </div>
+        <Stack align="center" justify="center" sx={{ flex: 1 }}>
+          <Typography tone="muted">{t("Не удалось загрузить данные редактора")}</Typography>
+        </Stack>
       )}
-    </section>
+    </Stack>
   );
 }

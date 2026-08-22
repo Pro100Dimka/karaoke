@@ -1,122 +1,178 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { translateSaved } from "../../../../i18n/runtime";
+import { translateSaved as t } from "../../../../i18n/runtime";
+import { Box, Card, Chip, Stack, Typography } from "../../../../theme/ui";
 import { SongCoverArt } from "../../../Library/components";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
 import KaraokeLyrics from "./karaoke-lyrics";
 import MelodyRoll from "./melody-roll";
 
-export default function KaraokePerformanceStage(props) {
-  const {
-    currentTime,
-    lyricsSync,
-    sceneBlackout,
-    sceneIntroVisible,
-    sceneIntro,
-    songId,
-    isPlaying,
-    isPitchDetected,
-    keyShift,
-    showLyrics,
-    showNotes,
-    notes,
-    sungMidi
-  } = props;
+export default function KaraokePerformanceStage({
+  currentTime,
+  currentTimeRef,
+  lyricsSync,
+  sceneBlackout,
+  sceneIntroVisible,
+  sceneIntro,
+  songId,
+  isPlaying,
+  isPitchDetected,
+  keyShift,
+  showLyrics,
+  showNotes,
+  notes = [],
+  sungMidi
+}) {
   const { activeTheme, panoramaRef } = useKaraokePanorama(songId, isPlaying);
-  const sceneVideoRef = useRef(null);
-  const sceneVideoTimerRef = useRef(null);
-  const [sceneVideoFading, setSceneVideoFading] = useState(false);
-  const sceneVideoUrl = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
-  const sceneSeed = String(songId || "karaoke")
-    .split("")
-    .reduce((seed, character) => (seed * 31 + character.charCodeAt(0)) % 997, 17);
-  const changeSceneVideoPosition = useCallback(() => {
-    const video = sceneVideoRef.current;
-    if (!video) return;
-    const videoDuration = Number(video.duration);
-    if (Number.isFinite(videoDuration) && videoDuration > 1) {
-      video.currentTime = Math.random() * Math.max(0.1, videoDuration - 0.5);
-    }
-    video.play().catch(() => {});
+  const videoRef = useRef(null);
+  const timerRef = useRef(null);
+  const [switching, setSwitching] = useState(false);
+  const sceneVideo = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
+  const jump = useCallback(() => {
+    const video = videoRef.current;
+    if (video?.duration > 1)
+      video.currentTime = Math.random() * Math.max(0.1, video.duration - 0.5);
+    Promise.resolve(video?.play()).catch(() => {});
   }, []);
-  const transitionSceneVideo = useCallback(() => {
-    if (!sceneVideoRef.current?.duration) return;
-    setSceneVideoFading(true);
-    window.clearTimeout(sceneVideoTimerRef.current);
-    sceneVideoTimerRef.current = window.setTimeout(() => {
-      changeSceneVideoPosition();
-      setSceneVideoFading(false);
+  const transition = useCallback(() => {
+    if (!videoRef.current?.duration) return;
+    setSwitching(true);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      jump();
+      setSwitching(false);
     }, 180);
-  }, [changeSceneVideoPosition]);
+  }, [jump]);
   useEffect(() => {
-    transitionSceneVideo();
-  }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
-  useEffect(() => () => window.clearTimeout(sceneVideoTimerRef.current), []);
+    transition();
+  }, [isPlaying, sceneVideo, transition]);
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+  const seed = [...String(songId || "karaoke")].reduce(
+    (value, character) => (value * 31 + character.charCodeAt(0)) % 997,
+    17
+  );
   return (
-    <div
-      className={`karaoke-performance-stage karaoke-video-stage ${isPlaying ? "is-playing" : "is-paused"}`}
+    <Box
+      as="section"
+      data-role="performance-stage"
+      data-playing={isPlaying || undefined}
+      sx={{
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+        background: "var(--color-bg-deep)"
+      }}
     >
-      {sceneVideoUrl ? (
-        <video
-          ref={sceneVideoRef}
-          className={`karaoke-scene-video ${sceneVideoFading ? "is-switching" : ""}`}
-          src={sceneVideoUrl}
+      {sceneVideo ? (
+        <Box
+          as="video"
+          ref={videoRef}
+          data-switching={switching || undefined}
+          src={sceneVideo}
           muted
           loop
           playsInline
           preload="metadata"
-          onLoadedMetadata={transitionSceneVideo}
+          onLoadedMetadata={transition}
           aria-hidden="true"
+          sx={{
+            position: "absolute",
+            inset: 0,
+            inlineSize: "100%",
+            blockSize: "100%",
+            objectFit: "cover",
+            opacity: switching ? 0 : 1,
+            transition: "opacity var(--motion-duration-normal) var(--motion-easing-standard)"
+          }}
         />
       ) : (
         <>
-          <div
+          <Box
             ref={panoramaRef}
-            className="karaoke-panoramic-sky"
-            style={{ "--panorama-image": `url("${activeTheme.image}")` }}
+            data-role="panorama"
             aria-hidden="true"
+            sx={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `linear-gradient(180deg, color-mix(in srgb, var(--color-bg-deep) 8%, transparent), var(--color-bg-deep)), url("${activeTheme.image}")`,
+              backgroundPosition: "calc(50% + var(--panorama-x, 0px)) var(--panorama-y, 50%)",
+              backgroundSize: "cover"
+            }}
           />
-          <AuroraWorld seed={sceneSeed} />
+          <AuroraWorld seed={seed} />
         </>
       )}
-
-      <div
-        className={`karaoke-scene-blackout ${sceneBlackout ? "is-visible" : ""}`}
-        aria-hidden="true"
-      />
-
-      <div
-        className={`karaoke-song-intro ${sceneIntroVisible ? "is-visible" : ""}`}
-        aria-hidden={!sceneIntroVisible}
-      >
-        <div className="karaoke-song-intro-card">
-          {songId && (
-            <SongCoverArt song={{ id: songId }} className="karaoke-song-intro-art" iconSize={26} />
-          )}
-          <span className="karaoke-song-intro-kicker">{translateSaved("Сейчас прозвучит")}</span>
-          <strong>{sceneIntro?.title || translateSaved("Караоке")}</strong>
-          {sceneIntro?.artist && (
-            <span className="karaoke-song-intro-artist">{sceneIntro.artist}</span>
-          )}
-          <div className="karaoke-song-intro-meta">
-            {sceneIntro?.genre && <span>{sceneIntro.genre}</span>}
-            {sceneIntro?.key && <span>{sceneIntro.key}</span>}
-            {sceneIntro?.tempo && <span>{sceneIntro.tempo} BPM</span>}
-            {sceneIntro?.difficulty && <span>{sceneIntro.difficulty}</span>}
-          </div>
-        </div>
-      </div>
-
       {showNotes && notes.length > 0 && (
         <MelodyRoll
           notes={notes}
           currentTime={currentTime}
+          currentTimeRef={currentTimeRef}
+          isPlaying={isPlaying}
           isPitchDetected={isPitchDetected}
           keyShift={keyShift}
           sungMidi={sungMidi}
         />
       )}
-      {showLyrics && <KaraokeLyrics lyricsSync={lyricsSync} currentTime={currentTime} />}
-    </div>
+      {showLyrics && (
+        <KaraokeLyrics
+          lyricsSync={lyricsSync}
+          currentTime={currentTime}
+          currentTimeRef={currentTimeRef}
+          isPlaying={isPlaying}
+        />
+      )}
+      <Box
+        aria-hidden="true"
+        data-role="scene-blackout"
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 8,
+          background: "var(--color-bg-deep)",
+          opacity: sceneBlackout ? 1 : 0,
+          pointerEvents: sceneBlackout ? "auto" : "none",
+          transition: "opacity var(--motion-duration-slow) var(--motion-easing-standard)"
+        }}
+      />
+      <Stack
+        aria-hidden={!sceneIntroVisible}
+        align="center"
+        justify="center"
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 9,
+          padding: "var(--space-6)",
+          opacity: sceneIntroVisible ? 1 : 0,
+          pointerEvents: "none",
+          transform: sceneIntroVisible ? "none" : "scale(.98)",
+          transition:
+            "opacity var(--motion-duration-slow) var(--motion-easing-standard), transform var(--motion-duration-slow) var(--motion-easing-spring)"
+        }}
+      >
+        <Card variant="laser" tilt={false} cardContent={{ style: { padding: "var(--space-8)" } }}>
+          <Stack align="center" gap="var(--space-3)">
+            {songId && <SongCoverArt song={{ id: songId }} sx={{ padding: "var(--space-12)" }} />}
+            <Typography variant="caption" tone="muted">
+              {t("Сейчас прозвучит")}
+            </Typography>
+            <Typography variant="h2">{sceneIntro?.title || t("Караоке")}</Typography>
+            {sceneIntro?.artist && <Typography tone="muted">{sceneIntro.artist}</Typography>}
+            <Stack direction="row" justify="center" wrap gap="var(--space-2)">
+              {[
+                sceneIntro?.genre,
+                sceneIntro?.key,
+                sceneIntro?.tempo && `${sceneIntro.tempo} BPM`,
+                sceneIntro?.difficulty
+              ]
+                .filter(Boolean)
+                .map((value) => (
+                  <Chip key={value}>{value}</Chip>
+                ))}
+            </Stack>
+          </Stack>
+        </Card>
+      </Stack>
+    </Box>
   );
 }

@@ -1,58 +1,52 @@
 import { useEffect, useState } from "react";
 import { api } from "../../../api/client";
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as t } from "../../../i18n/runtime";
+import { Box } from "../../../theme/ui";
 import { playbackGain, youTubeEmbedUrl } from "../utils/data";
 
-function useAudioTrackSource(songId, track) {
-  const directUrl = api.getAudioTrackUrl(songId, track);
-  const isElectron = globalThis.electronAPI?.isElectron === true;
-  const [source, setSource] = useState(isElectron ? directUrl : "");
-
+function useTrack(songId, track) {
+  const direct = api.getAudioTrackUrl(songId, track);
+  const desktop = globalThis.electronAPI?.isElectron === true;
+  const [source, setSource] = useState(desktop ? direct : "");
   useEffect(() => {
-    if (isElectron) {
-      setSource(directUrl);
-      return undefined;
-    }
+    if (desktop) return setSource(direct);
     let active = true;
-    let objectUrl = "";
+    let url = "";
     let file;
     api
       .getAudioTrackBlob(songId, track)
-      .then((nextFile) => {
-        file = nextFile;
-        if (!active) {
-          file?.cleanup?.();
-          return;
-        }
-        objectUrl = URL.createObjectURL(file);
-        setSource(objectUrl);
+      .then((next) => {
+        file = next;
+        if (!active) return file?.cleanup?.();
+        url = URL.createObjectURL(file);
+        setSource(url);
       })
-      .catch(() => {
-        if (active) setSource("");
-      });
+      .catch(() => active && setSource(""));
     return () => {
       active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (url) URL.revokeObjectURL(url);
       file?.cleanup?.();
     };
-  }, [directUrl, isElectron, songId, track]);
-
+  }, [desktop, direct, songId, track]);
   return source;
 }
 
-function AudioTrack({ track, audioRef, songId, volume }) {
-  const source = useAudioTrackSource(songId, track);
+function AudioTrack({ audioRef, songId, track, volume }) {
+  const source = useTrack(songId, track);
   return (
-    <audio
+    <Box
+      as="audio"
       ref={audioRef}
       src={source || undefined}
       preload="auto"
+      sx={{ display: "none" }}
       onLoadedMetadata={(event) => {
         event.currentTarget.volume = playbackGain(volume);
       }}
     />
   );
 }
+
 export default function KaraokeMedia({
   instrumentalRef,
   isPlaying,
@@ -67,11 +61,7 @@ export default function KaraokeMedia({
   youTubeClipRef,
   youTubeVideoId
 }) {
-  const tracks = [
-    ["instrumental", instrumentalRef, musicVolume],
-    ["vocals", vocalsRef, vocalVolume]
-  ];
-  const handleYouTubeLoad = () => {
+  const loadYouTube = () => {
     sendYouTubeCommand("mute");
     sendYouTubeCommand("setPlaybackRate", [speed]);
     syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
@@ -79,36 +69,50 @@ export default function KaraokeMedia({
   };
   return (
     <>
-      {tracks.map(([track, audioRef, volume]) => (
-        <AudioTrack
-          key={track}
-          track={track}
-          audioRef={audioRef}
-          songId={song.id}
-          volume={volume}
-        />
-      ))}
+      <AudioTrack
+        audioRef={instrumentalRef}
+        songId={song.id}
+        track="instrumental"
+        volume={musicVolume}
+      />
+      <AudioTrack audioRef={vocalsRef} songId={song.id} track="vocals" volume={vocalVolume} />
       {youTubeVideoId ? (
-        <iframe
+        <Box
+          as="iframe"
           ref={youTubeClipRef}
-          className="karaoke-video karaoke-youtube-video"
           src={youTubeEmbedUrl(youTubeVideoId)}
-          title={translateSaved("Клип: {0}", { 0: song.title })}
+          title={t("Клип: {0}", { 0: song.title })}
           allow="autoplay; encrypted-media; picture-in-picture"
-          onLoad={handleYouTubeLoad}
+          onLoad={loadYouTube}
+          sx={{
+            position: "absolute",
+            inset: 0,
+            inlineSize: "100%",
+            blockSize: "100%",
+            border: 0,
+            opacity: 0,
+            pointerEvents: "none"
+          }}
         />
-      ) : (
-        song.video_url && (
-          <video
-            ref={videoRef}
-            className="karaoke-video"
-            src={song.video_url}
-            preload="metadata"
-            muted
-            playsInline
-          />
-        )
-      )}
+      ) : song.video_url ? (
+        <Box
+          as="video"
+          ref={videoRef}
+          src={song.video_url}
+          preload="metadata"
+          muted
+          playsInline
+          sx={{
+            position: "absolute",
+            inset: 0,
+            inlineSize: "100%",
+            blockSize: "100%",
+            objectFit: "cover",
+            opacity: 0,
+            pointerEvents: "none"
+          }}
+        />
+      ) : null}
     </>
   );
 }

@@ -4,10 +4,9 @@ import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
-import { Card, IconButton } from "../theme/ui";
+import { Button, Card, IconButton } from "../theme/ui";
 import { copyText } from "../utils/clipboard";
 import OnlineRoomParticipant from "./OnlineRoomParticipant";
-import Button from "./fields/button";
 
 export function OnlineRoomDock() {
   const { t } = useI18n();

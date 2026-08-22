@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { translateSaved } from "../../i18n/runtime";
-import Button from "../fields/button";
+import { Button } from "../../theme/ui";
 
 export default function ModalCarouselNavigation({
   ariaLabel,

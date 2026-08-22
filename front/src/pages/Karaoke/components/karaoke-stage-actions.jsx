@@ -1,6 +1,6 @@
 import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
-import { translateSaved } from "../../../i18n/runtime";
-import { IconButton } from "../../../theme/ui";
+import { translateSaved as t } from "../../../i18n/runtime";
+import { IconButton, Stack } from "../../../theme/ui";
 
 export default function KaraokeStageActions({
   autoHideConsole,
@@ -15,51 +15,56 @@ export default function KaraokeStageActions({
   toggleRadio
 }) {
   const actions = [
-    {
-      show: true,
-      icon: ArrowLeft,
-      label: translateSaved("Назад в библиотеку"),
-      onClick: returnToLibrary
-    },
-    {
-      show: !autoHideConsole,
-      icon: SlidersHorizontal,
-      label: controlsVisible
-        ? translateSaved("Скрыть консоль")
-        : translateSaved("Показать консоль"),
-      active: controlsVisible,
-      onClick: controlsVisible ? hideControls : showControls
-    },
-    {
-      show: !isPlaying,
-      icon: Radio,
-      label: isRadioPlaying ? translateSaved("Выключить радио") : translateSaved("Включить радио"),
-      active: isRadioPlaying,
-      extraClass: "karaoke-stage-radio",
-      onClick: toggleRadio
-    }
+    ["back", ArrowLeft, t("Назад в библиотеку"), false, returnToLibrary, true],
+    [
+      "console",
+      SlidersHorizontal,
+      controlsVisible ? t("Скрыть консоль") : t("Показать консоль"),
+      controlsVisible,
+      controlsVisible ? hideControls : showControls,
+      !autoHideConsole
+    ],
+    [
+      "radio",
+      Radio,
+      isRadioPlaying ? t("Выключить радио") : t("Включить радио"),
+      isRadioPlaying,
+      toggleRadio,
+      !isPlaying
+    ]
   ];
-
   return (
-    <div
-      className={`karaoke-stage-actions ${stageActionsVisible && !sceneTransitioning ? "is-visible" : ""}`}
-      aria-label={translateSaved("Навигация караоке")}
+    <Stack
+      as="nav"
+      data-role="stage-actions"
+      direction="row"
+      gap="var(--space-3)"
+      aria-label={t("Навигация караоке")}
+      sx={{
+        position: "absolute",
+        inset: "var(--space-4) auto auto var(--space-4)",
+        zIndex: 20,
+        opacity: stageActionsVisible && !sceneTransitioning ? 1 : 0,
+        pointerEvents: stageActionsVisible && !sceneTransitioning ? "auto" : "none",
+        transition: "opacity var(--motion-duration-normal) var(--motion-easing-standard)"
+      }}
     >
       {actions.map(
-        ({ show, icon, size, label, active, extraClass = "", onClick }, i) =>
+        ([id, icon, label, active, onClick, show]) =>
           show && (
             <IconButton
-              key={i}
-              unstyled
-              className={`karaoke-stage-action ${extraClass} ${active ? "is-active" : ""}`}
+              key={id}
+              data-action={id}
               icon={icon}
-              iconSize={size}
               label={label}
+              title={label}
               aria-pressed={active}
+              variant={active ? "solid" : "outline"}
+              size="lg"
               onClick={onClick}
             />
           )
       )}
-    </div>
+    </Stack>
   );
 }

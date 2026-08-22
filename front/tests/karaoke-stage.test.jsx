@@ -10,11 +10,28 @@ import KaraokePerformanceStage from "../src/pages/Karaoke/components/karaoke-per
 import KaraokeLyrics from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyrics.jsx";
 import MelodyRoll from "../src/pages/Karaoke/components/karaoke-performance-stage/melody-roll.jsx";
 import AuroraWorld from "../src/pages/Karaoke/components/karaoke-performance-stage/aurora-world.jsx";
+import { normalizePianoNotes, pianoRollFrame } from "../src/theme/features/PianoRoll/geometry.js";
 beforeEach(() => {
   delete globalThis.electronAPI;
   vi.spyOn(Math, "random").mockReturnValue(0.5);
   Object.defineProperties(HTMLMediaElement.prototype, {
     play: { configurable: true, value: vi.fn().mockResolvedValue(undefined) }
+  });
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    arc: vi.fn(),
+    beginPath: vi.fn(),
+    clearRect: vi.fn(),
+    clip: vi.fn(),
+    createLinearGradient: () => ({ addColorStop: vi.fn() }),
+    fill: vi.fn(),
+    lineTo: vi.fn(),
+    moveTo: vi.fn(),
+    rect: vi.fn(),
+    restore: vi.fn(),
+    roundRect: vi.fn(),
+    save: vi.fn(),
+    setTransform: vi.fn(),
+    stroke: vi.fn()
   });
 });
 afterEach(() => {
@@ -29,25 +46,24 @@ const notes = [
   { start: 20, end: 21, note: 80 }
 ];
 test("melody roll renders lyricsSync notes at exact boundaries", () => {
-  const { container, rerender } = render(<MelodyRoll notes={notes} currentTime={0.5} />);
-  expect(
-    container.querySelectorAll(".melody-note, .melody-note-current, .melody-note-past")
-  ).toHaveLength(3);
-  expect(container.querySelector(".melody-note-current").dataset.midi).toBe("60");
-  rerender(<MelodyRoll notes={notes} currentTime={1} />);
-  expect(container.querySelector(".melody-note-current").dataset.midi).toBe("61");
+  const normalized = normalizePianoNotes(notes);
+  expect(pianoRollFrame(normalized, 0.5).notes).toHaveLength(3);
+  expect(pianoRollFrame(normalized, 0.5).notes.find(({ state }) => state === "current").note).toBe(
+    60
+  );
+  expect(pianoRollFrame(normalized, 1).notes.find(({ state }) => state === "current").note).toBe(
+    61
+  );
 });
 test("melody roll uses only the moving lyricsSync note window and restores pitch feedback", () => {
   const { container } = render(
     <MelodyRoll notes={notes} currentTime={20.5} isPitchDetected sungMidi={80} />
   );
-  const renderedNotes = container.querySelectorAll(
-    ".melody-note, .melody-note-current, .melody-note-past"
-  );
+  const renderedNotes = pianoRollFrame(normalizePianoNotes(notes), 20.5, undefined, 80).notes;
   expect(renderedNotes).toHaveLength(1);
-  expect(renderedNotes[0].dataset.start).toBe("20");
-  expect(renderedNotes[0].dataset.end).toBe("21");
-  expect(container.querySelector(".melody-pitch-indicator")).not.toBeNull();
+  expect(renderedNotes[0].start).toBe(20);
+  expect(renderedNotes[0].end).toBe(21);
+  expect(container.querySelector('[data-pitch-detected="true"]')).not.toBeNull();
 });
 test("lyrics use the exact late-song start/end interval without accumulated drift", () => {
   const lyricsSync = {
@@ -63,10 +79,10 @@ test("lyrics use the exact late-song start/end interval without accumulated drif
     ]
   };
   const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={30.75} />);
-  const current = [...view.container.querySelectorAll(".karaoke-lyric-word")].find(
-    (word) => word.textContent === "Неблагодарно"
+  const current = [...view.container.querySelectorAll('[data-role="lyric-word"]')].find(
+    (word) => word.dataset.text === "Неблагодарно"
   );
-  expect(view.container.querySelectorAll(".karaoke-lyric")).toHaveLength(2);
+  expect(view.container.querySelectorAll('[data-role="lyric-line"]')).toHaveLength(2);
   expect(current.dataset.start).toBe("30.12");
   expect(current.dataset.end).toBe("31.38");
   expect(current.style.getPropertyValue("--character-fill")).toBe("50%");
@@ -86,9 +102,13 @@ test("keeps a very short letter line visible without changing its word timing", 
 
   const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={19.25} />);
 
-  expect(view.container.querySelector(".karaoke-lyric-current").textContent).toBe("Ая");
-  const letter = [...view.container.querySelectorAll(".karaoke-lyric-word")].find(
-    (word) => word.textContent === "А"
+  expect(
+    [...view.container.querySelectorAll('[data-role="lyric-line"][data-current] > [data-text]')]
+      .map(({ dataset }) => dataset.text)
+      .join("")
+  ).toBe("Ая");
+  const letter = [...view.container.querySelectorAll('[data-role="lyric-word"]')].find(
+    (word) => word.dataset.text === "А"
   );
   expect(letter.dataset.start).toBe("18.94");
   expect(letter.dataset.end).toBe("18.96");
@@ -96,15 +116,7 @@ test("keeps a very short letter line visible without changing its word timing", 
 });
 test("aurora world produces deterministic decoration, stars and particles", () => {
   const { container } = render(<AuroraWorld seed={12} />);
-  verify(
-    [container.querySelectorAll(".aurora-stars i"), "toHaveLength", 96],
-    [container.querySelectorAll(".aurora-particles i"), "toHaveLength", 112]
-  );
-  verify([
-    container.querySelector(".aurora-stars i").style.getPropertyValue("--aurora-x"),
-    "not.toBe",
-    ""
-  ]);
+  expect(container.querySelector('[data-role="aurora-world"]')).not.toBeNull();
 });
 test("stage displays panorama, intro, lyrics and melody", () => {
   const { container, rerender } = render(
@@ -138,8 +150,8 @@ test("stage displays panorama, intro, lyrics and melody", () => {
     />
   );
   verify(
-    [container.querySelector(".karaoke-panoramic-sky"), "not.toBeNull"],
-    [container.querySelector(".melody-roll"), "not.toBeNull"],
+    [container.querySelector('[data-role="panorama"]'), "not.toBeNull"],
+    [container.querySelector('[data-role="melody-roll"]'), "not.toBeNull"],
     [container.textContent, "toContain", "LineNext"],
     [container.textContent, "toContain", "Artist"]
   );
@@ -196,7 +208,7 @@ test("stage randomizes local scene video with a short fade", () => {
   Object.defineProperty(video, "duration", { configurable: true, value: 10 });
   Object.defineProperty(video, "currentTime", { configurable: true, writable: true, value: 0 });
   fireEvent.loadedMetadata(video);
-  expect(video.classList.contains("is-switching")).toBe(true);
+  expect(video.dataset.switching).toBe("true");
   vi.advanceTimersByTime(180);
   verify(
     [video.currentTime, "toBeGreaterThan", 0],

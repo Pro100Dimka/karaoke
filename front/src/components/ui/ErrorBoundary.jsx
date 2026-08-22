@@ -1,9 +1,9 @@
 import { Component } from "react";
 import { translateMessage } from "../../i18n";
+import { Button } from "../../theme/ui";
 import { reportClientError } from "../../utils/error-reporter";
 import { getErrorMessage } from "../../utils/errors";
 import { getSavedLanguage } from "../../utils/language";
-import { Button } from "../fields";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {

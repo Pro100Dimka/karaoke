@@ -1,7 +1,6 @@
 import { useId } from "react";
-import { translateSaved as t } from "../../../i18n/runtime";
-import { Box, RangeInput } from "../../../theme/ui";
-import { getSeekTime, getTimelineProgress } from "../utils/timeline";
+import Box from "../Box";
+import RangeInput from "../RangeInput";
 
 const COUNT = 180;
 const WIDTH = COUNT * 3;
@@ -10,32 +9,34 @@ const BARS = Array.from({ length: COUNT }, (_, index) => [
   8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
 ]);
 
-export default function WaveformTimeline({ value, duration, onChange }) {
-  const progress = getTimelineProgress(value, duration);
+export default function Waveform({ value = 0, duration = 0, onChange, label }) {
   const gradient = `wave-${useId().replace(/:/g, "")}`;
+  const progress = duration > 0 ? Math.min(1, Math.max(0, value / duration)) : 0;
   const playhead = progress * WIDTH;
   const seek = (event) => {
     if (!duration) return;
-    const { left, width } = event.currentTarget.getBoundingClientRect();
-    const next = getSeekTime(event.clientX, left, width, duration);
-    if (next != null) onChange(next);
+    const rect = event.currentTarget.getBoundingClientRect();
+    onChange?.(((event.clientX - rect.left) / rect.width) * duration);
   };
   return (
     <Box
       data-role="waveform"
-      sx={{ position: "relative", flex: 1, color: "var(--color-primary)" }}
       onPointerDown={(event) => {
         event.preventDefault();
+        event.currentTarget.setPointerCapture?.(event.pointerId);
         seek(event);
       }}
-      onPointerMove={(event) => event.buttons === 1 && seek(event)}
+      onPointerMove={(event) =>
+        event.currentTarget.hasPointerCapture?.(event.pointerId) && seek(event)
+      }
+      sx={{ position: "relative", flex: 1, minInlineSize: 0, color: "var(--color-primary)" }}
     >
       <Box
         as="svg"
         viewBox={`0 0 ${WIDTH} 44`}
         preserveAspectRatio="none"
         aria-hidden="true"
-        sx={{ display: "block", inlineSize: "100%" }}
+        sx={{ display: "block", inlineSize: "100%", blockSize: "var(--control-md)" }}
       >
         <defs>
           <linearGradient id={gradient}>
@@ -47,34 +48,32 @@ export default function WaveformTimeline({ value, duration, onChange }) {
             <rect width={playhead} height="44" />
           </clipPath>
         </defs>
-        <g fill="color-mix(in srgb, var(--color-text) 16%, transparent)">
-          {BARS.map(([i, amplitude]) => (
-            <rect
-              key={i}
-              x={i * 3 + 0.75}
-              y={22 - amplitude / 2}
-              width="1.5"
-              height={amplitude}
-              rx=".75"
-            />
-          ))}
-        </g>
-        <g fill={`url(#${gradient})`} clipPath={`url(#${gradient}-played)`}>
-          {BARS.map(([i, amplitude]) => (
-            <rect
-              key={i}
-              x={i * 3 + 0.75}
-              y={22 - amplitude / 2}
-              width="1.5"
-              height={amplitude}
-              rx=".75"
-            />
-          ))}
-        </g>
+        {["base", "played"].map((layer) => (
+          <g
+            key={layer}
+            fill={
+              layer === "played"
+                ? `url(#${gradient})`
+                : "color-mix(in srgb, var(--color-text) 18%, transparent)"
+            }
+            clipPath={layer === "played" ? `url(#${gradient}-played)` : undefined}
+          >
+            {BARS.map(([index, amplitude]) => (
+              <rect
+                key={index}
+                x={index * 3 + 0.75}
+                y={22 - amplitude / 2}
+                width="1.5"
+                height={amplitude}
+                rx=".75"
+              />
+            ))}
+          </g>
+        ))}
         <line x1={playhead} x2={playhead} y2="44" stroke="currentColor" />
       </Box>
       <RangeInput
-        aria-label={t("Позиция песни")}
+        aria-label={label}
         min="0"
         max={duration || 0}
         step="0.01"

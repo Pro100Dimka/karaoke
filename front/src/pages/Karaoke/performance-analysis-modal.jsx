@@ -1,94 +1,81 @@
-import { BarChart3, Trash2, Trophy } from "lucide-react";
+import { BarChart3, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
-import { Button } from "../../components/fields";
 import Modal from "../../components/modal";
 import ModalCarouselNavigation from "../../components/modal/carousel-navigation";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../../hooks/useMountedRef";
-import { translateSaved } from "../../i18n/runtime";
+import { translateSaved as t } from "../../i18n/runtime";
+import { Button, Card, Grid, Stack, Typography } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 import { getAnalysisFeedback, normalizeAnalysisResult } from "./utils/analysis";
 
-const CONFETTI = Array.from({ length: 26 }, (_, index) => index);
-function VictoryScene() {
-  return (
-    <div className="analysis-victory-scene" aria-hidden="true">
-      <div className="analysis-trophy">
-        <Trophy size={38} fill="currentColor" />
-      </div>
-      <div className="analysis-crystal" />
-      <div className="analysis-confetti">
-        {CONFETTI.map((index) => (
-          <i key={index} style={{ "--j": index }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-function AnalysisSummary({ result }) {
-  const feedback = getAnalysisFeedback(result);
-  const {
-    accuracy,
-    scoredSections,
-    bestSection,
-    needsPractice,
-    grade,
-    advice,
-    mean_deviation_semitones: meanDeviation
-  } = feedback;
-  const metrics = [
-    [
-      translateSaved("Среднее отклонение"),
-      meanDeviation != null ? translateSaved("±{0} п/т", { 0: meanDeviation }) : "—"
-    ],
-    [translateSaved("Проверено фрагментов"), scoredSections.length || 0],
-    [translateSaved("Лучший фрагмент"), bestSection ? `${bestSection.accuracy_percent}%` : "—"],
-    [
-      translateSaved("Нуждается в работе"),
-      needsPractice ? `${needsPractice.accuracy_percent}%` : "—"
-    ]
-  ];
-  return (
-    <>
-      <div className="performance-analysis-grade">{grade}</div>
-      <div className="performance-analysis-score">
-        {accuracy ?? "—"}
-        <small>%</small>
-      </div>
-      <div className="text-muted">{translateSaved("Попадание в ноты")}</div>
-      <div className="performance-analysis-metrics performance-analysis-metrics-expanded">
-        {metrics.map(([label, value]) => (
-          <div key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
-      </div>
-      <div className="performance-analysis-advice">
-        <strong>{translateSaved("Рекомендация")}</strong>
-        <span>{advice}</span>
-      </div>
-    </>
-  );
-}
-export function getRecordingList(recordings, recordingId) {
+export const getRecordingList = (recordings, recordingId) => {
   const unique = new Map(
     (Array.isArray(recordings) ? recordings : [])
       .filter((recording) => recording?.id)
       .map((recording) => [String(recording.id), recording])
   );
-  const activeId = String(recordingId);
-  if (!unique.has(activeId)) unique.set(activeId, { id: recordingId });
+  if (!unique.has(String(recordingId))) unique.set(String(recordingId), { id: recordingId });
   return [...unique.values()];
-}
-
-export function formatRecordingDate(value) {
-  if (!value) return translateSaved("Запись исполнения");
+};
+export const formatRecordingDate = (value) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? translateSaved("Запись исполнения") : date.toLocaleString();
+  return value && !Number.isNaN(date.getTime()) ? date.toLocaleString() : t("Запись исполнения");
+};
+
+function Summary({ result }) {
+  const feedback = getAnalysisFeedback(result);
+  const metrics = [
+    [
+      t("Среднее отклонение"),
+      feedback.mean_deviation_semitones != null
+        ? t("±{0} п/т", { 0: feedback.mean_deviation_semitones })
+        : "—"
+    ],
+    [t("Проверено фрагментов"), feedback.scoredSections.length],
+    [
+      t("Лучший фрагмент"),
+      feedback.bestSection ? `${feedback.bestSection.accuracy_percent}%` : "—"
+    ],
+    [
+      t("Нуждается в работе"),
+      feedback.needsPractice ? `${feedback.needsPractice.accuracy_percent}%` : "—"
+    ]
+  ];
+  return (
+    <Stack align="center" gap="var(--space-4)">
+      <Typography variant="h2">{feedback.grade}</Typography>
+      <Typography data-role="analysis-score" variant="h1">
+        {feedback.accuracy ?? "—"}%
+      </Typography>
+      <Typography tone="muted">{t("Попадание в ноты")}</Typography>
+      <Grid columns={2} gap="var(--space-3)">
+        {metrics.map(([label, value]) => (
+          <Card key={label} cardContent={{ style: { padding: "var(--space-4)" } }}>
+            <Stack gap="var(--space-1)">
+              <Typography variant="caption" tone="muted">
+                {label}
+              </Typography>
+              <Typography>
+                <strong>{value}</strong>
+              </Typography>
+            </Stack>
+          </Card>
+        ))}
+      </Grid>
+      <Card variant="laser" tilt={false} cardContent={{ style: { padding: "var(--space-4)" } }}>
+        <Stack gap="var(--space-2)">
+          <Typography>
+            <strong>{t("Рекомендация")}</strong>
+          </Typography>
+          <Typography tone="muted">{feedback.advice}</Typography>
+        </Stack>
+      </Card>
+    </Stack>
+  );
 }
 
 export default function PerformanceAnalysisModal({
@@ -100,144 +87,115 @@ export default function PerformanceAnalysisModal({
 }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [viewedRecordingId, setViewedRecordingId] = useState(recordingId);
-  const analysisRequestRef = useRef({ recordingId: null, promise: null });
-  const mountedRef = useMountedRef();
-  const { confirm: confirmDialog } = useAppDialog();
-  const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
-  const recordingList = useMemo(
-    () => getRecordingList(recordings, recordingId),
-    [recordings, recordingId]
-  );
-  const viewedIndex = Math.max(
+  const [viewedId, setViewedId] = useState(recordingId);
+  const request = useRef({ recordingId: null, promise: null });
+  const mounted = useMountedRef();
+  const { confirm } = useAppDialog();
+  const { pending: deleting, run } = useExclusiveAsyncAction();
+  const list = useMemo(() => getRecordingList(recordings, recordingId), [recordings, recordingId]);
+  const index = Math.max(
     0,
-    recordingList.findIndex((recording) => String(recording.id) === String(viewedRecordingId))
+    list.findIndex(({ id }) => String(id) === String(viewedId))
   );
-  const viewedRecording = recordingList[viewedIndex];
-  const viewingActive = String(viewedRecording.id) === String(recordingId);
-  useEffect(() => setViewedRecordingId(recordingId), [recordingId]);
+  const viewed = list[index];
+  const active = String(viewed.id) === String(recordingId);
+  useEffect(() => setViewedId(recordingId), [recordingId]);
   useEffect(() => {
-    let active = true;
+    let subscribed = true;
     setResult(null);
     setError(null);
-    if (analysisRequestRef.current.recordingId !== recordingId) {
-      analysisRequestRef.current = { recordingId, promise: api.runAnalysis(recordingId) };
-    }
-    analysisRequestRef.current.promise
-      .then((analysis) => {
-        if (active) setResult(normalizeAnalysisResult(analysis));
-      })
-      .catch((analysisError) => {
-        if (analysisRequestRef.current.recordingId === recordingId) {
-          analysisRequestRef.current = { recordingId: null, promise: null };
-        }
-        if (active) {
-          setError(getErrorMessage(analysisError, translateSaved("Неизвестная ошибка анализа")));
-        }
+    if (request.current.recordingId !== recordingId)
+      request.current = { recordingId, promise: api.runAnalysis(recordingId) };
+    request.current.promise
+      .then((value) => subscribed && setResult(normalizeAnalysisResult(value)))
+      .catch((reason) => {
+        if (request.current.recordingId === recordingId)
+          request.current = { recordingId: null, promise: null };
+        if (subscribed) setError(getErrorMessage(reason, t("Неизвестная ошибка анализа")));
       });
     return () => {
-      active = false;
+      subscribed = false;
     };
   }, [recordingId]);
-  const deleteRecording = () =>
-    runDelete(async () => {
-      if (!(await confirmDialog(translateSaved("Удалить это записанное исполнение?")))) return;
-      if (!mountedRef.current) return;
+  const remove = () =>
+    run(async () => {
+      if (!(await confirm(t("Удалить это записанное исполнение?"))) || !mounted.current) return;
       try {
         await api.deleteRecording(recordingId);
-        if (mountedRef.current) onDeleted?.();
-      } catch (deleteError) {
-        if (!mountedRef.current) return;
-        setError(
-          translateSaved("Не удалось удалить запись: {0}", {
-            0: getErrorMessage(deleteError, translateSaved("неизвестная ошибка"))
-          })
-        );
+        if (mounted.current) onDeleted?.();
+      } catch (reason) {
+        if (mounted.current)
+          setError(
+            t("Не удалось удалить запись: {0}", {
+              0: getErrorMessage(reason, t("неизвестная ошибка"))
+            })
+          );
       }
     });
   return (
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={translateSaved("Анализ выступления")}
-      backdropClassName="app-modal-backdrop performance-analysis-backdrop"
-      modalClassName="app-modal modal-card performance-analysis-modal"
-      closeClassName="app-modal-close performance-analysis-close"
-      closeAriaLabel={translateSaved("Закрыть анализ")}
-      closeIconSize={18}
-      cardVariant="neon"
+      ariaLabel={t("Анализ выступления")}
+      cardVariant="laser"
       portal
       titleProps={{
         icon: BarChart3,
-        eyebrow: translateSaved("РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"),
-        title: translateSaved("Анализ выступления"),
-        description: translateSaved("Точность нот, ритм и рекомендации по исполнению."),
-        actions:
-          result || error ? (
-            <Button
-              variant="primary"
-              onClick={result ? (onDone ?? onClose) : onClose}
-              className="modal-title-action"
-            >
-              {result ? translateSaved("Готово") : translateSaved("Закрыть")}
-            </Button>
-          ) : null
+        eyebrow: t("РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"),
+        title: t("Анализ выступления"),
+        description: t("Точность нот, ритм и рекомендации по исполнению."),
+        actions: (result || error) && (
+          <Button onClick={result ? (onDone ?? onClose) : onClose}>
+            {result ? t("Готово") : t("Закрыть")}
+          </Button>
+        )
       }}
     >
-      <VictoryScene />
-      <div className="performance-analysis-body modal-scroll">
+      <Stack gap="var(--space-4)" sx={{ padding: "var(--space-4)" }}>
         <ModalCarouselNavigation
-          ariaLabel={translateSaved("Записи исполнения")}
-          className="performance-analysis-carousel"
-          metaClassName="performance-analysis-recording-meta"
-          index={viewedIndex}
-          count={recordingList.length}
-          title={formatRecordingDate(viewedRecording.created_at)}
-          subtitle={`${translateSaved("Запись {0} из {1}", { 0: viewedIndex + 1, 1: recordingList.length })}${viewingActive ? ` · ${translateSaved("анализируется")}` : ""}`}
-          previousLabel={translateSaved("Предыдущая запись")}
-          nextLabel={translateSaved("Следующая запись")}
-          onPrevious={() => setViewedRecordingId(recordingList[viewedIndex - 1].id)}
-          onNext={() => setViewedRecordingId(recordingList[viewedIndex + 1].id)}
+          ariaLabel={t("Записи исполнения")}
+          index={index}
+          count={list.length}
+          title={formatRecordingDate(viewed.created_at)}
+          subtitle={`${t("Запись {0} из {1}", { 0: index + 1, 1: list.length })}${active ? ` · ${t("анализируется")}` : ""}`}
+          previousLabel={t("Предыдущая запись")}
+          nextLabel={t("Следующая запись")}
+          onPrevious={() => setViewedId(list[index - 1].id)}
+          onNext={() => setViewedId(list[index + 1].id)}
         />
-
-        <AudioPlayer src={api.getPerformanceFileUrl(viewedRecording.id)} />
-
-        {!viewingActive && (
-          <p className="text-muted">
-            {translateSaved(
+        <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
+        {!active && (
+          <Typography tone="muted">
+            {t(
               "Вы просматриваете другую запись. Текущий анализ продолжает выполняться без переключения."
             )}
-          </p>
+          </Typography>
         )}
-
-        {viewingActive && !result && !error && (
-          <p className="text-muted">{translateSaved("Анализируем ноты и ритм исполнения…")}</p>
+        {active && !result && !error && (
+          <Typography role="status" tone="muted">
+            {t("Анализируем ноты и ритм исполнения…")}
+          </Typography>
         )}
-
-        {viewingActive && error && (
-          <p className="song-lyrics-error">
-            {translateSaved("Не удалось выполнить анализ:")}
-            {error}
-          </p>
+        {active && error && (
+          <Typography role="alert" tone="danger">
+            {t("Не удалось выполнить анализ:")} {error}
+          </Typography>
         )}
-
-        {viewingActive && result && (
+        {active && result && (
           <>
-            <AnalysisSummary result={result} />
-            <div className="performance-analysis-actions performance-analysis-actions--secondary">
-              <Button
-                icon={Trash2}
-                iconSize={14}
-                variant="danger"
-                onClick={deleteRecording}
-                disabled={deleting}
-              >
-                {deleting ? translateSaved("Удаляем…") : translateSaved("Удалить запись")}
-              </Button>
-            </div>
+            <Summary result={result} />
+            <Button
+              data-role="delete-recording"
+              tone="danger"
+              startIcon={<Trash2 />}
+              disabled={deleting}
+              onClick={remove}
+            >
+              {deleting ? t("Удаляем…") : t("Удалить запись")}
+            </Button>
           </>
         )}
-      </div>
+      </Stack>
     </Modal>
   );
 }
