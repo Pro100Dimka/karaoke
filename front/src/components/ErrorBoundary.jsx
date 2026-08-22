@@ -1,6 +1,6 @@
 import { Component } from "react";
 import { translateMessage } from "../i18n";
-import { Button, Card, Stack, Typography } from "../theme/ui";
+import { Button, Modal } from "../theme/ui";
 import { reportClientError } from "../utils/error-reporter";
 import { getErrorMessage } from "../utils/errors";
 import { getSavedLanguage } from "../utils/language";
@@ -27,16 +27,17 @@ export default class ErrorBoundary extends Component {
     if (!this.state.error) return this.props.children;
     const t = (key) => translateMessage(getSavedLanguage(), key);
     return (
-      <Stack as="main" role="alert" align="center" justify="center">
-        <Card variant="neon" sx={{ containerType: "normal" }}>
-          <Stack gap="var(--space-4)">
-            <Typography variant="caption">A&amp;D Voice</Typography>
-            <Typography variant="h1">{t("error.screen.title")}</Typography>
-            <Typography>{getErrorMessage(this.state.error, t("error.screen.body"))}</Typography>
-            <Button onClick={() => window.location.reload()}>{t("error.screen.restart")}</Button>
-          </Stack>
-        </Card>
-      </Stack>
+      <Modal
+        isOpen
+        ariaLabel={t("error.screen.title")}
+        titleProps={{
+          eyebrow: "A&amp;D Voice",
+          title: t("error.screen.title"),
+          description: getErrorMessage(this.state.error, t("error.screen.body"))
+        }}
+      >
+        <Button onClick={() => window.location.reload()}>{t("error.screen.restart")}</Button>
+      </Modal>
     );
   }
 }

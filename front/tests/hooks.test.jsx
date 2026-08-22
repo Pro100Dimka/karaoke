@@ -412,6 +412,11 @@ describe("navigation and karaoke hooks", () => {
     // bring the console back regardless of the auto-hide preference --
     // otherwise it stays hidden and unreachable for the rest of the session.
     expect(result.current.controlsVisible).toBe(true);
+    act(() => result.current.hideControls(true));
+    act(() => result.current.revealControls({ clientX: 20, clientY: 20 }));
+    expect(result.current.controlsVisible).toBe(false);
+    act(() => result.current.showControls(true));
+    expect(result.current.controlsVisible).toBe(true);
     rerender({ enabled: true });
     verify([result.current.controlsVisible, "toBe", true], [setInterval, "toHaveBeenCalledTimes", 2]);
     const fullscreenRegistration = addEvent.mock.calls.find(([event]) => event === "fullscreenchange");

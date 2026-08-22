@@ -19,6 +19,10 @@ class AICoreService:
         with self._lock:
             return self.pipeline.run(PipelineRequest(source_path, output_dir, **options))
 
+    def reprocess_song(self, output_dir, **options) -> PipelineResult:
+        with self._lock:
+            return self.pipeline.reprocess(output_dir, **options)
+
     def analyze_pitch(self, audio_path):
         with self._lock:
             return stabilize_pitch(self.pipeline.engines.pitch.estimate(audio_path))

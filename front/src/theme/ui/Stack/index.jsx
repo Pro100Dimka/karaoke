@@ -1,10 +1,11 @@
+import { forwardRef } from "react";
 import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./stack.css";
 
 const unit = (value) => (typeof value === "number" ? `${value}rem` : value);
 
-export default function Stack({
+const Stack = forwardRef(function Stack({
   as = "div",
   direction = "column",
   gap = 0,
@@ -15,9 +16,10 @@ export default function Stack({
   sx,
   style,
   ...props
-}) {
+}, ref) {
   return (
     <Primitive
+      ref={ref}
       as={as}
       className={cx("ui-stack", className)}
       sx={sx}
@@ -32,4 +34,6 @@ export default function Stack({
       {...props}
     />
   );
-}
+});
+
+export default Stack;

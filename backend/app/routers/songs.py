@@ -313,10 +313,6 @@ def reprocess_melody(song: SongDependency, db: Session = Depends(get_db)):
     if recording_service.has_active_recording(song.id): raise HTTPException(status_code=409, detail="Нельзя переобрабатывать песню во время записи")
     if not song.output_dir or song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Обработка уже запущена")
-    source = Path(song.source_path)
-    if source.name == "instrumental.flac" and source.parent == song_service.resolve_output_dir(song):
-        raise HTTPException(status_code=409, detail="Исходная запись удалена после обработки; добавьте песню заново")
-
     _queue_song_job(
         db,
         song,

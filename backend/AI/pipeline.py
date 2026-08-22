@@ -21,7 +21,7 @@ from .notes import build_vocal_notes
 from .pitch_post import stabilize_pitch
 from .processing_modes import resolve_processing_profile
 from .runtime import get_runtime_plan
-from .utils.io import write_json_atomic
+from .utils.io import read_json, write_json_atomic
 from .version import AI_BUILD_ID
 from .vocal_preprocess import prepare_vocal_reference
 
@@ -186,3 +186,45 @@ class KaraokePipeline:
                 shutil.rmtree(stale, ignore_errors=True)
         self._notify(request, "complete", 100, "Готово")
         return PipelineResult(output, output / "lyricsSync.json", tuple(warnings), tuple(reports))
+
+    def reprocess(self, output_dir: str | Path, **options) -> PipelineResult:
+        output = Path(output_dir).resolve()
+        vocals, lyrics = output / "vocals.flac", output / "lyricsSync.json"
+        if not vocals.is_file() or not lyrics.is_file():
+            raise FileNotFoundError("vocals.flac and lyricsSync.json are required")
+        current = validate_lyrics_document(read_json(lyrics))
+        text = str(current.get("text") or "").strip()
+        if not text:
+            raise EngineUnavailableError("lyricsSync.json has no text to align")
+        request = PipelineRequest(vocals, output, **options)
+        reports: list[StageReport] = []
+
+        self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
+        started = time.perf_counter()
+        pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+        self._stage(reports, "pitch", self.engines.pitch.name, started)
+
+        self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
+        started = time.perf_counter()
+        words = self._align(vocals, text, request.language, [])
+        self._stage(reports, "lyrics", self.engines.aligner.name, started)
+
+        self._notify(request, "notes", 84, "Построение мелодии голоса")
+        started = time.perf_counter()
+        notes = build_vocal_notes(
+            pitch, words=words, min_note=self.config.min_note_sec,
+            split_semitones=self.config.split_note_semitones,
+            max_gap=self.config.max_gap_sec,
+            min_confidence=self.config.min_voiced_confidence,
+        )
+        self._stage(reports, "notes", "fcpe-segments", started)
+        payload = validate_lyrics_document({
+            **current,
+            "duration": round(duration(vocals), 3),
+            "reference_audio": "vocals.flac",
+            "text": text,
+            "words": words_with_notes(words, notes),
+        })
+        write_json_atomic(lyrics, payload, compact=True)
+        self._notify(request, "complete", 100, "Готово")
+        return PipelineResult(output, lyrics, (), tuple(reports))

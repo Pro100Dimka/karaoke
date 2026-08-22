@@ -7,10 +7,13 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const lastActivityRef = useRef(Date.now());
   const lastPointerRef = useRef(null);
+  const manuallyHiddenRef = useRef(false);
   const effectiveAutoHide = autoHideEnabled;
 
   const showControls = useCallback(
-    () => {
+    (manual = false) => {
+      if (manual) manuallyHiddenRef.current = false;
+      if (manuallyHiddenRef.current) return;
       lastActivityRef.current = Date.now();
       setControlsVisible(true);
     },
@@ -19,7 +22,8 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   );
 
   const hideControls = useCallback(
-    () => {
+    (manual = false) => {
+      if (manual) manuallyHiddenRef.current = true;
       setControlsVisible(false);
     },
     // Stryker disable next-line ArrayDeclaration: React state setter is stable.
@@ -30,6 +34,7 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
     if (!effectiveAutoHide) return undefined;
 
     const watcher = window.setInterval(() => {
+      if (manuallyHiddenRef.current) return;
       setControlsVisible(Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS);
     }, VISIBILITY_CHECK_MS);
 
@@ -51,6 +56,7 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
 
   const revealControls = useCallback(
     (event) => {
+      if (manuallyHiddenRef.current) return false;
       // Scene transitions call hideControls() unconditionally (to black out the
       // UI during the intro/outro animation) regardless of this preference, so
       // reveal-on-activity must be equally unconditional. Gating it on

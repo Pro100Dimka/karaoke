@@ -1,11 +1,11 @@
 import { lazy, Suspense } from "react";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
-import { translateSaved as tr } from "../../i18n/runtime";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
-import { LibraryBackdrop, LibraryResults, SongGrid } from "./components";
+import { LibraryBackdrop } from "./components";
 import LibraryHero from "./hero";
 import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";
+import SongsGrid from "./songs-grid";
 import useLibrary from "./use-library";
 
 const SongSettings = lazy(() => import("./song-settings"));
@@ -33,29 +33,12 @@ export default function Library() {
           filterOptions={state.filterOptions}
           setFilters={state.setFilters}
         />
-        <LibraryResults
-          error={state.songsError}
-          onFileChosen={fileImport.importFile}
-          fileInputRef={state.fileInputRef}
-          importing={fileImport.importing}
-          canManageLibrary={state.canManageLibrary}
-          songs={state.filteredSongs}
-          errorText={`${tr("Не удалось загрузить список:")} ${state.songsError?.message || state.songsError || ""}`}
-        >
-          <SongGrid
-            songs={state.filteredSongs}
-            canManageLibrary={state.canManageLibrary}
-            transferStatuses={state.transferStatuses}
-            onOpenKaraoke={state.openKaraoke}
-            onOpenProcessing={processing.track}
-            onOpenRecordings={recordings.setSong}
-            onOpenSettings={state.setSettingsSongId}
-            onDelete={state.songActions.deleteSong}
-            onOpenFolder={state.songActions.openSongFolder}
-            onProcess={state.songActions.processSong}
-            onReprocess={state.songActions.reprocessSong}
-          />
-        </LibraryResults>
+        <SongsGrid
+          state={state}
+          fileImport={fileImport}
+          processing={processing}
+          recordings={recordings}
+        />
       </Stack>
       <Box
         aria-hidden="true"

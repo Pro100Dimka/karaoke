@@ -139,7 +139,7 @@ def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp
     patch_attrs(monkeypatch, pipeline_service, _clear_generated_results=rebuild, _run_job=run)
     pipeline_service._run_reprocessing("song")
     rebuild.assert_called_once_with(target)
-    run.assert_called_once_with("song")
+    run.assert_called_once_with("song", reuse_vocals=True)
 
 
 def test_optional_json_and_generated_metadata_preserve_user_edits(monkeypatch, tmp_path):

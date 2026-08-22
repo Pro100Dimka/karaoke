@@ -609,7 +609,7 @@ def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
         )
 
 
-def _run_job(song_id: str, processing_mode: str = "auto") -> None:
+def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
     source_path, out_dir = paths
@@ -643,19 +643,27 @@ def _run_job(song_id: str, processing_mode: str = "auto") -> None:
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
 
-        result = ai_bridge.process_song(
-            source_path, out_dir,
-            language=None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
-            lyrics_path=lyrics_path, title=searchable_title, bpm_override=bpm_override,
-            key_override=key_override, progress=_create_ai_progress_callback(
-                song_id, capture),
-            cancelled=lambda: _is_cancelled(song_id),
-            processing_mode=processing_mode,
+        shared = {
+            "language": None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
+            "progress": _create_ai_progress_callback(song_id, capture),
+            "cancelled": lambda: _is_cancelled(song_id),
+        }
+        result = (
+            ai_bridge.reprocess_song(out_dir, **shared)
+            if reuse_vocals
+            else ai_bridge.process_song(
+                source_path, out_dir, lyrics_path=lyrics_path,
+                title=searchable_title, bpm_override=bpm_override,
+                key_override=key_override, processing_mode=processing_mode, **shared,
+            )
         )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
             logger.warning("Song processing warning: %s", warning)
-        _write_stage_reports(capture, getattr(result, "reports", ()))
+        result_reports = getattr(result, "reports", ())
+        _write_stage_reports(
+            capture, result_reports if isinstance(result_reports, (list, tuple)) else ()
+        )
         pipeline_succeeded = True
     except ProcessingCancelled:
         _update_progress(
@@ -714,7 +722,7 @@ def _run_reprocessing(song_id: str) -> None:
     with song_service.song_content_lock(song_id):
         cache_service.recover_optimization_state(out_dir, committed=optimized)
         _clear_generated_results(out_dir)
-        _run_job(song_id)
+        _run_job(song_id, reuse_vocals=True)
 
 
 def _read_optional_generated_json(path: Path, default):

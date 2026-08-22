@@ -44,6 +44,10 @@ def process_song(
     return result
 
 
+def reprocess_song(output_dir: str | Path, **options):
+    return get_ai_service().reprocess_song(output_dir, **options)
+
+
 def release_ai_resources() -> None:
     reset_ai_service()
 

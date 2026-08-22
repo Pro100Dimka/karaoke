@@ -69,6 +69,27 @@ def test_clean_pipeline_publishes_only_canonical_runtime_artifacts(tmp_path, mon
     assert sf.info(output / "vocals.flac").channels == 1
 
 
+def test_reprocess_rebuilds_timing_from_existing_vocals_without_separation(tmp_path):
+    output = tmp_path / "out"
+    output.mkdir()
+    sf.write(output / "vocals.flac", np.zeros(44100 * 2, dtype=np.float32), 44100)
+    (output / "instrumental.flac").write_bytes(b"minus stays untouched")
+    (output / "lyricsSync.json").write_text(
+        '{"bpm":120,"key":"A minor","text":"hello","words":['
+        '{"start":0.1,"end":0.2,"text":"hello","notes":[]}]}',
+        encoding="utf-8",
+    )
+    engines = SimpleNamespace(
+        separator=Separator(), pitch=Pitch(), transcriber=None, aligner=Aligner()
+    )
+
+    result = KaraokePipeline(engines=engines).reprocess(output, language="en")
+
+    assert result.manifest_path == output / "lyricsSync.json"
+    assert (output / "instrumental.flac").read_bytes() == b"minus stays untouched"
+    assert '"start": 1.0' in (output / "lyricsSync.json").read_text(encoding="utf-8")
+
+
 def test_atomic_publish_restores_every_previous_artifact(tmp_path, monkeypatch):
     sources = [tmp_path / f"new-{index}" for index in range(2)]
     targets = [tmp_path / f"target-{index}" for index in range(2)]

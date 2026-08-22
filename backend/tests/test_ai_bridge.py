@@ -29,6 +29,14 @@ def test_process_song_forwards_the_request(monkeypatch, tmp_path):
     assert service.process_song.call_args.kwargs["processing_mode"] == "fast"
 
 
+def test_reprocess_song_uses_existing_vocals(monkeypatch, tmp_path):
+    service = Mock()
+    service.reprocess_song.return_value = "result"
+    monkeypatch.setattr(bridge, "get_ai_service", lambda: service)
+    assert bridge.reprocess_song(tmp_path, language="uk") == "result"
+    service.reprocess_song.assert_called_once_with(tmp_path, language="uk")
+
+
 @pytest.mark.parametrize(
     "frame,expected",
     [

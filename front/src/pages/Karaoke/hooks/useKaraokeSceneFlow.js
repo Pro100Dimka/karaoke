@@ -96,6 +96,15 @@ export default function useKaraokeSceneFlow({
       setSceneBlackout(true);
       const preparation = preloadSongMedia().catch(() => false);
       let result = false;
+      let controlsRestored = false;
+      const restoreControls = () => {
+        if (controlsRestored) return;
+        controlsRestored = true;
+        sceneTransitionRef.current = false;
+        setSceneTransitioning(false);
+        showControls();
+        revealStageActions();
+      };
       try {
         await waitForScene(420);
         setSceneIntroVisible(true);
@@ -105,15 +114,16 @@ export default function useKaraokeSceneFlow({
         await preparation;
         setSceneBlackout(false);
         await waitForScene(520);
+        // Electron may leave HTMLMediaElement.play() pending indefinitely. The
+        // intro itself is already complete, so controls must not remain locked
+        // while the transport negotiates playback.
+        restoreControls();
         result = await Promise.resolve(action());
       } finally {
         setSceneIntroVisible(false);
         setSceneBlackout(false);
         await waitForScene(120);
-        sceneTransitionRef.current = false;
-        setSceneTransitioning(false);
-        showControls();
-        revealStageActions();
+        restoreControls();
       }
       return result !== false;
     },

@@ -92,6 +92,19 @@ describe("karaoke scene flow", () => {
     expect(input.togglePlay).toHaveBeenNthCalledWith(2, { forcePlaying: true });
     calledTimes([input.hideControls, 1], [input.turnOffRadio, 2]);
   });
+  test("unlocks controls before Electron playback promise settles", async () => {
+    const input = props({ togglePlay: vi.fn(() => new Promise(() => {})) });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    act(() => void hook.result.current.handleTogglePlay());
+    await runTimersFor(2590);
+    expect(input.togglePlay).toHaveBeenCalledOnce();
+    expect(input.showControls).toHaveBeenCalledOnce();
+    same(
+      [hook.result.current.sceneBlackout, false],
+      [hook.result.current.sceneTransitioning, false],
+      [hook.result.current.stageActionsVisible, true]
+    );
+  });
   test("pausing after a radio-backed start restores radio and recording state", async () => {
     let input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));

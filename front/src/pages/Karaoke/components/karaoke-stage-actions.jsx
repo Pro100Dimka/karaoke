@@ -20,7 +20,7 @@ export default function KaraokeStageActions({
       SlidersHorizontal,
       controlsVisible ? t("Скрыть консоль") : t("Показать консоль"),
       controlsVisible,
-      controlsVisible ? hideControls : showControls,
+      controlsVisible ? () => hideControls(true) : () => showControls(true),
       true
     ],
     [
