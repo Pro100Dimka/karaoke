@@ -7,7 +7,6 @@ export async function closeAudioContext(context) {
     return false;
   }
 }
-
-export function closeAudioContextQuietly(context) {
+export const closeAudioContextQuietly = (context) => {
   closeAudioContext(context);
-}
+};

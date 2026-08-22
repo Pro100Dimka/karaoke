@@ -8,11 +8,15 @@ export const normalizeProcessingMode = (value) =>
 
 export const getProcessingModeOptions = () =>
   [
-    ["auto", "Авто · баланс", "Средняя скорость и качество с учётом вашего железа"],
-    ["fast", "Быстрый · минимальное время", "Минимальный overlap и один проход очистки вокала"],
-    ["quality", "Качество · точное разделение", "Четырёхкратный overlap и усиленная очистка вокала"]
-  ].map(([value, label, description]) => ({
-    value,
-    label: tr(label),
-    description: tr(description)
-  }));
+    ["auto", tr("Авто · баланс"), tr("Средняя скорость и качество с учётом вашего железа")],
+    [
+      "fast",
+      tr("Быстрый · минимальное время"),
+      tr("Минимальный overlap и один проход очистки вокала")
+    ],
+    [
+      "quality",
+      tr("Качество · точное разделение"),
+      tr("Четырёхкратный overlap и усиленная очистка вокала")
+    ]
+  ].map(([value, label, description]) => ({ value, label, description }));

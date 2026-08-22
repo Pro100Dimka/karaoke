@@ -55,11 +55,7 @@ export default function useLibrarySongActions({
   );
 
   const confirmReprocess = useCallback(
-    (song, text) =>
-      confirmDialog(
-        tr(text, { 0: song?.title || tr("Без названия") }),
-        tr("Обработать песню заново?")
-      ),
+    (text) => confirmDialog(text, tr("Обработать песню заново?")),
     [confirmDialog]
   );
 
@@ -69,8 +65,10 @@ export default function useLibrarySongActions({
       if (
         song?.status !== "pending" &&
         !(await confirmReprocess(
-          song,
-          "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены."
+          tr(
+            "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
+            { 0: song?.title || tr("Без названия") }
+          )
         ))
       )
         return;
@@ -84,8 +82,10 @@ export default function useLibrarySongActions({
       if (!song?.id) return;
       if (
         !(await confirmReprocess(
-          song,
-          "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы."
+          tr(
+            "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
+            { 0: song?.title || tr("Без названия") }
+          )
         ))
       )
         return;

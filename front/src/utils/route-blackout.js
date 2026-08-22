@@ -1,7 +1,6 @@
 export function setGlobalRouteBlackout(visible) {
-  const Event = globalThis.CustomEvent;
-  if (typeof Event === "function")
+  if (typeof globalThis.CustomEvent === "function")
     globalThis.dispatchEvent?.(
-      new Event("app:route-blackout", { detail: { visible: Boolean(visible) } })
+      new CustomEvent("app:route-blackout", { detail: { visible: Boolean(visible) } })
     );
 }

@@ -1,27 +1,24 @@
 import { isRecord, readJsonStorage, writeJsonStorage } from "./storage";
 
-const STORAGE_KEY = "karaoke-audio-preferences";
-const DEFAULT_DEVICE = "default";
+const KEY = "karaoke-audio-preferences";
+const DEVICE = "default";
 export const DEFAULT_AUDIO_PREFERENCES = Object.freeze({
-  monitorInputDeviceId: DEFAULT_DEVICE,
-  monitorOutputDeviceId: DEFAULT_DEVICE
+  monitorInputDeviceId: DEVICE,
+  monitorOutputDeviceId: DEVICE
 });
-
-const deviceId = (value) => (typeof value === "string" && value.trim() ? value : DEFAULT_DEVICE);
+const deviceId = (value) => (typeof value === "string" && value.trim() ? value : DEVICE);
 const normalize = (value = {}) => ({
   monitorInputDeviceId: deviceId(value.monitorInputDeviceId),
   monitorOutputDeviceId: deviceId(value.monitorOutputDeviceId)
 });
-
-export const getAudioPreferences = () => normalize(readJsonStorage(STORAGE_KEY));
-
+export const getAudioPreferences = () => normalize(readJsonStorage(KEY));
 export function saveAudioPreferences(patch) {
-  const next = normalize({ ...getAudioPreferences(), ...(isRecord(patch) ? patch : {}) });
-  writeJsonStorage(STORAGE_KEY, next);
+  const value = normalize({ ...getAudioPreferences(), ...(isRecord(patch) ? patch : {}) });
+  writeJsonStorage(KEY, value);
   try {
-    globalThis.dispatchEvent(new CustomEvent("audio-preferences-changed", { detail: next }));
+    globalThis.dispatchEvent(new CustomEvent("audio-preferences-changed", { detail: value }));
   } catch {
-    // A restricted renderer may expose storage without DOM events.
+    // DOM events are optional in restricted renderers.
   }
-  return next;
+  return value;
 }

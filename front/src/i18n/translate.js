@@ -1,13 +1,14 @@
 export const interpolate = (message, values = {}) =>
-  String(message).replace(/\{(\w+)\}/g, (token, key) => String(values[key] ?? token));
-
+  String(message).replace(/\{(\w+)\}/g, (match, key) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match
+  );
 export function translate(catalogs, language, key, values = {}, fallback = key) {
   const locale = language in catalogs ? language : "uk";
-  const message =
-    catalogs[locale]?.[key] ?? (locale === "ru" ? fallback : catalogs.uk?.[key]) ?? fallback;
-  return interpolate(message, values);
+  return interpolate(
+    catalogs[locale]?.[key] ?? (locale === "ru" ? fallback : catalogs.uk?.[key]) ?? fallback,
+    values
+  );
 }
-
 export const missingTranslationKeys = (catalogs) => {
   const expected = Object.keys(catalogs.uk ?? {});
   return Object.fromEntries(

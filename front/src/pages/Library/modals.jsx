@@ -47,9 +47,9 @@ export function SelectedFilePreview({ file }) {
     };
   }, [file]);
   const Icon = playing ? Pause : Play;
-  const label = tr(
-    playing ? "Приостановить выбранный аудиофайл" : "Прослушать выбранный аудиофайл"
-  );
+  const label = playing
+    ? tr("Приостановить выбранный аудиофайл")
+    : tr("Прослушать выбранный аудиофайл");
   return (
     <>
       <IconButton
@@ -167,12 +167,12 @@ export function getProcessingFailureInfo(message) {
 }
 
 const statusLabels = {
-  done: "Готово",
-  error: "Ошибка",
-  cancelled: "Отменено",
-  processing: "Обрабатывается",
-  queued: "В очереди",
-  cancelling: "Отменяется"
+  done: () => tr("Готово"),
+  error: () => tr("Ошибка"),
+  cancelled: () => tr("Отменено"),
+  processing: () => tr("Обрабатывается"),
+  queued: () => tr("В очереди"),
+  cancelling: () => tr("Отменяется")
 };
 
 export function ProcessingModal({
@@ -262,7 +262,7 @@ export function ProcessingModal({
           tone={failed ? "danger" : state === "done" ? "success" : "default"}
           sx={{ alignSelf: "flex-start" }}
         >
-          {tr(statusLabels[state] || state || "Ожидание")}
+          {statusLabels[state]?.() || state || tr("Ожидание")}
         </Chip>
         {!failed && !cancelled && (
           <ProcessingSignal

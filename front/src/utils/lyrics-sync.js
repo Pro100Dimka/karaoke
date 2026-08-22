@@ -1,5 +1,4 @@
 const finite = (value) => Number.isFinite(Number(value));
-
 export function flattenLyricsNotes(lyricsSync) {
   const canonical = new Map();
   for (const [wordIndex, word] of (lyricsSync?.words ?? []).entries()) {
@@ -22,48 +21,42 @@ export function flattenLyricsNotes(lyricsSync) {
   }
   return [...canonical.values()].map(({ value }) => value);
 }
-
-function fillPercent(interval, currentTime) {
-  const start = Number(interval?.start);
-  const end = Number(interval?.end);
-  const now = Number(currentTime);
-  if (![start, end, now].every(Number.isFinite) || end <= start || now <= start) return 0;
-  return now >= end ? 100 : ((now - start) / (end - start)) * 100;
-}
-
+const fill = (interval, currentTime) => {
+  const { start, end } = interval ?? {};
+  const [from, to, now] = [start, end, currentTime].map(Number);
+  if (![from, to, now].every(Number.isFinite) || to <= from || now <= from) return 0;
+  return now >= to ? 100 : ((now - from) / (to - from)) * 100;
+};
 export function mergeAdjacentLyricsNotes(word) {
-  const start = Number(word?.start);
-  const end = Number(word?.end);
+  const [start, end] = [word?.start, word?.end].map(Number);
   if (!finite(start) || !finite(end) || end <= start) return [];
-  const notes = (Array.isArray(word?.notes) ? word.notes : [])
-    .map(({ note, start: noteStart, end: noteEnd }) => ({
-      note: Number(note),
-      start: Math.max(start, Number(noteStart)),
-      end: Math.min(end, Number(noteEnd))
+  return (Array.isArray(word?.notes) ? word.notes : [])
+    .map((note) => ({
+      note: Number(note.note),
+      start: Math.max(start, Number(note.start)),
+      end: Math.min(end, Number(note.end))
     }))
     .filter(
-      ({ note, start: noteStart, end: noteEnd }) =>
-        Number.isInteger(note) && finite(noteStart) && finite(noteEnd) && noteEnd > noteStart
+      (note) =>
+        Number.isInteger(note.note) &&
+        finite(note.start) &&
+        finite(note.end) &&
+        note.end > note.start
     )
-    .sort((left, right) => left.start - right.start);
-  return notes.reduce((merged, note) => {
-    const previous = merged.at(-1);
-    const maxGap = previous
-      ? Math.min(previous.end - previous.start, note.end - note.start) / 2
-      : -1;
-    if (!previous || previous.note !== note.note || note.start - previous.end > maxGap) {
-      merged.push(note);
-    } else {
-      previous.end = Math.max(previous.end, note.end);
-    }
-    return merged;
-  }, []);
+    .sort((a, b) => a.start - b.start)
+    .reduce((merged, note) => {
+      const previous = merged.at(-1);
+      const gap = previous
+        ? Math.min(previous.end - previous.start, note.end - note.start) / 2
+        : -1;
+      if (!previous || previous.note !== note.note || note.start - previous.end > gap)
+        merged.push(note);
+      else previous.end = Math.max(previous.end, note.end);
+      return merged;
+    }, []);
 }
-
 export function lyricsNoteFillPercent(word, currentTime) {
   const notes = mergeAdjacentLyricsNotes(word);
-  return fillPercent(
-    notes.length ? { start: notes[0].start, end: notes.at(-1).end } : word,
-    currentTime
-  );
+  const interval = notes.length ? { start: notes[0].start, end: notes.at(-1).end } : word;
+  return fill(interval, currentTime);
 }

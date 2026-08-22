@@ -7,7 +7,6 @@ export const UI_PREFERENCE_STORAGE = Object.freeze({
   radio: "karaoke-radio",
   settings: "karaoke-settings-view"
 });
-
 export async function hydrateUiPreferences(api) {
   const remote = await api.getUiPreferences();
   await Promise.all(
@@ -22,7 +21,6 @@ export async function hydrateUiPreferences(api) {
     })
   );
 }
-
 export function persistUiPreferences(api, namespace, value) {
   const key = UI_PREFERENCE_STORAGE[namespace];
   if (key) writeJsonStorage(key, value);

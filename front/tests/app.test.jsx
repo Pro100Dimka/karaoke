@@ -6,7 +6,7 @@ import App from "../src/App.jsx";
 vi.mock("react-router-dom", () => ({
   HashRouter: ({ children }) => <div data-testid="router">{children}</div>
 }));
-vi.mock("../src/components/ui/ErrorBoundary", () => ({
+vi.mock("../src/components/ErrorBoundary", () => ({
   default: ({ children }) => <div data-testid="boundary">{children}</div>
 }));
 vi.mock("../src/components/backend-boot-loader", () => ({

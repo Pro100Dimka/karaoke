@@ -19,7 +19,7 @@ import {
 } from "../src/components/audio-player-utils.js";
 import FieldInput from "../src/theme/ui/FieldInput/index.jsx";
 import RangeInput from "../src/theme/ui/RangeInput/index.jsx";
-import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
+import ErrorBoundary from "../src/components/ErrorBoundary.jsx";
 import { Button, Card, IconButton } from "../src/theme/ui";
 const Icon = (props) => <svg data-testid="icon" {...props} />;
 beforeAll(() => {

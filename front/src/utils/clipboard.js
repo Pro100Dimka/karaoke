@@ -13,7 +13,6 @@ function legacyCopy(text) {
     field.remove();
   }
 }
-
 export async function copyText(value) {
   const text = String(value ?? "");
   if (!text) return false;
@@ -22,17 +21,16 @@ export async function copyText(value) {
     try {
       return Boolean(await electronCopy(text));
     } catch {
-      // Continue with browser transports when IPC is unavailable.
+      // Browser transports remain available when IPC itself fails.
     }
   }
   const browserCopy = globalThis.navigator?.clipboard?.writeText;
-  if (typeof browserCopy === "function") {
+  if (typeof browserCopy === "function")
     try {
       await browserCopy.call(globalThis.navigator.clipboard, text);
       return true;
     } catch {
-      // Continue with the legacy browser transport.
+      // Fall back to the legacy browser transport.
     }
-  }
   return legacyCopy(text);
 }

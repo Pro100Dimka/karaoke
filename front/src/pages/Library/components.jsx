@@ -32,17 +32,17 @@ import { formatSongKey, getSongCardState } from "./utils";
 
 const statusTone = { done: "success", error: "danger", processing: "primary", queued: "default" };
 const statusText = {
-  done: "Готово",
-  error: "Ошибка",
-  processing: "Обрабатывается",
-  queued: "В очереди",
-  cancelling: "Отменяется",
-  cancelled: "Отменено",
-  pending: "Ожидает обработки"
+  done: () => tr("Готово"),
+  error: () => tr("Ошибка"),
+  processing: () => tr("Обрабатывается"),
+  queued: () => tr("В очереди"),
+  cancelling: () => tr("Отменяется"),
+  cancelled: () => tr("Отменено"),
+  pending: () => tr("Ожидает обработки")
 };
 const STAT_CARDS = [
-  [Music2, "songCount", "всего песен"],
-  [Mic2, "readyCount", "готово к караоке"]
+  [Music2, "songCount", () => tr("всего песен")],
+  [Mic2, "readyCount", () => tr("готово к караоке")]
 ];
 const EQUALIZER_BARS = Array.from({ length: 16 }, (_, index) => ({
   level: 0.28 + ((index * 37 + 19) % 61) / 100,
@@ -82,7 +82,7 @@ export function LibraryActions({
   setQuery
 }) {
   return (
-    <Grid columns={4} gap="var(--space-4)" align="center">
+    <Grid minItemWidth="min(100%, var(--content-sm))" gap="var(--space-4)" align="center">
       <Card
         variant="laser"
         tilt={false}
@@ -113,13 +113,7 @@ export function LibraryActions({
           }}
         />
       </Card>
-      <Stack
-        direction="row"
-        justify="flex-end"
-        wrap
-        gap="var(--space-2)"
-        sx={{ gridColumn: "span 3" }}
-      >
+      <Stack direction="row" justify="flex-end" wrap gap="var(--space-2)">
         {!roomActive && (
           <Button size="lg" variant="outline" startIcon={<UsersRound />} onClick={onOpenRoom}>
             {tr("Петь вместе")}
@@ -164,7 +158,7 @@ export function LibraryHero({ songCount, readyCount, ...actions }) {
       justify="center"
       align="center"
     >
-      <Stack direction="row" justify="space-between" align="center">
+      <Grid minItemWidth="min(100%, var(--content-sm))" gap="var(--space-8)" align="center">
         <Stack direction="row" align="center" gap="var(--space-5)">
           <Box
             aria-hidden="true"
@@ -187,13 +181,13 @@ export function LibraryHero({ songCount, readyCount, ...actions }) {
             </Typography>
           </Stack>
         </Stack>
-        <Stack direction="row" gap="1rem" sx={{ width: "40%" }}>
-          {STAT_CARDS.map(([Icon, key, label]) => (
+        <Grid minItemWidth="min(100%, calc(var(--content-sm) / 2))" gap="var(--space-4)">
+          {STAT_CARDS.map(([Icon, key, getLabel]) => (
             <Card
               key={key}
               variant="laser"
               tilt={false}
-              sx={{ flex: 1, width: "100%" }}
+              sx={{ minWidth: 0 }}
               cardContent={{
                 style: {
                   display: "flex",
@@ -218,13 +212,13 @@ export function LibraryHero({ songCount, readyCount, ...actions }) {
               <Stack gap="var(--space-1)">
                 <Typography variant="h3">{values[key]}</Typography>
                 <Typography variant="body2" tone="muted">
-                  {tr(label)}
+                  {getLabel()}
                 </Typography>
               </Stack>
             </Card>
           ))}
-        </Stack>
-      </Stack>
+        </Grid>
+      </Grid>
       <LibraryActions {...actions} />
     </Stack>
   );

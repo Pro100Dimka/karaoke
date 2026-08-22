@@ -1,3 +1,59 @@
-@import "./styles/root.css";
-@import "./styles/theme.css";
-@import "./styles/app.css";
+@import "./theme/tokens.css";
+@import "./theme/palettes.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-inline-size: 0;
+  min-block-size: 100%;
+  margin: 0;
+}
+
+html {
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-block-size: 100dvh;
+  overflow-x: hidden;
+  color: var(--color-text);
+  background: var(--bg-image) center / cover no-repeat fixed;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+img,
+svg {
+  display: block;
+}
+
+::-webkit-scrollbar {
+  inline-size: var(--space-2);
+  block-size: var(--space-2);
+}
+::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--color-bg-deep) 50%, transparent);
+}
+::-webkit-scrollbar-thumb {
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-primary);
+  background-clip: padding-box;
+}

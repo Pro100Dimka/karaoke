@@ -1,24 +1,20 @@
-const STORAGE_KEY = "advoice-language";
-const DEFAULT_LANGUAGE = "uk";
-const SUPPORTED = new Set([DEFAULT_LANGUAGE, "ru", "en"]);
-
-export const normalizeLanguage = (language) =>
-  SUPPORTED.has(language) ? language : DEFAULT_LANGUAGE;
-
+const KEY = "advoice-language";
+const DEFAULT = "uk";
+const SUPPORTED = new Set([DEFAULT, "ru", "en"]);
+export const normalizeLanguage = (value) => (SUPPORTED.has(value) ? value : DEFAULT);
 export function getSavedLanguage() {
   try {
-    return normalizeLanguage(globalThis.localStorage?.getItem(STORAGE_KEY));
+    return normalizeLanguage(globalThis.localStorage?.getItem(KEY));
   } catch {
-    return DEFAULT_LANGUAGE;
+    return DEFAULT;
   }
 }
-
 export function saveLanguage(language) {
-  const normalized = normalizeLanguage(language);
+  const value = normalizeLanguage(language);
   try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, normalized);
+    globalThis.localStorage?.setItem(KEY, value);
   } catch {
-    // Backend settings remain authoritative when browser storage is restricted.
+    // Backend persistence remains authoritative in restricted renderers.
   }
-  return normalized;
+  return value;
 }

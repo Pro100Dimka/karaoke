@@ -1,14 +1,10 @@
 import { api } from "../api/client";
 
-const LIMITS = { message: 2000, stack: 4000 };
 let currentUser = null;
-
 const limited = (value, limit) => (value == null ? undefined : String(value).slice(0, limit));
-
 export const setErrorReporterUser = (name) => {
   currentUser = String(name ?? "").trim() || null;
 };
-
 export function reportClientError(
   message,
   { source = "renderer", level = "error", stack, url } = {}
@@ -18,17 +14,16 @@ export function reportClientError(
       api.reportClientLog({
         source,
         level,
-        message: limited(message ?? "unknown error", LIMITS.message),
-        stack: limited(stack, LIMITS.stack),
+        message: limited(message ?? "unknown error", 2000),
+        stack: limited(stack, 4000),
         url: url ?? globalThis.location?.href,
         user: currentUser
       })
     ).catch(() => {});
   } catch {
-    // Error reporting must never become another renderer error.
+    // Reporting must never cause another renderer failure.
   }
 }
-
 export function installGlobalErrorReporting() {
   if (!globalThis.window || window.__advoiceErrorReporterInstalled) return;
   window.__advoiceErrorReporterInstalled = true;
@@ -39,8 +34,6 @@ export function installGlobalErrorReporting() {
     })
   );
   window.addEventListener("unhandledrejection", ({ reason }) =>
-    reportClientError(reason?.message ?? reason ?? "unhandled rejection", {
-      stack: reason?.stack
-    })
+    reportClientError(reason?.message ?? reason ?? "unhandled rejection", { stack: reason?.stack })
   );
 }
