@@ -30,8 +30,7 @@ export default function ToolsPanel({
         {tools.map(([Icon, label, active, action]) => (
           <Button
             key={label}
-            size="sm"
-            variant={active ? "contained" : "outline"}
+            variant={active ? "contained" : "outlined"}
             tone={active ? "success" : "primary"}
             startIcon={<Icon />}
             aria-pressed={typeof active === "boolean" ? active : undefined}
@@ -45,8 +44,7 @@ export default function ToolsPanel({
         {EFFECT_PRESETS.map(normalizePreset).map(([id, label, symbol, echo, reverb, delay]) => (
           <Button
             key={id}
-            size="sm"
-            variant={effectPreset === id ? "contained" : "outline"}
+            variant={effectPreset === id ? "contained" : "outlined"}
             title={t("{0}: эхо {1}%, реверб {2}%", {
               0: label,
               1: Math.round(echo * 100),

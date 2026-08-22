@@ -81,7 +81,7 @@ export default function ConsoleCenter({
         <IconButton
           icon={isPlaying ? Pause : Play}
           label={t(isPlaying ? "Пауза" : "Воспроизвести")}
-          size="lg"
+          iconSize={60}
           onClick={onTogglePlay}
         />
         <IconButton icon={Square} label={t("Остановить")} variant="outline" onClick={onStop} />

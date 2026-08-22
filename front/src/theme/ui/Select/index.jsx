@@ -245,7 +245,8 @@ const Select = forwardRef(
                 open
                 id={listboxId}
                 role="listbox"
-                className="ui-select-popover"
+                className="ui-select-popover ui-control"
+                data-size={size}
                 style={{
                   position: "fixed",
                   top: position.top,
@@ -297,12 +298,13 @@ const Select = forwardRef(
                         key={item.value}
                         type="button"
                         unstyled
+                        data-size={size}
                         role="option"
                         aria-selected={active}
                         disabled={item.disabled}
                         data-value={String(item.value)}
                         data-selected={active || undefined}
-                        className="ui-select-option"
+                        className="ui-select-option ui-control"
                         onClick={(event) => selectOption(item, event)}
                       >
                         <span className="ui-select-option-mark">

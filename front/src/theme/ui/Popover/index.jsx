@@ -2,13 +2,13 @@ import { forwardRef, useEffect, useRef } from "react";
 import mergeRefs from "../_internal/mergeRefs";
 import "./popover.css";
 
-const Popover = forwardRef(function Popover({
+const Popover = forwardRef(({
   open,
   onClose,
   children,
   className = "",
   ...props
-}, ref) {
+}, ref) => {
   const popoverRef = useRef(null);
 
   useEffect(() => {

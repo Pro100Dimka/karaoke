@@ -50,11 +50,6 @@ export default function OnlineRoomParticipant({
       gap="var(--space-3)"
       data-self={self || undefined}
       data-speaking={speaking || undefined}
-      sx={{
-        padding: "var(--space-3)",
-        borderRadius: "var(--radius-md)",
-        background: "var(--color-surface-glass)"
-      }}
     >
       <Stack direction="row" align="center" gap="var(--space-2)" sx={{ minInlineSize: 0 }}>
         <Typography as="strong" noWrap>
@@ -99,7 +94,9 @@ export default function OnlineRoomParticipant({
               key={label}
               icon={icon}
               label={label}
-              variant="outline"
+              iconSize={58}
+              sx={{ minBlockSize: 0 }}
+              variant="contained"
               disabled={disabled}
               onClick={onClick}
             />

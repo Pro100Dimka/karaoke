@@ -4,6 +4,8 @@ from typing import Any
 
 from .models import VocalNote, Word, to_dict
 
+LYRICS_TIME_DIGITS = 3
+
 
 def validate_lyrics_document(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict) or any(key not in payload for key in ("bpm", "key", "words")) or not isinstance(payload["words"], list):
@@ -41,7 +43,7 @@ def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str
         clipped = []
         for note in owned:
             start, end = max(note.start, word.start), min(note.end, word.end)
-            if end <= start:
+            if round(end, LYRICS_TIME_DIGITS) <= round(start, LYRICS_TIME_DIGITS):
                 print(
                     f"[notes] dropping degenerate clip: word#{word.index} "
                     f"[{word.start:.6f}..{word.end:.6f}] note(word_index={note.word_index}) "

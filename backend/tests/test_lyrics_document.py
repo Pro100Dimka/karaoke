@@ -101,6 +101,16 @@ def test_export_preserves_every_acoustically_detected_interval_without_filling_g
     ]
 
 
+def test_export_drops_boundary_sliver_that_rounds_to_a_zero_length_note():
+    words = [Word(35.678, 36.08, "first", index=0), Word(36.08, 36.4, "second", index=1)]
+    detected = [VocalNote(36.0796, 36.2, 67, word_index=1)]
+
+    payload = words_with_notes(words, detected)
+
+    assert payload[0]["notes"] == []
+    assert payload[1]["notes"] == [{"note": 67, "start": 36.08, "end": 36.2}]
+
+
 def test_short_word_keeps_its_acoustically_detected_note():
     words = [Word(1.0, 1.04, "a", index=0)]
 

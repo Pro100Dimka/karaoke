@@ -62,7 +62,7 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
         )
       }}
     >
-      <Stack gap="var(--space-4)">
+      <Stack gap="var(--space-4)" sx={{ padding: "var(--space-4)" }}>
         <FieldInput
           field={{
             name: "onlineName",
