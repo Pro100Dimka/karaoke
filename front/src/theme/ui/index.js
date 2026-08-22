@@ -8,7 +8,6 @@ export { default as ConfigForm } from "./ConfigForm";
 export { default as Grid } from "./Grid";
 export { default as FolderField } from "./FolderField";
 export { default as FieldInput } from "./FieldInput";
-export { default as FieldList } from "./FieldList";
 export { default as IconButton } from "./IconButton";
 export { default as InputBase } from "./InputBase";
 export {

@@ -18,10 +18,8 @@ import {
   toggleAudioPlayback
 } from "../src/components/audio-player-utils.js";
 import FieldInput from "../src/theme/ui/FieldInput/index.jsx";
-import FieldList from "../src/theme/ui/FieldList/index.jsx";
 import RangeInput from "../src/theme/ui/RangeInput/index.jsx";
 import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
-import StatusBadge from "../src/components/ui/StatusBadge.jsx";
 import { Button, Card, IconButton } from "../src/theme/ui";
 const Icon = (props) => <svg data-testid="icon" {...props} />;
 beforeAll(() => {
@@ -57,14 +55,6 @@ describe("primitive UI components", () => {
       [screen.getByLabelText("Icon action").title, "toBe", "Custom"],
       [screen.getByLabelText("Raw icon").getAttribute("class"), "toBeNull"]
     );
-  });
-  test("renders statuses", () => {
-    const { rerender } = render(<StatusBadge status="done" />);
-    expect(document.querySelector('[data-status="done"]')).not.toBeNull();
-    rerender(<StatusBadge status="custom" />);
-    expect(document.querySelector('[data-status="custom"]')).not.toBeNull();
-    rerender(<StatusBadge />);
-    expect(screen.getByText("unknown")).not.toBeNull();
   });
   test("applies neon card pointer effects and delegates handlers", () => {
     const moved = vi.fn();
@@ -201,28 +191,12 @@ describe("field controls", () => {
     );
     expect(() => fireEvent.blur(screen.getByLabelText("Text"))).not.toThrow();
   });
-  test("maps field lists and range commit semantics", () => {
+  test("handles range commit semantics", () => {
     const change = vi.fn();
-    const blur = vi.fn();
-    const { rerender } = render(
-      <FieldList
-        fields={[{ name: "x", label: "X" }]}
-        values={{ x: "a" }}
-        onChange={change}
-        onBlur={blur}
-        className="list"
-      />
-    );
-    fireEvent.change(screen.getByLabelText("X"), { target: { value: "b" } });
-    fireEvent.blur(screen.getByLabelText("X"));
-    expect(change).toHaveBeenCalledWith("x", "b");
-    verify([blur, "toHaveBeenCalledWith", "x", "a", expect.objectContaining({ name: "x" })]);
-    rerender(
-      <FieldList fields={[{ name: "y", label: "Y" }]} values={{ y: "c" }} onChange={change} />
-    );
-    expect(() => fireEvent.blur(screen.getByLabelText("Y"))).not.toThrow();
     const commit = vi.fn();
-    rerender(<RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />);
+    const { rerender } = render(
+      <RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />
+    );
     const range = screen.getByLabelText("Range");
     fireEvent.change(range, { target: { value: "2" } });
     fireEvent.pointerUp(range, { target: { value: "2" } });

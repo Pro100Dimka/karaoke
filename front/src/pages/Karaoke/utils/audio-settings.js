@@ -79,11 +79,3 @@ export function findMatchingBrowserOutput(entries, selectedDevice) {
     }) || null
   );
 }
-
-export function groupBrowserAudioDevices(devices) {
-  const list = Array.isArray(devices) ? devices : [];
-  return {
-    inputs: list.filter((device) => device?.kind === "audioinput"),
-    outputs: list.filter((device) => device?.kind === "audiooutput")
-  };
-}

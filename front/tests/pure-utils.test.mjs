@@ -8,15 +8,15 @@ import {
   getMelodyGuideState,
   midiToFrequency
 } from "../src/pages/Karaoke/utils/melody-guide.js";
-import { marqueeHitIds } from "../src/pages/MelodyEditor/melody-editor-geometry.js";
 import {
   adjacentNoteId,
   canMergeSelectedNotes,
   constrainedMoveDelta,
   deleteNotes,
+  marqueeHitIds,
   mergeSelectedNotes,
   resizeBounds
-} from "../src/pages/MelodyEditor/melody-editor-operations.js";
+} from "../src/pages/MelodyEditor/model.js";
 import {
   flattenLyricsNotes,
   lyricsNoteFillPercent,

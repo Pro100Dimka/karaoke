@@ -8,9 +8,6 @@ const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: f
 vi.mock("../src/hooks/useAppSettings", () => ({
   default: () => (mocks.noSettings ? null : { settings: { theme: mocks.theme } })
 }));
-vi.mock("../src/components/ui/StatusBadge", () => ({
-  default: ({ status }) => <span data-testid="status">{status}</span>
-}));
 vi.mock("../src/theme/ui", async (importOriginal) => ({
   ...(await importOriginal()),
   Modal: ({ children, titleProps }) => {
