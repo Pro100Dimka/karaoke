@@ -76,7 +76,7 @@ export default function LibraryActions({
       gap="var(--space-4)"
       align="center"
       wrap
-      sx={{ position: "relative", width: "100%" }}
+      sx={{ position: "relative", width: "50%" }}
       {...dropzone.getRootProps()}
       aria-label={tr("Зона добавления песен")}
       data-drop-active={dropzone.isDragActive || undefined}

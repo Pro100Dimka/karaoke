@@ -57,6 +57,7 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
   const seek = (event) => {
     if (!duration) return;
     const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
     onChange?.(((event.clientX - rect.left) / rect.width) * duration);
   };
   return (
@@ -68,7 +69,8 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
         seek(event);
       }}
       onPointerMove={(event) =>
-        event.currentTarget.hasPointerCapture?.(event.pointerId) && seek(event)
+        (event.buttons === 1 || event.currentTarget.hasPointerCapture?.(event.pointerId)) &&
+        seek(event)
       }
       sx={{ position: "relative", flex: 1, minInlineSize: 0, color: "var(--color-primary)" }}
     >

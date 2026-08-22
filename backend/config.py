@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from AI.model_registry import MODELS, model_path
@@ -166,6 +167,30 @@ CACHE_DIR = _env_path("SONGAPP_CACHE_DIR", _saved_path("cache_folder", _DEFAULT_
 UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
 
 
+def configure_runtime_cache_environment() -> None:
+    """Keep transient Python/AI artefacts inside the user-selected cache."""
+    root = CACHE_DIR / "ai-runtime"
+    paths = {
+        "TEMP": root / "temp",
+        "TMP": root / "temp",
+        "HF_HOME": root / "huggingface",
+        "HUGGINGFACE_HUB_CACHE": root / "huggingface" / "hub",
+        "TRANSFORMERS_CACHE": root / "huggingface" / "transformers",
+        "TORCH_HOME": root / "torch",
+        "XDG_CACHE_HOME": root,
+        "NUMBA_CACHE_DIR": root / "numba",
+        "KERAS_HOME": root / "keras",
+        "MPLCONFIGDIR": root / "matplotlib",
+        "CUDA_CACHE_PATH": root / "cuda",
+        "TRITON_CACHE_DIR": root / "triton",
+        "TORCHINDUCTOR_CACHE_DIR": root / "torchinductor",
+    }
+    for name, path in paths.items():
+        path.mkdir(parents=True, exist_ok=True)
+        os.environ[name] = str(path)
+    tempfile.tempdir = str(paths["TEMP"])
+
+
 def apply_storage_paths(
     *,
     songs_folder: str | None = None,
@@ -191,6 +216,7 @@ def apply_storage_paths(
     if cache_folder is not None: CACHE_DIR = Path(cache_folder).expanduser().resolve()
     UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
     ensure_directories()
+    configure_runtime_cache_environment()
     configure_ai_resource_environment(force=True)
 
 
@@ -286,4 +312,5 @@ def ensure_directories() -> None:
 
 
 ensure_directories()
+configure_runtime_cache_environment()
 configure_ai_resource_environment()

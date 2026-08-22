@@ -19,13 +19,15 @@ const KaraokeLyricLine = ({ line, currentTime }) => (
 beforeEach(() => {
   apiMocks.getAudioTrackBlob.mockReset();
   apiMocks.getAudioTrackBlob.mockImplementation((_id, track) => Promise.resolve(new Blob([track])));
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
   delete globalThis.electronAPI;
 });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-test("karaoke media keeps direct authenticated URLs inside Electron", () => {
+test("karaoke media keeps direct authenticated URLs inside Electron and releases them", () => {
   globalThis.electronAPI = { isElectron: true };
   const props = {
     instrumentalRef: createRef(),
@@ -40,7 +42,7 @@ test("karaoke media keeps direct authenticated URLs inside Electron", () => {
     sendYouTubeCommand: vi.fn(),
     syncSecondaryMedia: vi.fn()
   };
-  const { container, rerender } = render(<KaraokeMedia {...props} song={{ id: "electron-song", title: "Title" }} />);
+  const { container, rerender, unmount } = render(<KaraokeMedia {...props} song={{ id: "electron-song", title: "Title" }} />);
   expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
     "electron-song/instrumental",
     "electron-song/vocals"
@@ -51,6 +53,9 @@ test("karaoke media keeps direct authenticated URLs inside Electron", () => {
     "next-song/vocals"
   ]);
   expect(apiMocks.getAudioTrackBlob).not.toHaveBeenCalled();
+  unmount();
+  expect(HTMLMediaElement.prototype.pause).toHaveBeenCalledTimes(4);
+  expect(HTMLMediaElement.prototype.load).toHaveBeenCalledTimes(4);
 });
 test("karaoke media releases authenticated files resolved after unmount", async () => {
   const resolvers = [];

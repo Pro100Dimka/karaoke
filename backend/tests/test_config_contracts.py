@@ -110,6 +110,39 @@ def test_apply_storage_paths_updates_only_supplied_values(monkeypatch, tmp_path)
     monkeypatch.setattr(config, "MODELS_DIR", original_models)
 
 
+def test_runtime_caches_follow_selected_cache_folder(monkeypatch, tmp_path):
+    cache = tmp_path / "cache"
+    names = (
+        "TEMP",
+        "TMP",
+        "HF_HOME",
+        "HUGGINGFACE_HUB_CACHE",
+        "TRANSFORMERS_CACHE",
+        "TORCH_HOME",
+        "XDG_CACHE_HOME",
+        "NUMBA_CACHE_DIR",
+        "KERAS_HOME",
+        "MPLCONFIGDIR",
+        "CUDA_CACHE_PATH",
+        "TRITON_CACHE_DIR",
+        "TORCHINDUCTOR_CACHE_DIR",
+    )
+    monkeypatch.setattr(config, "CACHE_DIR", cache)
+    monkeypatch.setattr(config.tempfile, "tempdir", config.tempfile.tempdir)
+    for name in names:
+        monkeypatch.setenv(name, "previous")
+
+    config.configure_runtime_cache_environment()
+
+    root = cache / "ai-runtime"
+    assert config.tempfile.gettempdir() == str(root / "temp")
+    assert config.os.environ["TEMP"] == str(root / "temp")
+    assert config.os.environ["TMP"] == str(root / "temp")
+    assert config.os.environ["HF_HOME"] == str(root / "huggingface")
+    assert config.os.environ["TORCH_HOME"] == str(root / "torch")
+    assert config.os.environ["CUDA_CACHE_PATH"] == str(root / "cuda")
+
+
 def test_ai_resource_environment_uses_existing_downloads(monkeypatch, tmp_path):
     models_dir, engine_dir = tmp_path / 'models', tmp_path / 'engines' / 'msst'
     config_file, checkpoint, snapshot = engine_dir / 'configs' / 'KimberleyJensen' / 'config_vocals_mel_band_roformer_kj.yaml', models_dir / 'pitch.pt', models_dir / 'asr'

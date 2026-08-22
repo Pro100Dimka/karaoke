@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { Box } from "../../../theme/ui";
@@ -33,10 +33,24 @@ function useTrack(songId, track) {
 
 function AudioTrack({ audioRef, songId, track, volume }) {
   const source = useTrack(songId, track);
+  const element = useRef(null);
+  useEffect(
+    () => () => {
+      const audio = element.current;
+      if (!audio) return;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    },
+    []
+  );
   return (
     <Box
       as="audio"
-      ref={audioRef}
+      ref={(node) => {
+        if (node) element.current = node;
+        audioRef.current = node;
+      }}
       src={source || undefined}
       preload="auto"
       sx={{ display: "none" }}
@@ -70,12 +84,19 @@ export default function KaraokeMedia({
   return (
     <>
       <AudioTrack
+        key={`${song.id}:instrumental`}
         audioRef={instrumentalRef}
         songId={song.id}
         track="instrumental"
         volume={musicVolume}
       />
-      <AudioTrack audioRef={vocalsRef} songId={song.id} track="vocals" volume={vocalVolume} />
+      <AudioTrack
+        key={`${song.id}:vocals`}
+        audioRef={vocalsRef}
+        songId={song.id}
+        track="vocals"
+        volume={vocalVolume}
+      />
       {youTubeVideoId ? (
         <Box
           as="iframe"
