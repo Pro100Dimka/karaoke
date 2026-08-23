@@ -3,6 +3,7 @@ import {
   FolderOpen,
   Headphones,
   Music2,
+  Play,
   RotateCcw,
   Settings2,
   Trash2
@@ -84,18 +85,18 @@ export function getSongActions({
   onOpenSettings,
   onProcess,
   onReprocess,
+  activate,
   song
 }) {
   return [
-    isReady
-      ? [Headphones, tr("Прослушать записи"), "contained", () => onOpenRecordings(song)]
+    ...(isReady
+      ? [
+          [Play, tr("Воспроизвести"), "contained", activate],
+          [Headphones, tr("Прослушать записи"), "contained", () => onOpenRecordings(song)]
+        ]
       : canManageLibrary && [
-          AudioWaveform,
-          tr("Обработать песню"),
-          "contained",
-          () => onProcess(song),
-          isWorking
-        ],
+          [AudioWaveform, tr("Обработать песню"), "contained", () => onProcess(song), isWorking]
+        ]),
     canManageLibrary && [
       Settings2,
       tr("Настройки песни"),

@@ -43,17 +43,17 @@ const LibrarySongCard = memo(
         role={isReady ? "button" : undefined}
         tabIndex={isReady ? 0 : undefined}
         aria-label={isReady ? tr("Открыть {0} в караоке", { 0: song.title }) : undefined}
-        onClick={(event) => !event.target.closest?.("button, a, input") && activate()}
-        onKeyDown={(event) => {
-          if (
-            event.target === event.currentTarget &&
-            ["Enter", " "].includes(event.key) &&
-            isReady
-          ) {
-            event.preventDefault();
-            activate();
-          }
-        }}
+        // onClick={(event) => !event.target.closest?.("button, a, input") && activate()}
+        // onKeyDown={(event) => {
+        //   if (
+        //     event.target === event.currentTarget &&
+        //     ["Enter", " "].includes(event.key) &&
+        //     isReady
+        //   ) {
+        //     event.preventDefault();
+        //     activate();
+        //   }
+        // }}
         sx={{ contentVisibility: "auto" }}
         style={{ "--card-sheen": "transparent", "--card-sheen-soft": "transparent" }}
         cardPanel={{
@@ -118,7 +118,7 @@ const LibrarySongCard = memo(
                 gap="var(--space-2)"
                 sx={{ width: "auto" }}
               >
-                {getSongActions({ ...handlers, isReady, isWorking, song }).map(
+                {getSongActions({ ...handlers, activate, isReady, isWorking, song }).map(
                   ([Icon, label, variant, onClick, disabled]) => (
                     <IconButton
                       key={label}
