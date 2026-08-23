@@ -180,14 +180,22 @@ describe("bounded lyricsSync note editing", () => {
     { _id: "c", note: 67, start: 3, end: 4, word_index: 1, word_start: 3, word_end: 5 }
   ];
 
-  test("merge, move, resize and delete cannot cross word ownership", () => {
+  test("merge can cross word ownership when notes are adjacent; move, resize and delete respect every note on the timeline", () => {
     expect(mergeSelectedNotes(notes, ["a", "b"])).toMatchObject({
       selectedId: "a",
       notes: [expect.objectContaining({ _id: "a", note: 62, start: 1, end: 2 }), notes[2]]
     });
     expect(canMergeSelectedNotes(notes, ["a", "b"])).toBe(true);
-    expect(canMergeSelectedNotes(notes, ["b", "c"])).toBe(false);
-    expect(mergeSelectedNotes(notes, ["b", "c"]).notes).toBe(notes);
+    // "b" and "c" belong to different words but are the two adjacent notes
+    // at the end of the timeline, so merging them (e.g. a sustained note
+    // split at the word boundary) is allowed
+    expect(canMergeSelectedNotes(notes, ["b", "c"])).toBe(true);
+    const crossWordMerge = mergeSelectedNotes(notes, ["b", "c"]);
+    expect(crossWordMerge.selectedId).toBe("b");
+    expect(crossWordMerge.notes).toMatchObject([
+      { _id: "a", start: 1, end: 1.5 },
+      { _id: "b", note: 66, start: 1.5, end: 4, word_start: 1, word_end: 5 }
+    ]);
     expect(constrainedMoveDelta(notes, ["a"], -10)).toBe(0);
     expect(constrainedMoveDelta(notes, ["b"], 10)).toBe(1);
     expect(resizeBounds(notes, "b")).toEqual({

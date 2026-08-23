@@ -54,14 +54,30 @@ test("normalizes, clamps, sorts and rejects invalid or overlapping notes", () =>
   ]);
 });
 
-test("merges only notes from the same word and deletes selected notes", () => {
-  const notes = [note("a", 0, 0.5, 60), note("b", 0.5, 1, 64), note("c", 2, 3, 70, 1)];
+test("merges adjacent notes -- including across a word boundary -- and deletes selected notes", () => {
+  // "a" and "b" are in different words (word_index 0 and 9, with bounds that
+  // only cover their own note); merging them is exactly the case this
+  // exists for: a sustained note that got split where the lyric word
+  // happened to end.
+  const notes = [
+    { ...note("a", 0, 0.5, 60, 0), word_start: 0, word_end: 0.5 },
+    { ...note("b", 0.5, 1, 64, 9), word_start: 0.5, word_end: 1 },
+    note("c", 2, 3, 70, 1)
+  ];
   expect(canMergeSelectedNotes(notes, ["a", "b"])).toBe(true);
   const merged = mergeSelectedNotes(notes, ["a", "b"]);
   expect(merged.selectedId).toBe("a");
   expect(merged.notes.map(({ _id }) => _id)).toEqual(["a", "c"]);
-  expect(merged.notes.find(({ _id }) => _id === "a")).toMatchObject({ start: 0, end: 1, note: 62 });
+  const result = merged.notes.find(({ _id }) => _id === "a");
+  expect(result).toMatchObject({ start: 0, end: 1, note: 62 });
+  // the merged note's own bounds now cover the union of both words, so a
+  // later move/resize isn't clamped back down to just the first word
+  expect(result.word_start).toBe(0);
+  expect(result.word_end).toBe(1);
+  // "a" and "c" are not adjacent -- "b" sits between them -- so merging them
+  // while leaving "b" unselected is refused
   expect(mergeSelectedNotes(notes, ["a", "c"]).notes).toBe(notes);
+  expect(canMergeSelectedNotes(notes, ["a", "c"])).toBe(false);
   expect(mergeSelectedNotes(notes, []).selectedId).toBeNull();
   expect(mergeSelectedNotes(notes, ["a"]).selectedId).toBe("a");
   expect(canMergeSelectedNotes(notes, ["a"])).toBe(false);
@@ -82,12 +98,17 @@ test("finds adjacent notes in both directions and without an existing selection"
   expect(adjacentNoteId([], [], 1)).toBeNull();
 });
 
-test("constrains movement and resizing to the word and neighbouring notes", () => {
+test("constrains movement and resizing to the note's own word and every other note on the timeline", () => {
   const notes = [note("a", 0.2, 0.6), note("b", 0.8, 1.2)];
   expect(constrainedMoveDelta(notes, ["a"], -1)).toBeCloseTo(-0.2);
   expect(constrainedMoveDelta(notes, ["a"], 1)).toBeCloseTo(0.2);
   expect(constrainedMoveDelta(notes, [], 1)).toBe(0);
   expect(constrainedMoveDelta([note("a", 0.2, 0.5), note("b", 0.7, 1), note("other", 2, 3, 70, 1)], ["a", "b"], 2)).toBe(1);
+  // a note from a *different* word still blocks movement/resizing if it is
+  // the closer obstacle -- collisions are checked across the whole timeline,
+  // not just within one word, since a merge can make one note span several
+  // words
+  expect(constrainedMoveDelta([note("a", 0.2, 0.5), note("other", 0.8, 1.2, 70, 1)], ["a"], 2)).toBeCloseTo(0.3);
   expect(constrainedMoveDelta([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], ["moving"], -1)).toBe(0);
   expect(constrainedMoveDelta([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], ["moving"], 1)).toBe(0);
   expect(resizeBounds(notes, "a")).toEqual({
@@ -102,9 +123,17 @@ test("constrains movement and resizing to the word and neighbouring notes", () =
     minStart: 0.2,
     maxEnd: 0.5
   });
+  // "other-word" is farther than the note's own word bound here, so the
+  // word bound is still the tighter (and thus decisive) limit
   expect(resizeBounds([note("moving", 0.2, 0.5), note("other-word", 2, 3, 70, 1)], "moving")).toMatchObject({
     minStart: 0,
     maxEnd: 2
+  });
+  // but a note from a different word that sits *closer* than the word bound
+  // still constrains the resize
+  expect(resizeBounds([note("moving", 0.2, 0.5), note("closer-word", 0.7, 1, 70, 1)], "moving")).toMatchObject({
+    minStart: 0,
+    maxEnd: 0.7
   });
 });
 
@@ -216,7 +245,21 @@ test("shifts a selected run of word texts forward or backward, carrying every la
   expect(shiftWordTexts(texts, [3, 4], 1)).toBe(texts);
 });
 
-test("serializes only the backend note contract and rounds editor time", () => {
-  expect(serializeNotes([{ ...note("a", 0, 1), extra: true }])).toEqual([{ note: 60, start: 0, end: 1, word_index: 0 }]);
+test("serializes notes by clipping them to every word they overlap, splitting a merged cross-word note back apart", () => {
+  const words = [
+    { start: 0, end: 1 },
+    { start: 1, end: 2 }
+  ];
+  expect(serializeNotes([{ ...note("a", 0, 1), extra: true }], words)).toEqual([
+    { note: 60, start: 0, end: 1, word_index: 0 }
+  ]);
+  // a note spanning both words (e.g. the result of merging across the word
+  // boundary) is split back into one clipped piece per word it overlaps --
+  // the backend's per-word note contract never has to change
+  expect(serializeNotes([note("merged", 0.5, 1.5)], words)).toEqual([
+    { note: 60, start: 0.5, end: 1, word_index: 0 },
+    { note: 60, start: 1, end: 1.5, word_index: 1 }
+  ]);
+  expect(serializeNotes([note("a", 0, 1)], [])).toEqual([]);
   expect(roundTime(1.23456)).toBe(1.235);
 });

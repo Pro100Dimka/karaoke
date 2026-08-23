@@ -643,18 +643,20 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
 
-        shared = {
-            "language": None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
-            "progress": _create_ai_progress_callback(song_id, capture),
-            "cancelled": lambda: _is_cancelled(song_id),
-        }
+        shared_language = None if lyrics_path is not None else config.DEFAULT_LANGUAGE
+        shared_progress = _create_ai_progress_callback(song_id, capture)
+        shared_cancelled = lambda: _is_cancelled(song_id)  # noqa: E731
         result = (
-            ai_bridge.reprocess_song(out_dir, **shared)
+            ai_bridge.reprocess_song(
+                out_dir, language=shared_language,
+                progress=shared_progress, cancelled=shared_cancelled,
+            )
             if reuse_vocals
             else ai_bridge.process_song(
                 source_path, out_dir, lyrics_path=lyrics_path,
                 title=searchable_title, bpm_override=bpm_override,
-                key_override=key_override, processing_mode=processing_mode, **shared,
+                key_override=key_override, processing_mode=processing_mode,
+                language=shared_language, progress=shared_progress, cancelled=shared_cancelled,
             )
         )
         result_warnings = getattr(result, "warnings", ())

@@ -28,16 +28,16 @@ export function normalizeNotes(notes = []) {
         Number.isInteger(note.word_index) &&
         note.end > note.start
     )
-    .sort((a, b) => a.word_index - b.word_index || byStart(a, b));
-  const endByWord = new Map();
-  return ordered
-    .filter((note) => {
-      const previous = endByWord.get(note.word_index) ?? note.word_start;
-      if (note.start < previous) return false;
-      endByWord.set(note.word_index, note.end);
-      return true;
-    })
     .sort(byStart);
+  // Notes share one timeline regardless of which word they were originally
+  // attached to (a merge can span two words), so overlap is resolved
+  // globally here rather than per word.
+  let previousEnd = -Infinity;
+  return ordered.filter((note) => {
+    if (note.start < previousEnd) return false;
+    previousEnd = note.end;
+    return true;
+  });
 }
 
 const selectedNotes = (notes, ids) => {
@@ -45,16 +45,30 @@ const selectedNotes = (notes, ids) => {
   return notes.filter(({ _id }) => selected.has(_id)).sort(byStart);
 };
 
+// Two or more selected notes can merge as long as nothing unselected sits
+// between them on the timeline -- they no longer need to share a word, since
+// a sustained note that was split at a word boundary is exactly the case
+// this exists to fix.
+const isContiguousSelection = (notes, chosen) => {
+  if (chosen.length < 2) return false;
+  const ordered = [...notes].sort(byStart);
+  const chosenIds = new Set(chosen.map(({ _id }) => _id));
+  const positions = ordered.map(({ _id }) => _id).filter((id) => chosenIds.has(id));
+  const first = ordered.findIndex(({ _id }) => _id === positions[0]);
+  return ordered.slice(first, first + positions.length).every(({ _id }) => chosenIds.has(_id));
+};
+
 export function mergeSelectedNotes(notes, ids) {
   const chosen = selectedNotes(notes, ids);
-  if (chosen.length < 2 || chosen.some((note) => note.word_index !== chosen[0].word_index))
-    return { notes, selectedId: chosen[0]?._id || null };
+  if (!isContiguousSelection(notes, chosen)) return { notes, selectedId: chosen[0]?._id || null };
   const selected = new Set(ids);
   const merged = {
     ...chosen[0],
     start: Math.min(...chosen.map(({ start }) => start)),
     end: Math.max(...chosen.map(({ end }) => end)),
-    note: Math.round(chosen.reduce((sum, { note }) => sum + note, 0) / chosen.length)
+    note: Math.round(chosen.reduce((sum, { note }) => sum + note, 0) / chosen.length),
+    word_start: Math.min(...chosen.map(({ word_start }) => word_start)),
+    word_end: Math.max(...chosen.map(({ word_end }) => word_end))
   };
   return {
     notes: normalizeNotes([...notes.filter(({ _id }) => !selected.has(_id)), merged]),
@@ -62,10 +76,8 @@ export function mergeSelectedNotes(notes, ids) {
   };
 }
 
-export const canMergeSelectedNotes = (notes, ids) => {
-  const chosen = selectedNotes(notes, ids);
-  return chosen.length > 1 && chosen.every(({ word_index }) => word_index === chosen[0].word_index);
-};
+export const canMergeSelectedNotes = (notes, ids) =>
+  isContiguousSelection(notes, selectedNotes(notes, ids));
 
 export const deleteNotes = (notes, ids) => {
   const selected = new Set(ids);
@@ -92,7 +104,7 @@ export function constrainedMoveDelta(notes, ids, requested) {
   let maximum = Math.min(...chosen.map(({ word_end, end }) => word_end - end));
   chosen.forEach((current) =>
     notes.forEach((neighbour) => {
-      if (moving.has(neighbour._id) || neighbour.word_index !== current.word_index) return;
+      if (moving.has(neighbour._id)) return;
       if (neighbour.end <= current.start)
         minimum = Math.max(minimum, neighbour.end - current.start);
       if (neighbour.start >= current.end)
@@ -108,7 +120,7 @@ export function resizeBounds(notes, id, minimumDuration = 0.03) {
   let previousEnd = current.word_start;
   let nextStart = current.word_end;
   notes.forEach((note) => {
-    if (note._id === id || note.word_index !== current.word_index) return;
+    if (note._id === id) return;
     if (note.end <= current.start) previousEnd = Math.max(previousEnd, note.end);
     if (note.start >= current.end) nextStart = Math.min(nextStart, note.start);
   });
@@ -228,5 +240,21 @@ export function documentReducer(state, action) {
   return state;
 }
 
-export const serializeNotes = (notes) =>
-  notes.map(({ note, start, end, word_index }) => ({ note, start, end, word_index }));
+// Splits each note against every word it overlaps in time and clips it to
+// that word's own bounds, rather than trusting the note's own (possibly
+// stale, e.g. after a cross-word merge) word_index. This is what lets a
+// merged note that spans two words save correctly without changing the
+// backend's per-word note contract at all -- each word still only ever
+// receives notes clipped to its own bounds, exactly as it always did.
+export function serializeNotes(notes, words = []) {
+  const result = [];
+  notes.forEach((note) => {
+    words.forEach((word, index) => {
+      const start = roundTime(Math.max(note.start, Number(word.start)));
+      const end = roundTime(Math.min(note.end, Number(word.end)));
+      if (end <= start) return;
+      result.push({ note: note.note, start, end, word_index: index });
+    });
+  });
+  return result;
+}
