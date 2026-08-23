@@ -103,15 +103,6 @@ export default function OnlineRoomParticipant({
           ))
         ) : (
           <>
-            <IconButton
-              icon={Sparkles}
-              variant="outline"
-              aria-pressed={effectsEnabled}
-              label={t(key(effectsEnabled, "effects.disable", "effects.enable"), {
-                name: person.name
-              })}
-              onClick={() => onTogglePersonEffects(person.id)}
-            />
             <Slider
               min={0}
               max={1}
@@ -124,9 +115,22 @@ export default function OnlineRoomParticipant({
             />
             <IconButton
               icon={isLocallyMuted ? VolumeX : Volume2}
-              variant="outline"
+              variant={isLocallyMuted ? "contained" : "outlined"}
+              sx={{ minBlockSize: 0 }}
+              iconSize={58}
               label={t(key(isLocallyMuted, "enable", "disable"), { name: person.name })}
               onClick={() => onTogglePersonMuted(person.id)}
+            />
+            <IconButton
+              icon={Sparkles}
+              variant={effectsEnabled ? "contained" : "outline"}
+              aria-pressed={effectsEnabled}
+              label={t(key(effectsEnabled, "effects.disable", "effects.enable"), {
+                name: person.name
+              })}
+              iconSize={58}
+              sx={{ minBlockSize: 0 }}
+              onClick={() => onTogglePersonEffects(person.id)}
             />
           </>
         )}
