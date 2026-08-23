@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import numpy as np
 
 import models
+from sqlalchemy.exc import IntegrityError
 from app.services import audio_service
 from tests._shared import patch_attrs, patch_many, raises
 
@@ -41,6 +42,20 @@ def test_settings_are_loaded_or_created(monkeypatch):
     created = audio_service.get_settings(database)
     assert isinstance(created, models.AudioSettings) and created.id == 1
     database.add.assert_called_once_with(created)
+
+
+def test_settings_creation_recovers_from_concurrent_singleton_insert(monkeypatch):
+    database, winner = Mock(), settings()
+    database.get.side_effect = [None, winner]
+    monkeypatch.setattr(
+        audio_service,
+        "commit_refresh",
+        Mock(side_effect=IntegrityError("insert", {}, Exception("duplicate"))),
+    )
+
+    assert audio_service.get_settings(database) is winner
+    database.add.assert_called_once()
+    assert database.get.call_count == 2
 
 
 def test_input_device_name_is_bounded_and_backend_aware(monkeypatch):

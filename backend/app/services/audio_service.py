@@ -8,6 +8,7 @@ import sys
 import threading
 from pathlib import Path
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import config
@@ -256,7 +257,15 @@ def _get_or_create_settings(db: Session) -> models.AudioSettings:
     if (settings := db.get(models.AudioSettings, 1)) is not None: return settings
     settings = models.AudioSettings(id=1)
     db.add(settings)
-    return commit_refresh(db, settings)
+    try:
+        return commit_refresh(db, settings)
+    except IntegrityError:
+        # Two API requests can observe the singleton row as missing at the
+        # same time.  The winner creates id=1; the loser must reuse it rather
+        # than turning a harmless first-run race into HTTP 500.
+        if (settings := db.get(models.AudioSettings, 1)) is not None:
+            return settings
+        raise
 
 
 def get_settings(db: Session) -> models.AudioSettings: return _get_or_create_settings(db)
