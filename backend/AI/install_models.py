@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import logging
 import os
-import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -129,13 +128,17 @@ class ProgressReporter:
     def start(self) -> None:
         self.started = time.monotonic()
         self._last_time = self.started
+        self._completed = {model.name for model in MODELS if is_valid(self.models_root, model)}
         self._last_bytes = self._downloaded_bytes()
         self._bytes_per_second = 0.0
         self._stop.clear()
-        self._completed = {model.name for model in MODELS if is_valid(self.models_root, model)}
         self.refresh()
         if self.path and (self._thread is None or not self._thread.is_alive()):
-            self._thread = threading.Thread(target=self._monitor, name="model-install-progress", daemon=True)
+            self._thread = threading.Thread(
+                target=self._monitor,
+                name="model-install-progress",
+                daemon=True,
+            )
             self._thread.start()
 
     def model_started(self, name: str) -> None:
@@ -167,6 +170,40 @@ class ProgressReporter:
             self._write(**values)
 
 
+def _download_single_file(target: Path, model: ModelSpec) -> Path:
+    """Download a single-file model directly into its final model directory.
+
+    Hugging Face's cache API returns a path inside its cache. On Windows that path
+    can contain a symlink/reparse point. Copying that returned path caused
+    WinError 448 ("untrusted mount point") on real installer runs. Using
+    ``local_dir`` asks huggingface_hub to materialize the file in the destination
+    directory itself, so there is no cache-path traversal or copy step afterward.
+    The local-dir metadata still lets huggingface_hub resume/reuse the download.
+    """
+    from huggingface_hub import hf_hub_download
+
+    if not model.filename:
+        raise RuntimeError(f"{model.name} has no filename")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    downloaded = Path(
+        hf_hub_download(
+            repo_id=model.repo_id,
+            filename=model.filename,
+            revision=model.revision,
+            local_dir=target.parent,
+        )
+    )
+    expected = target.parent / model.filename
+    if downloaded != expected and downloaded.name != target.name:
+        raise RuntimeError(
+            f"{model.name} downloaded to an unexpected path: {downloaded}"
+        )
+    if not target.is_file():
+        raise FileNotFoundError(f"Downloaded model file is missing: {target}")
+    return target
+
+
 def install_one(
     models_root: Path,
     cache_dir: Path,
@@ -181,25 +218,13 @@ def install_one(
     target.parent.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
     last_error: Exception | None = None
+    attempts = max(1, int(retries))
 
-    for attempt in range(1, max(1, retries) + 1):
+    for attempt in range(1, attempts + 1):
         try:
-            logger.info("Installing AI model %s (attempt %d/%d)", model.name, attempt, max(1, retries))
+            logger.info("Installing AI model %s (attempt %d/%d)", model.name, attempt, attempts)
             if model.kind == "file":
-                from huggingface_hub import hf_hub_download
-
-                downloaded = hf_hub_download(
-                    repo_id=model.repo_id,
-                    filename=model.filename,
-                    revision=model.revision,
-                    cache_dir=cache_dir,
-                )
-                temporary = target.with_suffix(target.suffix + ".download")
-                try:
-                    shutil.copy2(downloaded, temporary)
-                    os.replace(temporary, target)
-                finally:
-                    temporary.unlink(missing_ok=True)
+                _download_single_file(target, model)
             else:
                 from huggingface_hub import snapshot_download
 
@@ -218,7 +243,7 @@ def install_one(
         except Exception as error:
             last_error = error
             logger.exception("AI model install attempt failed: %s", model.name)
-            if attempt < max(1, retries):
+            if attempt < attempts:
                 time.sleep(min(5.0, float(attempt)))
 
     raise last_error or RuntimeError(f"Unable to install {model.name}")
@@ -228,11 +253,21 @@ def verify_all(models_root: Path) -> bool:
     return all(is_valid(models_root, model) for model in MODELS)
 
 
+def _prepare_log_file(log_file: Path) -> None:
+    """Make the log readable by Windows PowerShell 5.x as well as UTF-8 tools."""
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if not log_file.exists() or log_file.stat().st_size == 0:
+            log_file.write_bytes(b"\xef\xbb\xbf")
+    except OSError:
+        pass
+
+
 def _configure_logging(log_file: Path | None) -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler()]
     if log_file:
         log_file = Path(log_file)
-        log_file.parent.mkdir(parents=True, exist_ok=True)
+        _prepare_log_file(log_file)
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
     logging.basicConfig(
         level=logging.INFO,
@@ -278,10 +313,14 @@ def _install_models(
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Install or verify A&D Voice AI models")
-    parser.add_argument("--downloads", type=Path, help="Legacy download root; models go to <downloads>/models")
+    parser.add_argument(
+        "--downloads",
+        type=Path,
+        help="Legacy download root; models go to <downloads>/models",
+    )
     parser.add_argument("--models-root", type=Path, help="Explicit model installation directory")
     parser.add_argument("--cache-dir", type=Path, help="Resumable Hugging Face download cache")
-    parser.add_argument("--progress-file", type=Path, help="key=value progress file for the installer/UI")
+    parser.add_argument("--progress-file", type=Path, help="key=value progress file for installer/UI")
     parser.add_argument("--log-file", type=Path, help="Model installation log file")
     parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--check", action="store_true")
@@ -305,7 +344,7 @@ def main(argv=None) -> int:
     elif args.downloads:
         cache_dir = (args.downloads / ".cache").resolve()
     else:
-        cache_dir = (models_root.parent / "cache" / "model-downloads").resolve()
+        cache_dir = (models_root.parent / "generated" / "temp" / "model-downloads").resolve()
 
     models_root.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
