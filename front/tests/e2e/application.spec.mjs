@@ -71,7 +71,7 @@ test("settings load persisted values and remain navigable", async ({ page }) => 
   const dialog = page.getByRole("dialog", { name: /Налаштування програми|Настройки программы/ });
   await expect(dialog).toBeVisible();
   const tabs = dialog.getByRole("tab");
-  await expect(tabs).toHaveCount(3);
+  await expect(tabs).toHaveCount(4);
   await expect(dialog.getByRole("textbox", { name: /Ім'я у мережі|Имя в сети/ })).toHaveValue("Тестовый пользователь");
   const theme = dialog.getByRole("button", { name: /Тема/ });
   await theme.click();

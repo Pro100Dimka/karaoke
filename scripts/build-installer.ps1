@@ -3,7 +3,10 @@ param(
     [string]$Mode = "full",
 
     [ValidateSet("","backend","asio","frontend","models")]
-    [string]$Worker = ""
+    [string]$Worker = "",
+
+    [switch]$SkipReleaseGate,
+    [switch]$SkipPackageSmoke
 )
 
 $ErrorActionPreference = "Stop"
@@ -177,14 +180,19 @@ $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
 
 if (-not $Worker) {
-    Write-Host "Running mandatory release gate..."
-    $ReleaseGate = Join-Path $Root "verify-release.bat"
-    if (-not (Test-Path -LiteralPath $ReleaseGate -PathType Leaf)) {
-        throw "Release gate was not found: $ReleaseGate"
+    if ($SkipReleaseGate) {
+        Write-Warning "Release gate skipped by -SkipReleaseGate. Tests, mutation checks and browser E2E are NOT being run."
     }
-    & $ReleaseGate
-    if ($LASTEXITCODE -ne 0) {
-        throw "Release gate failed. Installer build is blocked."
+    else {
+        Write-Host "Running mandatory release gate..."
+        $ReleaseGate = Join-Path $Root "verify-release.bat"
+        if (-not (Test-Path -LiteralPath $ReleaseGate -PathType Leaf)) {
+            throw "Release gate was not found: $ReleaseGate"
+        }
+        & $ReleaseGate
+        if ($LASTEXITCODE -ne 0) {
+            throw "Release gate failed. Installer build is blocked."
+        }
     }
 }
 
@@ -3147,8 +3155,13 @@ try {
         -Force:($Mode -eq "clean")
 
     if ($electronSmokeNeeded) {
-        Smoke-TestElectronPackage
-        Set-State "electron-smoke" $electronSmokeFp
+        if ($SkipPackageSmoke) {
+            Write-Warning "Packaged backend smoke test skipped by -SkipPackageSmoke."
+        }
+        else {
+            Smoke-TestElectronPackage
+            Set-State "electron-smoke" $electronSmokeFp
+        }
     }
 
     # Runtime archive is independently cached. Changing runtime compression

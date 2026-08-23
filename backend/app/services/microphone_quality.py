@@ -4,13 +4,15 @@ import math
 
 import numpy as np
 
-from AI.utils.numeric import clamp01
-
 # Largest float32 value that is guaranteed not to exceed the documented 0.985
 # limiter ceiling when compared in Python/float64. ``np.float32(0.985)`` itself
 # is slightly larger (0.985000014...), which made exact limiter hits violate
 # the public bound on some tests/platforms.
 _LIMITER_CEILING = np.nextafter(np.float32(0.985), np.float32(0.0))
+
+
+def clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
 
 
 class StudioMicrophoneProcessor:
@@ -25,12 +27,15 @@ class StudioMicrophoneProcessor:
         self._compressor_gain = 1.0
         self._noise_floor = 0.003
         self._hp_r = math.exp(-2.0 * math.pi * 70.0 / self.sample_rate)
-        self._tone_alpha = 1.0 - math.exp(-2.0 * math.pi * 2200.0 / self.sample_rate)
+        self._tone_alpha = 1.0 - \
+            math.exp(-2.0 * math.pi * 2200.0 / self.sample_rate)
 
     def process(self, data, gain: float = 1.0, noise_suppression: float = 0.35):
         source = np.asarray(data, dtype=np.float32)
-        if source.ndim == 1: source = source[:, None]
-        if source.size == 0: return source.copy()
+        if source.ndim == 1:
+            source = source[:, None]
+        if source.size == 0:
+            return source.copy()
         if source.shape[1] != self.channels:
             self.channels = source.shape[1]
             self._prev_x = np.zeros(self.channels, dtype=np.float32)
@@ -48,7 +53,8 @@ class StudioMicrophoneProcessor:
             y[index] = hp * 0.94 + (hp - self._tone_low) * 0.16
 
         rms = float(np.sqrt(np.mean(np.square(y), dtype=np.float64)))
-        if rms < self._noise_floor * 1.4: self._noise_floor = self._noise_floor * 0.995 + rms * 0.005
+        if rms < self._noise_floor * 1.4:
+            self._noise_floor = self._noise_floor * 0.995 + rms * 0.005
         strength = clamp01(noise_suppression)
         threshold = max(0.0025, self._noise_floor * (2.4 + strength * 1.2))
         if rms <= threshold:
@@ -65,14 +71,16 @@ class StudioMicrophoneProcessor:
         self._gate_gain += (target_gate - self._gate_gain) * gate_speed
         y *= self._gate_gain
 
-        rms, threshold_comp = float(np.sqrt(np.mean(np.square(y), dtype=np.float64))), 0.16
+        rms, threshold_comp = float(
+            np.sqrt(np.mean(np.square(y), dtype=np.float64))), 0.16
         if rms > threshold_comp:
             compressed = threshold_comp * (rms / threshold_comp) ** (1.0 / 3.0)
             target_comp = compressed / max(rms, 1e-9)
         else:
             target_comp = 1.0
         comp_speed = 0.35 if target_comp < self._compressor_gain else 0.08
-        self._compressor_gain += (target_comp - self._compressor_gain) * comp_speed
+        self._compressor_gain += (target_comp -
+                                  self._compressor_gain) * comp_speed
         y *= self._compressor_gain * 1.08
 
         y = np.tanh(y * 1.12) / np.tanh(1.12)
@@ -87,7 +95,8 @@ class MonitorEffectsChain:
     def __init__(self, sample_rate: float):
         self.sample_rate = max(8_000.0, float(sample_rate))
         self._buffer_len = int(self.sample_rate * self._MAX_DELAY_SEC) + 1
-        self._buffers = np.zeros((self._SLOT_COUNT, self._buffer_len), dtype=np.float32)
+        self._buffers = np.zeros(
+            (self._SLOT_COUNT, self._buffer_len), dtype=np.float32)
         self._write_pos = 0
         self._active_slots = [False] * self._SLOT_COUNT
 
@@ -107,17 +116,21 @@ class MonitorEffectsChain:
         slots = self._slots(reverb, echo, delay)
         active = [decay > 0.0 for _, decay in slots]
         for slot, enabled in enumerate(active):
-            if self._active_slots[slot] and not enabled: self._buffers[slot].fill(0.0)
+            if self._active_slots[slot] and not enabled:
+                self._buffers[slot].fill(0.0)
         self._active_slots = active
-        if not any(active): return samples
+        if not any(active):
+            return samples
         length = self._buffer_len
-        offsets, decays, buffers, write_pos, out = [min(length - 1, max(1, int(delay_sec * self.sample_rate))) for delay_sec, _ in slots], [decay for _, decay in slots], self._buffers, self._write_pos, np.empty_like(samples)
+        offsets, decays, buffers, write_pos, out = [min(length - 1, max(1, int(delay_sec * self.sample_rate))) for delay_sec, _ in slots], [
+            decay for _, decay in slots], self._buffers, self._write_pos, np.empty_like(samples)
         for index in range(len(samples)):
             dry = float(samples[index])
             wet = 0.0
             for slot in range(self._SLOT_COUNT):
                 decay = decays[slot]
-                if decay <= 0.0: continue
+                if decay <= 0.0:
+                    continue
                 read_pos = (write_pos - offsets[slot]) % length
                 delayed = buffers[slot, read_pos]
                 buffers[slot, write_pos] = dry + decay * delayed
