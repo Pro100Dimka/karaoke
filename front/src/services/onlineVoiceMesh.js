@@ -169,22 +169,45 @@ export default class OnlineVoiceMesh {
       this.peers.get(participantId) === peer &&
       peer.connectionState !== "closed";
     const operation = (async () => {
-      if (!this.channels.has(participantId))
-        this.setupDataChannel(
-          participantId,
-          peer.createDataChannel("karaoke-library", { ordered: true })
-        );
+      // Do not start a second offer while an incoming/outgoing SDP exchange is still active.
+      // Creating the data channel before setLocalDescription in that state can leave a
+      // permanently `connecting` zombie channel, which later makes song transfers time out.
+      if (
+        this.signalPromises.has(participantId) ||
+        (peer.signalingState && peer.signalingState !== "stable")
+      )
+        return false;
+
+      let createdChannel = null;
+      const discardCreatedChannel = () => {
+        if (!createdChannel || this.channels.get(participantId) !== createdChannel) return;
+        if (createdChannel.readyState === "open") return;
+        this.channels.delete(participantId);
+        createdChannel.close?.();
+      };
+
+      if (!this.channels.has(participantId)) {
+        createdChannel = peer.createDataChannel("karaoke-library", { ordered: true });
+        this.setupDataChannel(participantId, createdChannel);
+      }
       try {
         const offer = await peer.createOffer();
-        if (!current()) return false;
+        if (!current()) {
+          discardCreatedChannel();
+          return false;
+        }
         await peer.setLocalDescription(offer);
-        return current() && peer.localDescription
-          ? this.roomClient.send("signal", {
-              targetId: participantId,
-              signal: { description: peer.localDescription }
-            })
-          : false;
+        const sent =
+          current() && peer.localDescription
+            ? this.roomClient.send("signal", {
+                targetId: participantId,
+                signal: { description: peer.localDescription }
+              })
+            : false;
+        if (!sent) discardCreatedChannel();
+        return Boolean(sent);
       } catch (error) {
+        discardCreatedChannel();
         if (!current()) return false;
         throw error;
       }
@@ -282,10 +305,6 @@ export default class OnlineVoiceMesh {
 
   cancelTransfersByCommandId(commandId, error) {
     return cancelTransfersByCommandId(this, commandId, error);
-  }
-
-  resetPeers() {
-    new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id));
   }
 
   removePeer(id) {

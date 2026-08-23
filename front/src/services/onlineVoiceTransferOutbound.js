@@ -10,6 +10,7 @@ import {
 } from "./onlineVoiceTransferProtocol";
 
 const CLOSED = new Set(["closing", "closed"]);
+const STALE_CONNECTING_MS = 8_000;
 const cancelledError = () => new Error(translateSaved("Передача файла отменена"));
 const isCancelled = (mesh, channel, lifecycle, active, signal) =>
   active.cancelled ||
@@ -24,15 +25,32 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
     ? Math.max(0, Math.min(60_000, numericTimeout))
     : 15_000;
   const startedAt = Date.now();
+  let connectingSince = null;
   while (Date.now() - startedAt < timeout) {
     if (signal?.aborted || lifecycle !== mesh.lifecycleVersion) throw cancelledError();
     const channel = mesh.channels.get(participantId);
     if (channel?.readyState === "open") return channel;
     if (CLOSED.has(channel?.readyState)) {
       if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
-      throw new Error(translateSaved("Канал передачи песни закрыт"));
+      if (!mesh.peers.has(participantId))
+        throw new Error(translateSaved("Канал передачи песни закрыт"));
+      connectingSince = null;
+    } else if (channel?.readyState === "connecting") {
+      connectingSince ??= Date.now();
+      if (Date.now() - connectingSince >= STALE_CONNECTING_MS) {
+        // A failed SDP negotiation can leave a channel stuck in `connecting` forever.
+        // Drop only that unopened channel and renegotiate; never touch an open transfer.
+        if (mesh.channels.get(participantId) === channel) {
+          mesh.channels.delete(participantId);
+          channel.close?.();
+        }
+        connectingSince = null;
+      }
+    } else {
+      connectingSince = null;
     }
-    if (!channel && mesh.peers.has(participantId)) {
+
+    if (!mesh.channels.get(participantId) && mesh.peers.has(participantId)) {
       // eslint-disable-next-line no-await-in-loop
       await mesh.invite(participantId).catch(() => false);
     }

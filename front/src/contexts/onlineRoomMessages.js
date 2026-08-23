@@ -275,10 +275,7 @@ export function createOnlineRoomMessageHandler(options) {
           host: self.role === "host",
           role: self.role
         });
-      const participants = message.participants || [];
-      setParticipants(participants);
-      for (const participant of participants)
-        if (participant?.id && participant.id !== self?.id) voice.invite(participant.id).catch(() => {});
+      setParticipants(message.participants || []);
     },
     "participant-joined": (message) => {
       const { participant } = message;
@@ -364,20 +361,8 @@ export function createOnlineRoomMessageHandler(options) {
       const text = typeof message.message === "string" ? message.message.trim() : "";
       if (text) lastRoomErrorRef.current = text;
     },
-    "connection-reconnecting": () => {
-      if (disconnectIntentRef.current) return;
-      setVoiceError(
-        translateSaved("Связь с комнатой прервалась. Восстанавливаем подключение…")
-      );
-    },
-    "connection-reconnected": () => {
-      if (disconnectIntentRef.current) return;
-      lastRoomErrorRef.current = null;
-      voice.resetPeers?.();
-      setVoiceError("");
-    },
-    "connection-closed": (message) => {
-      const reason = lastRoomErrorRef.current || message.reason;
+    "connection-closed": () => {
+      const reason = lastRoomErrorRef.current;
       lastRoomErrorRef.current = null;
       if (disconnectIntentRef.current) return;
       if (onConnectionClosed) return onConnectionClosed(reason);
