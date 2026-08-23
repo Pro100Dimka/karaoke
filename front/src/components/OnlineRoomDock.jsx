@@ -19,7 +19,26 @@ export function OnlineRoomDock() {
   const [collapsed, setCollapsed] = useState(false);
   const { pending, run } = useExclusiveAsyncAction();
   useEffect(() => () => timer.current && globalThis.clearTimeout(timer.current), []);
-  if (!online?.room) return null;
+  if (!online) return null;
+  if (!online.room)
+    return online.voiceError ? (
+      <Card
+        variant="neon"
+        tilt={false}
+        sx={{
+          position: "fixed",
+          inset: "auto auto var(--space-5) var(--space-5)",
+          zIndex: 20,
+          inlineSize: "min(var(--content-sm), calc(100vw - var(--space-10)))"
+        }}
+      >
+        <Stack gap="var(--space-2)" sx={{ padding: "var(--space-4)" }}>
+          <Typography as="strong" tone="danger">
+            {online.voiceError}
+          </Typography>
+        </Stack>
+      </Card>
+    ) : null;
   const copy = async () => {
     if (!(await copyText(online.room.id)) || !mounted.current) return;
     setCopied(true);

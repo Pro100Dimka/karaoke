@@ -3,7 +3,7 @@ const MAX_NAME_LENGTH = 40;
 const MAX_MESSAGE_BYTES = 256 * 1024;
 const MAX_PARTICIPANTS = 12;
 const RATE_WINDOW_MS = 10_000;
-const RATE_LIMIT = 80;
+const RATE_LIMITS = Object.freeze({ signal: 600, sync: 240, ui: 180, presence: 120, ping: 120, chat: 40, default: 120 });
 const MAX_SIGNAL_BYTES = 64 * 1024;
 const MAX_STATE_BYTES = 128 * 1024;
 const MAX_LOG_BYTES = 128 * 1024;
@@ -46,12 +46,17 @@ export class KaraokeRoom {
     socket.close(1008, message.slice(0, 120));
   }
 
-  withinRate(id) {
+  withinRate(id, type) {
     const now = Date.now();
-    const entry = this.rate.get(id) || { startedAt: now, count: 0 };
-    if (now - entry.startedAt >= RATE_WINDOW_MS) { entry.startedAt = now; entry.count = 0; }
-    entry.count += 1; this.rate.set(id, entry);
-    return entry.count <= RATE_LIMIT;
+    const bucket = `${id}:${type || "default"}`;
+    const entry = this.rate.get(bucket) || { startedAt: now, count: 0 };
+    if (now - entry.startedAt >= RATE_WINDOW_MS) {
+      entry.startedAt = now;
+      entry.count = 0;
+    }
+    entry.count += 1;
+    this.rate.set(bucket, entry);
+    return entry.count <= (RATE_LIMITS[type] || RATE_LIMITS.default);
   }
 
   participants() {
@@ -122,7 +127,7 @@ export class KaraokeRoom {
     catch { this.reject(socket); return; }
     const sender = participantFromSocket(socket);
     if (!sender || typeof message?.type !== "string") return;
-    if (!this.withinRate(sender.id)) { this.reject(socket, "Rate limit exceeded"); return; }
+    if (!this.withinRate(sender.id, message.type)) { this.reject(socket, "Rate limit exceeded"); return; }
 
     if (message.type === "signal" && typeof message.targetId === "string") {
       if (
@@ -294,7 +299,7 @@ export class KaraokeRoom {
 
   async webSocketClose(socket, code, reason) {
     const participant = participantFromSocket(socket);
-    if (participant) { this.rate.delete(participant.id); this.broadcast("participant-left", { participantId: participant.id }); }
+    if (participant) { for (const key of this.rate.keys()) if (key.startsWith(`${participant.id}:`)) this.rate.delete(key); this.broadcast("participant-left", { participantId: participant.id }); }
     if (this.ctx.getWebSockets().length === 0) await this.ctx.storage.delete("hostToken");
     // The edge already closes this endpoint before invoking the callback.
     // Calling close() again can prevent the remaining sockets from receiving

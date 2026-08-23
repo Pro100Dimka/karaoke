@@ -1,7 +1,19 @@
 import { translateSaved as translate } from "../i18n/runtime";
 
 export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
-const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 20_000, signal: 64 * 1024 };
+const LIMITS = {
+  connect: 10_000,
+  message: 256 * 1024,
+  name: 40,
+  ping: 20_000,
+  reconnectAttempts: 8,
+  reconnectBase: 500,
+  reconnectMax: 8_000,
+  signal: 64 * 1024,
+  sendBurst: 70,
+  sendWindow: 10_000
+};
+const RETRYABLE_CLOSE_CODES = new Set([1001, 1006, 1011, 1012, 1013]);
 const bytes = (value) => new TextEncoder().encode(value).byteLength;
 const hex = (values) => [...values].map((value) => value.toString(16).padStart(2, "0")).join("");
 
@@ -59,12 +71,28 @@ function closeDetail(event) {
   return event?.code && event.code !== 1006 ? translate("(код {0})", { 0: event.code }) : "";
 }
 
+function closeReason(event) {
+  const reason = event?.reason?.trim();
+  if (reason) return reason;
+  if (event?.code === 1006)
+    return translate("Соединение с сервером комнат неожиданно прервано.");
+  if (event?.code) return translate("Соединение с комнатой закрыто (код {0}).", { 0: event.code });
+  return translate("Соединение с комнатой потеряно.");
+}
+
 export class OnlineRoomClient {
   constructor(url = DEFAULT_SIGNALING_URL) {
     this.url = safeUrl(url);
     this.listeners = new Set();
     this.socket = null;
     this.pingTimer = null;
+    this.reconnectTimer = null;
+    this.reconnectAttempts = 0;
+    this.connectionOptions = null;
+    this.manualDisconnect = false;
+    this.sendTimes = [];
+    this.sendQueue = [];
+    this.sendQueueTimer = null;
     this.clockOffsetMs = 0;
     this.clockSynchronized = false;
   }
@@ -96,31 +124,110 @@ export class OnlineRoomClient {
     this.pingTimer = null;
   }
 
+  stopReconnect() {
+    if (this.reconnectTimer == null) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  clearSendQueue() {
+    if (this.sendQueueTimer != null) clearTimeout(this.sendQueueTimer);
+    this.sendQueueTimer = null;
+    this.sendQueue = [];
+    this.sendTimes = [];
+  }
+
+  flushSendQueue() {
+    if (this.socket?.readyState !== 1) return;
+    const now = Date.now();
+    this.sendTimes = this.sendTimes.filter((time) => now - time < LIMITS.sendWindow);
+    while (this.sendQueue.length && this.sendTimes.length < LIMITS.sendBurst) {
+      const { packet } = this.sendQueue.shift();
+      try {
+        this.socket.send(packet);
+        this.sendTimes.push(Date.now());
+      } catch {
+        break;
+      }
+    }
+    if (!this.sendQueue.length || this.sendQueueTimer != null) return;
+    const wait = Math.max(50, LIMITS.sendWindow - (Date.now() - this.sendTimes[0]) + 50);
+    this.sendQueueTimer = setTimeout(() => {
+      this.sendQueueTimer = null;
+      this.flushSendQueue();
+    }, wait);
+  }
+
+  queuePacket(packet, type) {
+    const now = Date.now();
+    this.sendTimes = this.sendTimes.filter((time) => now - time < LIMITS.sendWindow);
+    if (this.sendTimes.length < LIMITS.sendBurst && !this.sendQueue.length) {
+      this.socket.send(packet);
+      this.sendTimes.push(now);
+      return true;
+    }
+    if (type === "ui") this.sendQueue = this.sendQueue.filter((entry) => entry.type !== "ui");
+    this.sendQueue.push({ packet, type });
+    this.flushSendQueue();
+    return true;
+  }
+
   sendClockProbe() {
     this.send("ping", { clientTime: Date.now() });
   }
 
-  connect({ id, name, host = false, hostToken = "" }) {
-    const roomId = normalizeRoomId(id);
-    if (roomId.length < 4)
-      return Promise.reject(
-        new Error(translate("Код комнаты должен содержать минимум 4 символа."))
-      );
-    this.disconnect();
-    if (typeof globalThis.WebSocket !== "function")
-      return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
+  buildSocketUrl(options) {
     const query = new URLSearchParams({
-      name: participantName(name),
-      role: host ? "host" : "guest"
+      name: options.name,
+      role: options.host ? "host" : "guest"
     });
-    if (host) {
+    if (options.host) {
       query.set("create", "1");
-      query.set("hostToken", String(hostToken));
+      query.set("hostToken", options.hostToken);
     }
+    return `${this.url}/rooms/${encodeURIComponent(options.roomId)}?${query}`;
+  }
+
+  shouldReconnect(event) {
+    if (this.manualDisconnect || !this.connectionOptions) return false;
+    const code = Number(event?.code) || 1006;
+    return RETRYABLE_CLOSE_CODES.has(code) && this.reconnectAttempts < LIMITS.reconnectAttempts;
+  }
+
+  scheduleReconnect(event) {
+    if (!this.shouldReconnect(event)) {
+      this.emit({ type: "connection-closed", reason: closeReason(event), code: event?.code || 1006 });
+      return;
+    }
+    this.reconnectAttempts += 1;
+    const delay = Math.min(
+      LIMITS.reconnectMax,
+      LIMITS.reconnectBase * 2 ** Math.max(0, this.reconnectAttempts - 1)
+    );
+    this.emit({
+      type: "connection-reconnecting",
+      attempt: this.reconnectAttempts,
+      delay,
+      code: event?.code || 1006,
+      reason: closeReason(event)
+    });
+    this.stopReconnect();
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.manualDisconnect || !this.connectionOptions) return;
+      this.openSocket(this.connectionOptions, { reconnect: true }).catch(() => {});
+    }, delay);
+  }
+
+  openSocket(options, { reconnect = false } = {}) {
     let socket;
     try {
-      socket = new WebSocket(`${this.url}/rooms/${encodeURIComponent(roomId)}?${query}`);
+      socket = new WebSocket(this.buildSocketUrl(options));
     } catch (error) {
+      if (reconnect) {
+        this.scheduleReconnect({ code: 1006, reason: error instanceof Error ? error.message : "" });
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+      }
       return Promise.reject(
         error instanceof Error
           ? error
@@ -129,8 +236,12 @@ export class OnlineRoomClient {
     }
     this.socket = socket;
     return new Promise((resolve, reject) => {
+      let opened = false;
+      let settled = false;
       const current = () => this.socket === socket;
       const settle = (callback, value) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
         callback(value);
       };
@@ -139,18 +250,25 @@ export class OnlineRoomClient {
         this.socket = null;
         settle(reject, new Error(message));
         if (socket.readyState < WebSocket.CLOSING) socket.close();
+        if (reconnect && !this.manualDisconnect)
+          this.scheduleReconnect({ code: 1006, reason: message });
       };
       const timeout = setTimeout(
         () => fail(translate("Сервер комнат не ответил.")),
         LIMITS.connect
       );
+
       socket.onopen = () => {
         if (!current()) return socket.close(1000, "Stale connection");
+        opened = true;
         this.stopPing();
+        this.reconnectAttempts = 0;
         this.sendClockProbe();
         this.pingTimer = setInterval(() => this.sendClockProbe(), LIMITS.ping);
-        settle(resolve, roomId);
+        settle(resolve, options.roomId);
+        if (reconnect) this.emit({ type: "connection-reconnected" });
       };
+
       socket.onmessage = ({ data }) => {
         if (!current() || typeof data !== "string") return;
         if (bytes(data) > LIMITS.message) return socket.close(1009, "Message too large");
@@ -173,25 +291,59 @@ export class OnlineRoomClient {
           // Malformed packets do not own the room connection.
         }
       };
-      socket.onerror = () => {};
-      socket.onclose = (event) => {
+
+      socket.onerror = (event) => {
+        console.warn("Online room WebSocket error", {
+          roomId: options.roomId,
+          reconnect,
+          readyState: socket.readyState,
+          event
+        });
+      };
+
+      socket.onclose = (event = {}) => {
         const wasCurrent = current();
         if (wasCurrent) {
           this.socket = null;
           this.stopPing();
+          this.clearSendQueue();
         }
-        settle(
-          reject,
-          new Error(
-            translate(
-              "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
-              { 0: closeDetail(event) }
+        if (!opened) {
+          settle(
+            reject,
+            new Error(
+              translate(
+                "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
+                { 0: closeDetail(event) }
+              )
             )
-          )
-        );
-        if (wasCurrent) this.emit({ type: "connection-closed" });
+          );
+        }
+        if (!wasCurrent || this.manualDisconnect) return;
+        if (opened || reconnect) this.scheduleReconnect(event);
+        else this.emit({ type: "connection-closed", reason: closeReason(event), code: event.code || 1006 });
       };
     });
+  }
+
+  connect({ id, name, host = false, hostToken = "" }) {
+    const roomId = normalizeRoomId(id);
+    if (roomId.length < 4)
+      return Promise.reject(
+        new Error(translate("Код комнаты должен содержать минимум 4 символа."))
+      );
+    this.disconnect();
+    if (typeof globalThis.WebSocket !== "function")
+      return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
+    this.manualDisconnect = false;
+    this.reconnectAttempts = 0;
+    this.connectionOptions = {
+      roomId,
+      name: participantName(name),
+      host: Boolean(host),
+      hostToken: String(hostToken)
+    };
+    return this.openSocket(this.connectionOptions);
   }
 
   send(type, payload = {}) {
@@ -210,14 +362,18 @@ export class OnlineRoomClient {
         return false;
       const packet = JSON.stringify({ ...payload, type: normalized });
       if (bytes(packet) > LIMITS.message) return false;
-      this.socket.send(packet);
-      return true;
+      return this.queuePacket(packet, normalized);
     } catch {
       return false;
     }
   }
 
   disconnect() {
+    this.manualDisconnect = true;
+    this.connectionOptions = null;
+    this.reconnectAttempts = 0;
+    this.stopReconnect();
+    this.clearSendQueue();
     const { socket } = this;
     this.socket = null;
     this.stopPing();

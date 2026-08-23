@@ -284,6 +284,10 @@ export default class OnlineVoiceMesh {
     return cancelTransfersByCommandId(this, commandId, error);
   }
 
+  resetPeers() {
+    new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id));
+  }
+
   removePeer(id) {
     const timer = this.disconnectTimers.get(id);
     if (timer) clearTimeout(timer);

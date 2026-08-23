@@ -1,5 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { openKaraokeInRoom } from "../onlineRoomActions";
+
+const UI_SYNC_DELAY_MS = 200;
 
 export default function useOnlineRoomCommands({
   api,
@@ -10,11 +12,36 @@ export default function useOnlineRoomCommands({
   roomRef,
   voiceRef
 }) {
+  const pendingUiRef = useRef(null);
+  const uiTimerRef = useRef(null);
+
+  const flushUi = useCallback(() => {
+    if (uiTimerRef.current != null) {
+      clearTimeout(uiTimerRef.current);
+      uiTimerRef.current = null;
+    }
+    const state = pendingUiRef.current;
+    pendingUiRef.current = null;
+    if (state && roomRef.current) clientRef.current?.send("ui", { state });
+  }, [clientRef, roomRef]);
+
   const syncUi = useCallback(
     (state) => {
-      if (roomRef.current) clientRef.current?.send("ui", { state });
+      if (!roomRef.current || !state || typeof state !== "object" || Array.isArray(state)) return;
+      pendingUiRef.current = { ...(pendingUiRef.current || {}), ...state };
+      if (uiTimerRef.current == null)
+        uiTimerRef.current = setTimeout(flushUi, UI_SYNC_DELAY_MS);
     },
-    [clientRef, roomRef]
+    [flushUi, roomRef]
+  );
+
+  useEffect(
+    () => () => {
+      if (uiTimerRef.current != null) clearTimeout(uiTimerRef.current);
+      uiTimerRef.current = null;
+      pendingUiRef.current = null;
+    },
+    []
   );
 
   const syncCommand = useCallback(
