@@ -1,14 +1,17 @@
 @layer ui.components {
   .ui-popover {
     position: absolute;
-    z-index: var(--z-index-popover);
+    z-index: var(--z-index-popover, 10000);
     min-width: 180px;
     padding: 6px;
     border: 1px solid var(--overlay-border);
     border-radius: var(--shape-md);
     background: var(--overlay-bg);
     box-shadow: var(--shadows-3);
+
   }
 
-  .ui-popover:not([data-open]) { display: none; }
+  .ui-popover:not([data-open]) {
+    display: none;
+  }
 }

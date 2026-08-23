@@ -57,7 +57,9 @@ export function createOnlineRoomMessageHandler(options) {
     participantsRef.current?.some((participant) => participant.id === message.fromId);
   const guestSharedUi = (state) =>
     Object.fromEntries(
-      Object.entries(state).filter(([key]) => ["query", "filters", "radio", "karaoke"].includes(key))
+      Object.entries(state).filter(([key]) =>
+        ["query", "filters", "radio", "karaoke"].includes(key)
+      )
     );
   const guestSharedCommand = (command) =>
     ["karaoke-player", "open-library"].includes(command?.type);

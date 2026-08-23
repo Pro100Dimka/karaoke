@@ -98,32 +98,34 @@ export default function LibraryActions({
           sx={{ flex: 1 }}
         />
       </Card>
-      <Stack direction="row" gap="var(--space-4)" sx={{ flex: 1 }}>
-        {!roomActive && (
-          <Button
-            size="lg"
-            variant="outlined"
-            fullWidth
-            startIcon={<UsersRound />}
-            onClick={onOpenRoom}
-          >
-            {tr("Петь вместе")}
-          </Button>
-        )}
-        {canManageLibrary && (
-          <Button
-            size="lg"
-            variant="contained"
-            startIcon={<Plus />}
-            fullWidth
-            disabled={importing}
-            onClick={onAdd}
-          >
-            {tr("Добавить песню")}
-          </Button>
-        )}
-        <input {...dropzone.getInputProps()} ref={fileInputRef} />
-      </Stack>
+      {(!roomActive || canManageLibrary) && (
+        <Stack direction="row" gap="var(--space-4)" sx={{ flex: 1 }}>
+          {!roomActive && (
+            <Button
+              size="lg"
+              variant="outlined"
+              fullWidth
+              startIcon={<UsersRound />}
+              onClick={onOpenRoom}
+            >
+              {tr("Петь вместе")}
+            </Button>
+          )}
+          {canManageLibrary && (
+            <Button
+              size="lg"
+              variant="contained"
+              startIcon={<Plus />}
+              fullWidth
+              disabled={importing}
+              onClick={onAdd}
+            >
+              {tr("Добавить песню")}
+            </Button>
+          )}
+          <input {...dropzone.getInputProps()} ref={fileInputRef} />
+        </Stack>
+      )}
 
       <Popover
         open={open}

@@ -94,9 +94,10 @@ export function getSongActions({
           [Play, tr("Воспроизвести"), "contained", activate],
           [Headphones, tr("Прослушать записи"), "contained", () => onOpenRecordings(song)]
         ]
-      : canManageLibrary && [
+      : (canManageLibrary && [
           [AudioWaveform, tr("Обработать песню"), "contained", () => onProcess(song), isWorking]
-        ]),
+        ]) ||
+        []),
     canManageLibrary && [
       Settings2,
       tr("Настройки песни"),

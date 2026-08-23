@@ -232,6 +232,7 @@ test("room messages update participants, UI, voice and connection state", async 
   equal([ui.effectsByParticipant.a.echo, 2], [ui.radio, true]);
   assert.ok(ui.__eventId);
   ui = {};
+  participantsRef.current = [...participantsRef.current, { id: "first-effects", role: "guest" }];
   handler({ type: "ui", fromId: "first-effects", state: { participantEffects: { dry: 0.5 } } });
   deepEqual([ui.effectsByParticipant, { "first-effects": { dry: 0.5 } }]);
   await flush();

@@ -72,7 +72,7 @@ export default function RoomRadioSync() {
     });
   }, [radio.isPlaying, radio.stationId, radio.volume, room, syncUi]);
   useEffect(() => {
-    if (!room?.host || !participants.length) return;
+    if (!room?.host || !participants.length || target.current) return;
     const value = current.current;
     syncUi({
       radio: { isPlaying: value.isPlaying, stationId: value.stationId, volume: value.volume }

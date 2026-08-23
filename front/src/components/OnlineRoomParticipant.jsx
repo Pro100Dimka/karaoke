@@ -1,19 +1,11 @@
 import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../i18n";
-import {
-  Box,
-  IconButton,
-  Popover,
-  Slider,
-  Stack,
-  Typography
-} from "../theme/ui";
+import { Box, IconButton, Popover, Slider, Stack, Typography } from "../theme/ui";
 
 const LEVELS = [0.18, 0.38, 0.6, 0.82];
 
-const key = (enabled, on, off) =>
-  `room.person.${enabled ? on : off}`;
+const key = (enabled, on, off) => `room.person.${enabled ? on : off}`;
 
 export default function OnlineRoomParticipant({
   person,
@@ -38,43 +30,25 @@ export default function OnlineRoomParticipant({
 
   const self = person.id === room.selfId;
 
-  const inactive = self
-    ? microphoneMuted || roomSoundMuted
-    : person.micMuted;
+  const inactive = self ? microphoneMuted || roomSoundMuted : person.micMuted;
 
-  const level = inactive
-    ? 0
-    : self
-      ? localSpeakingLevel
-      : speakingLevel;
+  const level = inactive ? 0 : self ? localSpeakingLevel : speakingLevel;
 
   const speaking = level > 0.08;
 
   const selfActions = [
     [
       microphoneMuted ? MicOff : Mic,
-      t(
-        microphoneMuted
-          ? "room.microphone.enable"
-          : "room.microphone.disable"
-      ),
+      t(microphoneMuted ? "room.microphone.enable" : "room.microphone.disable"),
       () => onSetMicrophoneMuted(!microphoneMuted),
       roomSoundMuted
     ],
     [
       roomSoundMuted ? VolumeX : Volume2,
-      t(
-        roomSoundMuted
-          ? "room.sound.enable"
-          : "room.sound.disable"
-      ),
+      t(roomSoundMuted ? "room.sound.enable" : "room.sound.disable"),
       () => onSetRoomSoundMuted(!roomSoundMuted)
     ],
-    [
-      LogOut,
-      t("room.leave"),
-      onLeave
-    ]
+    [LogOut, t("room.leave"), onLeave]
   ];
 
   return (
@@ -102,68 +76,36 @@ export default function OnlineRoomParticipant({
         </Typography>
 
         {person.role === "host" && (
-          <Typography
-            variant="caption"
-            tone="muted"
-          >
+          <Typography variant="caption" tone="muted">
             {t("room.role.host")}
           </Typography>
         )}
 
-        {transferStatus &&
-          transferStatus.stage !== "error" && (
-            <Typography
-              variant="caption"
-              tone="muted"
-            >
-              {Math.round(
-                transferStatus.percent || 0
-              )}
-              %
-            </Typography>
-          )}
+        {transferStatus && transferStatus.stage !== "error" && (
+          <Typography variant="caption" tone="muted">
+            {Math.round(transferStatus.percent || 0)}%
+          </Typography>
+        )}
 
         <Stack
           as="span"
           direction="row"
           gap="var(--space-1)"
-          aria-label={t(
-            key(
-              speaking,
-              "speaking",
-              "silent"
-            ),
-            {
-              name: person.name
-            }
-          )}
-          title={t(
-            key(
-              speaking,
-              "speakingNow",
-              "noSignal"
-            )
-          )}
+          aria-label={t(key(speaking, "speaking", "silent"), {
+            name: person.name
+          })}
+          title={t(key(speaking, "speakingNow", "noSignal"))}
         >
           {LEVELS.map((threshold) => (
             <Box
               as="i"
               key={threshold}
-              data-active={
-                level >= threshold ||
-                undefined
-              }
+              data-active={level >= threshold || undefined}
               sx={{
-                inlineSize:
-                  "var(--space-1)",
-                blockSize:
-                  "var(--space-3)",
-                borderRadius:
-                  "var(--radius-pill)",
-                background:
-                  level >= threshold
-                    ? "var(--color-primary)"
-                    : "var(--color-border)"
+                inlineSize: "var(--space-1)",
+                blockSize: "var(--space-3)",
+                borderRadius: "var(--radius-pill)",
+                background: level >= threshold ? "var(--color-primary)" : "var(--color-border)"
               }}
             />
           ))}
@@ -180,27 +122,20 @@ export default function OnlineRoomParticipant({
         }}
       >
         {self ? (
-          selfActions.map(
-            ([
-              icon,
-              label,
-              onClick,
-              disabled
-            ]) => (
-              <IconButton
-                key={label}
-                icon={icon}
-                label={label}
-                iconSize={58}
-                sx={{
-                  minBlockSize: 0
-                }}
-                variant="contained"
-                disabled={disabled}
-                onClick={onClick}
-              />
-            )
-          )
+          selfActions.map(([icon, label, onClick, disabled]) => (
+            <IconButton
+              key={label}
+              icon={icon}
+              label={label}
+              iconSize={58}
+              sx={{
+                minBlockSize: 0
+              }}
+              variant="contained"
+              disabled={disabled}
+              onClick={onClick}
+            />
+          ))
         ) : (
           <>
             <Box
@@ -210,50 +145,25 @@ export default function OnlineRoomParticipant({
                 alignItems: "center",
                 overflow: "visible"
               }}
-              onMouseEnter={() =>
-                setVolumeOpen(true)
-              }
-              onMouseLeave={() =>
-                setVolumeOpen(false)
-              }
+              onMouseEnter={() => setVolumeOpen(true)}
+              onMouseLeave={() => setVolumeOpen(false)}
             >
               <IconButton
-                icon={
-                  isLocallyMuted
-                    ? VolumeX
-                    : Volume2
-                }
-                variant={
-                  isLocallyMuted
-                    ? "contained"
-                    : "outlined"
-                }
+                icon={isLocallyMuted ? VolumeX : Volume2}
+                variant={isLocallyMuted ? "contained" : "outlined"}
                 sx={{
                   minBlockSize: 0
                 }}
                 iconSize={58}
-                label={t(
-                  key(
-                    isLocallyMuted,
-                    "enable",
-                    "disable"
-                  ),
-                  {
-                    name: person.name
-                  }
-                )}
-                onClick={() =>
-                  onTogglePersonMuted(
-                    person.id
-                  )
-                }
+                label={t(key(isLocallyMuted, "enable", "disable"), {
+                  name: person.name
+                })}
+                onClick={() => onTogglePersonMuted(person.id)}
               />
 
               <Popover
                 open={volumeOpen}
-                onClose={() =>
-                  setVolumeOpen(false)
-                }
+                onClose={() => setVolumeOpen(false)}
                 style={{
                   position: "absolute",
 
@@ -263,44 +173,26 @@ export default function OnlineRoomParticipant({
                   right: "auto",
                   bottom: "auto",
 
-                  transform:
-                    "translateY(-50%)",
+                  transform: "translateY(-50%)",
 
-                  width: "180px",
+                  padding: "var(--space-4)",
 
-                  padding:
-                    "var(--space-4)",
-
-                  zIndex: 9000,
-
-                  boxShadow:
-                    "var(--shadow-lg)"
+                  boxShadow: "var(--shadow-lg)"
                 }}
               >
                 <Slider
                   min={0}
                   max={1}
                   step={0.05}
-                  value={
-                    participantVolume
-                  }
-                  formatValue={(value) =>
-                    `${Math.round(
-                      value * 100
-                    )}%`
-                  }
-                  aria-label={t(
-                    "room.person.volume",
-                    {
-                      name: person.name
-                    }
-                  )}
-                  onChange={(value) =>
-                    onSetParticipantVolume?.(
-                      person.id,
-                      value
-                    )
-                  }
+                  value={participantVolume}
+                  formatValue={(value) => `${Math.round(value * 100)}%`}
+                  aria-label={t("room.person.volume", {
+                    name: person.name
+                  })}
+                  sx={{
+                    zIndex: 99999
+                  }}
+                  onChange={(value) => onSetParticipantVolume?.(person.id, value)}
                   controlSx={{
                     inlineSize: "100%"
                   }}
@@ -310,33 +202,16 @@ export default function OnlineRoomParticipant({
 
             <IconButton
               icon={Sparkles}
-              variant={
-                effectsEnabled
-                  ? "contained"
-                  : "outline"
-              }
-              aria-pressed={
-                effectsEnabled
-              }
-              label={t(
-                key(
-                  effectsEnabled,
-                  "effects.disable",
-                  "effects.enable"
-                ),
-                {
-                  name: person.name
-                }
-              )}
-              iconSize={58}
+              variant={effectsEnabled ? "contained" : "outlined"}
+              aria-pressed={effectsEnabled}
+              label={t(key(effectsEnabled, "effects.disable", "effects.enable"), {
+                name: person.name
+              })}
+              iconSize={50}
               sx={{
                 minBlockSize: 0
               }}
-              onClick={() =>
-                onTogglePersonEffects(
-                  person.id
-                )
-              }
+              onClick={() => onTogglePersonEffects(person.id)}
             />
           </>
         )}

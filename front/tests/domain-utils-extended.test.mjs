@@ -484,6 +484,7 @@ describe("device, settings and song-card factories", () => {
     );
     for (const value of [null, undefined, "", "   ", 0]) equal([formatSongKey(value), translateSaved("Тональность определяется")]);
     const callbacks = {
+      activate: vi.fn(),
       onDelete: vi.fn(),
       onOpenFolder: vi.fn(),
       onOpenRecordings: vi.fn(),
@@ -507,6 +508,12 @@ describe("device, settings and song-card factories", () => {
     deepEqual([
       actionContracts(ready),
       [
+        {
+          label: translateSaved("Воспроизвести"),
+          variant: "contained",
+          callback: "function",
+          disabled: undefined
+        },
         {
           label: translateSaved("Прослушать записи"),
           variant: "contained",
@@ -563,7 +570,7 @@ describe("device, settings and song-card factories", () => {
           callback: "function",
           disabled: true
         },
-        ...actionContracts(ready.slice(1, 3)),
+        ...actionContracts(ready.slice(2, 4)),
         actionContracts(ready).at(-1)
       ]
     ]);
@@ -572,6 +579,6 @@ describe("device, settings and song-card factories", () => {
       [callbacks.onProcess.mock.calls.at(-1), [songs[0]]],
       [getSongActions({ ...callbacks, canManageLibrary: false, isReady: false, song: songs[0] }), []]
     );
-    equal([getSongActions({ ...callbacks, canManageLibrary: false, isReady: true, song: songs[0] }).length, 1]);
+    equal([getSongActions({ ...callbacks, canManageLibrary: false, isReady: true, song: songs[0] }).length, 2]);
   });
 });

@@ -2,7 +2,7 @@
   "root": ".",
   "summary": {
     "cssFiles": 29,
-    "sourceFiles": 236,
+    "sourceFiles": 237,
     "selectors": 353,
     "classesDefined": 104,
     "classesUsed": 72,
@@ -143,14 +143,14 @@
       "bytes": 469
     },
     {
+      "file": "src/theme/ui/Popover/popover.css",
+      "lines": 17,
+      "bytes": 360
+    },
+    {
       "file": "src/theme/ui/IconButton/icon-button.css",
       "lines": 15,
       "bytes": 257
-    },
-    {
-      "file": "src/theme/ui/Popover/popover.css",
-      "lines": 15,
-      "bytes": 347
     },
     {
       "file": "src/theme/ui/Stack/stack.css",
@@ -806,7 +806,7 @@
         },
         {
           "file": "src/theme/ui/Popover/popover.css",
-          "line": 13,
+          "line": 14,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-popover:not([data-open])"
@@ -8081,7 +8081,7 @@
         },
         {
           "file": "src/theme/ui/Popover/popover.css",
-          "line": 13,
+          "line": 14,
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-popover:not([data-open])"

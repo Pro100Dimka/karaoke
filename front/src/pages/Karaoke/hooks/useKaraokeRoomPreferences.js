@@ -39,7 +39,7 @@ export default function useKaraokeRoomPreferences({
     if (!room || !roomUi?.karaoke) return;
     const remote = valuesOf(roomUi.karaoke);
     const remoteSignature = JSON.stringify(remote);
-    const current = currentLocal.current;
+    const { current } = currentLocal;
     if (remoteSignature === JSON.stringify(current)) {
       remoteTarget.current = null;
       sent.current = remoteSignature;

@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   testInfo.errorsInPage = errors;
 });
 
-test.afterEach(async (_fixtures, testInfo) => {
+test.afterEach(async ({}, testInfo) => {
   expect(testInfo.errorsInPage).toEqual([]);
 });
 
