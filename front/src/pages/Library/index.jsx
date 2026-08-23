@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
-import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
+import { OnlineRoomModal } from "../OnlineRoom";
 import { LibraryBackdrop } from "./components";
 import LibraryHero from "./hero";
 import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";

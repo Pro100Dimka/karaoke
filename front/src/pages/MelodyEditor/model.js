@@ -28,22 +28,49 @@ export function normalizeNotes(notes = []) {
         Number.isInteger(note.word_index) &&
         note.end > note.start
     )
+    .sort((a, b) => a.word_index - b.word_index || byStart(a, b));
+  // Notes in different words are allowed to sound at the same time (a word
+  // can carry a harmony/backing note while the next word's own note has
+  // already started) -- overlap is only ever rejected within the same word.
+  const endByWord = new Map();
+  return ordered
+    .filter((note) => {
+      const previous = endByWord.get(note.word_index) ?? note.word_start;
+      if (note.start < previous) return false;
+      endByWord.set(note.word_index, note.end);
+      return true;
+    })
     .sort(byStart);
-  // Notes share one timeline regardless of which word they were originally
-  // attached to (a merge can span two words), so overlap is resolved
-  // globally here rather than per word.
-  let previousEnd = -Infinity;
-  return ordered.filter((note) => {
-    if (note.start < previousEnd) return false;
-    previousEnd = note.end;
-    return true;
-  });
 }
 
 const selectedNotes = (notes, ids) => {
   const selected = new Set(ids);
   return notes.filter(({ _id }) => selected.has(_id)).sort(byStart);
 };
+
+// The saved document always stores one clipped piece of a note per word it
+// overlaps (see serializeNotes), even when the editor showed it merged into
+// one box -- that's how a merge survives save without changing the
+// backend's per-word note contract at all. This is the other half: on load,
+// walk the flattened notes back and re-glue any run of touching,
+// equal-pitch pieces (regardless of which word each piece came from) into
+// one note again, so a merge the user made keeps looking merged after a
+// save + reload instead of falling back apart at the word seam.
+export function recombineAdjacentEqualPitchNotes(notes, epsilon = 0.01) {
+  const ordered = [...notes].sort(byStart);
+  const result = [];
+  ordered.forEach((note) => {
+    const previous = result.at(-1);
+    if (previous && previous.note === note.note && note.start - previous.end <= epsilon) {
+      previous.end = Math.max(previous.end, note.end);
+      previous.word_start = Math.min(previous.word_start, note.word_start);
+      previous.word_end = Math.max(previous.word_end, note.word_end);
+    } else {
+      result.push({ ...note });
+    }
+  });
+  return result;
+}
 
 // Two or more selected notes can merge as long as nothing unselected sits
 // between them on the timeline -- they no longer need to share a word, since
@@ -104,7 +131,7 @@ export function constrainedMoveDelta(notes, ids, requested) {
   let maximum = Math.min(...chosen.map(({ word_end, end }) => word_end - end));
   chosen.forEach((current) =>
     notes.forEach((neighbour) => {
-      if (moving.has(neighbour._id)) return;
+      if (moving.has(neighbour._id) || neighbour.word_index !== current.word_index) return;
       if (neighbour.end <= current.start)
         minimum = Math.max(minimum, neighbour.end - current.start);
       if (neighbour.start >= current.end)
@@ -120,7 +147,7 @@ export function resizeBounds(notes, id, minimumDuration = 0.03) {
   let previousEnd = current.word_start;
   let nextStart = current.word_end;
   notes.forEach((note) => {
-    if (note._id === id) return;
+    if (note._id === id || note.word_index !== current.word_index) return;
     if (note.end <= current.start) previousEnd = Math.max(previousEnd, note.end);
     if (note.start >= current.end) nextStart = Math.min(nextStart, note.start);
   });
@@ -139,6 +166,39 @@ export const canonicalLyricProjection = (words = []) =>
     start: Number(word.start),
     end: Number(word.end)
   }));
+
+// A word's start may not move earlier than the previous word's own start,
+// and may not move past the next word's start either -- lyricsSync only
+// requires word starts to be non-decreasing across the document, so going
+// further would invalidate the *next* word, not just this one. Its end has
+// no such neighbour constraint (words are allowed to overlap in time), so
+// it is only bounded by the song's own duration.
+export function wordResizeBounds(wordBounds, index, duration, minimumDuration = 0.05) {
+  const current = wordBounds[index];
+  if (!current) return null;
+  const previousStart = wordBounds[index - 1]?.start ?? 0;
+  const nextStart = wordBounds[index + 1]?.start ?? duration;
+  return {
+    minStart: previousStart,
+    maxStart: Math.min(current.end - minimumDuration, nextStart),
+    minEnd: current.start + minimumDuration,
+    maxEnd: duration
+  };
+}
+
+// Which notes belong to the given words, by time overlap -- not by a note's
+// own stored word_index, since a merged note (see mergeSelectedNotes) can
+// legitimately overlap more than one word and word_index only names one of
+// them.
+export function notesOverlappingWords(notes, words, wordIndices) {
+  const ranges = wordIndices.map((index) => words[index]).filter(Boolean);
+  const ids = new Set();
+  if (!ranges.length) return ids;
+  notes.forEach((note) => {
+    if (ranges.some(({ start, end }) => note.end > start && note.start < end)) ids.add(note._id);
+  });
+  return ids;
+}
 
 // Moves a selected run of word texts [start, end] one slot forward or
 // backward. Either way, the run and everything after it (to the end of the
@@ -187,15 +247,20 @@ export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowH
     .map(({ _id }) => _id);
 }
 
-export const initialDocument = { notes: [], wordTexts: [], past: [], future: [] };
+export const initialDocument = { notes: [], wordTexts: [], wordBounds: [], past: [], future: [] };
 
-const snapshot = (notes, wordTexts) => ({ notes: cloneNotes(notes), wordTexts: [...wordTexts] });
+const snapshot = (notes, wordTexts, wordBounds) => ({
+  notes: cloneNotes(notes),
+  wordTexts: [...wordTexts],
+  wordBounds: wordBounds.map((bound) => ({ ...bound }))
+});
 
 export function documentReducer(state, action) {
   if (action.type === "load")
     return {
       notes: normalizeNotes(action.notes),
       wordTexts: action.wordTexts || [],
+      wordBounds: action.wordBounds || [],
       past: [],
       future: []
     };
@@ -204,7 +269,7 @@ export function documentReducer(state, action) {
       ...state,
       notes: normalizeNotes(action.notes),
       past: action.record
-        ? [...state.past.slice(-79), snapshot(state.notes, state.wordTexts)]
+        ? [...state.past.slice(-79), snapshot(state.notes, state.wordTexts, state.wordBounds)]
         : state.past,
       future: action.record ? [] : state.future
     };
@@ -212,13 +277,29 @@ export function documentReducer(state, action) {
     return {
       ...state,
       wordTexts: action.wordTexts,
-      past: [...state.past.slice(-79), snapshot(state.notes, state.wordTexts)],
+      past: [...state.past.slice(-79), snapshot(state.notes, state.wordTexts, state.wordBounds)],
       future: []
+    };
+  if (action.type === "resizeWord")
+    return {
+      ...state,
+      wordBounds: action.wordBounds,
+      past: action.record
+        ? [...state.past.slice(-79), snapshot(state.notes, state.wordTexts, state.wordBounds)]
+        : state.past,
+      future: action.record ? [] : state.future
     };
   if (action.type === "remember")
     return {
       ...state,
-      past: [...state.past.slice(-79), snapshot(action.notes, state.wordTexts)],
+      past: [
+        ...state.past.slice(-79),
+        snapshot(
+          action.notes ?? state.notes,
+          action.wordTexts ?? state.wordTexts,
+          action.wordBounds ?? state.wordBounds
+        )
+      ],
       future: []
     };
   if (action.type === "undo" && state.past.length)
@@ -226,15 +307,17 @@ export function documentReducer(state, action) {
       ...state,
       notes: state.past.at(-1).notes,
       wordTexts: state.past.at(-1).wordTexts,
+      wordBounds: state.past.at(-1).wordBounds,
       past: state.past.slice(0, -1),
-      future: [snapshot(state.notes, state.wordTexts), ...state.future]
+      future: [snapshot(state.notes, state.wordTexts, state.wordBounds), ...state.future]
     };
   if (action.type === "redo" && state.future.length)
     return {
       ...state,
       notes: state.future[0].notes,
       wordTexts: state.future[0].wordTexts,
-      past: [...state.past, snapshot(state.notes, state.wordTexts)],
+      wordBounds: state.future[0].wordBounds,
+      past: [...state.past, snapshot(state.notes, state.wordTexts, state.wordBounds)],
       future: state.future.slice(1)
     };
   return state;
@@ -258,3 +341,6 @@ export function serializeNotes(notes, words = []) {
   });
   return result;
 }
+
+export const serializeWordBounds = (wordBounds) =>
+  wordBounds.map(({ start, end }) => ({ start: roundTime(start), end: roundTime(end) }));

@@ -396,7 +396,8 @@ def save_song_editor(
     if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 400), song_service.song_content_lock(song.id), song_service.library_write_lock():
         lyrics_sync = song_editor_service.save_editor(
-            song_service.resolve_output_dir(song), payload.notes, payload.word_texts
+            song_service.resolve_output_dir(song), payload.notes,
+            payload.word_texts, payload.word_bounds,
         )
         song_package_service.invalidate_content_revision(song)
     _touch_song(db, song, refresh=True)

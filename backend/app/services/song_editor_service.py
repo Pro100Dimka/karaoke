@@ -31,7 +31,10 @@ def normalize_editor_timeline(payload: JsonObject) -> JsonObject:
 
 
 def save_editor(
-    output_dir: Path, raw_notes: list[JsonObject], word_texts: list[str] | None = None
+    output_dir: Path,
+    raw_notes: list[JsonObject],
+    word_texts: list[str] | None = None,
+    word_bounds: list[JsonObject] | None = None,
 ) -> JsonObject:
     payload = _load(output_dir)
     editor_value = payload.get("editor")
@@ -47,6 +50,16 @@ def save_editor(
             **payload,
             "words": [
                 {**word, "text": text} for word, text in zip(payload["words"], word_texts, strict=True)
+            ],
+        }
+    if word_bounds is not None:
+        if len(word_bounds) != len(payload["words"]):
+            raise ValueError("word_bounds length must match the number of words")
+        payload = {
+            **payload,
+            "words": [
+                {**word, "start": float(bound["start"]), "end": float(bound["end"])}
+                for word, bound in zip(payload["words"], word_bounds, strict=True)
             ],
         }
     updated = replace_word_notes(payload, raw_notes)

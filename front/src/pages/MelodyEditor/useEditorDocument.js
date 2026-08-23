@@ -3,7 +3,7 @@ import { api } from "../../api/client";
 import { translateSaved as t } from "../../i18n/runtime";
 import { getErrorMessage } from "../../utils/errors";
 import { prepareEditorNotes } from "../../workers/editor-client";
-import { documentReducer, initialDocument, serializeNotes } from "./model";
+import { documentReducer, initialDocument, serializeNotes, serializeWordBounds } from "./model";
 
 export default function useEditorDocument({ songId, confirm, notify }) {
   const [song, setSong] = useState(null);
@@ -35,8 +35,10 @@ export default function useEditorDocument({ songId, confirm, notify }) {
   const accept = useCallback(async (result) => {
     const notes = await prepareEditorNotes(result?.lyrics_sync);
     setPayload(result);
-    const wordTexts = (result?.lyrics_sync?.words || []).map((word) => String(word.text || ""));
-    dispatch({ type: "load", notes, wordTexts });
+    const words = result?.lyrics_sync?.words || [];
+    const wordTexts = words.map((word) => String(word.text || ""));
+    const wordBounds = words.map((word) => ({ start: Number(word.start), end: Number(word.end) }));
+    dispatch({ type: "load", notes, wordTexts, wordBounds });
   }, []);
 
   const load = useCallback(async () => {
@@ -59,14 +61,18 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     if (!song?.id) return;
     setSaving(true);
     try {
-      const raw = serializeNotes(document.notes, payload?.lyrics_sync?.words || []);
-      await accept(await api.saveSongEditor(song.id, raw, document.wordTexts));
+      const raw = serializeNotes(document.notes, document.wordBounds);
+      await accept(
+        await api.saveSongEditor(
+          song.id, raw, document.wordTexts, serializeWordBounds(document.wordBounds)
+        )
+      );
     } catch (error) {
       await notify(t("Не удалось сохранить редактор: {0}", { 0: getErrorMessage(error) }));
     } finally {
       setSaving(false);
     }
-  }, [accept, document.notes, document.wordTexts, notify, payload?.lyrics_sync?.words, song?.id]);
+  }, [accept, document.notes, document.wordBounds, document.wordTexts, notify, song?.id]);
 
   const restore = useCallback(async () => {
     if (

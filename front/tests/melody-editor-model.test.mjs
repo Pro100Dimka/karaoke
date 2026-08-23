@@ -10,10 +10,14 @@ import {
   marqueeHitIds,
   mergeSelectedNotes,
   normalizeNotes,
+  notesOverlappingWords,
+  recombineAdjacentEqualPitchNotes,
   resizeBounds,
   roundTime,
   serializeNotes,
-  shiftWordTexts
+  serializeWordBounds,
+  shiftWordTexts,
+  wordResizeBounds
 } from "../src/pages/MelodyEditor/model.js";
 
 const note = (id, start, end, pitch = 60, word = 0) => ({
@@ -98,17 +102,18 @@ test("finds adjacent notes in both directions and without an existing selection"
   expect(adjacentNoteId([], [], 1)).toBeNull();
 });
 
-test("constrains movement and resizing to the note's own word and every other note on the timeline", () => {
+test("constrains movement and resizing to the word and neighbouring notes in that same word", () => {
+  // notes in different words are allowed to sound at the same time (a word
+  // can carry a harmony/backing note while the next word's own note has
+  // already started), so collisions are only ever checked within one word
   const notes = [note("a", 0.2, 0.6), note("b", 0.8, 1.2)];
   expect(constrainedMoveDelta(notes, ["a"], -1)).toBeCloseTo(-0.2);
   expect(constrainedMoveDelta(notes, ["a"], 1)).toBeCloseTo(0.2);
   expect(constrainedMoveDelta(notes, [], 1)).toBe(0);
   expect(constrainedMoveDelta([note("a", 0.2, 0.5), note("b", 0.7, 1), note("other", 2, 3, 70, 1)], ["a", "b"], 2)).toBe(1);
-  // a note from a *different* word still blocks movement/resizing if it is
-  // the closer obstacle -- collisions are checked across the whole timeline,
-  // not just within one word, since a merge can make one note span several
-  // words
-  expect(constrainedMoveDelta([note("a", 0.2, 0.5), note("other", 0.8, 1.2, 70, 1)], ["a"], 2)).toBeCloseTo(0.3);
+  // "other" is in a different word and sits well within where "a" would
+  // move to -- it does not block the move at all
+  expect(constrainedMoveDelta([note("a", 0.2, 0.5), note("other", 0.8, 1.2, 70, 1)], ["a"], 2)).toBeCloseTo(1.5);
   expect(constrainedMoveDelta([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], ["moving"], -1)).toBe(0);
   expect(constrainedMoveDelta([note("previous", 0, 0.2), note("moving", 0.2, 0.5), note("next", 0.5, 0.8)], ["moving"], 1)).toBe(0);
   expect(resizeBounds(notes, "a")).toEqual({
@@ -123,18 +128,37 @@ test("constrains movement and resizing to the note's own word and every other no
     minStart: 0.2,
     maxEnd: 0.5
   });
-  // "other-word" is farther than the note's own word bound here, so the
-  // word bound is still the tighter (and thus decisive) limit
+  // a note from a different word never constrains a resize, even when it
+  // sits closer than the note's own word bound
   expect(resizeBounds([note("moving", 0.2, 0.5), note("other-word", 2, 3, 70, 1)], "moving")).toMatchObject({
     minStart: 0,
     maxEnd: 2
   });
-  // but a note from a different word that sits *closer* than the word bound
-  // still constrains the resize
   expect(resizeBounds([note("moving", 0.2, 0.5), note("closer-word", 0.7, 1, 70, 1)], "moving")).toMatchObject({
     minStart: 0,
-    maxEnd: 0.7
+    maxEnd: 2
   });
+});
+
+test("finds notes overlapping the selected words by time, not by their stored word_index", () => {
+  const words = [
+    { index: 0, text: "one", start: 0, end: 1 },
+    { index: 1, text: "two", start: 1, end: 2 },
+    { index: 2, text: "three", start: 2, end: 3 }
+  ];
+  const notes = [
+    note("inside-one", 0.1, 0.5, 60, 5),
+    // spans words 1 and 2, but its own word_index only names one of them --
+    // overlap must still find it for word 2
+    note("spans-two-and-three", 1.5, 2.5, 62, 1),
+    note("far-away", 2.9, 3.0, 64, 2)
+  ];
+  expect(notesOverlappingWords(notes, words, [0])).toEqual(new Set(["inside-one"]));
+  expect(notesOverlappingWords(notes, words, [2])).toEqual(
+    new Set(["spans-two-and-three", "far-away"])
+  );
+  expect(notesOverlappingWords(notes, words, [])).toEqual(new Set());
+  expect(notesOverlappingWords(notes, words, [99])).toEqual(new Set());
 });
 
 test("projects canonical lyrics and detects marquee intersections", () => {
@@ -262,4 +286,73 @@ test("serializes notes by clipping them to every word they overlap, splitting a 
   ]);
   expect(serializeNotes([note("a", 0, 1)], [])).toEqual([]);
   expect(roundTime(1.23456)).toBe(1.235);
+});
+
+test("recombines touching equal-pitch pieces on load, so a merge survives a save + reload round trip", () => {
+  // this is exactly what serializeNotes produces for a note that spans two
+  // words: two touching, equal-pitch pieces, one clipped to each word
+  const split = [
+    note("piece-1", 0.5, 1, 62, 0),
+    note("piece-2", 1, 1.5, 62, 1),
+    note("elsewhere", 3, 3.5, 64, 2)
+  ];
+  const recombined = recombineAdjacentEqualPitchNotes(split);
+  expect(recombined).toHaveLength(2);
+  expect(recombined[0]).toMatchObject({
+    note: 62,
+    start: 0.5,
+    end: 1.5,
+    word_start: 0,
+    word_end: 4
+  });
+  expect(recombined[1]).toMatchObject({ note: 64, start: 3, end: 3.5 });
+  // different pitch, or a real gap between them, must not be glued together
+  expect(
+    recombineAdjacentEqualPitchNotes([note("a", 0, 0.5, 60), note("b", 0.5, 1, 64)])
+  ).toHaveLength(2);
+  expect(
+    recombineAdjacentEqualPitchNotes([note("a", 0, 0.5, 60), note("b", 0.6, 1, 60)])
+  ).toHaveLength(2);
+});
+
+test("bounds a word's resize to its neighbours' starts, since only word starts must stay ordered", () => {
+  const bounds = [{ start: 0, end: 1 }, { start: 1, end: 2 }, { start: 2, end: 3 }];
+  // the middle word's left edge can't pass the previous word's start, and
+  // can't pass the next word's start either (that would make the next word
+  // start earlier than this one, which lyricsSync forbids)
+  expect(wordResizeBounds(bounds, 1, 10)).toEqual({
+    minStart: 0,
+    maxStart: 1.95,
+    minEnd: 1.05,
+    maxEnd: 10
+  });
+  // a word's end has no neighbour constraint at all -- words are allowed to
+  // overlap in time -- so it is only bounded by the song's duration
+  expect(wordResizeBounds(bounds, 0, 10).maxEnd).toBe(10);
+  expect(wordResizeBounds(bounds, 5, 10)).toBeNull();
+  expect(serializeWordBounds([{ start: 1.23456, end: 2.98765 }])).toEqual([
+    { start: 1.235, end: 2.988 }
+  ]);
+});
+
+test("word text shifts and word resizes share the same undo/redo history as note edits", () => {
+  const notes = [note("a", 0, 1)];
+  const wordBounds = [{ start: 0, end: 1 }, { start: 1, end: 2 }];
+  let state = documentReducer(initialDocument, {
+    type: "load",
+    notes,
+    wordTexts: ["one", "two"],
+    wordBounds
+  });
+  state = documentReducer(state, {
+    type: "resizeWord",
+    wordBounds: [{ start: 0, end: 1.5 }, { start: 1, end: 2 }],
+    record: true
+  });
+  expect(state.wordBounds[0].end).toBe(1.5);
+  expect(state.past).toHaveLength(1);
+  const undone = documentReducer(state, { type: "undo" });
+  expect(undone.wordBounds[0].end).toBe(1);
+  const redone = documentReducer(undone, { type: "redo" });
+  expect(redone.wordBounds[0].end).toBe(1.5);
 });

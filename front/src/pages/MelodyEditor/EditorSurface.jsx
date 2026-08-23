@@ -1,8 +1,9 @@
-import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { translateSaved as t } from "../../i18n/runtime";
 import { Box, PianoKeyboard, pianoNoteName, StudioScrollbars, Typography } from "../../theme/ui";
+import { notesOverlappingWords } from "./model";
 
-function NoteHitTarget({ controller, note }) {
+function NoteHitTarget({ controller, note, wordHighlighted }) {
   const selected = controller.selected.includes(note._id);
   const top = (controller.maxMidi - note.note) * controller.rowHeight;
   const left = controller.keyboardWidth + note.start * controller.zoom;
@@ -13,6 +14,7 @@ function NoteHitTarget({ controller, note }) {
       type="button"
       data-role="editor-note"
       data-selected={selected || undefined}
+      data-word-highlighted={wordHighlighted || undefined}
       aria-label={`${pianoNoteName(note.note)} · ${note.start.toFixed(3)}–${note.end.toFixed(3)}`}
       onPointerDown={(event) => controller.startDrag(event, note)}
       sx={{
@@ -21,17 +23,21 @@ function NoteHitTarget({ controller, note }) {
         inlineSize: `${width}px`,
         blockSize: `${controller.rowHeight * 0.76}px`,
         padding: 0,
-        border: "var(--hairline) solid var(--color-highlight)",
+        border: wordHighlighted
+          ? "calc(var(--hairline) * 2) solid var(--color-warning)"
+          : "var(--hairline) solid var(--color-highlight)",
         borderRadius: "var(--shape-round)",
         background: selected
           ? "linear-gradient(var(--color-highlight), var(--color-primary-hover))"
           : "linear-gradient(var(--color-primary-hover), var(--color-primary))",
         boxShadow: selected
           ? "0 0 var(--space-3) var(--color-primary)"
-          : "0 0 var(--space-1) color-mix(in srgb, var(--color-primary) 45%, transparent)",
+          : wordHighlighted
+            ? "0 0 var(--space-3) var(--color-warning)"
+            : "0 0 var(--space-1) color-mix(in srgb, var(--color-primary) 45%, transparent)",
         cursor: "grab",
         touchAction: "none",
-        zIndex: selected ? 5 : 4
+        zIndex: selected ? 5 : wordHighlighted ? 5 : 4
       }}
     >
       {["left", "right"].map((side) => (
@@ -115,6 +121,10 @@ function EditorScrollbars({ controller }) {
 }
 
 function EditorSurface({ controller, transport }) {
+  const highlightedNoteIds = useMemo(
+    () => notesOverlappingWords(controller.notes, controller.words, controller.selectedWords),
+    [controller.notes, controller.selectedWords, controller.words]
+  );
   useLayoutEffect(() => {
     if (!controller.playheadRef.current) return;
     controller.playheadRef.current.style.transform = `translate3d(${transport.timeRef.current * controller.zoom}px, 0, 0) translateX(-50%)`;
@@ -233,12 +243,32 @@ function EditorSurface({ controller, transport }) {
                   }}
                 >
                   {word.text}
+                  {["left", "right"].map((side) => (
+                    <Box
+                      as="span"
+                      key={side}
+                      aria-hidden="true"
+                      onPointerDown={(event) => controller.startWordResize(event, word.index, side)}
+                      onClick={(event) => event.stopPropagation()}
+                      sx={{
+                        position: "absolute",
+                        inset: `0 ${side === "right" ? 0 : "auto"} 0 ${side === "left" ? 0 : "auto"}`,
+                        inlineSize: "6px",
+                        cursor: "ew-resize"
+                      }}
+                    />
+                  ))}
                 </Typography>
               );
             })}
           </Box>
           {controller.notes.map((note) => (
-            <NoteHitTarget key={note._id} controller={controller} note={note} />
+            <NoteHitTarget
+              key={note._id}
+              controller={controller}
+              note={note}
+              wordHighlighted={highlightedNoteIds.has(note._id)}
+            />
           ))}
           {controller.selectionBox && (
             <Box

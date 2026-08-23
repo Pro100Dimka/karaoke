@@ -119,3 +119,28 @@ def test_save_editor_without_word_texts_leaves_text_unchanged(tmp_path):
         ],
     )
     assert [word["text"] for word in saved["words"]] == ["one", "two"]
+
+
+def test_save_editor_applies_word_bounds_and_reclips_notes_to_them(tmp_path):
+    write_document(tmp_path, two_word_document())
+    saved = song_editor_service.save_editor(
+        tmp_path,
+        [
+            {"note": 60, "start": 1.0, "end": 1.5, "word_index": 0},
+            {"note": 62, "start": 1.5, "end": 3.0, "word_index": 1},
+        ],
+        word_bounds=[{"start": 1.0, "end": 1.5}, {"start": 1.5, "end": 3.0}],
+    )
+    assert [(word["start"], word["end"]) for word in saved["words"]] == [(1.0, 1.5), (1.5, 3.0)]
+    assert saved["words"][0]["notes"][0]["end"] == 1.5
+    assert saved["words"][1]["notes"][0]["start"] == 1.5
+
+
+def test_save_editor_rejects_mismatched_word_bounds_length(tmp_path):
+    write_document(tmp_path, two_word_document())
+    with pytest.raises(ValueError, match="word_bounds"):
+        song_editor_service.save_editor(
+            tmp_path,
+            [{"note": 60, "start": 1.0, "end": 2.0, "word_index": 0}],
+            word_bounds=[{"start": 1.0, "end": 2.0}],
+        )

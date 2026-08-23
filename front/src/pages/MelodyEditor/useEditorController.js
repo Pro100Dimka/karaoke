@@ -5,7 +5,6 @@ import { readJsonStorage } from "../../utils/storage";
 import { persistUiPreferences } from "../../utils/ui-preferences";
 import {
   canMergeSelectedNotes,
-  canonicalLyricProjection,
   cloneNotes,
   constrainedMoveDelta,
   deleteNotes,
@@ -14,7 +13,8 @@ import {
   mergeSelectedNotes,
   resizeBounds,
   roundTime,
-  shiftWordTexts
+  shiftWordTexts,
+  wordResizeBounds
 } from "./model";
 
 const STORAGE_KEY = "karaoke-melody-editor";
@@ -28,8 +28,8 @@ export default function useEditorController({ document, dispatch, payload, save,
   const [selected, setSelected] = useState([]);
   const [selectedWords, setSelectedWords] = useState([]);
   const wordSelectAnchor = useRef(null);
-  const [zoom, setZoom] = useState(() => preference(saved.zoom, 48, 36, 72));
-  const [rowHeight, setRowHeight] = useState(() => preference(saved.verticalZoom, 16, 10, 16));
+  const [zoom, setZoom] = useState(() => preference(saved.zoom, 48, 36, 600));
+  const [rowHeight, setRowHeight] = useState(() => preference(saved.verticalZoom, 16, 10, 36));
   const [autoScroll, setAutoScroll] = useState(() => saved.autoScroll ?? true);
   const [playbackRate, setPlaybackRate] = useState(() => Number(saved.playbackRate) || 1);
   const [volumes, setVolumes] = useState(() => ({
@@ -39,12 +39,13 @@ export default function useEditorController({ document, dispatch, payload, save,
   }));
   const [selectionBox, setSelectionBox] = useState(null);
   const dragRef = useRef(null);
+  const wordDragRef = useRef(null);
   const marqueeRef = useRef(null);
   const clipboardRef = useRef([]);
   const shellRef = useRef(null);
   const surfaceRef = useRef(null);
   const playheadRef = useRef(null);
-  const { notes, wordTexts } = document;
+  const { notes, wordBounds, wordTexts } = document;
   const lyricsSync = payload?.lyrics_sync || {};
   const duration = Number(lyricsSync.duration) || Math.max(1, ...notes.map(({ end }) => end));
   const midi = notes.map(({ note }) => note);
@@ -58,11 +59,16 @@ export default function useEditorController({ document, dispatch, payload, save,
   const keyboardWidth = rowHeight * 4.5;
   const laneHeight = (maxMidi - minMidi + 1) * rowHeight;
   const laneWidth = keyboardWidth + Math.max(duration, 16) * zoom;
-  const words = useMemo(() => {
-    const projected = canonicalLyricProjection(lyricsSync.words);
-    if (!wordTexts || wordTexts.length !== projected.length) return projected;
-    return projected.map((word, index) => ({ ...word, text: wordTexts[index] }));
-  }, [lyricsSync.words, wordTexts]);
+  const words = useMemo(
+    () =>
+      wordBounds.map((bound, index) => ({
+        index,
+        text: wordTexts[index] ?? "",
+        start: bound.start,
+        end: bound.end
+      })),
+    [wordBounds, wordTexts]
+  );
 
   useEffect(() => {
     persistUiPreferences(api, "melody_editor", {
@@ -179,6 +185,22 @@ export default function useEditorController({ document, dispatch, payload, save,
     [dispatch, selectedWords, wordTexts]
   );
 
+  const startWordResize = useCallback(
+    (event, index, side) => {
+      event.preventDefault();
+      event.stopPropagation();
+      wordDragRef.current = {
+        index,
+        side,
+        x: event.clientX,
+        snapshot: wordBounds.map((bound) => ({ ...bound })),
+        moved: false
+      };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    [wordBounds]
+  );
+
   const startDrag = useCallback(
     (event, note, mode = "move") => {
       event.preventDefault();
@@ -210,6 +232,27 @@ export default function useEditorController({ document, dispatch, payload, save,
 
   const movePointer = useCallback(
     (event) => {
+      const wordDrag = wordDragRef.current;
+      if (wordDrag) {
+        const dx = (event.clientX - wordDrag.x) / zoom;
+        wordDrag.moved ||= Math.abs(event.clientX - wordDrag.x) > 1;
+        const original = wordDrag.snapshot[wordDrag.index];
+        const limits = wordResizeBounds(wordDrag.snapshot, wordDrag.index, duration);
+        dispatch({
+          type: "resizeWord",
+          wordBounds: wordDrag.snapshot.map((bound, index) => {
+            if (index !== wordDrag.index) return bound;
+            if (wordDrag.side === "left") {
+              const start = clamp(original.start + dx, limits.minStart, limits.maxStart);
+              return { ...bound, start: roundTime(start) };
+            }
+            const end = clamp(original.end + dx, limits.minEnd, limits.maxEnd);
+            return { ...bound, end: roundTime(end) };
+          }),
+          record: false
+        });
+        return;
+      }
       const drag = dragRef.current;
       if (drag) {
         const dx = (event.clientX - drag.x) / zoom;
@@ -261,10 +304,13 @@ export default function useEditorController({ document, dispatch, payload, save,
       });
       setSelected([...new Set([...marquee.base, ...hits])]);
     },
-    [edit, keyboardWidth, maxMidi, notes, rowHeight, zoom]
+    [dispatch, duration, edit, keyboardWidth, maxMidi, notes, rowHeight, zoom]
   );
 
   const endPointer = useCallback(() => {
+    const wordDrag = wordDragRef.current;
+    if (wordDrag?.moved) dispatch({ type: "remember", wordBounds: wordDrag.snapshot });
+    wordDragRef.current = null;
     const drag = dragRef.current;
     if (drag?.moved) dispatch({ type: "remember", notes: drag.snapshot });
     dragRef.current = null;
@@ -406,6 +452,7 @@ export default function useEditorController({ document, dispatch, payload, save,
     shiftWords,
     startDrag,
     startMarquee,
+    startWordResize,
     surfaceRef,
     undo,
     volumes,

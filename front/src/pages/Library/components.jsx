@@ -39,9 +39,22 @@ export function LibraryBackdrop() {
         zIndex: 0,
         overflow: "hidden",
         background: `
-          radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--ui-primary) 24%, transparent), transparent 34%),
-          radial-gradient(circle at 85% 12%, color-mix(in srgb, var(--ui-secondary) 18%, transparent), transparent 32%),
-          linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 42%, transparent), var(--color-bg))`
+          radial-gradient(
+            circle at 15% 20%,
+            color-mix(in srgb, var(--ui-primary) 10%, transparent),
+            transparent 34%
+          ),
+          radial-gradient(
+            circle at 85% 12%,
+            color-mix(in srgb, var(--ui-secondary) 7%, transparent),
+            transparent 32%
+          ),
+          linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--color-surface) 18%, transparent),
+            color-mix(in srgb, var(--color-bg) 40%, transparent)
+          )
+        `
       }}
     >
       <AnimatedLibraryBackdrop />

@@ -528,8 +528,10 @@ void main() {
     mix(
       finalColor,
       vec3(0.02, 0.03, 0.05),
-      vDepth * 0.4
+      vDepth * 0.22
     );
+
+  finalColor *= 1.28;
 
   float finalAlpha =
     clamp(
@@ -733,7 +735,7 @@ export default function AnimatedLibraryBackdrop() {
 
     const scene = new THREE.Scene();
 
-    scene.fog = new THREE.FogExp2(0x000508, 0.005);
+    scene.fog = new THREE.FogExp2(0x000508, 0.0036);
 
     const camera = new THREE.PerspectiveCamera(
       55,
@@ -759,7 +761,7 @@ export default function AnimatedLibraryBackdrop() {
 
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
-    renderer.toneMappingExposure = 2.1;
+    renderer.toneMappingExposure = 2.2;
 
     renderer.domElement.style.position = "absolute";
 

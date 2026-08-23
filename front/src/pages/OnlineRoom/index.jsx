@@ -1,12 +1,12 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
 import { useState } from "react";
-import { api } from "../api/client";
-import { useOnlineRoom } from "../contexts/OnlineRoomContext";
-import useMountedRef from "../hooks/useMountedRef";
-import { useI18n } from "../i18n";
-import { normalizeRoomId } from "../services/onlineRoom";
-import { Button, FieldInput, Modal, Stack, Typography } from "../theme/ui";
-import { getErrorMessage } from "../utils/errors";
+import { api } from "../../api/client";
+import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
+import useMountedRef from "../../hooks/useMountedRef";
+import { useI18n } from "../../i18n";
+import { normalizeRoomId } from "../../services/onlineRoom";
+import { Button, FieldInput, Modal, Stack, Typography } from "../../theme/ui";
+import { getErrorMessage } from "../../utils/errors";
 
 export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
   const { t } = useI18n();
@@ -52,13 +52,25 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
         title: t("room.performance"),
         description: t("room.description"),
         actions: (
-          <Button
-            variant="contained"
-            disabled={form.busy || (form.join && form.roomId.length < 4)}
-            onClick={() => connect(!form.join)}
-          >
-            {t(action)}
-          </Button>
+          <>
+            <Button
+              fullWidth
+              variant="outlined"
+              disabled={form.busy}
+              startIcon={form.join ? <ArrowLeft /> : undefined}
+              onClick={() => set({ join: !form.join, error: "" })}
+            >
+              {t(form.join ? "room.back" : "room.joinByCode")}
+            </Button>
+            <Button
+              variant="contained"
+              fullWidth
+              disabled={form.busy || (form.join && form.roomId.length < 4)}
+              onClick={() => connect(!form.join)}
+            >
+              {t(action)}
+            </Button>
+          </>
         )
       }}
     >
@@ -73,7 +85,7 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
           value={form.name}
           onChange={(name) => set({ name })}
         />
-        {form.join ? (
+        {form.join && (
           <FieldInput
             field={{
               name: "roomId",
@@ -90,22 +102,12 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
               }
             }}
           />
-        ) : (
-          <Typography tone="muted">{t("room.instructions")}</Typography>
         )}
         {form.error && (
           <Typography role="alert" tone="danger">
             {form.error}
           </Typography>
         )}
-        <Button
-          variant="outlined"
-          disabled={form.busy}
-          startIcon={form.join ? <ArrowLeft /> : undefined}
-          onClick={() => set({ join: !form.join, error: "" })}
-        >
-          {t(form.join ? "room.back" : "room.joinByCode")}
-        </Button>
       </Stack>
     </Modal>
   );
