@@ -243,24 +243,44 @@ function EditorSurface({ controller, transport }) {
                   }}
                 >
                   {word.text}
-                  {["left", "right"].map((side) => (
+                </Typography>
+              );
+            })}
+            {controller.words.map((word) => (
+              // Rendered at the word's true start/end pixel position, not
+              // nested inside its (possibly minimum-width-padded, see
+              // inlineSize above) label box -- a short word's label can be
+              // widened past its real end for readability, which would
+              // otherwise drag the right handle into the next word's
+              // territory and make it grab that word instead.
+              <Box key={word.index} aria-hidden="true">
+                {["left", "right"].map((side) => {
+                  // The left handle sits just inside the word's own start,
+                  // the right handle just inside its own end -- so two
+                  // touching words' handles sit side by side rather than on
+                  // top of each other at the shared boundary.
+                  const edge =
+                    (side === "left" ? word.start : word.end) * controller.zoom +
+                    controller.keyboardWidth;
+                  return (
                     <Box
                       as="span"
                       key={side}
-                      aria-hidden="true"
                       onPointerDown={(event) => controller.startWordResize(event, word.index, side)}
                       onClick={(event) => event.stopPropagation()}
                       sx={{
                         position: "absolute",
-                        inset: `0 ${side === "right" ? 0 : "auto"} 0 ${side === "left" ? 0 : "auto"}`,
+                        insetBlock: "var(--space-1) 0",
+                        insetInlineStart: `${side === "left" ? edge : edge - 6}px`,
                         inlineSize: "6px",
-                        cursor: "ew-resize"
+                        cursor: "ew-resize",
+                        zIndex: 4
                       }}
                     />
-                  ))}
-                </Typography>
-              );
-            })}
+                  );
+                })}
+              </Box>
+            ))}
           </Box>
           {controller.notes.map((note) => (
             <NoteHitTarget

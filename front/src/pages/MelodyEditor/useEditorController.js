@@ -154,20 +154,17 @@ export default function useEditorController({ document, dispatch, payload, save,
     [notes, selected, transportRef]
   );
 
-  const selectWord = useCallback(
-    (index, event) => {
-      if (event?.shiftKey && wordSelectAnchor.current !== null) {
-        const anchor = wordSelectAnchor.current;
-        const lo = Math.min(anchor, index);
-        const hi = Math.max(anchor, index);
-        setSelectedWords(Array.from({ length: hi - lo + 1 }, (_, offset) => lo + offset));
-        return;
-      }
-      wordSelectAnchor.current = index;
-      setSelectedWords([index]);
-    },
-    []
-  );
+  const selectWord = useCallback((index, event) => {
+    if (event?.shiftKey && wordSelectAnchor.current !== null) {
+      const anchor = wordSelectAnchor.current;
+      const lo = Math.min(anchor, index);
+      const hi = Math.max(anchor, index);
+      setSelectedWords(Array.from({ length: hi - lo + 1 }, (_, offset) => lo + offset));
+      return;
+    }
+    wordSelectAnchor.current = index;
+    setSelectedWords([index]);
+  }, []);
 
   const shiftWords = useCallback(
     (direction) => {

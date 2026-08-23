@@ -397,7 +397,12 @@ describe("API domains", () => {
       [() => songsApi.getLog(id), "/songs/a%2Fb/log"],
       [() => songsApi.getResult(id), "/songs/a%2Fb/result"],
       [() => songsApi.getSongEditor(id), "/songs/a%2Fb/editor"],
-      [() => songsApi.saveSongEditor(id, [{ pitch: 60 }]), "/songs/a%2Fb/editor", "PUT", { notes: [{ pitch: 60 }] }],
+      [
+        () => songsApi.saveSongEditor(id, [{ pitch: 60 }]),
+        "/songs/a%2Fb/editor",
+        "PUT",
+        { notes: [{ pitch: 60 }], word_texts: null, word_bounds: null }
+      ],
       [() => songsApi.resetSongEditor(id), "/songs/a%2Fb/editor/reset", "POST"],
       [() => songsApi.updateLyrics(id, "lyrics"), "/songs/a%2Fb/lyrics", "PUT", { lyrics: "lyrics" }]
     ])

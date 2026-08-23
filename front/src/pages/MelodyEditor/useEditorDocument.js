@@ -64,7 +64,10 @@ export default function useEditorDocument({ songId, confirm, notify }) {
       const raw = serializeNotes(document.notes, document.wordBounds);
       await accept(
         await api.saveSongEditor(
-          song.id, raw, document.wordTexts, serializeWordBounds(document.wordBounds)
+          song.id,
+          raw,
+          document.wordTexts,
+          serializeWordBounds(document.wordBounds)
         )
       );
     } catch (error) {

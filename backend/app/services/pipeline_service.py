@@ -597,6 +597,34 @@ def _release_processing_slot(song_id: str) -> None:
         _processing_condition.notify_all()
 
 
+def _invoke_ai_pipeline(
+    song_id: str,
+    source_path: str,
+    out_dir: Path,
+    lyrics_path: Path | None,
+    searchable_title: str | None,
+    bpm_override: float | None,
+    key_override: str | None,
+    processing_mode: str,
+    capture: _ProgressCapture,
+    *,
+    reuse_vocals: bool,
+):
+    language = None if lyrics_path is not None else config.DEFAULT_LANGUAGE
+    progress = _create_ai_progress_callback(song_id, capture)
+    cancelled = lambda: _is_cancelled(song_id)  # noqa: E731
+    if reuse_vocals:
+        return ai_bridge.reprocess_song(
+            out_dir, language=language, progress=progress, cancelled=cancelled
+        )
+    return ai_bridge.process_song(
+        source_path, out_dir, lyrics_path=lyrics_path,
+        title=searchable_title, bpm_override=bpm_override,
+        key_override=key_override, processing_mode=processing_mode,
+        language=language, progress=progress, cancelled=cancelled,
+    )
+
+
 def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
     try:
         if not _is_cancelled(song_id):
@@ -643,21 +671,10 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
 
-        shared_language = None if lyrics_path is not None else config.DEFAULT_LANGUAGE
-        shared_progress = _create_ai_progress_callback(song_id, capture)
-        shared_cancelled = lambda: _is_cancelled(song_id)  # noqa: E731
-        result = (
-            ai_bridge.reprocess_song(
-                out_dir, language=shared_language,
-                progress=shared_progress, cancelled=shared_cancelled,
-            )
-            if reuse_vocals
-            else ai_bridge.process_song(
-                source_path, out_dir, lyrics_path=lyrics_path,
-                title=searchable_title, bpm_override=bpm_override,
-                key_override=key_override, processing_mode=processing_mode,
-                language=shared_language, progress=shared_progress, cancelled=shared_cancelled,
-            )
+        result = _invoke_ai_pipeline(
+            song_id, source_path, out_dir, lyrics_path, searchable_title,
+            bpm_override, key_override, processing_mode, capture,
+            reuse_vocals=reuse_vocals,
         )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():

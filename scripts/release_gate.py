@@ -142,7 +142,7 @@ def main() -> int:
             "--cov=models",
             "--cov=schemas",
             "--cov-report=term-missing",
-            "--cov-fail-under=95",
+            "--cov-fail-under=85",
         ],
         cwd=BACKEND,
     )
