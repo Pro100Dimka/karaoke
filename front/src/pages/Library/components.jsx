@@ -36,7 +36,7 @@ export function LibraryBackdrop() {
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
-        zIndex: -1,
+        zIndex: 0,
         overflow: "hidden",
         background: `
           radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--ui-primary) 24%, transparent), transparent 34%),

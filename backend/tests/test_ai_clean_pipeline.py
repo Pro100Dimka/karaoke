@@ -251,35 +251,38 @@ def test_acoustic_runs_find_words_crossing_silence_and_overlapping_neighbors():
     assert _acoustic_runs(words, samples, rate) == [(1, 4)]
 
 
-def test_long_alignment_uses_model_window_and_acoustic_confidence(tmp_path):
+def test_ordinary_song_length_uses_a_single_aligner_call_not_windowing(tmp_path):
+    # A typical 6-minute song must never hit the windowing path: every
+    # attempt to patch window-seam coverage just moved the artifact to the
+    # next boundary instead of removing it, so ordinary songs now get one
+    # consistent aligner call covering the whole thing instead of being
+    # stitched together from several overlapping windows.
     audio = tmp_path / "vocals.flac"
-    sf.write(audio, np.zeros(1600, dtype=np.float32), 10)
+    sf.write(audio, np.zeros(3600, dtype=np.float32), 10)  # 360s span
     tokens = [f"word{index}" for index in range(10)]
 
     def align(audio, text, **_kwargs):
-        assert all(len(segment) == 900 for segment, _rate in audio)
-        assert text == [" ".join(tokens), " ".join(tokens)]
+        assert audio == str(audio_path)
+        assert text == " ".join(tokens)
         return [
-            SimpleNamespace(items=[
-                {"text": token, "start_time": index + 0.5, "end_time": index + 0.9,
-                 "confidence": confidence}
-                for index, token in enumerate(tokens)
-            ])
-            for confidence in (0.1, 0.9)
+            {"text": token, "start_time": index + 0.5, "end_time": index + 0.9}
+            for index, token in enumerate(tokens)
         ]
 
+    audio_path = audio
     aligner = Qwen3ForcedAligner("test-model")
     aligner._model = SimpleNamespace(align=align)
 
     words = aligner.align_long_text(audio, " ".join(tokens), "en")
 
-    assert words[0].start == 70.5
-    assert all(word.confidence == 0.9 for word in words)
+    assert len(words) == len(tokens)
+    assert words[0].start == 0.5
 
 
-def test_six_minute_alignment_uses_four_model_windows(tmp_path):
+def test_only_genuine_outliers_beyond_the_threshold_use_windowing(tmp_path):
     audio = tmp_path / "vocals.flac"
-    sf.write(audio, np.zeros(3600, dtype=np.float32), 10)
+    span_seconds = 610.0  # just over WINDOWED_ALIGNMENT_THRESHOLD_SECONDS (600)
+    sf.write(audio, np.zeros(int(span_seconds * 10), dtype=np.float32), 10)
     tokens = [f"word{index}" for index in range(36)]
     calls = []
 
@@ -302,8 +305,12 @@ def test_six_minute_alignment_uses_four_model_windows(tmp_path):
     aligner.align_long_text(audio, " ".join(tokens), "en")
 
     assert len(calls) == 1
-    assert len(calls[0][0]) == 4
-    assert all(len(segment) == 900 for segment, _rate in calls[0][0])
+    segments = [len(segment) for segment, _rate in calls[0][0]]
+    # Every main window overlaps its neighbour by >=50% (900 samples each),
+    # plus a dedicated intro and outro window (450 samples each) appended last.
+    assert segments[-2:] == [450, 450]
+    assert all(length == 900 for length in segments[:-2])
+    assert len(segments) > 2
 
 
 def test_separation_cancel_stops_worker_immediately():

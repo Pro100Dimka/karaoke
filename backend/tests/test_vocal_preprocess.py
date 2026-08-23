@@ -1,76 +1,73 @@
 import numpy as np
 import soundfile as sf
 
-from AI.vocal_preprocess import _dereverberate, prepare_vocal_reference
+from AI.vocal_preprocess import _gate_threshold, prepare_vocal_reference
 
 
-def _echoed_signal(rate=16000, duration=4.0, delay_sec=0.15, gain=0.6, seed=42):
+def test_gate_threshold_tracks_the_loud_portion_of_the_vocal(tmp_path):
+    rate = 16000
+    quiet = np.full(rate, 0.02, dtype=np.float32)
+    loud = np.full(rate, 0.2, dtype=np.float32)
+    signal = np.concatenate([quiet, loud])
+    source = tmp_path / "vocal.wav"
+    sf.write(source, signal, rate)
+
+    threshold = _gate_threshold(source, percentile=75)
+
+    # p75 of a 50/50 quiet/loud mix should land on the loud half, not the quiet one.
+    assert 0.05 < threshold <= 0.2
+
+
+def test_gate_threshold_is_zero_for_silence(tmp_path):
+    silence = np.zeros(16000, dtype=np.float32)
+    source = tmp_path / "silence.wav"
+    sf.write(source, silence, 16000)
+
+    assert _gate_threshold(source, percentile=75) == 0.0
+
+
+def test_prepare_vocal_reference_suppresses_a_quiet_delay_tap(tmp_path):
+    rate = 16000
+    duration = 4.0
+    n = int(rate * duration)
+    rng = np.random.default_rng(3)
     from scipy.signal import butter, lfilter
 
-    n = int(rate * duration)
-    rng = np.random.default_rng(seed)
     dry = lfilter(*butter(4, 3000 / (rate / 2), btype="low"), rng.standard_normal(n))
-    delay = int(delay_sec * rate)
+    dry = dry / (np.abs(dry).max() + 1e-9) * 0.6
+    delay = int(rate * 0.15)
     echo = np.zeros_like(dry)
-    echo[delay:] = gain * dry[:-delay]
-    wet = dry + echo
-    return wet / (np.abs(wet).max() + 1e-9) * 0.8, delay
-
-
-def _echo_lag_correlation(signal, delay):
-    a, b = signal[delay:], signal[:-delay]
-    n = min(len(a), len(b))
-    return float(np.corrcoef(a[:n], b[:n])[0, 1])
-
-
-def test_dereverberate_reduces_a_known_delay_tap(tmp_path):
-    wet, delay = _echoed_signal()
-    stereo = np.stack([wet, wet * 0.98], axis=1).astype(np.float32)
+    echo[delay:] = 0.25 * dry[:-delay]  # a quiet delay tap, well below the dry signal
+    wet = (dry + echo).astype(np.float32)
     source = tmp_path / "wet.wav"
-    sf.write(source, stereo, 16000)
-
-    output = _dereverberate(source, tmp_path, iterations=5)
-    result, _ = sf.read(output, always_2d=True)
-
-    before = abs(_echo_lag_correlation(wet, delay))
-    after = abs(_echo_lag_correlation(result[:, 0], delay))
-    assert after < before
-
-
-def test_dereverberate_skips_mono_input_unchanged(tmp_path):
-    mono = np.zeros((16000, 1), dtype=np.float32)
-    source = tmp_path / "mono.wav"
-    sf.write(source, mono, 16000)
-
-    output = _dereverberate(source, tmp_path, iterations=3)
-
-    assert output == source
-
-
-def test_prepare_vocal_reference_without_wpe_matches_previous_behavior(tmp_path):
-    stereo = np.random.default_rng(0).standard_normal((16000, 2)).astype(np.float32) * 0.1
-    source = tmp_path / "source.wav"
-    sf.write(source, stereo, 16000)
+    sf.write(source, wet, rate)
     target = tmp_path / "vocals.flac"
 
-    info = prepare_vocal_reference(source, target, sample_rate=16000)
+    info = prepare_vocal_reference(source, target, sample_rate=rate)
+    cleaned, _ = sf.read(target, always_2d=True)
+    cleaned = cleaned[:, 0]
+
+    def echo_energy(signal, delay):
+        a, b = signal[delay:], signal[:-delay]
+        n = min(len(a), len(b))
+        return float(np.corrcoef(a[:n], b[:n])[0, 1])
+
+    assert info.channels == 1
+    assert abs(echo_energy(cleaned, delay)) < abs(echo_energy(wet, delay))
+
+
+def test_prepare_vocal_reference_leaves_a_clean_signal_alone(tmp_path):
+    rate = 16000
+    rng = np.random.default_rng(1)
+    from scipy.signal import butter, lfilter
+
+    dry = lfilter(*butter(4, 3000 / (rate / 2), btype="low"), rng.standard_normal(rate * 2))
+    dry = (dry / (np.abs(dry).max() + 1e-9) * 0.6).astype(np.float32)
+    source = tmp_path / "clean.wav"
+    sf.write(source, dry, rate)
+    target = tmp_path / "vocals.flac"
+
+    info = prepare_vocal_reference(source, target, sample_rate=rate)
 
     assert info.channels == 1
     assert info.frames > 0
-    assert target.is_file()
-
-
-def test_prepare_vocal_reference_with_wpe_still_produces_valid_mono_output(tmp_path):
-    wet, _ = _echoed_signal(duration=2.0)
-    stereo = np.stack([wet, wet * 0.98], axis=1).astype(np.float32)
-    source = tmp_path / "source.wav"
-    sf.write(source, stereo, 16000)
-    target = tmp_path / "vocals.flac"
-
-    info = prepare_vocal_reference(source, target, sample_rate=16000, wpe_iterations=3)
-
-    assert info.channels == 1
-    assert info.frames > 0
-    assert target.is_file()
-    # no leftover temp dereverb file
-    assert not list(tmp_path.glob(".dereverb-*"))

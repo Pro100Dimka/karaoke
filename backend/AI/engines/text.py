@@ -12,6 +12,11 @@ from .device import select_torch_device
 
 ASR_PIPELINE_VERSION = LONG_TEXT_ALIGNMENT_VERSION = "clean-v1"
 LANGUAGES = {"en": "English", "ru": "Russian", "uk": "Ukrainian"}
+# A single aligner call covers everything up to this length; only songs
+# longer than this fall back to windowing. Set generously above ordinary
+# song lengths so windowing's seam artifacts stay a rare-outlier fallback,
+# not the everyday path.
+WINDOWED_ALIGNMENT_THRESHOLD_SECONDS = 600.0
 
 
 def tokenize(text: str) -> list[str]:
@@ -445,12 +450,27 @@ class Qwen3ForcedAligner(Aligner):
 
     def _align_windows(self, samples, rate, tokens: list[str], span: float, language: str) -> list[Word]:
         window = 90.0
-        count = max(1, ceil(span / window))
+        # Consecutive windows must overlap by at least half a window,
+        # otherwise the strip between their overlap zones is only ever
+        # covered by one window with no second candidate to weigh by
+        # confidence against -- that gap moves around (not just "the start")
+        # depending on how span divides into windows, so it isn't something
+        # a single fixed patch can catch; the overlap ratio itself has to be
+        # guaranteed for every song length.
+        count = max(1, ceil((span - window) / (window / 2)) + 1) if span > window else 1
         starts = [index * max(0, span - window) / max(1, count - 1) for index in range(count)]
+        windows = [(start, min(span, start + window)) for start in starts]
+        if count > 1:
+            # Nothing can precede t=0 or follow t=span, so the very first and
+            # very last stretch of the song can never get a second window no
+            # matter how much overlap the interior windows have. Add one
+            # smaller, tighter window at each end so the intro and outro get
+            # a genuine second opinion too.
+            windows.append((0.0, min(span, window / 2)))
+            windows.append((max(0.0, span - window / 2), span))
         margin = max(8, ceil(len(tokens) * min(30.0, span) / span))
         requests = []
-        for start in starts:
-            end = min(span, start + window)
+        for start, end in windows:
             lower = max(0, int(start / span * len(tokens)) - margin)
             upper = min(len(tokens), ceil(end / span * len(tokens)) + margin)
             segment = samples[round(start * rate):round(end * rate)]
@@ -489,7 +509,17 @@ class Qwen3ForcedAligner(Aligner):
         tokens, span = tokenize(text), duration(audio)
         resolved = resolve_alignment_language(text, language)
         samples = rate = None
-        if span > 150:
+        # Windowing exists only because a single aligner call has *some*
+        # practical limit -- it is not a quality improvement, it's a
+        # necessary evil that trades one long, consistent alignment for
+        # several short ones stitched together at boundaries that are never
+        # perfectly seamless (as every attempt to patch the seam coverage
+        # has shown: fixing one boundary just moves the artifact to the
+        # next one). So the single-call path should cover every length the
+        # model can actually take in one shot, and windowing should only be
+        # the fallback for genuinely long outliers, not the default path
+        # for an ordinary song.
+        if span > WINDOWED_ALIGNMENT_THRESHOLD_SECONDS:
             samples, rate = sf.read(audio, dtype="float32", always_2d=False)
             words = self._align_windows(samples, rate, tokens, span, resolved)
         else:

@@ -68,6 +68,7 @@
     "react-dropzone": "^20.1.1",
     "react-konva": "^18.2.16",
     "react-router-dom": "^7.18.2",
+    "three": "^0.185.1",
     "wavesurfer.js": "^7.12.11",
     "xstate": "^5.32.5",
     "zustand": "^5.0.15"

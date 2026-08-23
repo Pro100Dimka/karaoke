@@ -139,9 +139,7 @@ class KaraokePipeline:
 
             self._notify(request, "vocal", 42, "Очистка и перевод голоса в моно")
             started = time.perf_counter()
-            prepare_vocal_reference(
-                raw_vocals, vocals, self.config.sample_rate, wpe_iterations=profile.wpe_iterations
-            )
+            prepare_vocal_reference(raw_vocals, vocals, self.config.sample_rate)
             self._stage(reports, "vocal", "ffmpeg-mono-clean", started)
 
             self._notify(request, "analysis", 48, "Анализ музыки и мелодии по vocals.flac")
