@@ -14,6 +14,7 @@ import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
+import useKaraokeRoomPreferences from "./hooks/useKaraokeRoomPreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
 import useKaraokeSceneFlow from "./hooks/useKaraokeSceneFlow";
 import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
@@ -62,6 +63,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const resetPlayback = playback.reset;
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const karaokePreferences = useKaraokePreferences();
   const {
     musicVolume,
     setMusicVolume,
@@ -81,7 +83,14 @@ export default function Karaoke({ onOpenAppSettings }) {
     setAutoHideConsole,
     effectPreset,
     setEffectPreset
-  } = useKaraokePreferences();
+  } = karaokePreferences;
+  useKaraokeRoomPreferences({
+    participantCount: onlineParticipantCount,
+    preferences: karaokePreferences,
+    room: onlineRoomState,
+    roomUi: onlineRoom.roomUi,
+    syncUi: syncRoomUi
+  });
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
   const analysisRecordingIdRef = useRef(null);
@@ -423,9 +432,9 @@ export default function Karaoke({ onOpenAppSettings }) {
         keyShift,
         onKeyShiftChange: setKeyShift,
         showNotes,
-        onToggleNotes: () => setShowNotes((value) => !value),
+        onToggleNotes: () => setShowNotes(!showNotes),
         showLyrics,
-        onToggleLyrics: () => setShowLyrics((value) => !value),
+        onToggleLyrics: () => setShowLyrics(!showLyrics),
         onOpenAppSettings,
         autoHideEnabled: autoHideConsole,
         onAutoHideChange: setAutoHideConsole,

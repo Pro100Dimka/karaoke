@@ -179,11 +179,14 @@ export default function useLibrary() {
   useLibraryRoomSync({
     localSongs,
     query,
+    filters,
     room: room?.room,
     roomEventId: room?.roomUi?.__eventId,
     roomQuery: room?.roomUi?.query,
+    roomFilters: room?.roomUi?.filters,
     participantCount: room?.participants?.length,
     setQuery,
+    setFilters,
     syncUi: room.syncUi
   });
 

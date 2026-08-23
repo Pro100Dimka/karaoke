@@ -53,6 +53,14 @@ export function createOnlineRoomMessageHandler(options) {
     participantsRef.current?.some(
       (participant) => participant.id === message.fromId && participant.role === "host"
     );
+  const senderIsParticipant = (message) =>
+    participantsRef.current?.some((participant) => participant.id === message.fromId);
+  const guestSharedUi = (state) =>
+    Object.fromEntries(
+      Object.entries(state).filter(([key]) => ["query", "filters", "radio", "karaoke"].includes(key))
+    );
+  const guestSharedCommand = (command) =>
+    ["karaoke-player", "open-library"].includes(command?.type);
   const isCurrentPending = (command) =>
     isCurrentConnection() && pendingCommandRef.current?.commandId === command.commandId;
 
@@ -301,15 +309,17 @@ export function createOnlineRoomMessageHandler(options) {
     },
     signal: (message) => voice.accept(message.fromId, message.signal).catch(() => {}),
     ui: (message) => {
+      if (!senderIsParticipant(message)) return;
       const state = message.state || {};
       const { participantEffects, participantSongs } = state;
       const host = senderIsHost(message);
-      if (!host && !participantEffects && !participantSongs) return;
+      const shared = guestSharedUi(state);
+      if (!host && !participantEffects && !participantSongs && !Object.keys(shared).length) return;
       setRoomUi((current) => ({
         ...current,
         ...(host
           ? Object.fromEntries(Object.entries(state).filter(([key]) => key !== "participantSongs"))
-          : {}),
+          : shared),
         ...(message.fromId && participantEffects
           ? {
               effectsByParticipant: {
@@ -338,7 +348,8 @@ export function createOnlineRoomMessageHandler(options) {
         syncHandlers[command.type](command, message);
         return;
       }
-      if (!senderIsHost(message)) return;
+      if (!senderIsHost(message) && !(senderIsParticipant(message) && guestSharedCommand(command)))
+        return;
       publishRoomCommand(command, message.sentAt || "sync");
     },
     // Sent by the server right before it force-closes this socket (rate limit, oversized or

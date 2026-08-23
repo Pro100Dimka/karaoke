@@ -155,10 +155,15 @@ export class KaraokeRoom {
       const participantSongs = message.state.participantSongs;
       const hasEffects = participantEffects && typeof participantEffects === "object" && !Array.isArray(participantEffects);
       const hasSongs = Array.isArray(participantSongs) && participantSongs.length <= 500 && participantSongs.every((song) => song && typeof song === "object" && !Array.isArray(song));
-      if (!hasEffects && !hasSongs) { this.reject(socket); return; }
+      const sharedKeys = ["query", "filters", "radio", "karaoke"];
+      const sharedState = Object.fromEntries(
+        Object.entries(message.state).filter(([key]) => sharedKeys.includes(key))
+      );
+      if (!hasEffects && !hasSongs && !Object.keys(sharedState).length) { this.reject(socket); return; }
       this.broadcast("ui", {
         fromId: sender.id,
         state: {
+          ...sharedState,
           ...(hasEffects ? { participantEffects } : {}),
           ...(hasSongs ? { participantSongs } : {}),
         },
@@ -171,6 +176,32 @@ export class KaraokeRoom {
       if (!state || typeof state !== "object" || Array.isArray(state) || JSON.stringify(state).length > MAX_STATE_BYTES) { this.reject(socket); return; }
       if (sender.role === "host") {
         this.broadcast("sync", { state, sentAt: Date.now(), fromId: sender.id }, sender.id);
+        return;
+      }
+      if (
+        state.type === "karaoke-player" &&
+        typeof state.songId === "string" && state.songId.length <= 128 &&
+        ["play", "pause", "stop", "seek", "sync"].includes(state.action) &&
+        Number.isFinite(state.position)
+      ) {
+        this.broadcast("sync", {
+          fromId: sender.id,
+          sentAt: Date.now(),
+          state: {
+            type: "karaoke-player",
+            songId: state.songId,
+            action: state.action,
+            position: state.position,
+          }
+        }, sender.id);
+        return;
+      }
+      if (state.type === "open-library") {
+        this.broadcast("sync", {
+          fromId: sender.id,
+          sentAt: Date.now(),
+          state: { type: "open-library" }
+        }, sender.id);
         return;
       }
       if (

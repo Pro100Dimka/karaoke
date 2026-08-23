@@ -12,18 +12,14 @@ export default function useOnlineRoomCommands({
 }) {
   const syncUi = useCallback(
     (state) => {
-      if (!roomRef.current) return;
-
-      clientRef.current?.send("ui", { state });
+      if (roomRef.current) clientRef.current?.send("ui", { state });
     },
     [clientRef, roomRef]
   );
 
   const syncCommand = useCallback(
     (state) => {
-      if (!roomRef.current) return;
-
-      clientRef.current?.send("sync", { state });
+      if (roomRef.current) clientRef.current?.send("sync", { state });
     },
     [clientRef, roomRef]
   );
@@ -32,7 +28,6 @@ export default function useOnlineRoomCommands({
     (songId) => {
       const client = clientRef.current;
       const connectionToken = connectionTokenRef.current;
-
       return openKaraokeInRoom({
         songId,
         room: roomRef.current,
@@ -47,9 +42,5 @@ export default function useOnlineRoomCommands({
     [api, clientRef, connectionTokenRef, hostSongCommandRef, participantsRef, roomRef, voiceRef]
   );
 
-  return {
-    openKaraoke,
-    syncCommand,
-    syncUi
-  };
+  return { openKaraoke, syncCommand, syncUi };
 }

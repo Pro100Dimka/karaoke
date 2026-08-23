@@ -7,12 +7,17 @@ const signature = ({ stationId, isPlaying, volume }) =>
   `${stationId}:${Boolean(isPlaying)}:${Number(volume).toFixed(3)}`;
 
 export default function RoomRadioSync() {
-  const { room, roomUi, syncUi } = useOnlineRoom();
+  const { participants, room, roomUi, syncUi } = useOnlineRoom();
   const radio = useRadio();
   const current = useRef(radio);
   const target = useRef(null);
   const sent = useRef("");
   current.current = radio;
+
+  useEffect(() => {
+    target.current = null;
+    sent.current = room && !room.host ? signature(current.current) : "";
+  }, [room?.host, room?.id, room?.selfId]);
 
   useEffect(() => {
     if (!room || !roomUi?.radio) return;
@@ -32,21 +37,21 @@ export default function RoomRadioSync() {
     }
     target.current = { signature: next, startedAt: Date.now() };
     if (roomUi.radio.stationId && remote.stationId !== local.stationId)
-      radio.setStation(remote.stationId);
-    if (Math.abs(remote.volume - local.volume) > 0.001) radio.setVolume(remote.volume);
+      local.setStation(remote.stationId);
+    if (Math.abs(remote.volume - local.volume) > 0.001) local.setVolume(remote.volume);
     if (remote.isPlaying && !local.isPlaying) {
       Promise.resolve(
-        radio.turnOn({
+        local.turnOn({
           remember: false,
           fadeIn: true,
           targetStation:
-            radio.stations.find(({ id }) => id === remote.stationId) || radio.stations[0]
+            local.stations.find(({ id }) => id === remote.stationId) || local.stations[0]
         })
       ).catch(() => {
         target.current = null;
       });
-    } else if (!remote.isPlaying && local.isPlaying) radio.turnOff({ remember: false });
-  }, [radio, room, roomUi?.__eventId, roomUi?.radio]);
+    } else if (!remote.isPlaying && local.isPlaying) local.turnOff({ remember: false });
+  }, [room?.id, roomUi?.__eventId, roomUi?.radio]);
 
   useEffect(() => {
     if (!room) return;
@@ -66,5 +71,13 @@ export default function RoomRadioSync() {
       radio: { isPlaying: radio.isPlaying, stationId: radio.stationId, volume: radio.volume }
     });
   }, [radio.isPlaying, radio.stationId, radio.volume, room, syncUi]);
+  useEffect(() => {
+    if (!room?.host || !participants.length) return;
+    const value = current.current;
+    syncUi({
+      radio: { isPlaying: value.isPlaying, stationId: value.stationId, volume: value.volume }
+    });
+  }, [participants.length, room?.host, syncUi]);
+
   return null;
 }

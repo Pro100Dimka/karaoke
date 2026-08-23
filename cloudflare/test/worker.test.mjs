@@ -113,3 +113,45 @@ test("rejects batches without hardware, warnings or errors", async () => {
   );
   assert.equal(response.status, 400);
 });
+
+test("guest can broadcast shared library filters including sort", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "guest" });
+  const target = new FakeSocket({ id: "target", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
+  const filters = { genre: "Rock", key: "Am", status: "done", sort: "artist" };
+
+  await room.webSocketMessage(sender, JSON.stringify({ type: "ui", state: { filters } }));
+
+  assert.equal(sender.closed, null);
+  assert.deepEqual(target.messages.at(-1), {
+    type: "ui",
+    fromId: "sender",
+    state: { filters },
+  });
+});
+
+test("guest can broadcast all shared karaoke preferences", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "guest" });
+  const target = new FakeSocket({ id: "target", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
+  const karaoke = {
+    musicVolume: 0.21,
+    vocalVolume: 0.42,
+    melodyVolume: 0.63,
+    speed: 1.25,
+    keyShift: -3,
+    showLyrics: false,
+    showNotes: false,
+    autoHideConsole: false,
+    effectPreset: "studio",
+  };
+
+  await room.webSocketMessage(sender, JSON.stringify({ type: "ui", state: { karaoke } }));
+
+  assert.equal(sender.closed, null);
+  assert.deepEqual(target.messages.at(-1), {
+    type: "ui",
+    fromId: "sender",
+    state: { karaoke },
+  });
+});

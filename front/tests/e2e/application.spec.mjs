@@ -1,4 +1,3 @@
-/* eslint-disable no-empty-pattern */
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }, testInfo) => {
@@ -7,7 +6,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   testInfo.errorsInPage = errors;
 });
 
-test.afterEach(async ({}, testInfo) => {
+test.afterEach(async (_fixtures, testInfo) => {
   expect(testInfo.errorsInPage).toEqual([]);
 });
 
