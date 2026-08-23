@@ -128,6 +128,34 @@ export const canonicalLyricProjection = (words = []) =>
     end: Number(word.end)
   }));
 
+// Moves a selected run of word texts [start, end] one slot forward or
+// backward. Either way, the run and everything after it (to the end of the
+// song) shifts by one slot in the same direction, so a misalignment that
+// starts at the selection and repeats through the rest of the song only
+// needs one shift instead of one per word. Timing slots (start/end, note
+// assignments) are never touched -- only which text sits in which slot
+// changes. Moving forward leaves the selection's old starting slot blank
+// (nothing to its left moves in to fill it) and drops the very last word's
+// text off the end of the song. Moving backward instead overwrites the one
+// word immediately before the selection -- everything from the selection
+// onward, including it, shifts left by one to follow -- leaving a blank
+// only in the very last slot of the song. Undo with Ctrl+Z if a shift went
+// further than intended.
+export function shiftWordTexts(texts, range, direction) {
+  const [start, end] = range;
+  if (direction > 0 && end >= texts.length - 1) return texts;
+  if (direction < 0 && start <= 0) return texts;
+  const next = [...texts];
+  if (direction > 0) {
+    for (let index = texts.length - 1; index > start; index -= 1) next[index] = next[index - 1];
+    next[start] = "";
+  } else {
+    for (let index = start - 1; index < texts.length - 1; index += 1) next[index] = next[index + 1];
+    next[texts.length - 1] = "";
+  }
+  return next;
+}
+
 export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowHeight, maxMidi }) {
   const left = Math.min(x1, x2);
   const right = Math.max(x1, x2);
@@ -147,28 +175,54 @@ export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowH
     .map(({ _id }) => _id);
 }
 
-export const initialDocument = { notes: [], past: [], future: [] };
+export const initialDocument = { notes: [], wordTexts: [], past: [], future: [] };
+
+const snapshot = (notes, wordTexts) => ({ notes: cloneNotes(notes), wordTexts: [...wordTexts] });
 
 export function documentReducer(state, action) {
-  if (action.type === "load") return { notes: normalizeNotes(action.notes), past: [], future: [] };
-  if (action.type === "edit")
+  if (action.type === "load")
     return {
       notes: normalizeNotes(action.notes),
-      past: action.record ? [...state.past.slice(-79), cloneNotes(state.notes)] : state.past,
+      wordTexts: action.wordTexts || [],
+      past: [],
+      future: []
+    };
+  if (action.type === "edit")
+    return {
+      ...state,
+      notes: normalizeNotes(action.notes),
+      past: action.record
+        ? [...state.past.slice(-79), snapshot(state.notes, state.wordTexts)]
+        : state.past,
       future: action.record ? [] : state.future
     };
+  if (action.type === "shiftWords")
+    return {
+      ...state,
+      wordTexts: action.wordTexts,
+      past: [...state.past.slice(-79), snapshot(state.notes, state.wordTexts)],
+      future: []
+    };
   if (action.type === "remember")
-    return { ...state, past: [...state.past.slice(-79), cloneNotes(action.notes)], future: [] };
+    return {
+      ...state,
+      past: [...state.past.slice(-79), snapshot(action.notes, state.wordTexts)],
+      future: []
+    };
   if (action.type === "undo" && state.past.length)
     return {
-      notes: state.past.at(-1),
+      ...state,
+      notes: state.past.at(-1).notes,
+      wordTexts: state.past.at(-1).wordTexts,
       past: state.past.slice(0, -1),
-      future: [cloneNotes(state.notes), ...state.future]
+      future: [snapshot(state.notes, state.wordTexts), ...state.future]
     };
   if (action.type === "redo" && state.future.length)
     return {
-      notes: state.future[0],
-      past: [...state.past, cloneNotes(state.notes)],
+      ...state,
+      notes: state.future[0].notes,
+      wordTexts: state.future[0].wordTexts,
+      past: [...state.past, snapshot(state.notes, state.wordTexts)],
       future: state.future.slice(1)
     };
   return state;

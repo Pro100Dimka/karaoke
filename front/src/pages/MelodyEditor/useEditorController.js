@@ -13,7 +13,8 @@ import {
   marqueeHitIds,
   mergeSelectedNotes,
   resizeBounds,
-  roundTime
+  roundTime,
+  shiftWordTexts
 } from "./model";
 
 const STORAGE_KEY = "karaoke-melody-editor";
@@ -25,6 +26,8 @@ const preference = (value, fallback, minimum, maximum) => {
 export default function useEditorController({ document, dispatch, payload, save, transportRef }) {
   const saved = useMemo(() => readJsonStorage(STORAGE_KEY), []);
   const [selected, setSelected] = useState([]);
+  const [selectedWords, setSelectedWords] = useState([]);
+  const wordSelectAnchor = useRef(null);
   const [zoom, setZoom] = useState(() => preference(saved.zoom, 48, 36, 72));
   const [rowHeight, setRowHeight] = useState(() => preference(saved.verticalZoom, 16, 10, 16));
   const [autoScroll, setAutoScroll] = useState(() => saved.autoScroll ?? true);
@@ -41,7 +44,7 @@ export default function useEditorController({ document, dispatch, payload, save,
   const shellRef = useRef(null);
   const surfaceRef = useRef(null);
   const playheadRef = useRef(null);
-  const { notes } = document;
+  const { notes, wordTexts } = document;
   const lyricsSync = payload?.lyrics_sync || {};
   const duration = Number(lyricsSync.duration) || Math.max(1, ...notes.map(({ end }) => end));
   const midi = notes.map(({ note }) => note);
@@ -55,7 +58,11 @@ export default function useEditorController({ document, dispatch, payload, save,
   const keyboardWidth = rowHeight * 4.5;
   const laneHeight = (maxMidi - minMidi + 1) * rowHeight;
   const laneWidth = keyboardWidth + Math.max(duration, 16) * zoom;
-  const words = useMemo(() => canonicalLyricProjection(lyricsSync.words), [lyricsSync.words]);
+  const words = useMemo(() => {
+    const projected = canonicalLyricProjection(lyricsSync.words);
+    if (!wordTexts || wordTexts.length !== projected.length) return projected;
+    return projected.map((word, index) => ({ ...word, text: wordTexts[index] }));
+  }, [lyricsSync.words, wordTexts]);
 
   useEffect(() => {
     persistUiPreferences(api, "melody_editor", {
@@ -139,6 +146,37 @@ export default function useEditorController({ document, dispatch, payload, save,
       transportRef.current.tone?.(note.note);
     },
     [notes, selected, transportRef]
+  );
+
+  const selectWord = useCallback(
+    (index, event) => {
+      if (event?.shiftKey && wordSelectAnchor.current !== null) {
+        const anchor = wordSelectAnchor.current;
+        const lo = Math.min(anchor, index);
+        const hi = Math.max(anchor, index);
+        setSelectedWords(Array.from({ length: hi - lo + 1 }, (_, offset) => lo + offset));
+        return;
+      }
+      wordSelectAnchor.current = index;
+      setSelectedWords([index]);
+    },
+    []
+  );
+
+  const shiftWords = useCallback(
+    (direction) => {
+      if (!wordTexts.length || !selectedWords.length) return;
+      const start = Math.min(...selectedWords);
+      const end = Math.max(...selectedWords);
+      const next = shiftWordTexts(wordTexts, [start, end], direction);
+      if (next === wordTexts) return;
+      dispatch({ type: "shiftWords", wordTexts: next });
+      const moved = start + direction;
+      const movedEnd = end + direction;
+      setSelectedWords(Array.from({ length: movedEnd - moved + 1 }, (_, offset) => moved + offset));
+      wordSelectAnchor.current = moved;
+    },
+    [dispatch, selectedWords, wordTexts]
   );
 
   const startDrag = useCallback(
@@ -236,7 +274,11 @@ export default function useEditorController({ document, dispatch, payload, save,
 
   const startMarquee = useCallback(
     (event) => {
-      if (event.button !== 0 || event.target.closest?.('[data-role="editor-note"]')) return;
+      if (
+        event.button !== 0 ||
+        event.target.closest?.('[data-role="editor-note"], [data-role="editor-word"]')
+      )
+        return;
       const rect = surfaceRef.current.getBoundingClientRect();
       const x = event.clientX - rect.left;
       if (x < keyboardWidth) return;
@@ -298,14 +340,18 @@ export default function useEditorController({ document, dispatch, payload, save,
         (transportRef.current.playing ? transportRef.current.pause : transportRef.current.play)?.();
       else if (event.key === "Home") transportRef.current.seek?.(0);
       else if (event.key === "End") transportRef.current.seek?.(duration);
+      else if (event.altKey && selectedWords.length && event.key === "ArrowLeft") shiftWords(-1);
+      else if (event.altKey && selectedWords.length && event.key === "ArrowRight") shiftWords(1);
       else if (event.key === "ArrowLeft")
         modifier ? nudge(event.shiftKey ? -0.25 : -0.05) : selectAdjacent(-1);
       else if (event.key === "ArrowRight")
         modifier ? nudge(event.shiftKey ? 0.25 : 0.05) : selectAdjacent(1);
       else if (event.key === "ArrowUp" && selected.length) nudge(0, event.shiftKey ? 12 : 1);
       else if (event.key === "ArrowDown" && selected.length) nudge(0, event.shiftKey ? -12 : -1);
-      else if (event.key === "Escape") setSelected([]);
-      else return;
+      else if (event.key === "Escape") {
+        setSelected([]);
+        setSelectedWords([]);
+      } else return;
       event.preventDefault();
     };
     window.addEventListener("keydown", hotkey);
@@ -322,6 +368,8 @@ export default function useEditorController({ document, dispatch, payload, save,
     save,
     selectAdjacent,
     selected,
+    selectedWords,
+    shiftWords,
     transportRef,
     undo
   ]);
@@ -346,6 +394,8 @@ export default function useEditorController({ document, dispatch, payload, save,
     rowHeight,
     selected,
     selectionBox,
+    selectWord,
+    selectedWords,
     setAutoScroll,
     setPlaybackRate,
     setRowHeight,
@@ -353,6 +403,7 @@ export default function useEditorController({ document, dispatch, payload, save,
     setVolumes,
     setZoom,
     shellRef,
+    shiftWords,
     startDrag,
     startMarquee,
     surfaceRef,

@@ -24,6 +24,7 @@ from .runtime import get_runtime_plan
 from .utils.io import read_json, write_json_atomic
 from .version import AI_BUILD_ID
 from .vocal_preprocess import prepare_vocal_reference
+from .word_voicing import anchor_words_to_voice, voice_activity_intervals
 
 ProgressCallback = callable
 CancelCallback = callable
@@ -155,6 +156,7 @@ class KaraokePipeline:
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
             words = self._align(vocals, text, request.language, direct)
+            words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
             self._stage(reports, "lyrics", self.engines.aligner.name, started)
 
             self._notify(request, "notes", 84, "Построение мелодии голоса")
@@ -208,6 +210,7 @@ class KaraokePipeline:
         self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
         started = time.perf_counter()
         words = self._align(vocals, text, request.language, [])
+        words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
         self._stage(reports, "lyrics", self.engines.aligner.name, started)
 
         self._notify(request, "notes", 84, "Построение мелодии голоса")

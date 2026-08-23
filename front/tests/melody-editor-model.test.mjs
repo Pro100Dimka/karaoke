@@ -12,7 +12,8 @@ import {
   normalizeNotes,
   resizeBounds,
   roundTime,
-  serializeNotes
+  serializeNotes,
+  shiftWordTexts
 } from "../src/pages/MelodyEditor/model.js";
 
 const note = (id, start, end, pitch = 60, word = 0) => ({
@@ -152,7 +153,7 @@ test("document history records commits and previews without losing redo", () => 
   const preview = documentReducer(state, { type: "edit", notes: first, record: false });
   expect(preview.past).toEqual(state.past);
   const remembered = documentReducer(preview, { type: "remember", notes: second });
-  expect(remembered.past.at(-1)[0].note).toBe(62);
+  expect(remembered.past.at(-1).notes[0].note).toBe(62);
   expect(documentReducer(initialDocument, { type: "undo" })).toBe(initialDocument);
   expect(documentReducer(initialDocument, { type: "redo" })).toBe(initialDocument);
   const dirty = { notes: first, past: [second], future: [second] };
@@ -173,6 +174,46 @@ test("document history records commits and previews without losing redo", () => 
   const redone = documentReducer(undone, { type: "redo" });
   expect(redone.future).toHaveLength(0);
   expect(redone.past).toHaveLength(80);
+});
+
+test("word text shifts share the same undo/redo history as note edits", () => {
+  const notes = [note("a", 0, 1)];
+  let state = documentReducer(initialDocument, {
+    type: "load",
+    notes,
+    wordTexts: ["one", "two", "three"]
+  });
+  state = documentReducer(state, {
+    type: "shiftWords",
+    wordTexts: shiftWordTexts(state.wordTexts, [0, 0], 1)
+  });
+  expect(state.wordTexts).toEqual(["", "one", "two"]);
+  expect(state.past).toHaveLength(1);
+  const undone = documentReducer(state, { type: "undo" });
+  expect(undone.wordTexts).toEqual(["one", "two", "three"]);
+  expect(undone.notes[0].note).toBe(60);
+  const redone = documentReducer(undone, { type: "redo" });
+  expect(redone.wordTexts).toEqual(["", "one", "two"]);
+});
+
+test("shifts a selected run of word texts forward or backward, carrying every later or earlier word along", () => {
+  const texts = ["a", "b", "c", "d", "e"];
+  // moving [1,2] forward carries c,d,e each one slot right; the vacated
+  // slot (1) is left blank, and the word pushed past the far end (e) is
+  // dropped rather than reappearing anywhere
+  expect(shiftWordTexts(texts, [1, 2], 1)).toEqual(["a", "", "b", "c", "d"]);
+  // moving [2,3] backward overwrites its one left neighbour (b); the run
+  // and everything after it (d, e) follows it left, leaving the very last
+  // slot of the song blank
+  expect(shiftWordTexts(texts, [2, 3], -1)).toEqual(["a", "c", "d", "e", ""]);
+  // a single word behaves the same as a run of length one
+  expect(shiftWordTexts(texts, [0, 0], 1)).toEqual(["", "a", "b", "c", "d"]);
+  // moving a single word backward: it overwrites its left neighbour, and
+  // everything after it follows along, leaving the last slot blank
+  expect(shiftWordTexts(texts, [1, 1], -1)).toEqual(["b", "c", "d", "e", ""]);
+  // at either edge, with nowhere to move into, the array is returned unchanged
+  expect(shiftWordTexts(texts, [0, 1], -1)).toBe(texts);
+  expect(shiftWordTexts(texts, [3, 4], 1)).toBe(texts);
 });
 
 test("serializes only the backend note contract and rounds editor time", () => {

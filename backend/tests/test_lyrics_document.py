@@ -175,3 +175,19 @@ def test_requires_all_authoritative_fields(field):
 
     with pytest.raises(ValueError):
         validate_lyrics_document(payload)
+
+
+def test_accepts_a_word_with_deliberately_blank_text():
+    payload = document()
+    payload["words"][0]["text"] = ""
+
+    assert validate_lyrics_document(payload)["words"][0]["text"] == ""
+
+
+@pytest.mark.parametrize("text", [None, 123, ["la"]])
+def test_rejects_a_word_whose_text_is_not_a_string(text):
+    payload = document()
+    payload["words"][0]["text"] = text
+
+    with pytest.raises(ValueError, match="Invalid word"):
+        validate_lyrics_document(payload)

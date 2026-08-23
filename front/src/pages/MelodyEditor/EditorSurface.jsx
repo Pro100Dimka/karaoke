@@ -198,28 +198,44 @@ function EditorSurface({ controller, transport }) {
               backdropFilter: "blur(var(--space-1))"
             }}
           >
-            {controller.words.map((word) => (
-              <Typography
-                key={word.index}
-                as="span"
-                variant="caption"
-                title={`${word.text} · ${word.start.toFixed(3)}–${word.end.toFixed(3)}`}
-                sx={{
-                  position: "absolute",
-                  inset: `var(--space-1) auto auto ${controller.keyboardWidth + word.start * controller.zoom}px`,
-                  inlineSize: `${Math.max(controller.rowHeight, (word.end - word.start) * controller.zoom)}px`,
-                  overflow: "hidden",
-                  whiteSpace: "nowrap",
-                  color: "var(--color-text)",
-                  fontWeight: 800,
-                  textAlign: "center",
-                  textShadow: "0 1px var(--space-1) var(--color-bg-deep)",
-                  borderBlockEnd: "calc(var(--hairline) * 2) solid var(--color-primary)"
-                }}
-              >
-                {word.text}
-              </Typography>
-            ))}
+            {controller.words.map((word) => {
+              const wordSelected = controller.selectedWords?.includes(word.index);
+              return (
+                <Typography
+                  key={word.index}
+                  as="button"
+                  type="button"
+                  variant="caption"
+                  data-role="editor-word"
+                  data-selected={wordSelected || undefined}
+                  title={`${word.text} · ${word.start.toFixed(3)}–${word.end.toFixed(3)}`}
+                  onClick={(event) => controller.selectWord(word.index, event)}
+                  sx={{
+                    position: "absolute",
+                    inset: `var(--space-1) auto auto ${controller.keyboardWidth + word.start * controller.zoom}px`,
+                    inlineSize: `${Math.max(controller.rowHeight, (word.end - word.start) * controller.zoom)}px`,
+                    overflow: "hidden",
+                    whiteSpace: "nowrap",
+                    color: "var(--color-text)",
+                    fontWeight: 800,
+                    textAlign: "center",
+                    textShadow: "0 1px var(--space-1) var(--color-bg-deep)",
+                    borderBlockEnd: wordSelected
+                      ? "calc(var(--hairline) * 2) solid var(--color-highlight)"
+                      : "calc(var(--hairline) * 2) solid var(--color-primary)",
+                    background: wordSelected
+                      ? "color-mix(in srgb, var(--color-highlight) 30%, transparent)"
+                      : "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    font: "inherit"
+                  }}
+                >
+                  {word.text}
+                </Typography>
+              );
+            })}
           </Box>
           {controller.notes.map((note) => (
             <NoteHitTarget key={note._id} controller={controller} note={note} />
@@ -299,6 +315,7 @@ const SURFACE_KEYS = [
   "notes",
   "rowHeight",
   "selected",
+  "selectedWords",
   "selectionBox",
   "words",
   "zoom"

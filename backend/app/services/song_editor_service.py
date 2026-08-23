@@ -30,7 +30,9 @@ def normalize_editor_timeline(payload: JsonObject) -> JsonObject:
     return validate_lyrics_document(payload)
 
 
-def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
+def save_editor(
+    output_dir: Path, raw_notes: list[JsonObject], word_texts: list[str] | None = None
+) -> JsonObject:
     payload = _load(output_dir)
     editor_value = payload.get("editor")
     editor: JsonObject = editor_value if isinstance(editor_value, dict) else {}
@@ -38,6 +40,15 @@ def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
         editor["ai_notes"] = [
             [dict(note) for note in word["notes"]] for word in payload["words"]
         ]
+    if word_texts is not None:
+        if len(word_texts) != len(payload["words"]):
+            raise ValueError("word_texts length must match the number of words")
+        payload = {
+            **payload,
+            "words": [
+                {**word, "text": text} for word, text in zip(payload["words"], word_texts, strict=True)
+            ],
+        }
     updated = replace_word_notes(payload, raw_notes)
     updated["editor"] = {**editor, "edited": True, "source": "manual"}
     _write(output_dir, updated)

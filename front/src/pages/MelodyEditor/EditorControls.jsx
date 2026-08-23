@@ -1,4 +1,16 @@
-import { ArrowLeft, Crosshair, Merge, Pause, Play, Redo2, Save, Trash2, Undo2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  Crosshair,
+  Merge,
+  Pause,
+  Play,
+  Redo2,
+  Save,
+  Trash2,
+  Undo2
+} from "lucide-react";
 import { translateSaved as t } from "../../i18n/runtime";
 import {
   Box,
@@ -114,6 +126,20 @@ export default function EditorControls({ controller, onBack, save, saving, trans
       onClick: controller.remove
     }
   ];
+  const lyrics = [
+    {
+      Icon: ArrowLeftToLine,
+      label: t("Сдвинуть текст назад (Alt+←)"),
+      disabled: !controller.selectedWords.length,
+      onClick: () => controller.shiftWords(-1)
+    },
+    {
+      Icon: ArrowRightToLine,
+      label: t("Сдвинуть текст вперёд (Alt+→)"),
+      disabled: !controller.selectedWords.length,
+      onClick: () => controller.shiftWords(1)
+    }
+  ];
   const volumes = [
     ["vocals", t("Вокал")],
     ["melody", t("Мелодия"), "secondary"],
@@ -139,6 +165,7 @@ export default function EditorControls({ controller, onBack, save, saving, trans
       <ActionGroup actions={follow} color="var(--color-studio-follow)" />
       <ActionGroup actions={playback} color="var(--color-studio-transport)" />
       <ActionGroup actions={edit} color="var(--color-studio-edit)" />
+      <ActionGroup actions={lyrics} color="var(--color-studio-edit)" />
       <Stack
         direction="row"
         align="center"

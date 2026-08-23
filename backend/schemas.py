@@ -135,6 +135,7 @@ class ProcessingStatusOut(BaseModel):
 
 class SongEditorUpdate(BaseModel):
     notes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
+    word_texts: list[str] | None = Field(default=None, max_length=20_000)
 
 
 class SongEditorOut(BaseModel):

@@ -118,6 +118,24 @@ export default function useEditorAudio({
     }
   }, [playbackRate, volumes]);
 
+  const followPlayheadRef = useRef(false);
+  useEffect(() => {
+    const updateFollow = (event) => {
+      followPlayheadRef.current = event.ctrlKey && event.shiftKey;
+    };
+    const stopFollow = () => {
+      followPlayheadRef.current = false;
+    };
+    window.addEventListener("keydown", updateFollow);
+    window.addEventListener("keyup", updateFollow);
+    window.addEventListener("blur", stopFollow);
+    return () => {
+      window.removeEventListener("keydown", updateFollow);
+      window.removeEventListener("keyup", updateFollow);
+      window.removeEventListener("blur", stopFollow);
+    };
+  }, []);
+
   useEffect(() => {
     let frame;
     let lastScroll = 0;
@@ -126,6 +144,12 @@ export default function useEditorAudio({
     const tick = (stamp) => {
       const master = instrumentalRef.current;
       const vocals = vocalsRef.current;
+      if (followPlayheadRef.current && shellRef.current) {
+        const shell = shellRef.current;
+        const x = keyboardWidth + timeRef.current * zoom;
+        const maxScroll = shell.scrollWidth - shell.clientWidth;
+        shell.scrollLeft = clamp(x - shell.clientWidth / 2, 0, maxScroll);
+      }
       if (master && !master.paused) {
         const current = master.currentTime;
         timeRef.current = current;

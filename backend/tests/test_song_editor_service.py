@@ -68,3 +68,54 @@ def test_reset_requires_backup(tmp_path):
     write_document(tmp_path)
     with pytest.raises(ValueError, match="backup"):
         song_editor_service.reset_editor(tmp_path)
+
+
+def two_word_document():
+    return {
+        "bpm": 120,
+        "key": "C",
+        "words": [
+            {"text": "one", "start": 1.0, "end": 2.0, "notes": [{"note": 60, "start": 1.0, "end": 2.0}]},
+            {"text": "two", "start": 2.0, "end": 3.0, "notes": [{"note": 62, "start": 2.0, "end": 3.0}]},
+        ],
+    }
+
+
+def test_save_editor_applies_word_texts_without_touching_notes(tmp_path):
+    write_document(tmp_path, two_word_document())
+    saved = song_editor_service.save_editor(
+        tmp_path,
+        [
+            {"note": 60, "start": 1.0, "end": 2.0, "word_index": 0},
+            {"note": 62, "start": 2.0, "end": 3.0, "word_index": 1},
+        ],
+        word_texts=["two", "one"],
+    )
+    assert [word["text"] for word in saved["words"]] == ["two", "one"]
+    assert [word["start"] for word in saved["words"]] == [1.0, 2.0]
+    assert saved["words"][0]["notes"][0]["note"] == 60
+
+
+def test_save_editor_rejects_mismatched_word_texts_length(tmp_path):
+    write_document(tmp_path, two_word_document())
+    with pytest.raises(ValueError, match="word_texts"):
+        song_editor_service.save_editor(
+            tmp_path,
+            [
+                {"note": 60, "start": 1.0, "end": 2.0, "word_index": 0},
+                {"note": 62, "start": 2.0, "end": 3.0, "word_index": 1},
+            ],
+            word_texts=["only-one"],
+        )
+
+
+def test_save_editor_without_word_texts_leaves_text_unchanged(tmp_path):
+    write_document(tmp_path, two_word_document())
+    saved = song_editor_service.save_editor(
+        tmp_path,
+        [
+            {"note": 60, "start": 1.0, "end": 2.0, "word_index": 0},
+            {"note": 62, "start": 2.0, "end": 3.0, "word_index": 1},
+        ],
+    )
+    assert [word["text"] for word in saved["words"]] == ["one", "two"]

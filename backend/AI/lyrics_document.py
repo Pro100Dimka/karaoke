@@ -12,7 +12,7 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
         raise ValueError("lyricsSync.json must contain bpm, key and words")
     previous = 0.0
     for index, word in enumerate(payload["words"]):
-        if not isinstance(word, dict) or not str(word.get("text", "")).strip():
+        if not isinstance(word, dict) or not isinstance(word.get("text"), str):
             raise ValueError(f"Invalid word {index}")
         start, end = float(word.get("start", -1)), float(word.get("end", -1))
         if start < 0 or end <= start or start + 1e-6 < previous:

@@ -35,7 +35,8 @@ export default function useEditorDocument({ songId, confirm, notify }) {
   const accept = useCallback(async (result) => {
     const notes = await prepareEditorNotes(result?.lyrics_sync);
     setPayload(result);
-    dispatch({ type: "load", notes });
+    const wordTexts = (result?.lyrics_sync?.words || []).map((word) => String(word.text || ""));
+    dispatch({ type: "load", notes, wordTexts });
   }, []);
 
   const load = useCallback(async () => {
@@ -58,13 +59,15 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     if (!song?.id) return;
     setSaving(true);
     try {
-      await accept(await api.saveSongEditor(song.id, serializeNotes(document.notes)));
+      await accept(
+        await api.saveSongEditor(song.id, serializeNotes(document.notes), document.wordTexts)
+      );
     } catch (error) {
       await notify(t("Не удалось сохранить редактор: {0}", { 0: getErrorMessage(error) }));
     } finally {
       setSaving(false);
     }
-  }, [accept, document.notes, notify, song?.id]);
+  }, [accept, document.notes, document.wordTexts, notify, song?.id]);
 
   const restore = useCallback(async () => {
     if (

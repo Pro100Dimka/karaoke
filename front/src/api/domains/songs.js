@@ -31,10 +31,10 @@ export const songsApi = {
   getLog: (id) => request(`/songs/${encodePathSegment(id)}/log`),
   getResult: (id) => request(`/songs/${encodePathSegment(id)}/result`),
   getSongEditor: (id) => request(`/songs/${encodePathSegment(id)}/editor`),
-  saveSongEditor: (id, notes) =>
+  saveSongEditor: (id, notes, wordTexts) =>
     request(`/songs/${encodePathSegment(id)}/editor`, {
       method: "PUT",
-      body: JSON.stringify({ notes })
+      body: JSON.stringify({ notes, word_texts: wordTexts ?? null })
     }),
   resetSongEditor: (id) =>
     request(`/songs/${encodePathSegment(id)}/editor/reset`, { method: "POST" }),
