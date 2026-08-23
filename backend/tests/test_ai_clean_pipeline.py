@@ -438,3 +438,60 @@ def test_collapsed_consonant_preposition_uses_one_model_time_quantum(tmp_path):
     )
 
     assert (round(words[1].start, 2), round(words[1].end, 2), round(words[2].start, 2)) == (1, 1.08, 1.08)
+
+
+def test_msst_separator_accepts_flac_vocal_output(tmp_path, monkeypatch):
+    engine = tmp_path / "msst"
+    engine.mkdir()
+    (engine / "inference.py").write_text("# stub", encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    checkpoint = tmp_path / "model.ckpt"
+    config.write_text("stub", encoding="utf-8")
+    checkpoint.write_bytes(b"stub")
+
+    mix = tmp_path / "mix.wav"
+    vocals = tmp_path / "vocals.flac"
+    instrumental = tmp_path / "instrumental.flac"
+    audio = np.linspace(-0.2, 0.2, 4410, dtype=np.float32)
+    stereo = np.column_stack((audio, audio))
+    sf.write(mix, stereo, 44100)
+
+    separator = MSSTMelRoformerSeparator(engine_dir=engine, config=config, checkpoint=checkpoint)
+
+    def fake_run(_source, output, _tuning, **_kwargs):
+        stem_dir = output / "song"
+        stem_dir.mkdir(parents=True)
+        sf.write(stem_dir / "vocals.flac", stereo * 0.75, 44100, subtype="PCM_24")
+
+    monkeypatch.setattr(separator, "_run", fake_run)
+    separator.separate(mix, vocals, instrumental)
+
+    vocal_audio, rate = sf.read(vocals, dtype="float32", always_2d=True)
+    backing_audio, backing_rate = sf.read(instrumental, dtype="float32", always_2d=True)
+    assert rate == backing_rate == 44100
+    assert vocal_audio.shape == backing_audio.shape == stereo.shape
+    assert np.max(np.abs(vocal_audio)) > 0.1
+    assert np.max(np.abs((vocal_audio + backing_audio) - stereo)) < 2e-4
+
+
+def test_msst_separator_reports_actual_audio_outputs_when_vocal_is_missing(tmp_path, monkeypatch):
+    engine = tmp_path / "msst"
+    engine.mkdir()
+    (engine / "inference.py").write_text("# stub", encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    checkpoint = tmp_path / "model.ckpt"
+    config.write_text("stub", encoding="utf-8")
+    checkpoint.write_bytes(b"stub")
+
+    mix = tmp_path / "mix.wav"
+    sf.write(mix, np.zeros((1000, 2), dtype=np.float32), 44100)
+    separator = MSSTMelRoformerSeparator(engine_dir=engine, config=config, checkpoint=checkpoint)
+
+    def fake_run(_source, output, _tuning, **_kwargs):
+        stem_dir = output / "song"
+        stem_dir.mkdir(parents=True)
+        sf.write(stem_dir / "other.flac", np.zeros((1000, 2), dtype=np.float32), 44100)
+
+    monkeypatch.setattr(separator, "_run", fake_run)
+    with pytest.raises(Exception, match=r"audio outputs: song[/\\]other\.flac"):
+        separator.separate(mix, tmp_path / "vocals.flac", tmp_path / "instrumental.flac")

@@ -59,6 +59,13 @@ def _worker(engine_dir, config_path, checkpoint, requests, results, device, pare
             "start_check_point": checkpoint,
             "force_cpu": device == "cpu",
             "disable_detailed_pbar": True,
+            # Keep the MSST output contract stable across upstream releases.
+            # Some MSST revisions default to FLAC/PCM while others default to
+            # WAV/FLOAT; the application accepts both below, but requesting
+            # FLOAT avoids an unnecessary lossless transcode in the worker.
+            "flac_file": False,
+            "pcm_type": "FLOAT",
+            "filename_template": "{file_name}/{instr}",
         })
         model, config = get_model_from_config(arguments.model_type, arguments.config_path)
         weights = torch.load(checkpoint, weights_only=False, map_location="cpu")
@@ -144,11 +151,24 @@ class MSSTMelRoformerSeparator(Separator):
                 output = Path(temporary) / "output-cpu"
                 output.mkdir()
                 self._run(source, output, tuning, device="cpu", cancelled=cancelled)
-            files = list(output.rglob("*.wav"))
-            vocal = next((item for item in files if "vocal" in item.name.lower() and "no_vocal" not in item.name.lower()), None)
-            backing = next((item for item in files if any(name in item.name.lower() for name in ("instrumental", "no_vocal"))), None)
+            # MSST has changed its output codec defaults across releases.  Do
+            # not bind the application to one extension: both WAV and FLAC are
+            # lossless and soundfile reads either without changing the signal.
+            files = sorted(
+                item for item in output.rglob("*")
+                if item.is_file() and item.suffix.lower() in {".wav", ".flac"}
+            )
+            vocal = next(
+                (item for item in files if "vocal" in item.stem.lower() and "no_vocal" not in item.stem.lower()),
+                None,
+            )
+            backing = next(
+                (item for item in files if any(name in item.stem.lower() for name in ("instrumental", "no_vocal"))),
+                None,
+            )
             if vocal is None:
-                raise AICoreError("MSST produced no vocal stem")
+                produced = ", ".join(str(item.relative_to(output)) for item in files) or "<none>"
+                raise AICoreError(f"MSST produced no vocal stem; audio outputs: {produced}")
             mix_audio, rate = sf.read(mix, dtype="float32", always_2d=True)
             vocal_audio, vocal_rate = sf.read(vocal, dtype="float32", always_2d=True)
             if vocal_rate != rate:
