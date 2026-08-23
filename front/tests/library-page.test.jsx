@@ -1,8 +1,10 @@
+/* eslint-disable max-len */
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { same, verify } from "./helpers/assertions.mjs";
 import { passthrough } from "./helpers/mocks.mjs";
+
 const mocks = vi.hoisted(() => ({
   location: { state: null },
   navigate: vi.fn(),
@@ -89,7 +91,7 @@ vi.mock("../src/theme/ui", () => ({
   Grid: passthrough("div")
 }));
 vi.mock("../src/pages/Library/animated-backdrop", () => ({
-  default: () => <div data-testid="backdrop" />
+  QuantumFieldBackdrop: () => <div data-testid="backdrop" />
 }));
 vi.mock("../src/pages/Library/hero", () => ({
   default: (props) => (
@@ -109,11 +111,7 @@ vi.mock("../src/pages/Library/songs-grid", () => ({
           <button type="button" data-testid="karaoke" onClick={() => state.openKaraoke(song)} />
           <button type="button" data-testid="processing" onClick={() => processing.track(song)} />
           <button type="button" data-testid="recordings" onClick={() => recordings.setSong(song)} />
-          <button
-            type="button"
-            data-testid="song-settings"
-            onClick={() => state.setSettingsSongId(song.id)}
-          />
+          <button type="button" data-testid="song-settings" onClick={() => state.setSettingsSongId(song.id)} />
         </div>
       ))
     ) : (

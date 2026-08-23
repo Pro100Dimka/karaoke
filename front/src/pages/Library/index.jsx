@@ -15,7 +15,7 @@ export default function Library() {
   const { fileImport, online, processing, recordings } = state;
   return (
     <Stack align="center" sx={{ position: "relative" }}>
-      <QuantumFieldBackdrop fieldType="Waveform Terrain" />
+      <QuantumFieldBackdrop />
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
           songCount={state.totalCount}

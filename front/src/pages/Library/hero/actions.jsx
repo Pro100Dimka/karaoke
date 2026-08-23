@@ -23,11 +23,12 @@ import {
 import { defaultLibraryFilters } from "../utils";
 
 const SORTS = [
-  ["relevance", "По умолчанию"],
-  ["title", "Название"],
-  ["artist", "Исполнитель"],
-  ["recent", "Недавно добавленные"]
+  ["relevance", tr("По умолчанию")],
+  ["title", tr("Название")],
+  ["artist", tr("Исполнитель")],
+  ["recent", tr("Недавно добавленные")]
 ];
+
 const options = (items, first) => [
   { value: "", label: tr(first) },
   ...items.map((item) => (typeof item === "object" ? item : { value: item, label: item }))
@@ -148,7 +149,7 @@ export default function LibraryActions({
                   aria-pressed={draft.sort === value}
                   onClick={() => update("sort")(value)}
                 >
-                  {tr(label)}
+                  {label}
                 </Button>
               ))}
             </Stack>

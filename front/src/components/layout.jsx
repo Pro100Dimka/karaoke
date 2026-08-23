@@ -27,7 +27,7 @@ function FloatingControls({ openSettings }) {
     t(radio.isPlaying ? "radio.disable" : "radio.enable", { station: radio.station.name });
   return (
     <Stack
-      aria-label={t("Управление приложением")}
+      aria-label={t("app.controls")}
       sx={{
         position: "fixed",
         bottom: "var(--space-4)",

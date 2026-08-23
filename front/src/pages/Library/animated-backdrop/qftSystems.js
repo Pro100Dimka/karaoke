@@ -32,7 +32,7 @@ export function createTrailSystem(scene, { count = 50, length = 12, color = "#00
   }
 
   return {
-    update(time, audio, enabled = true) {
+    update(time, audio, enabled = true, opacity = 1) {
       for (const trail of trails) {
         trail.line.visible = enabled;
         if (!enabled) continue;
@@ -53,8 +53,11 @@ export function createTrailSystem(scene, { count = 50, length = 12, color = "#00
         for (let j = 0; j < trail.positions.length; j += 1)
           attr.setXYZ(j, trail.positions[j].x, trail.positions[j].y, trail.positions[j].z);
         attr.needsUpdate = true;
-        trail.line.material.opacity = 0.18 + audio.beat * 0.12 + audio.mid * 0.08;
+        trail.line.material.opacity = (0.18 + audio.beat * 0.12 + audio.mid * 0.08) * opacity;
       }
+    },
+    setColor(color) {
+      for (const { line } of trails) line.material.color.set(color);
     },
     dispose() {
       for (const { line } of trails) {
@@ -159,6 +162,10 @@ export function createForceNetwork(
       material.uniforms.uHighMid.value = highMid;
       material.uniforms.uSpectralCentroid.value = centroid;
       material.uniforms.uOpacity.value = opacity;
+    },
+    setColors(color1, color2) {
+      material.uniforms.uColor.value.set(color1);
+      material.uniforms.uColor2.value.set(color2);
     },
     dispose() {
       scene.remove(mesh);

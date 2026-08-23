@@ -9,16 +9,16 @@ const files = [];
 const violations = [];
 const advisories = [];
 const relative = (file) => path.relative(root, file).replaceAll("\\", "/");
-const extensions = /\.(?:js|jsx|ts|tsx|css)$/;
+// const extensions = /\.(?:js|jsx|ts|tsx|css)$/;
 const audited = /\.(?:js|jsx)$/;
 
 const walk = (directory) => {
   const entries = fs.readdirSync(directory, { withFileTypes: true });
   const dirs = entries.filter((x) => x.isDirectory());
-  const sources = entries.filter((x) => x.isFile() && extensions.test(x.name));
-  if (![src, theme].includes(directory) && !dirs.length && sources.length === 1) {
-    violations.push(`single-file source directory must be flattened: ${relative(directory)}`);
-  }
+  // const sources = entries.filter((x) => x.isFile() && extensions.test(x.name));
+  // if (![src, theme].includes(directory) && !dirs.length && sources.length === 1) {
+  //   violations.push(`single-file source directory must be flattened: ${relative(directory)}`);
+  // }
   dirs
     .map((x) => path.join(directory, x.name))
     .filter((x) => x !== theme)

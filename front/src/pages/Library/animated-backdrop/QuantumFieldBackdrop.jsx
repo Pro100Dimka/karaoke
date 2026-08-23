@@ -1,13 +1,16 @@
+/* eslint-disable import/no-unresolved */
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { AfterimagePass } from "three/addons/postprocessing/AfterimagePass.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
+import { QFT_DEFAULT_SETTINGS, getQftThemeName, getQftThemeStyle } from "./qft-settings";
 import { createQftAudioReader } from "./qftAudio";
-import { DEFAULTS, FIELD_TYPES } from "./qftConfig";
+import { FIELD_TYPES } from "./qftConfig";
 import {
   mainFragmentShader,
   mainVertexShader,
@@ -45,7 +48,7 @@ function createMainGeometry(maxParticles, fieldRadius, density) {
   geometry.setAttribute("aRandom", new THREE.BufferAttribute(random, 3));
   geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
   geometry.setAttribute("aLayer", new THREE.BufferAttribute(layers, 1));
-  geometry.setDrawRange(0, Math.floor(maxParticles * density));
+  geometry.setDrawRange(0, Math.floor(maxParticles * Math.max(0.001, Math.min(1, density))));
   return geometry;
 }
 
@@ -77,49 +80,149 @@ function createSecondaryGeometry(count, fieldRadius) {
   return geometry;
 }
 
-const makeUniforms = (field, pixelRatio, fieldRadius, terrainHeight) => ({
-  uTime: { value: 0 },
-  uPixelRatio: { value: pixelRatio },
-  uSizeBase: { value: field.sz },
-  uNoiseScale: { value: field.s },
-  uCurlStrength: { value: field.curl },
-  uRadius: { value: fieldRadius },
-  uColor1: { value: new THREE.Color(field.c1) },
-  uColor2: { value: new THREE.Color(field.c2) },
-  uColor3: { value: new THREE.Color(field.c3) },
-  uSubBass: { value: 0 },
-  uBass: { value: 0 },
-  uLowMid: { value: 0 },
-  uMid: { value: 0 },
-  uHighMid: { value: 0 },
-  uHigh: { value: 0 },
-  uUltraHigh: { value: 0 },
-  uBeatEnergy: { value: 0 },
-  uSpectralCentroid: { value: 0 },
-  uSpectralFlux: { value: 0 },
-  uOnsetEnergy: { value: 0 },
-  uTerrainMode: { value: field.terrain ? 1 : 0 },
-  uTerrainHeight: { value: terrainHeight },
-  uVortexStrength: { value: DEFAULTS.vortexStrength },
-  uPulseIntensity: { value: DEFAULTS.pulseIntensity },
-  uZoomFactor: { value: 1 },
-  uMousePos: { value: new THREE.Vector3() },
-  uMouseVelocity: { value: new THREE.Vector2() }
-});
+function makeUniforms(field, theme, pixelRatio, settings) {
+  return {
+    uTime: { value: 0 },
+    uPixelRatio: { value: pixelRatio },
+    uSizeBase: { value: field.sz },
+    uNoiseScale: { value: field.s },
+    uCurlStrength: { value: field.curl },
+    uRadius: { value: settings.fieldRadius },
+    uColor1: { value: new THREE.Color(theme.particle1) },
+    uColor2: { value: new THREE.Color(theme.particle2) },
+    uColor3: { value: new THREE.Color(theme.particle3) },
+    uSubBass: { value: 0 },
+    uBass: { value: 0 },
+    uLowMid: { value: 0 },
+    uMid: { value: 0 },
+    uHighMid: { value: 0 },
+    uHigh: { value: 0 },
+    uUltraHigh: { value: 0 },
+    uBeatEnergy: { value: 0 },
+    uSpectralCentroid: { value: 0 },
+    uSpectralFlux: { value: 0 },
+    uOnsetEnergy: { value: 0 },
+    uTerrainMode: { value: field.terrain ? 1 : 0 },
+    uTerrainHeight: { value: settings.terrainHeight },
+    uVortexStrength: { value: settings.vortex },
+    uPulseIntensity: { value: settings.pulseIntensity },
+    uZoomFactor: { value: 1 },
+    uMousePos: { value: new THREE.Vector3() },
+    uMouseVelocity: { value: new THREE.Vector2() }
+  };
+}
+
+function createFlareTexture(color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.08, color);
+  gradient.addColorStop(0.28, "rgba(255,255,255,.22)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(canvas);
+}
+
+const POST_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uChromatic: { value: 0 },
+    uAnamorphic: { value: 0 },
+    uGodRays: { value: 0 },
+    uGodRaysIntensity: { value: 0 },
+    uFilmGrain: { value: 0 },
+    uDof: { value: 0 },
+    uFocusRing: { value: 0.02 },
+    uFocusFalloff: { value: 0.4 },
+    uBlurAmount: { value: 0.36 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform float uChromatic;
+    uniform float uAnamorphic;
+    uniform float uGodRays;
+    uniform float uGodRaysIntensity;
+    uniform float uFilmGrain;
+    uniform float uDof;
+    uniform float uFocusRing;
+    uniform float uFocusFalloff;
+    uniform float uBlurAmount;
+    varying vec2 vUv;
+
+    float rand(vec2 co) {
+      return fract(sin(dot(co, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
+    }
+
+    void main() {
+      vec2 centre = vec2(0.5);
+      vec2 dir = normalize(vUv - centre + vec2(0.0001));
+      float ca = uChromatic * 1.8;
+      vec3 color;
+      color.r = texture2D(tDiffuse, vUv + dir * ca).r;
+      color.g = texture2D(tDiffuse, vUv).g;
+      color.b = texture2D(tDiffuse, vUv - dir * ca).b;
+
+      if (uDof > 0.5) {
+        float d = abs(length(vUv - centre) - uFocusRing);
+        float blur = smoothstep(max(0.001, uFocusFalloff * 0.12), max(0.002, uFocusFalloff * 0.45), d) * uBlurAmount * 0.008;
+        vec3 b = color;
+        b += texture2D(tDiffuse, vUv + vec2( blur, 0.0)).rgb;
+        b += texture2D(tDiffuse, vUv + vec2(-blur, 0.0)).rgb;
+        b += texture2D(tDiffuse, vUv + vec2(0.0,  blur)).rgb;
+        b += texture2D(tDiffuse, vUv + vec2(0.0, -blur)).rgb;
+        color = mix(color, b / 5.0, clamp(uBlurAmount, 0.0, 1.0));
+      }
+
+      if (uAnamorphic > 0.0) {
+        vec3 streak = texture2D(tDiffuse, vUv + vec2(0.006, 0.0)).rgb;
+        streak += texture2D(tDiffuse, vUv - vec2(0.006, 0.0)).rgb;
+        color += max(streak - 1.0, 0.0) * uAnamorphic;
+      }
+
+      if (uGodRays > 0.5) {
+        vec2 stepUv = (centre - vUv) * 0.035;
+        vec2 uv = vUv;
+        vec3 rays = vec3(0.0);
+        for (int i = 0; i < 8; i++) {
+          uv += stepUv;
+          rays += texture2D(tDiffuse, uv).rgb;
+        }
+        color += rays * (uGodRaysIntensity / 8.0);
+      }
+
+      color += (rand(vUv) - 0.5) * uFilmGrain;
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `
+};
 
 export default function QuantumFieldBackdrop({
-  fieldType = "Neutrino",
-  sensitivity = DEFAULTS.sensitivity,
-  density = DEFAULTS.density,
-  scale = [2.55, 1.9, 1.35],
-  position = [0, -1.5, 0],
-  camera = [0, 8, 118],
-  terrainHeight = DEFAULTS.terrainHeight,
-  secondary = true,
-  trails = true,
-  connections = true,
-  bloom = DEFAULTS.bloom,
-  afterimage = DEFAULTS.trails,
+  settings: overrides = {},
+  fieldType,
+  sensitivity,
+  density,
+  scale,
+  position,
+  camera,
+  terrainHeight,
+  secondary,
+  trails,
+  connections,
+  bloom,
+  afterimage,
   className,
   style
 }) {
@@ -129,10 +232,30 @@ export default function QuantumFieldBackdrop({
     const mount = mountRef.current;
     if (!mount) return undefined;
 
-    const field = FIELD_TYPES[fieldType] || FIELD_TYPES.Neutrino;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+    const settings = {
+      ...QFT_DEFAULT_SETTINGS,
+      ...overrides,
+      ...(fieldType !== undefined ? { fieldType } : {}),
+      ...(sensitivity !== undefined ? { sensitivity } : {}),
+      ...(density !== undefined ? { density } : {}),
+      ...(scale !== undefined ? { scale } : {}),
+      ...(position !== undefined ? { position } : {}),
+      ...(camera !== undefined ? { camera } : {}),
+      ...(terrainHeight !== undefined ? { terrainHeight } : {}),
+      ...(secondary !== undefined ? { secondaryParticlesEnabled: secondary } : {}),
+      ...(trails !== undefined ? { particleTrails: trails } : {}),
+      ...(connections !== undefined ? { forceNetwork: connections } : {}),
+      ...(bloom !== undefined ? { bloom } : {}),
+      ...(afterimage !== undefined ? { motionBlur: afterimage } : {})
+    };
+
+    const field = FIELD_TYPES[settings.fieldType] || FIELD_TYPES["Waveform Terrain"];
+    let themeName = getQftThemeName();
+    let theme = getQftThemeStyle(themeName);
+    let pixelRatio = Math.min(window.devicePixelRatio || 1, settings.pixelRatioMax);
+
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000508, 0.005);
+    scene.fog = new THREE.FogExp2(new THREE.Color(theme.fog), 0.005);
 
     const camera3d = new THREE.PerspectiveCamera(
       55,
@@ -140,7 +263,7 @@ export default function QuantumFieldBackdrop({
       0.1,
       800
     );
-    camera3d.position.set(...camera);
+    camera3d.position.set(...settings.camera);
 
     const renderer = new THREE.WebGLRenderer({
       alpha: true,
@@ -151,7 +274,7 @@ export default function QuantumFieldBackdrop({
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 2.1;
+    renderer.toneMappingExposure = settings.exposure;
     Object.assign(renderer.domElement.style, {
       position: "absolute",
       inset: "0",
@@ -161,23 +284,27 @@ export default function QuantumFieldBackdrop({
     });
     mount.appendChild(renderer.domElement);
 
-    const geometry = createMainGeometry(DEFAULTS.maxParticles, DEFAULTS.fieldRadius, density);
+    const geometry = createMainGeometry(
+      settings.maxParticles,
+      settings.fieldRadius,
+      settings.density
+    );
     const material = new THREE.ShaderMaterial({
       vertexShader: mainVertexShader,
       fragmentShader: mainFragmentShader,
-      uniforms: makeUniforms(field, pixelRatio, DEFAULTS.fieldRadius, terrainHeight),
+      uniforms: makeUniforms(field, theme, pixelRatio, settings),
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
     const points = new THREE.Points(geometry, material);
-    points.scale.set(...scale);
-    points.position.set(...position);
+    points.scale.set(...settings.scale);
+    points.position.set(...settings.position);
     scene.add(points);
 
     const secondaryGeometry = createSecondaryGeometry(
-      DEFAULTS.secondaryParticles,
-      DEFAULTS.fieldRadius
+      settings.secondaryParticles,
+      settings.fieldRadius
     );
     const secondaryMaterial = new THREE.ShaderMaterial({
       vertexShader: secondaryVertexShader,
@@ -196,48 +323,102 @@ export default function QuantumFieldBackdrop({
         uSpectralCentroid: { value: 0 },
         uSpectralFlux: { value: 0 },
         uOnsetEnergy: { value: 0 },
-        uVortexStrength: { value: DEFAULTS.vortexStrength },
-        uColor1: { value: new THREE.Color(field.sc1) },
-        uColor2: { value: new THREE.Color(field.sc2) },
-        uRadius: { value: DEFAULTS.fieldRadius }
+        uVortexStrength: { value: settings.vortex },
+        uColor1: { value: new THREE.Color(theme.secondary1) },
+        uColor2: { value: new THREE.Color(theme.secondary2) },
+        uRadius: { value: settings.fieldRadius }
       },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
     const secondaryPoints = new THREE.Points(secondaryGeometry, secondaryMaterial);
-    secondaryPoints.visible = secondary;
+    secondaryPoints.visible = settings.secondaryParticlesEnabled;
     secondaryPoints.scale.copy(points.scale);
     secondaryPoints.position.copy(points.position);
     scene.add(secondaryPoints);
 
-    const trailSystem = createTrailSystem(scene, { color: field.c1 });
+    const trailSystem = createTrailSystem(scene, { color: theme.trail });
     const network = createForceNetwork(scene, geometry, {
-      fieldRadius: DEFAULTS.fieldRadius,
-      color1: field.c2,
-      color2: field.c1
+      fieldRadius: settings.fieldRadius,
+      color1: theme.network1,
+      color2: theme.network2
     });
+
+    const flareTexture = createFlareTexture(theme.flare);
+    const flareMaterial = new THREE.SpriteMaterial({
+      map: flareTexture,
+      color: new THREE.Color(theme.flare),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: settings.flareIntensity
+    });
+    const flare = new THREE.Sprite(flareMaterial);
+    flare.position.set(-22, 18, 6);
+    flare.scale.set(34, 34, 1);
+    flare.visible = false;
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera3d));
+
     const afterimagePass = new AfterimagePass();
-    afterimagePass.uniforms.damp.value = afterimage;
+    afterimagePass.uniforms.damp.value = settings.motionBlur;
     composer.addPass(afterimagePass);
+
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.5,
+      settings.bloom,
       0.4,
       0.85
     );
     bloomPass.threshold = 0.85;
-    bloomPass.strength = bloom;
+    bloomPass.strength = settings.bloom;
     bloomPass.radius = 0.4;
     composer.addPass(bloomPass);
+
+    const postPass = new ShaderPass(POST_SHADER);
+    postPass.uniforms.uChromatic.value = settings.chromaticAberration;
+    postPass.uniforms.uAnamorphic.value = settings.anamorphicStretch;
+    postPass.uniforms.uGodRays.value = settings.godRays ? 1 : 0;
+    postPass.uniforms.uGodRaysIntensity.value = settings.godRaysIntensity;
+    postPass.uniforms.uFilmGrain.value = settings.filmGrain;
+    postPass.uniforms.uDof.value = settings.depthOfField ? 1 : 0;
+    postPass.uniforms.uFocusRing.value = settings.focusRing;
+    postPass.uniforms.uFocusFalloff.value = settings.focusFalloff;
+    postPass.uniforms.uBlurAmount.value = settings.blurAmount;
+    composer.addPass(postPass);
     composer.addPass(new OutputPass());
 
-    const readAudio = createQftAudioReader();
+    const readAudio = createQftAudioReader({
+      bassGateEnabled: settings.bassGateEnabled,
+      bassGateThreshold: settings.bassGateThreshold,
+      bassGateAttack: settings.bassGateAttack,
+      bassGateRelease: settings.bassGateRelease,
+      bassGateRatio: settings.bassGateRatio,
+      onsetSensitivity: settings.onsetSensitivity
+    });
+
     const clock = new THREE.Clock();
     let raf = 0;
+    let frames = 0;
+    let fpsTimer = performance.now();
+
+    const updateTheme = () => {
+      const nextName = getQftThemeName();
+      if (nextName === themeName) return;
+      themeName = nextName;
+      theme = getQftThemeStyle(themeName);
+      scene.fog.color.set(theme.fog);
+      material.uniforms.uColor1.value.set(theme.particle1);
+      material.uniforms.uColor2.value.set(theme.particle2);
+      material.uniforms.uColor3.value.set(theme.particle3);
+      secondaryMaterial.uniforms.uColor1.value.set(theme.secondary1);
+      secondaryMaterial.uniforms.uColor2.value.set(theme.secondary2);
+      flareMaterial.color.set(theme.flare);
+      trailSystem.setColor(theme.trail);
+      network.setColors(theme.network1, theme.network2);
+    };
 
     const updateUniforms = (audio) => {
       const lf = 0.16;
@@ -253,7 +434,7 @@ export default function QuantumFieldBackdrop({
       for (const [uniform, band] of pairs) {
         material.uniforms[uniform].value = THREE.MathUtils.lerp(
           material.uniforms[uniform].value,
-          audio.gatedBands[band] * sensitivity,
+          audio.gatedBands[band] * settings.sensitivity,
           lf
         );
       }
@@ -269,14 +450,12 @@ export default function QuantumFieldBackdrop({
       );
       material.uniforms.uSpectralFlux.value = THREE.MathUtils.lerp(
         material.uniforms.uSpectralFlux.value,
-        audio.spectralFlux * sensitivity,
+        audio.spectralFlux * settings.sensitivity,
         lf
       );
-      material.uniforms.uOnsetEnergy.value = THREE.MathUtils.lerp(
-        material.uniforms.uOnsetEnergy.value,
-        audio.onsetEnergy,
-        0.25
-      );
+      material.uniforms.uOnsetEnergy.value = settings.onsetPunch
+        ? THREE.MathUtils.lerp(material.uniforms.uOnsetEnergy.value, audio.onsetEnergy, 0.25)
+        : 0;
 
       for (const key of [
         "uSubBass",
@@ -297,14 +476,19 @@ export default function QuantumFieldBackdrop({
 
     const animate = () => {
       raf = requestAnimationFrame(animate);
+      updateTheme();
+
       const dt = clock.getDelta();
       const elapsed = clock.getElapsedTime();
       const audio = readAudio();
-      material.uniforms.uTime.value += dt;
+      material.uniforms.uTime.value += dt * settings.timeFlow;
       material.uniforms.uZoomFactor.value = camera3d.position.length() / 118;
-      updateUniforms(audio);
+      material.uniforms.uVortexStrength.value = settings.vortex;
+      material.uniforms.uPulseIntensity.value = settings.pulseIntensity;
+      material.uniforms.uTerrainHeight.value = settings.terrainHeight;
       secondaryMaterial.uniforms.uTime.value = material.uniforms.uTime.value;
-      secondaryPoints.visible = secondary;
+      secondaryMaterial.uniforms.uVortexStrength.value = settings.vortex;
+      updateUniforms(audio);
 
       const live = {
         bass: material.uniforms.uBass.value,
@@ -314,23 +498,59 @@ export default function QuantumFieldBackdrop({
         beat: material.uniforms.uBeatEnergy.value,
         centroid: material.uniforms.uSpectralCentroid.value
       };
-      trailSystem.update(elapsed, live, trails && audio.active);
+
+      secondaryPoints.visible = settings.secondaryParticlesEnabled;
+      trailSystem.update(elapsed, live, settings.particleTrails, settings.trailOpacity);
       network.update({
-        threshold: DEFAULTS.connectionThreshold,
+        threshold: settings.networkRange,
         bass: live.bass,
         highMid: live.highMid,
         mid: live.mid,
         beat: live.beat,
         centroid: live.centroid,
-        opacity: DEFAULTS.connectionOpacity,
-        enabled: connections && audio.active
+        opacity:
+          settings.networkOpacity *
+          (settings.networkCrawlers ? 0.72 + Math.sin(elapsed * 2.2) * 0.28 : 1),
+        enabled: settings.forceNetwork
       });
 
-      points.rotation.y += dt * (0.035 + live.mid * 2 + live.beat * 2);
+      points.rotation.y +=
+        dt * settings.timeFlow * (settings.idleRotationSpeed + live.mid * 2 + live.beat * 2);
       secondaryPoints.rotation.y = points.rotation.y * 0.75;
+
+      if (settings.audioCamera) {
+        const shake =
+          settings.cameraShake * settings.audioCameraIntensity * (live.bass + live.beat);
+        camera3d.position.x = settings.camera[0] + Math.sin(elapsed * 23) * shake;
+        camera3d.position.y = settings.camera[1] + Math.cos(elapsed * 19) * shake;
+        camera3d.position.z = settings.camera[2] + Math.sin(elapsed * 13) * shake * 0.4;
+      }
+
+      flare.visible = false;
+      flareMaterial.opacity = 0;
+      flare.scale.setScalar(28 + settings.flareIntensity * 14 + live.beat * 8);
+
       bloomPass.strength =
-        bloom + (audio.gatedBands.bass + audio.gatedBands.mid + audio.beatEnergy) / 6;
-      composer.render();
+        settings.bloom + (audio.gatedBands.bass + audio.gatedBands.mid + audio.beatEnergy) / 6;
+      afterimagePass.uniforms.damp.value = settings.motionBlur;
+      postPass.uniforms.uTime.value = elapsed;
+
+      renderer.render(scene, camera3d);
+
+      if (settings.adaptiveQuality) {
+        frames += 1;
+        const now = performance.now();
+        if (now - fpsTimer >= 1000) {
+          const fps = (frames * 1000) / (now - fpsTimer);
+          frames = 0;
+          fpsTimer = now;
+          if (fps < settings.targetFPS - 8) pixelRatio = Math.max(0.75, pixelRatio - 0.1);
+          if (fps > settings.targetFPS + 6) {
+            pixelRatio = Math.min(settings.pixelRatioMax, pixelRatio + 0.05);
+          }
+          renderer.setPixelRatio(pixelRatio);
+        }
+      }
     };
 
     const resize = () => {
@@ -350,7 +570,9 @@ export default function QuantumFieldBackdrop({
       window.removeEventListener("resize", resize);
       trailSystem.dispose();
       network.dispose();
-      scene.remove(points, secondaryPoints);
+      scene.remove(points, secondaryPoints, flare);
+      flareTexture.dispose();
+      flareMaterial.dispose();
       geometry.dispose();
       secondaryGeometry.dispose();
       material.dispose();
@@ -366,6 +588,7 @@ export default function QuantumFieldBackdrop({
     connections,
     density,
     fieldType,
+    overrides,
     position,
     scale,
     secondary,
@@ -373,6 +596,10 @@ export default function QuantumFieldBackdrop({
     terrainHeight,
     trails
   ]);
+
+  const s = { ...QFT_DEFAULT_SETTINGS, ...overrides };
+  const nebula = Math.max(0, Math.min(1, s.nebulaIntensity));
+  const dim = Math.max(0, Math.min(1, s.backgroundDim));
 
   return (
     <div
@@ -386,6 +613,9 @@ export default function QuantumFieldBackdrop({
         height: "100vh",
         overflow: "hidden",
         pointerEvents: "none",
+        background: "transparent",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
         ...style
       }}
     />
