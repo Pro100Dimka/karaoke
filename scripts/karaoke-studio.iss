@@ -527,8 +527,9 @@ begin
 
     BackendExe := ExpandConstant('{app}\resources\backend\KaraokeBackend.exe');
     // Keep models, resumable download cache and logs inside the selected install folder.
+    // The cache path matches config.CACHE_DIR/model-downloads so the app can resume installer downloads.
     ModelsDir := ExpandConstant('{app}\data\models');
-    ModelCacheDir := ExpandConstant('{app}\data\cache\model-downloads');
+    ModelCacheDir := ExpandConstant('{app}\data\generated\temp\model-downloads');
     ModelLogPath := ExpandConstant('{app}\data\logs\model-install.log');
     ModelProgressPath := ExpandConstant('{app}\data\logs\model-progress.txt');
     DeleteFile(ModelProgressPath);
@@ -558,13 +559,22 @@ begin
     StopModelProgressTimer;
     UpdateModelProgress(nil);
     if ResultCode <> 0 then
-      RaiseException(
-        'Не удалось загрузить одну из AI-моделей. Уже загруженные файлы сохранены,' + #13#10 +
-        'поэтому повторная установка продолжит загрузку, а не начнёт её заново.' + #13#10#13#10 +
+    begin
+      CompleteInstallProgress;
+      WizardForm.StatusLabel.Caption :=
+        'A&D Voice установлен. Загрузка AI-моделей не завершена и может быть продолжена позже.';
+      MsgBox(
+        'Программа установлена, но не удалось загрузить одну из AI-моделей.' + #13#10 +
+        'Уже загруженные файлы и кэш сохранены, поэтому повторная загрузка продолжится,' + #13#10 +
+        'а не начнётся с нуля. Модели можно докачать из настроек A&D Voice.' + #13#10#13#10 +
         'Код: ' + IntToStr(ResultCode) + #13#10 +
-        'Подробный лог: ' + ModelLogPath
+        'Подробный лог: ' + ModelLogPath,
+        mbError,
+        MB_OK
       );
+      Exit;
+    end;
     CompleteInstallProgress;
-    WizardForm.StatusLabel.Caption := 'Установка A&D Voice завершена.';
+    WizardForm.StatusLabel.Caption := 'Установка A&D Voice завершена. AI-модели готовы.';
   end;
 end;
