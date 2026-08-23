@@ -7,7 +7,7 @@ vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, useI18n: mockUseI18nWithFallback };
 });
-import { LibrarySongCard } from "../src/pages/Library/components.jsx";
+import LibrarySongCard from "../src/pages/Library/songs-grid/song-card.jsx";
 const handlers = () => ({
   onDelete: vi.fn(),
   onOpenFolder: vi.fn(),

@@ -9,58 +9,12 @@ import {
 } from "lucide-react";
 import { translateSaved as tr } from "../../i18n/runtime";
 import { Box, ProcessingSignal, Stack } from "../../theme/ui";
-import AnimatedLibraryBackdrop from "./animated-backdrop";
 import useSongCover from "./hooks/useSongCover";
-
-const statusTone = { done: "success", error: "danger", processing: "primary", queued: "default" };
-const statusText = {
-  done: tr("Готово"),
-  error: tr("Ошибка"),
-  processing: tr("Обрабатывается"),
-  queued: tr("В очереди"),
-  cancelling: tr("Отменяется"),
-  cancelled: tr("Отменено"),
-  pending: tr("Ожидает обработки")
-};
 
 const EQUALIZER_BARS = Array.from({ length: 16 }, (_, index) => ({
   level: 0.28 + ((index * 37 + 19) % 61) / 100,
   speed: 720 + ((index * 113 + 47) % 620)
 }));
-
-export function LibraryBackdrop() {
-  return (
-    <Box
-      aria-hidden="true"
-      sx={{
-        position: "fixed",
-        inset: 0,
-        pointerEvents: "none",
-        zIndex: 0,
-        overflow: "hidden",
-        background: `
-          radial-gradient(
-            circle at 15% 20%,
-            color-mix(in srgb, var(--ui-primary) 10%, transparent),
-            transparent 34%
-          ),
-          radial-gradient(
-            circle at 85% 12%,
-            color-mix(in srgb, var(--ui-secondary) 7%, transparent),
-            transparent 32%
-          ),
-          linear-gradient(
-            180deg,
-            color-mix(in srgb, var(--color-surface) 18%, transparent),
-            color-mix(in srgb, var(--color-bg) 40%, transparent)
-          )
-        `
-      }}
-    >
-      <AnimatedLibraryBackdrop />
-    </Box>
-  );
-}
 
 export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
   const version = `${song?.updated_at ?? ""}:${song?.status ?? ""}:${song?.__roomLocal ?? ""}`;

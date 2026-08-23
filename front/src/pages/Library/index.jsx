@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
 import { OnlineRoomModal } from "../OnlineRoom";
-import { LibraryBackdrop } from "./components";
+import { QuantumFieldBackdrop } from "./animated-backdrop";
 import LibraryHero from "./hero";
 import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";
 import SongsGrid from "./songs-grid";
@@ -15,7 +15,7 @@ export default function Library() {
   const { fileImport, online, processing, recordings } = state;
   return (
     <Stack align="center" sx={{ position: "relative" }}>
-      <LibraryBackdrop />
+      <QuantumFieldBackdrop fieldType="Waveform Terrain" />
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
           songCount={state.totalCount}

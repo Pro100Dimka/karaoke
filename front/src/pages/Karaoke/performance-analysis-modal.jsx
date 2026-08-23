@@ -170,11 +170,14 @@ export default function PerformanceAnalysisModal({
           onNext={() => setViewedId(list[index + 1].id)}
         />
         {!active && (
-          <Typography tone="muted">
-            {t(
-              "Вы просматриваете другую запись. Текущий анализ продолжает выполняться без переключения."
-            )}
-          </Typography>
+          <>
+            <Typography tone="muted">
+              {t(
+                "Вы просматриваете другую запись. Текущий анализ продолжает выполняться без переключения."
+              )}
+            </Typography>
+            <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
+          </>
         )}
         {active && !result && !error && (
           <Typography role="status" tone="muted">

@@ -88,27 +88,39 @@ vi.mock("../src/theme/ui", () => ({
   Stack: passthrough("div"),
   Grid: passthrough("div")
 }));
-vi.mock("../src/pages/Library/components", () => ({
-  LibraryBackdrop: () => <div data-testid="backdrop" />,
-  LibraryHero: (props) => (
+vi.mock("../src/pages/Library/animated-backdrop", () => ({
+  default: () => <div data-testid="backdrop" />
+}));
+vi.mock("../src/pages/Library/hero", () => ({
+  default: (props) => (
     <div data-testid="hero">
       <span>{props.songCount}</span>
       <button type="button" data-testid="open-room" onClick={props.onOpenRoom} />
     </div>
-  ),
-  LibraryResults: ({ error, songs, children }) =>
-    error ? <p role="alert">{error.message}</p> : songs.length ? children : <p data-testid="empty-library">empty</p>,
-  SongGrid: ({ songs, onOpenKaraoke, onOpenProcessing, onOpenRecordings, onOpenSettings }) =>
-    songs.map((song) => (
-      <div key={song.id} data-testid={`song-${song.id}`}>
-        <button type="button" data-testid="karaoke" onClick={() => onOpenKaraoke(song)} />
-        <button type="button" data-testid="processing" onClick={() => onOpenProcessing(song)} />
-        <button type="button" data-testid="recordings" onClick={() => onOpenRecordings(song)} />
-        <button type="button" data-testid="song-settings" onClick={() => onOpenSettings(song.id)} />
-      </div>
-    ))
+  )
 }));
-vi.mock("../src/components/OnlineRoomModal", () => ({
+vi.mock("../src/pages/Library/songs-grid", () => ({
+  default: ({ state, processing, recordings }) =>
+    state.songsError ? (
+      <p role="alert">{state.songsError.message}</p>
+    ) : state.filteredSongs.length ? (
+      state.filteredSongs.map((song) => (
+        <div key={song.id} data-testid={`song-${song.id}`}>
+          <button type="button" data-testid="karaoke" onClick={() => state.openKaraoke(song)} />
+          <button type="button" data-testid="processing" onClick={() => processing.track(song)} />
+          <button type="button" data-testid="recordings" onClick={() => recordings.setSong(song)} />
+          <button
+            type="button"
+            data-testid="song-settings"
+            onClick={() => state.setSettingsSongId(song.id)}
+          />
+        </div>
+      ))
+    ) : (
+      <p data-testid="empty-library">empty</p>
+    )
+}));
+vi.mock("../src/pages/OnlineRoom", () => ({
   OnlineRoomModal: ({ onClose }) => <button data-testid="room-modal" onClick={onClose} />
 }));
 vi.mock("../src/pages/Library/modals", () => ({

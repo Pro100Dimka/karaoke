@@ -509,25 +509,25 @@ describe("device, settings and song-card factories", () => {
       [
         {
           label: translateSaved("Прослушать записи"),
-          variant: "outline",
+          variant: "contained",
           callback: "function",
           disabled: undefined
         },
         {
           label: translateSaved("Настройки песни"),
-          variant: "outline",
+          variant: "contained",
           callback: "function",
           disabled: undefined
         },
         {
           label: translateSaved("Открыть папку"),
-          variant: "outline",
+          variant: "contained",
           callback: "function",
           disabled: undefined
         },
         {
           label: translateSaved("Переобработать мелодию"),
-          variant: "outline",
+          variant: "contained",
           callback: "function",
           disabled: undefined
         },
@@ -559,7 +559,7 @@ describe("device, settings and song-card factories", () => {
       [
         {
           label: translateSaved("Обработать песню"),
-          variant: "outline",
+          variant: "contained",
           callback: "function",
           disabled: true
         },

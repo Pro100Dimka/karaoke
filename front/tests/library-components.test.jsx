@@ -35,8 +35,11 @@ vi.mock("../src/api/client", () => ({
     getSongCoverUrl: (id) => `cover/${id}`
   }
 }));
-import { LibraryActions, LibraryHero, ProcessingSignal, SongCoverArt, SongGrid } from "../src/pages/Library/components.jsx";
+import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
+import LibraryActions from "../src/pages/Library/hero/actions.jsx";
+import LibraryHero from "../src/pages/Library/hero/index.jsx";
 import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
+import LibrarySongsGrid from "../src/pages/Library/songs-grid/index.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
@@ -51,7 +54,6 @@ test("library actions cover search, room, adding and file selection", async () =
     <LibraryActions
       canManageLibrary
       fileInputRef={createRef()}
-      includeFileInput
       onFileChosen={onFile}
       onAdd={onAdd}
       onOpenRoom={onRoom}
@@ -100,7 +102,28 @@ test("large song collections render through the window virtualizer", () => {
     title: `Song ${index}`,
     status: "done"
   }));
-  const { container } = render(<SongGrid songs={songs} />);
+  const state = {
+    songsError: null,
+    canManageLibrary: true,
+    filteredSongs: songs,
+    transferStatuses: new Map(),
+    openKaraoke: vi.fn(),
+    setSettingsSongId: vi.fn(),
+    songActions: {
+      deleteSong: vi.fn(),
+      openSongFolder: vi.fn(),
+      processSong: vi.fn(),
+      reprocessSong: vi.fn()
+    }
+  };
+  const { container } = render(
+    <LibrarySongsGrid
+      state={state}
+      fileImport={{ importFile: vi.fn(), importing: false }}
+      processing={{ track: vi.fn() }}
+      recordings={{ setSong: vi.fn() }}
+    />
+  );
   expect(container.querySelectorAll('[role="button"]').length).toBeGreaterThan(0);
   expect(container.querySelectorAll('[role="button"]').length).toBeLessThan(songs.length);
 });

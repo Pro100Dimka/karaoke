@@ -277,8 +277,12 @@ describe("AudioPlayer and error boundary", () => {
         <Crash />{" "}
       </ErrorBoundary>
     );
-    verify([screen.getByRole("alert"), "not.toBeNull"], [screen.getByText("boom"), "not.toBeNull"], [log, "toHaveBeenCalled"]);
+    verify(
+      [screen.getByRole("dialog"), "not.toBeNull"],
+      [screen.getByText("boom"), "not.toBeNull"],
+      [log, "toHaveBeenCalled"]
+    );
     restore();
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /Restart|Перезапустити|Перезапустить/ }));
   });
 });

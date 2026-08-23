@@ -22,7 +22,7 @@ vi.mock("../src/i18n", async (importOriginal) => ({
   useI18n: mockUseI18nWithValues
 }));
 import { OnlineRoomDock } from "../src/components/OnlineRoomDock.jsx";
-import { OnlineRoomModal } from "../src/components/OnlineRoomModal.jsx";
+import { OnlineRoomModal } from "../src/pages/OnlineRoom/index.jsx";
 import OnlineRoomParticipant from "../src/components/OnlineRoomParticipant.jsx";
 import RoomRadioSync from "../src/components/RoomRadioSync.jsx";
 const roomValue = (overrides = {}) => ({

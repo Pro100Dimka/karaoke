@@ -146,7 +146,7 @@ describe("application dialog provider", () => {
       </AppDialogProvider>
     );
     expect(screen.getByText("Saved")).not.toBeNull();
-    const closeButton = document.querySelector(".ui-modal-title-actions button");
+    const closeButton = document.querySelector(".ui-modal-actions button");
     verify([closeButton, "not.toBeNull"], [screen.queryByText("Отмена"), "toBeNull"]);
     act(() => {
       closeButton.click();

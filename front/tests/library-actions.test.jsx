@@ -44,6 +44,6 @@ test("library filter popover closes only after an outside click", () => {
   fireEvent.click(screen.getByText("Сортировка"));
   expect(popover.dataset.open).not.toBeUndefined();
 
-  fireEvent.click(document.body);
+  fireEvent.pointerDown(document.body);
   expect(popover.dataset.open).toBeUndefined();
 });
