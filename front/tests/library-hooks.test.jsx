@@ -2,16 +2,17 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-import useLibraryFileImport from "../src/pages/Library/hooks/use-file-import.js";
-import useLibraryRoomSync from "../src/pages/Library/hooks/use-room-sync.js";
-import useLibrarySongActions from "../src/pages/Library/hooks/use-song-actions.js";
+import useLibraryFileImport from "../src/pages/Library/hooks/useFileImport.js";
+import useLibraryRoomSync from "../src/pages/Library/hooks/useRoomSync.js";
+import useLibrarySongActions from "../src/pages/Library/hooks/useSongActions.js";
 import { resolveVisibleSongs } from "../src/pages/Library/utils.js";
 
 const api = vi.hoisted(() => ({
   addSong: vi.fn(),
   processSong: vi.fn(),
   reprocessMelody: vi.fn(),
-  deleteSong: vi.fn()
+  deleteSong: vi.fn(),
+  getSongRevisions: vi.fn()
 }));
 const exclusive = vi.hoisted(() => ({ pending: false, run: vi.fn() }));
 vi.mock("../src/api/client", () => ({ api }));
@@ -28,6 +29,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// importFile only stages a reviewable draft now (AddSongsModal confirms
+// title/artist before anything is uploaded) -- confirmDraft() is what
+// actually fires api.addSong/processSong. Flushing a macrotask after it
+// lets every awaited call inside the queued process() finish, since the
+// microtask queue (including chained promise .then()s) always drains
+// before a setTimeout callback runs.
+const confirmAndFlush = async (result) => {
+  await act(async () => {
+    result.current.confirmDraft();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+};
+
 describe("library file import", () => {
   test("opens the picker and imports the selected file", async () => {
     const click = vi.fn();
@@ -43,8 +57,10 @@ describe("library file import", () => {
     const input = { files: [new File(["audio"], "track.mp3")], value: "path" };
     await act(() => result.current.importFile({ currentTarget: input }));
     expect(input.value).toBe("");
-    expect(api.addSong).toHaveBeenCalledWith(input.files[0], "track");
-    expect(api.processSong).toHaveBeenCalledWith("song");
+    expect(result.current.review).not.toBeNull();
+    await confirmAndFlush(result);
+    expect(api.addSong).toHaveBeenCalledWith(input.files[0], "track", "");
+    expect(api.processSong).toHaveBeenCalledWith("song", "auto");
     expect(onStarted).toHaveBeenCalledWith(expect.objectContaining({ id: "song" }));
     expect(notify).not.toHaveBeenCalled();
   });
@@ -71,7 +87,8 @@ describe("library file import", () => {
     await act(() =>
       hook.result.current.importFile({ currentTarget: { files: [file], value: "path" } })
     );
-    expect(api.addSong).toHaveBeenCalledWith(file, "archive.tar");
+    await confirmAndFlush(hook.result);
+    expect(api.addSong).toHaveBeenCalledWith(file, "archive.tar", "");
     expect(firstStarted).not.toHaveBeenCalled();
     expect(secondStarted).toHaveBeenCalledWith({ id: "song" });
   });
@@ -104,6 +121,7 @@ describe("library file import", () => {
         currentTarget: { files: [new File(["x"], "broken")], value: "x" }
       })
     );
+    await confirmAndFlush(hook.result);
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("invalid file"));
   });
 
@@ -122,6 +140,7 @@ describe("library file import", () => {
         currentTarget: { files: [new File(["x"], "track.mp3")], value: "x" }
       })
     );
+    await confirmAndFlush(result);
     expect(api.deleteSong).toHaveBeenCalledWith("rollback");
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("pipeline busy"));
   });
@@ -141,6 +160,7 @@ describe("library file import", () => {
         currentTarget: { files: [new File(["x"], "track.mp3")], value: "x" }
       })
     );
+    await confirmAndFlush(result);
     expect(api.deleteSong).not.toHaveBeenCalled();
     expect(onStarted).toHaveBeenCalledWith({ id: "uncertain" });
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("deadline"));
@@ -185,8 +205,6 @@ describe("library room synchronization", () => {
     };
     const hook = renderHook((value) => useLibraryRoomSync(value), { initialProps: base });
     expect(setQuery).toHaveBeenCalledWith("remote");
-    // Every participant -- host or guest -- broadcasts their own library.
-    expect(syncUi).toHaveBeenCalledWith({ songs: [] });
     syncUi.mockClear();
     hook.rerender({ ...base, query: "remote" });
     expect(syncUi).not.toHaveBeenCalled();
@@ -200,6 +218,41 @@ describe("library room synchronization", () => {
     syncUi.mockClear();
     hook.rerender({ ...base, query: "offline", room: null, roomQuery: null });
     expect(syncUi).not.toHaveBeenCalled();
+  });
+
+  test("publishes done songs' revisions from a single batched request", async () => {
+    const syncUi = vi.fn();
+    api.getSongRevisions.mockResolvedValue({
+      revisions: [
+        { song_id: "done", revision: "sha256:done", error: null },
+        { song_id: "broken", revision: null, error: "Could not fingerprint song" }
+      ]
+    });
+    const props = {
+      localSongs: [
+        { id: "done", status: "done" },
+        { id: "broken", status: "done" },
+        { id: "queued", status: "processing" }
+      ],
+      query: "",
+      room: { host: true, selfId: "self" },
+      roomEventId: 1,
+      participantCount: 1,
+      setQuery: vi.fn(),
+      syncUi
+    };
+    renderHook((value) => useLibraryRoomSync(value), { initialProps: props });
+    await act(async () => Promise.resolve());
+    // One batched request for both "done" songs, not one call per song.
+    expect(api.getSongRevisions).toHaveBeenCalledOnce();
+    expect(api.getSongRevisions).toHaveBeenCalledWith(["done", "broken"]);
+    expect(syncUi).toHaveBeenCalledWith({
+      participantSongs: [
+        { id: "done", status: "done", __roomOwnerId: "self", __roomRevision: "sha256:done" },
+        { id: "broken", status: "done", __roomOwnerId: "self" },
+        { id: "queued", status: "processing", __roomOwnerId: "self" }
+      ]
+    });
   });
 });
 
@@ -257,7 +310,7 @@ describe("library song actions", () => {
     await act(() => hook.result.current.reprocessSong(null));
     expect(api.processSong).not.toHaveBeenCalled();
     expect(api.reprocessMelody).not.toHaveBeenCalled();
-    expect(props.confirmDialog).toHaveBeenCalledTimes(3);
+    expect(props.confirmDialog).toHaveBeenCalledTimes(2);
     expect(props.confirmDialog).toHaveBeenLastCalledWith(
       translateSaved(
         "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
@@ -287,7 +340,7 @@ describe("library song actions", () => {
     api.reprocessMelody.mockRejectedValueOnce(new Error("midi busy"));
     await act(() => hook.result.current.reprocessSong({ id: "midi", title: "Midi" }));
     expect(props.notify).toHaveBeenLastCalledWith(
-      `${translateSaved("Не удалось переобработать MIDI")}: midi busy`
+      `${translateSaved("Не удалось переобработать мелодию")}: midi busy`
     );
   });
 
@@ -433,7 +486,7 @@ describe("library song actions", () => {
     await act(() => hook.result.current.reprocessSong({ id: "m", title: "Midi" }));
     expect(firstNotify).not.toHaveBeenCalled();
     expect(secondNotify).toHaveBeenCalledWith(
-      `${translateSaved("Не удалось переобработать MIDI")}: latest midi`
+      `${translateSaved("Не удалось переобработать мелодию")}: latest midi`
     );
 
     secondNotify.mockClear();
@@ -490,73 +543,52 @@ describe("library song actions", () => {
   });
 });
 
-describe("resolveVisibleSongs merges every participant's library", () => {
+describe("resolveVisibleSongs merges the room's shared library", () => {
   const local = [{ id: "mine", title: "Mine" }];
-  const participants = [
-    { id: "host-id", role: "host", name: "Host" },
-    { id: "self", role: "guest", name: "Me" },
-    { id: "peer-id", role: "guest", name: "Peer" }
-  ];
 
   test("returns only local songs outside a room", () => {
-    expect(resolveVisibleSongs({ localSongs: local, room: null })).toEqual([
-      { id: "mine", title: "Mine", isRemote: false }
-    ]);
+    expect(resolveVisibleSongs({ localSongs: local, room: null })).toEqual(local);
   });
 
-  test("a guest merges the host's broadcast list under the host's id", () => {
-    const result = resolveVisibleSongs({
-      localSongs: local,
-      room: { host: false, selfId: "self" },
-      roomSongs: [{ id: "host-song", title: "Host song" }],
-      participants
-    });
-    expect(result).toEqual([
-      { id: "mine", title: "Mine", isRemote: false },
-      {
-        id: "host-id:host-song",
-        title: "Host song",
-        localSongId: "host-song",
-        ownerId: "host-id",
-        ownerName: "Host",
-        isRemote: true
-      }
-    ]);
+  test("the host always sees their own local library", () => {
+    expect(resolveVisibleSongs({ localSongs: local, room: { host: true } })).toEqual(local);
   });
 
-  test("everyone sees a peer's songs via songsByParticipant, tagged by owner", () => {
-    const result = resolveVisibleSongs({
-      localSongs: local,
-      room: { host: true, selfId: "self" },
-      songsByParticipant: {
-        self: [{ id: "should-not-appear-twice" }],
-        "peer-id": [{ id: "peer-song", title: "Peer song", status: "done" }]
-      },
-      participants
-    });
-    expect(result).toEqual([
-      { id: "mine", title: "Mine", isRemote: false },
-      {
-        id: "peer-id:peer-song",
-        title: "Peer song",
-        status: "done",
-        localSongId: "peer-song",
-        ownerId: "peer-id",
-        ownerName: "Peer",
-        isRemote: true
-      }
-    ]);
+  test("a guest sees the host's broadcast room song list instead of their own", () => {
+    const roomSongs = [{ id: "host-song", title: "Host song" }];
+    expect(
+      resolveVisibleSongs({ localSongs: local, room: { host: false }, roomSongs })
+    ).toEqual(roomSongs);
+  });
+
+  test("a guest sees both per-participant songs and the flat room list combined", () => {
+    const roomSongs = [{ id: "host-song", title: "Host song" }];
+    const roomSongsByParticipant = { "peer-id": [{ id: "peer-song", title: "Peer song" }] };
+    expect(
+      resolveVisibleSongs({
+        localSongs: local,
+        room: { host: false },
+        roomSongs,
+        roomSongsByParticipant
+      })
+    ).toEqual([{ id: "peer-song", title: "Peer song" }, { id: "host-song", title: "Host song" }]);
+  });
+
+  test("falls back to local songs when no remote song list is available", () => {
+    expect(
+      resolveVisibleSongs({
+        localSongs: local,
+        room: { host: false },
+        roomSongs: [],
+        roomSongsByParticipant: {}
+      })
+    ).toEqual(local);
   });
 
   test("ignores malformed remote entries instead of throwing", () => {
-    const result = resolveVisibleSongs({
-      localSongs: [],
-      room: { host: true, selfId: "self" },
-      songsByParticipant: { "peer-id": [null, "bad", { title: "no id" }, { id: "ok" }] },
-      participants
-    });
-    expect(result).toEqual([
-      { id: "peer-id:ok", localSongId: "ok", ownerId: "peer-id", ownerName: "Peer", isRemote: true }
-    ]);
+    const roomSongsByParticipant = { "peer-id": [null, "bad", { title: "no id" }, { id: "ok" }] };
+    expect(
+      resolveVisibleSongs({ localSongs: [], room: { host: false }, roomSongsByParticipant })
+    ).toEqual([{ id: "ok" }]);
   });
 });

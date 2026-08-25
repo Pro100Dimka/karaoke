@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import {
@@ -18,6 +26,14 @@ import { playParticipantJoinedSound } from "./onlineRoomAudio";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 
 const OnlineRoomContext = createContext(null);
+// Speaking levels update on a ~70ms meter tick while anyone's mic is live,
+// which is far more often than the rest of the room state changes. Keeping
+// them out of the main context value means a room-wide voice call doesn't
+// re-render every consumer of useOnlineRoom() (Karaoke, Library, OnlineRoom
+// pages, navigation hooks) dozens of times a second -- only the one place
+// that actually renders speaking indicators (OnlineRoomDock) subscribes to
+// this context and re-renders on those ticks.
+const OnlineRoomSpeakingContext = createContext({ localSpeakingLevel: 0, speakingLevels: {} });
 const OFF = false;
 const SONG_SYNC_REQUEST_TIMEOUT_MS = 15_000;
 export function OnlineRoomProvider({ children }) {
@@ -665,7 +681,6 @@ export function OnlineRoomProvider({ children }) {
     effectPeople,
     joinRoom,
     leaveRoom,
-    localSpeakingLevel,
     microphoneMuted,
     mutedPeople,
     openKaraoke,
@@ -681,7 +696,6 @@ export function OnlineRoomProvider({ children }) {
     setMicrophoneMuted,
     setParticipantVolume,
     setRoomSoundMuted,
-    speakingLevels,
     syncCommand,
     syncUi,
     togglePersonEffects,
@@ -689,8 +703,21 @@ export function OnlineRoomProvider({ children }) {
     transferStatus,
     voiceError
   });
-  return <OnlineRoomContext.Provider value={value}>{children}</OnlineRoomContext.Provider>;
+  const speakingValue = useMemo(
+    () => ({ localSpeakingLevel, speakingLevels }),
+    [localSpeakingLevel, speakingLevels]
+  );
+  return (
+    <OnlineRoomContext.Provider value={value}>
+      <OnlineRoomSpeakingContext.Provider value={speakingValue}>
+        {children}
+      </OnlineRoomSpeakingContext.Provider>
+    </OnlineRoomContext.Provider>
+  );
 }
 export function useOnlineRoom() {
   return useContext(OnlineRoomContext);
+}
+export function useOnlineRoomSpeaking() {
+  return useContext(OnlineRoomSpeakingContext);
 }

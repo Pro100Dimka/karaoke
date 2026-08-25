@@ -6,6 +6,7 @@ import {
   constrainedMoveDelta,
   deleteNotes,
   documentReducer,
+  filterByTimeRange,
   initialDocument,
   marqueeHitIds,
   mergeSelectedNotes,
@@ -17,6 +18,7 @@ import {
   serializeNotes,
   serializeWordBounds,
   shiftWordTexts,
+  visibleTimeRange,
   wordResizeBounds
 } from "../src/pages/MelodyEditor/model.js";
 
@@ -159,6 +161,30 @@ test("finds notes overlapping the selected words by time, not by their stored wo
   );
   expect(notesOverlappingWords(notes, words, [])).toEqual(new Set());
   expect(notesOverlappingWords(notes, words, [99])).toEqual(new Set());
+});
+
+test("visibleTimeRange pads the scrolled viewport with overscan on both sides", () => {
+  const [start, end] = visibleTimeRange(
+    { scrollLeft: 1000, clientWidth: 800 },
+    { keyboardWidth: 100, zoom: 100 }
+  );
+  expect(start).toBeCloseTo(4.2, 5);
+  expect(end).toBeCloseTo(21.8, 5);
+});
+
+test("filterByTimeRange keeps only items overlapping the range, including partial overlaps", () => {
+  const items = [
+    note("before", 0, 4.1),
+    note("partially-before", 3, 4.5),
+    note("inside", 5, 10),
+    note("partially-after", 21, 22),
+    note("after", 22, 23)
+  ];
+  expect(filterByTimeRange(items, [4.2, 21.8]).map((item) => item._id)).toEqual([
+    "partially-before",
+    "inside",
+    "partially-after"
+  ]);
 });
 
 test("projects canonical lyrics and detects marquee intersections", () => {

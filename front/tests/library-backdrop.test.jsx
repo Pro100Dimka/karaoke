@@ -2,6 +2,8 @@
 import { render } from "@testing-library/react";
 import { beforeAll, expect, test, vi } from "vitest";
 import { QuantumFieldBackdrop as LibraryBackdrop } from "../src/pages/Library/animated-backdrop/index.js";
+
+let rendererInstances = 0;
 // jsdom implements neither WebGL nor 2D canvas contexts without the native
 // "canvas" package, and has no GPU to actually run post-processing passes
 // on. None of that is what these tests check (they only check the static
@@ -32,6 +34,9 @@ vi.mock("three", async (importOriginal) => ({
   ...(await importOriginal()),
   WebGLRenderer: class {
     domElement = document.createElement("canvas");
+    constructor() {
+      rendererInstances += 1;
+    }
     setPixelRatio() {}
     setSize() {}
     setClearColor() {}
@@ -53,6 +58,52 @@ test("library backdrop is decorative and cannot intercept controls", () => {
   expect(backdrop.getAttribute("aria-hidden")).toBe("true");
   expect(backdrop.style.position).toBe("fixed");
   expect(backdrop.style.pointerEvents).toBe("none");
+});
+
+test("library backdrop does not rebuild its WebGL scene when re-rendered without a settings prop", () => {
+  // Regression test: a fresh `{}` default for the `settings` prop used to be
+  // a new object identity on every render, and it was a direct dependency of
+  // the effect that builds the renderer/scene/composer -- so every unrelated
+  // parent re-render tore down and rebuilt the whole visualizer. The caller
+  // (Library/index.jsx) never passes a `settings` prop at all, so this is the
+  // exact scenario that used to retrigger the effect on every render.
+  rendererInstances = 0;
+  const { rerender } = render(<LibraryBackdrop />);
+  expect(rendererInstances).toBe(1);
+  rerender(<LibraryBackdrop />);
+  expect(rendererInstances).toBe(1);
+});
+
+test("library backdrop watches the theme attribute instead of polling it every frame", () => {
+  // Regression test: updateTheme() used to run inside the rAF loop, reading
+  // documentElement's data-theme attribute up to 60 times a second just to
+  // catch the rare case where the user actually toggles it. A
+  // MutationObserver reacts to that attribute changing instead, so this
+  // checks the observer is wired to the right target/attribute and torn
+  // down on unmount, without needing to reach into the (mocked) WebGL scene.
+  const observe = vi.fn();
+  const disconnect = vi.fn();
+  const OriginalMutationObserver = globalThis.MutationObserver;
+  class FakeMutationObserver {
+    observe(...args) {
+      observe(...args);
+    }
+    disconnect() {
+      disconnect();
+    }
+  }
+  globalThis.MutationObserver = FakeMutationObserver;
+  try {
+    const { unmount } = render(<LibraryBackdrop />);
+    expect(observe).toHaveBeenCalledWith(
+      document.documentElement,
+      expect.objectContaining({ attributes: true, attributeFilter: ["data-theme"] })
+    );
+    unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+  } finally {
+    globalThis.MutationObserver = OriginalMutationObserver;
+  }
 });
 
 test("library backdrop cleans up its window resize listener on unmount", () => {

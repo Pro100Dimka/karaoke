@@ -1,6 +1,6 @@
 import { Check, Copy, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useOnlineRoom } from "../contexts/OnlineRoomContext";
+import { useOnlineRoom, useOnlineRoomSpeaking } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
@@ -13,6 +13,7 @@ const ACTIVE_TRANSFER = new Set(["waiting", "sending", "receiving", "importing"]
 export function OnlineRoomDock() {
   const { t } = useI18n();
   const online = useOnlineRoom();
+  const { localSpeakingLevel, speakingLevels } = useOnlineRoomSpeaking();
   const mounted = useMountedRef();
   const timer = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -80,8 +81,8 @@ export function OnlineRoomDock() {
                   key={person.id}
                   person={person}
                   room={online.room}
-                  localSpeakingLevel={online.localSpeakingLevel}
-                  speakingLevel={online.speakingLevels[person.id] || 0}
+                  localSpeakingLevel={localSpeakingLevel}
+                  speakingLevel={speakingLevels[person.id] || 0}
                   microphoneMuted={online.microphoneMuted}
                   roomSoundMuted={online.roomSoundMuted}
                   isLocallyMuted={online.mutedPeople.has(person.id)}

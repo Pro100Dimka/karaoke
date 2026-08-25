@@ -6,12 +6,16 @@ import { notCalled, calledWith, verify } from "./helpers/assertions.mjs";
 import { mockUseI18nWithValues } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   roomValue: null,
+  speakingValue: null,
   radioValue: null,
   copyText: vi.fn(),
   pending: false,
   run: vi.fn()
 }));
-vi.mock("../src/contexts/OnlineRoomContext", () => ({ useOnlineRoom: () => mocks.roomValue }));
+vi.mock("../src/contexts/OnlineRoomContext", () => ({
+  useOnlineRoom: () => mocks.roomValue,
+  useOnlineRoomSpeaking: () => mocks.speakingValue
+}));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => mocks.radioValue }));
 vi.mock("../src/utils/clipboard", () => ({ copyText: mocks.copyText }));
 vi.mock("../src/hooks/useExclusiveAsyncAction", () => ({
@@ -32,8 +36,6 @@ const roomValue = (overrides = {}) => ({
     { id: "self", name: "Alice", role: "host", micMuted: false },
     { id: "guest", name: "Bob", role: "guest", micMuted: false }
   ],
-  localSpeakingLevel: 0.7,
-  speakingLevels: { guest: 0.5 },
   microphoneMuted: false,
   roomSoundMuted: false,
   mutedPeople: new Set(),
@@ -53,6 +55,7 @@ const roomValue = (overrides = {}) => ({
 });
 beforeEach(() => {
   mocks.roomValue = roomValue();
+  mocks.speakingValue = { localSpeakingLevel: 0.7, speakingLevels: { guest: 0.5 } };
   mocks.radioValue = {
     isPlaying: false,
     stationId: "one",
@@ -306,14 +309,14 @@ describe("room radio synchronization", () => {
     render(<RoomRadioSync />);
     verify(
       [mocks.roomValue.syncUi, "not.toHaveBeenCalled"],
-      [mocks.radioValue.setStation, "toHaveBeenCalledWith", "two"],
+      [mocks.radioValue.setStation, "toHaveBeenCalledWith", "two", { resume: true }],
       [mocks.radioValue.turnOn, "toHaveBeenCalled"]
     );
   });
   test("applies remote station playback and stop", async () => {
     mocks.roomValue.roomUi = { __eventId: 1, radio: { stationId: "two", isPlaying: true } };
     const view = render(<RoomRadioSync />);
-    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two");
+    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two", { resume: true });
     verify([mocks.radioValue.turnOn, "toHaveBeenCalledWith", expect.objectContaining({ remember: false, fadeIn: true })]);
     await act(async () => Promise.resolve());
     mocks.radioValue = { ...mocks.radioValue, stationId: "two", isPlaying: true };
@@ -341,7 +344,7 @@ describe("room radio synchronization", () => {
       roomUi: { __eventId: 4, radio: { stationId: "two", isPlaying: false } }
     });
     view.rerender(<RoomRadioSync />);
-    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two");
+    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two", { resume: false });
     mocks.roomValue = roomValue({ roomUi: { __eventId: 5, radio: { isPlaying: true } } });
     view.rerender(<RoomRadioSync />);
     expect(mocks.radioValue.turnOn).toHaveBeenCalled();

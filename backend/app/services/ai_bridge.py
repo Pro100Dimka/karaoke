@@ -52,6 +52,10 @@ def release_ai_resources() -> None:
     reset_ai_service()
 
 
+def max_concurrent_jobs() -> int:
+    return get_ai_service().config.max_concurrent_jobs
+
+
 
 def _pitch_frame_to_legacy(frame: PitchFrame) -> dict[str, Any]:
     midi = hz_to_midi(

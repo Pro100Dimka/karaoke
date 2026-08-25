@@ -11,7 +11,7 @@ import tempfile
 import unicodedata
 import wave
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
@@ -193,6 +193,28 @@ def _locked_done_song(db: Session, song_id: str) -> Iterator[models.Song]:
 
 def content_revision_for_song(db: Session, song_id: str) -> str:
     with _locked_done_song(db, song_id) as song: return content_revision(song)
+
+
+def content_revisions_for_songs(
+    db: Session, song_ids: Iterable[str],
+) -> list[tuple[str, str | None, str | None]]:
+    """Fingerprint many songs under one library-lock hold instead of one per song.
+
+    A caller (e.g. a room participant publishing their whole library) that
+    fingerprints N songs one request at a time forces N separate acquisitions
+    of the process-wide library_write_lock, serializing what should be a
+    single batch of reads. Holding it once for the whole list keeps the same
+    per-song locking/error semantics as content_revision_for_song while
+    cutting that contention -- and the request count -- by N.
+    """
+    results: list[tuple[str, str | None, str | None]] = []
+    with song_service.library_write_lock():
+        for song_id in song_ids:
+            try:
+                results.append((song_id, content_revision_for_song(db, song_id), None))
+            except (OSError, ValueError) as exc:
+                results.append((song_id, None, str(exc)))
+    return results
 
 
 def build_package_for_song(

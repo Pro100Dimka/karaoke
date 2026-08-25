@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifacts import publish_files_atomically
-from .audio import decode_audio, duration
+from .audio import audio_buffer_cache, decode_audio, duration
 from .config import CoreConfig
 from .engines.registry import EngineRegistry
 from .engines.text import UniformTextFallback
@@ -113,6 +113,7 @@ class KaraokePipeline:
         with (
             tempfile.TemporaryDirectory(prefix=".ai-clean-", dir=output) as temporary,
             ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai-independent") as parallel,
+            audio_buffer_cache(),
         ):
             work = Path(temporary)
             mix, raw_vocals = work / "mix.wav", work / "vocals.raw.flac"
@@ -202,16 +203,17 @@ class KaraokePipeline:
         request = PipelineRequest(vocals, output, **options)
         reports: list[StageReport] = []
 
-        self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
-        started = time.perf_counter()
-        pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
-        self._stage(reports, "pitch", self.engines.pitch.name, started)
+        with audio_buffer_cache():
+            self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
+            started = time.perf_counter()
+            pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            self._stage(reports, "pitch", self.engines.pitch.name, started)
 
-        self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
-        started = time.perf_counter()
-        words = self._align(vocals, text, request.language, [])
-        words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
-        self._stage(reports, "lyrics", self.engines.aligner.name, started)
+            self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
+            started = time.perf_counter()
+            words = self._align(vocals, text, request.language, [])
+            words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
+            self._stage(reports, "lyrics", self.engines.aligner.name, started)
 
         self._notify(request, "notes", 84, "Построение мелодии голоса")
         started = time.perf_counter()

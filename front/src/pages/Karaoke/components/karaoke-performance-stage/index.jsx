@@ -3,6 +3,7 @@ import { translateSaved as t } from "../../../../i18n/runtime";
 import { Box, Card, Chip, Stack, Typography } from "../../../../theme/ui";
 import { SongCoverArt } from "../../../Library/components";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
+import usePitchDetection from "../../hooks/usePitchDetection";
 import AuroraWorld from "./aurora-world";
 import KaraokeLyrics from "./karaoke-lyrics";
 import MelodyRoll from "./melody-roll";
@@ -16,14 +17,24 @@ export default function KaraokePerformanceStage({
   sceneIntro,
   songId,
   isPlaying,
-  isPitchDetected,
   keyShift,
+  monitorInputDeviceId,
+  monitoringEnabled,
   showLyrics,
   showNotes,
-  notes = [],
-  sungMidi
+  notes = []
 }) {
   const { activeTheme, panoramaRef } = useKaraokePanorama(songId, isPlaying);
+  // Pitch detection publishes React state on every voiced/rest transition
+  // (and while singing, up to ~66 times a second to animate the pursued
+  // note). Calling the hook here instead of in Karaoke/index.jsx keeps that
+  // churn scoped to this stage -- the console, transport controls and
+  // hotkeys wiring above no longer re-render on every pitch sample.
+  const { sungMidi, isPitchDetected } = usePitchDetection({
+    isPlaying,
+    monitorInputDeviceId,
+    monitoringEnabled
+  });
   const videoRef = useRef(null);
   const timerRef = useRef(null);
   const [switching, setSwitching] = useState(false);

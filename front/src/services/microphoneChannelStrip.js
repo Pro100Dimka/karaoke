@@ -13,7 +13,7 @@ export function buildNoiseGateCurve(strength = 0.35) {
   });
 }
 
-export function buildSoftLimiterCurve(drive = 1.12) {
+export function buildSoftLimiterCurve(drive = 1.03) {
   const limit = Math.tanh(drive);
   return curve(CURVES.limiter, (sample) => Math.tanh(sample * drive) / limit);
 }
@@ -32,7 +32,13 @@ export function connectMicrophoneChannelStrip(
   const highpass = assign(context.createBiquadFilter(), { frequency: 70 });
   highpass.type = "highpass";
   const noiseGate = context.createWaveShaper();
-  const presence = assign(context.createBiquadFilter(), { frequency: 2200, gain: 2.5 });
+  // Boosting presence before the compressor makes the compressor's envelope
+  // detector react harder to exactly the frequencies (~2-8kHz) where hiss and
+  // sibilance live, and the following limiter then has to soft-clip that
+  // already-brightened, already-compressed signal -- a combination reported
+  // to sound harsh/hissy to listeners on the receiving end. Trading some
+  // presence/"clarity" for a cleaner signal here.
+  const presence = assign(context.createBiquadFilter(), { frequency: 2200, gain: 1.2 });
   presence.type = "highshelf";
   const compressor = assign(context.createDynamicsCompressor(), {
     threshold: -16,
@@ -41,7 +47,7 @@ export function connectMicrophoneChannelStrip(
     attack: 0.01,
     release: 0.15
   });
-  const makeup = assign(context.createGain(), { gain: 1.08 });
+  const makeup = assign(context.createGain(), { gain: 1.04 });
   const limiter = context.createWaveShaper();
   Object.assign(noiseGate, { curve: buildNoiseGateCurve(noiseSuppression), oversample: "2x" });
   Object.assign(limiter, { curve: buildSoftLimiterCurve(), oversample: "2x" });

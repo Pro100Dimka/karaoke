@@ -200,6 +200,22 @@ export function notesOverlappingWords(notes, words, wordIndices) {
   return ids;
 }
 
+// A full song's melody can hold thousands of notes/words laid out across the
+// whole timeline -- rendering every one of them regardless of scroll position
+// means the DOM holds thousands of buttons/labels nowhere near the viewport.
+// This computes the [start, end] time window actually worth rendering: the
+// visible pixels translated back to seconds, padded with a screen-width of
+// overscan on each side so scrolling doesn't pop content in.
+export function visibleTimeRange({ scrollLeft, clientWidth }, { keyboardWidth, zoom }) {
+  const overscan = Math.max(480, clientWidth * 0.5);
+  const start = (scrollLeft - keyboardWidth - overscan) / zoom;
+  const end = (scrollLeft - keyboardWidth + clientWidth + overscan) / zoom;
+  return [start, end];
+}
+
+export const filterByTimeRange = (items, [start, end]) =>
+  items.filter((item) => item.end >= start && item.start <= end);
+
 // Moves a selected run of word texts [start, end] one slot forward or
 // backward. Either way, the run and everything after it (to the end of the
 // song) shifts by one slot in the same direction, so a misalignment that

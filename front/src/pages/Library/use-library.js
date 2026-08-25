@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useAppDialog } from "../../contexts/AppDialog";
@@ -134,20 +134,36 @@ export default function useLibrary() {
     setRecordingsSong
   });
 
-  const currentSongs = mergeSongProcessingStatus(songsQuery.data, statusQuery.data);
-  const processingSongs = getProcessingSongs(currentSongs);
+  // These are recomputed from scratch (sorting, filtering, merging) rather
+  // than cheap field reads, and this hook re-renders on every unrelated poll
+  // tick (recordings, processing status, room presence) -- without memoizing
+  // them, every one of those ticks redid the work AND hands SongsGrid/
+  // LibraryHero a brand-new array/object identity even when the songs
+  // themselves haven't changed.
+  const currentSongs = useMemo(
+    () => mergeSongProcessingStatus(songsQuery.data, statusQuery.data),
+    [songsQuery.data, statusQuery.data]
+  );
+  const processingSongs = useMemo(() => getProcessingSongs(currentSongs), [currentSongs]);
   useEffect(() => {
     const active = hasActiveSongProcessing(currentSongs);
     setProcessingLoadActive(active);
     return () => setProcessingLoadActive(false);
   }, [currentSongs]);
-  const localSongs = getLocalVisibleSongs(currentSongs, hiddenSongIds);
-  const visibleSongs = resolveVisibleSongs({
-    localSongs,
-    room: room?.room,
-    roomSongs: room?.roomUi?.songs,
-    roomSongsByParticipant: room?.roomUi?.songsByParticipant
-  });
+  const localSongs = useMemo(
+    () => getLocalVisibleSongs(currentSongs, hiddenSongIds),
+    [currentSongs, hiddenSongIds]
+  );
+  const visibleSongs = useMemo(
+    () =>
+      resolveVisibleSongs({
+        localSongs,
+        room: room?.room,
+        roomSongs: room?.roomUi?.songs,
+        roomSongsByParticipant: room?.roomUi?.songsByParticipant
+      }),
+    [localSongs, room?.room, room?.roomUi?.songs, room?.roomUi?.songsByParticipant]
+  );
 
   useEffect(() => {
     if (!room?.room) {
@@ -168,7 +184,7 @@ export default function useLibrary() {
       ) {
         syncQueue.current = syncQueue.current
           .catch(() => {})
-          .then(() => room.syncSong(song))
+          .then(() => room.requestSongSync(song.id, song.__roomOwnerId))
           .then(songsQuery.refresh)
           .catch(() => {});
       }
@@ -212,7 +228,8 @@ export default function useLibrary() {
       transition.current = true;
       try {
         if (room?.room && !localSongs.some(({ id }) => id === song.id)) {
-          await room.syncSong(song);
+          if (!(await room.requestSongSync(song.id, song.__roomOwnerId)))
+            throw new Error(tr("Не удалось получить песню от участника"));
           await songsQuery.refresh();
           if (!room.room.host) {
             transition.current = false;
@@ -259,14 +276,21 @@ export default function useLibrary() {
     }
   }, [dialog, processingSong, songsQuery]);
 
+  const filteredSongs = useMemo(
+    () => arrangeSongs(visibleSongs, query, filters),
+    [visibleSongs, query, filters]
+  );
+  const filterOptions = useMemo(() => getLibraryFilterOptions(visibleSongs), [visibleSongs]);
+  const readyCount = useMemo(() => countReadySongs(visibleSongs), [visibleSongs]);
+
   return {
     analysis,
     closeAnalysis,
     canManageLibrary: !room?.room || room.room.host,
     fileImport,
     fileInputRef,
-    filteredSongs: arrangeSongs(visibleSongs, query, filters),
-    filterOptions: getLibraryFilterOptions(visibleSongs),
+    filteredSongs,
+    filterOptions,
     filters,
     online: {
       open: onlineRoomOpen,
@@ -296,7 +320,7 @@ export default function useLibrary() {
       setSong: setRecordingsSong,
       song: recordingsSong
     },
-    readyCount: countReadySongs(visibleSongs),
+    readyCount,
     room,
     setAnalysis,
     setQuery,

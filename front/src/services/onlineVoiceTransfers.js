@@ -40,7 +40,14 @@ const TRANSFER_CONFIRM_TIMEOUT_MS = 5 * 60_000;
 const TRANSFER_FLUSH_TIMEOUT_MS = 30_000;
 const TRANSFER_CLOSE_TIMEOUT_MS = 30_000;
 const TRANSFER_IMPORT_TIMEOUT_MS = 5 * 60_000;
-const MAX_PENDING_WRITE_BYTES = 512 * 1024;
+// Credit is only replenished once the receiver's disk write of a chunk
+// actually completes (see the file-credit send after transfer.writes settles
+// below), so this window directly caps how many chunks can be in flight
+// before the sender must stall on a write+ack round trip. 512KB (16 chunks
+// at the 32KB chunk size) made every ~16 chunks pay for a full round trip on
+// a local P2P transfer that should otherwise run at line-rate; a much larger
+// window lets many more chunks queue ahead of that gating.
+const MAX_PENDING_WRITE_BYTES = 8 * 1024 * 1024;
 const CLOSED_CHANNEL_STATES = ["closing", "closed"];
 const isValidTransferSize = (size) =>
   Number.isSafeInteger(size) && size >= 0 && size <= MAX_INCOMING_FILE_BYTES;
@@ -333,8 +340,7 @@ function handleFileStart(mesh, participantId, channel, message) {
 export function sendSongSyncError(mesh, participantId, commandId, error) {
   const channel = mesh.channels.get(participantId);
   return (
-    Boolean(channel) &&
-    sendTransferStatus(channel, { type: "song-sync-error", commandId, error })
+    Boolean(channel) && sendTransferStatus(channel, { type: "song-sync-error", commandId, error })
   );
 }
 
@@ -618,7 +624,12 @@ export function setupDataChannel(mesh, participantId, channel) {
       // The data channel itself can close without a full removePeer() (e.g.
       // renegotiation) — surface the same terminal event here so nothing
       // waiting on this transfer is left hanging until a generic timeout.
-      mesh.emitTransferProgress(participantId, "cancelled", incoming.lastPercent, incoming.metadata);
+      mesh.emitTransferProgress(
+        participantId,
+        "cancelled",
+        incoming.lastPercent,
+        incoming.metadata
+      );
     }
     if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
   };

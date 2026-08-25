@@ -22,6 +22,30 @@ def _hash(path: Path) -> str:
     return digest.hexdigest()
 
 
+# is_valid() runs at the start of every song-processing job (via
+# ensure_ready_sync), and for a large checkpoint (e.g. the ~900MB
+# MelBandRoformer) that meant re-reading and re-hashing the entire file from
+# disk on every single request even though it never changes between runs.
+# Caching the digest against the file's (size, mtime) means it's only
+# recomputed when the file has actually been replaced -- by a repair/
+# re-download, which changes its mtime.
+_hash_cache: dict[Path, tuple[int, int, str]] = {}
+_hash_cache_lock = threading.Lock()
+
+
+def _cached_hash(path: Path) -> str:
+    stat = path.stat()
+    key = (stat.st_size, stat.st_mtime_ns)
+    with _hash_cache_lock:
+        cached = _hash_cache.get(path)
+        if cached is not None and cached[:2] == key:
+            return cached[2]
+    digest = _hash(path)
+    with _hash_cache_lock:
+        _hash_cache[path] = (*key, digest)
+    return digest
+
+
 def _size(path: Path) -> int:
     try:
         if path.is_file():
@@ -39,7 +63,7 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
         return (
             path.is_file()
             and path.stat().st_size >= max(1, model.expected_bytes // 2)
-            and (not model.sha256 or _hash(path) == model.sha256)
+            and (not model.sha256 or _cached_hash(path) == model.sha256)
         )
     return path.is_dir() and (path / "config.json").is_file()
 

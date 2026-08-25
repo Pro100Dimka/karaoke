@@ -162,6 +162,24 @@ def test_listing_get_patch_remove_and_package(monkeypatch, tmp_path):
     assert_http_status(409, lambda: songs.export_song_package(current.id, BackgroundTasks(), db=database))
 
 
+def test_get_song_revisions_maps_the_batch_service_result(monkeypatch):
+    database = Mock()
+    patch_attrs(
+        monkeypatch, songs.song_package_service,
+        content_revisions_for_songs=Mock(
+            return_value=[("a", "sha256:a", None), ("missing", None, "Song not found")]
+        ),
+    )
+    response = songs.get_song_revisions(schemas.SongRevisionsRequest(song_ids=["a", "missing"]), database)
+    songs.song_package_service.content_revisions_for_songs.assert_called_once_with(database, ["a", "missing"])
+    assert response == {
+        "revisions": [
+            {"song_id": "a", "revision": "sha256:a", "error": None},
+            {"song_id": "missing", "revision": None, "error": "Song not found"},
+        ]
+    }
+
+
 def test_import_package_streams_and_maps_archive_errors(monkeypatch, tmp_path):
     patch_attrs(monkeypatch, songs.config, DATA_DIR=tmp_path / 'data', CACHE_DIR=tmp_path)
     patch_many(monkeypatch, (songs, "save_upload_limited", AsyncMock()), (songs.song_package_service, "import_package", Mock(return_value="song")))

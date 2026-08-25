@@ -13,7 +13,7 @@ import { translateSaved as t } from "../../../i18n/runtime";
 import Box from "../../ui/Box";
 import PianoKeyboard from "../../ui/PianoKeyboard";
 import { drawPianoRoll } from "./draw";
-import { normalizePianoNotes, pianoRollFrame, PIANO_ROLL_VIEW } from "./geometry";
+import { normalizePianoNotes, pianoPitchRange, pianoRollFrame, PIANO_ROLL_VIEW } from "./geometry";
 
 const color = (style, name, fallback) => style.getPropertyValue(name).trim() || fallback;
 const PixiPianoRoll = lazy(() => import("./pixi-scene"));
@@ -43,15 +43,20 @@ function PianoRoll({
     [keyShift, notes]
   );
   const sung = Number(sungMidi);
+  // The draw loop below runs on every animation frame while playing, so the
+  // pitch range (a full min/max scan over every note) is computed here once
+  // per actual notes/pitch change instead of once per frame inside
+  // pianoRollFrame -- see the comment on pianoRollFrame for why that matters.
+  const pitchRange = useMemo(() => pianoPitchRange(normalized, sung), [normalized, sung]);
   const frame = useMemo(
     () =>
       pianoRollFrame(
         normalized,
         Number(currentTimeRef?.current ?? currentTime) || 0,
         size,
-        sung
+        pitchRange
       ),
-    [currentTime, currentTimeRef, normalized, size, sung]
+    [currentTime, currentTimeRef, normalized, pitchRange, size]
   );
   const draw = useCallback((time) => {
     const canvas = canvasRef.current;
@@ -66,11 +71,11 @@ function PianoRoll({
       canvas.height = Math.round(size.height * ratio);
     }
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    drawPianoRoll(context, pianoRollFrame(normalized, time, size, sung), palette, {
+    drawPianoRoll(context, pianoRollFrame(normalized, time, size, pitchRange), palette, {
       detected: isPitchDetected,
       midi: sung
     });
-  }, [isPitchDetected, normalized, palette, size, sung]);
+  }, [isPitchDetected, normalized, palette, pitchRange, size, sung]);
 
   useLayoutEffect(
     () => draw(Number(currentTimeRef?.current ?? currentTime) || 0),

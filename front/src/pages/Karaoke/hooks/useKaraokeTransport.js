@@ -239,6 +239,11 @@ export default function useKaraokeTransport({
       if (!sessionRef.current && pendingStart && pendingStart.songId === song.id)
         pendingStart.settle = "pause";
       pauseMedia();
+      // setCurrentTime is throttled during playback (see useKaraokeMediaSync),
+      // so the last published value can be briefly behind the exact moment
+      // playback actually stopped -- resync it here rather than leaving the
+      // paused timecode/lyrics highlight a fraction of a second stale.
+      setCurrentTime(instrumental.currentTime);
       lifecycle.paused();
       if (sessionRef.current) await api.pauseRecording(sessionRef.current).catch(() => {});
       if (shouldBroadcast) broadcast("pause", instrumental.currentTime);

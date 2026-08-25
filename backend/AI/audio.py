@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import os
 import subprocess
 import tempfile
@@ -20,9 +21,50 @@ def run_ffmpeg(arguments: list[str], *, timeout: float | None = None) -> subproc
     return result
 
 
+_mono_cache: contextvars.ContextVar[dict[str, tuple[np.ndarray, int]] | None] = contextvars.ContextVar(
+    "audio_mono_cache", default=None
+)
+
+
 @contextmanager
 def audio_buffer_cache():
-    yield
+    """Share one decoded copy of each audio file across a pipeline run.
+
+    vocals.flac is independently read from disk by pitch estimation, voice-
+    activity detection and forced-alignment repair -- up to three full
+    decodes of the same file per song. Anything read via read_mono() while
+    this context is active is cached (keyed by resolved path) so the second
+    and third readers get it for free; the cache is discarded when the
+    context exits so it never leaks between pipeline runs or grows
+    unbounded.
+    """
+    token = _mono_cache.set({})
+    try:
+        yield
+    finally:
+        _mono_cache.reset(token)
+
+
+def read_mono(path: str | Path) -> tuple[np.ndarray, int]:
+    """Decode a (guaranteed single-channel) audio file as float64 mono.
+
+    vocals.flac is always produced single-channel (see
+    prepare_vocal_reference's "-ac 1"), so averaging an always_2d read's one
+    channel is equivalent to a plain mono read, just in the canonical shape
+    every cached caller shares. Returns a fresh array each call so a caller
+    that mutates its copy in place can never corrupt the shared cache entry.
+    """
+    key = str(Path(path).resolve())
+    cache = _mono_cache.get()
+    if cache is not None and key in cache:
+        samples, rate = cache[key]
+        return samples.copy(), rate
+    samples, rate = sf.read(path, always_2d=True, dtype="float64")
+    mono = samples.mean(axis=1)
+    if cache is not None:
+        cache[key] = (mono, rate)
+        return mono.copy(), rate
+    return mono, rate
 
 
 def _render(source: str | Path, target: Path, sample_rate: int, channels: int) -> Path:

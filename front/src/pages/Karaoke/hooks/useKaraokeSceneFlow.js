@@ -31,6 +31,7 @@ const waitForMediaReady = (element) => {
 export default function useKaraokeSceneFlow({
   analysisRecordingIdRef,
   autoStartRequested,
+  roomPrepared,
   hideControls,
   instrumentalRef,
   isPlaying,
@@ -51,22 +52,24 @@ export default function useKaraokeSceneFlow({
   const stageActionTimerRef = useRef(null);
   const autoStartedSongRef = useRef(null);
   const autoStartInFlightRef = useRef(null);
+  const roomRevealedSongRef = useRef(null);
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
-  const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
+  const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested || roomPrepared);
   const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
-  const [sceneTransitioning, setSceneTransitioning] = useState(autoStartRequested);
+  const [sceneTransitioning, setSceneTransitioning] = useState(autoStartRequested || roomPrepared);
 
   useEffect(() => {
     hasStartedPlaybackRef.current = false;
     autoStartedSongRef.current = null;
     autoStartInFlightRef.current = null;
+    roomRevealedSongRef.current = null;
   }, [songId]);
 
   useEffect(() => {
-    if (!autoStartRequested) return undefined;
+    if (!autoStartRequested && !roomPrepared) return undefined;
     const timer = window.setTimeout(() => setGlobalRouteBlackout(false), 80);
     return () => window.clearTimeout(timer);
-  }, [autoStartRequested]);
+  }, [autoStartRequested, roomPrepared]);
 
   const revealStageActions = useCallback(() => {
     setStageActionsVisible(true);
@@ -242,6 +245,21 @@ export default function useKaraokeSceneFlow({
       if (timerId) window.clearTimeout(timerId);
     };
   }, [autoStartRequested, instrumentalRef, showControls, songId, startSongWithIntroRef]);
+
+  useEffect(() => {
+    // A guest's karaoke playback is driven by the room's own transport sync,
+    // not by this hook -- but they should still see the same fade-in/performer
+    // reveal the host gets instead of the song just appearing instantly, so
+    // this replays the same intro visuals without forcing playback itself.
+    if (autoStartRequested || !roomPrepared || !songId || roomRevealedSongRef.current === songId)
+      return undefined;
+    roomRevealedSongRef.current = songId;
+    let cancelled = false;
+    runIntroTransition(() => !cancelled);
+    return () => {
+      cancelled = true;
+    };
+  }, [autoStartRequested, roomPrepared, runIntroTransition, songId]);
 
   return {
     handleStop,

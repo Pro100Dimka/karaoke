@@ -212,6 +212,17 @@ def get_song_revision(song_id: str, db: Session = Depends(get_db)):
     return {"song_id": song_id, "revision": revision}
 
 
+@router.post("/revisions", response_model=schemas.SongRevisionsOut)
+def get_song_revisions(payload: schemas.SongRevisionsRequest, db: Session = Depends(get_db)):
+    results = song_package_service.content_revisions_for_songs(db, payload.song_ids)
+    return {
+        "revisions": [
+            {"song_id": song_id, "revision": revision, "error": error}
+            for song_id, revision, error in results
+        ]
+    }
+
+
 @router.get("/{song_id}/package")
 def export_song_package(
     song_id: str, background_tasks: BackgroundTasks, expected_revision: str | None = None,

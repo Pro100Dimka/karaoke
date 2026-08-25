@@ -321,10 +321,16 @@ export function RadioProvider({ children }) {
   );
   // Stryker restore ArrayDeclaration
   const setStation = useCallback(
-    (nextId) => {
+    (nextId, { resume } = {}) => {
       const next = RADIO_STATIONS.find(({ id }) => id === nextId);
       if (!next || next.id === stationId) return;
-      const shouldResume = isPlaying || isLoading;
+      // Callers that already know the desired end state (e.g. room sync
+      // applying a remote {stationId, isPlaying} pair together) can pass
+      // `resume` explicitly instead of relying on the current `isPlaying`
+      // snapshot -- otherwise a simultaneous station-change + stop signal
+      // would resume playback here just before the caller's own turnOff()
+      // takes effect, since that state update hasn't committed yet.
+      const shouldResume = resume ?? (isPlaying || isLoading);
       playbackVersionRef.current = createVersion();
       audioRef.current.pause();
       stopAnalysis();

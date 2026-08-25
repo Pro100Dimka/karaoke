@@ -1,7 +1,7 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { translateSaved as t } from "../../i18n/runtime";
 import { Box, PianoKeyboard, pianoNoteName, StudioScrollbars, Typography } from "../../theme/ui";
-import { notesOverlappingWords } from "./model";
+import { filterByTimeRange, notesOverlappingWords, visibleTimeRange } from "./model";
 
 function NoteHitTarget({ controller, note, wordHighlighted }) {
   const selected = controller.selected.includes(note._id);
@@ -58,7 +58,7 @@ function NoteHitTarget({ controller, note, wordHighlighted }) {
   );
 }
 
-function EditorScrollbars({ controller }) {
+function useShellScrollState(controller) {
   const frameRef = useRef(0);
   const [scrollState, setScrollState] = useState({
     clientHeight: 1,
@@ -106,6 +106,10 @@ function EditorScrollbars({ controller }) {
     controller.surfaceRef,
     syncScroll
   ]);
+  return { scrollState, syncScroll };
+}
+
+function EditorScrollbars({ controller, scrollState, syncScroll }) {
   return (
     <StudioScrollbars
       keyboardWidth={controller.keyboardWidth}
@@ -121,6 +125,19 @@ function EditorScrollbars({ controller }) {
 }
 
 function EditorSurface({ controller, transport }) {
+  const { scrollState, syncScroll } = useShellScrollState(controller);
+  const range = useMemo(
+    () => visibleTimeRange(scrollState, controller),
+    [controller.keyboardWidth, controller.zoom, scrollState]
+  );
+  const visibleNotes = useMemo(
+    () => filterByTimeRange(controller.notes, range),
+    [controller.notes, range]
+  );
+  const visibleWords = useMemo(
+    () => filterByTimeRange(controller.words, range),
+    [controller.words, range]
+  );
   const highlightedNoteIds = useMemo(
     () => notesOverlappingWords(controller.notes, controller.words, controller.selectedWords),
     [controller.notes, controller.selectedWords, controller.words]
@@ -208,7 +225,7 @@ function EditorSurface({ controller, transport }) {
               backdropFilter: "blur(var(--space-1))"
             }}
           >
-            {controller.words.map((word) => {
+            {visibleWords.map((word) => {
               const wordSelected = controller.selectedWords?.includes(word.index);
               return (
                 <Typography
@@ -246,7 +263,7 @@ function EditorSurface({ controller, transport }) {
                 </Typography>
               );
             })}
-            {controller.words.map((word) => (
+            {visibleWords.map((word) => (
               // Rendered at the word's true start/end pixel position, not
               // nested inside its (possibly minimum-width-padded, see
               // inlineSize above) label box -- a short word's label can be
@@ -282,7 +299,7 @@ function EditorSurface({ controller, transport }) {
               </Box>
             ))}
           </Box>
-          {controller.notes.map((note) => (
+          {visibleNotes.map((note) => (
             <NoteHitTarget
               key={note._id}
               controller={controller}
@@ -350,7 +367,7 @@ function EditorSurface({ controller, transport }) {
           />
         </Box>
       </Box>
-      <EditorScrollbars controller={controller} />
+      <EditorScrollbars controller={controller} scrollState={scrollState} syncScroll={syncScroll} />
     </Box>
   );
 }

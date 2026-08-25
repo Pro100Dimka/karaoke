@@ -133,6 +133,20 @@ class ProcessingStatusOut(BaseModel):
     error_message: str | None = None
 
 
+class SongRevisionsRequest(BaseModel):
+    song_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class SongRevisionResult(BaseModel):
+    song_id: str
+    revision: str | None = None
+    error: str | None = None
+
+
+class SongRevisionsOut(BaseModel):
+    revisions: list[SongRevisionResult]
+
+
 class SongEditorUpdate(BaseModel):
     notes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
     word_texts: list[str] | None = Field(default=None, max_length=20_000)

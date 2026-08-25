@@ -68,6 +68,27 @@ describe("application audio muting", () => {
     hook.unmount();
     expect(inserted.muted).toBe(false);
   });
+  test("forgets a muted element's original state once it's removed from the DOM", async () => {
+    // Regression test: without this, originalMuteStateRef kept one entry
+    // per <audio>/<video> element that ever got muted while room-sound
+    // mute was on, even after the element was removed (e.g. KaraokeMedia
+    // remounting a fresh <audio> per song) -- pinning detached DOM nodes in
+    // memory for as long as the toggle stayed on.
+    const container = document.createElement("section");
+    document.body.append(container);
+    const removed = document.createElement("audio");
+    container.append(removed);
+    const deleteSpy = vi.spyOn(Map.prototype, "delete");
+    const hook = renderHook(() => useApplicationAudioMute(true));
+    await waitFor(() => expect(removed.muted).toBe(true));
+    deleteSpy.mockClear();
+
+    removed.remove();
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(removed));
+
+    hook.unmount();
+    deleteSpy.mockRestore();
+  });
   test("restores audio without mutation observer support", () => {
     const audio = document.createElement("audio");
     document.body.append(audio);

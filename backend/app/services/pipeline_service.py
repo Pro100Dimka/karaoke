@@ -53,7 +53,7 @@ _active_jobs: dict[str, threading.Thread] = {}
 _active_jobs_lock = threading.RLock()
 _processing_condition = threading.Condition(threading.RLock())
 _processing_queue: list[str] = []
-_processing_owner: str | None = None
+_processing_active: set[str] = set()
 _cancelled_jobs: set[str] = set()
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
@@ -574,26 +574,30 @@ def _ensure_cover_extracted(source_path: str, out_dir: Path) -> None:
 
 
 def _acquire_processing_slot(song_id: str) -> bool:
-    global _processing_owner
+    # A strict single global owner meant a purely CPU-bound stage of one
+    # song (lyric search, librosa music analysis) could never run while any
+    # other song held the one slot for its GPU stage, even for a different
+    # user's unrelated song. Waiters still queue up and are admitted in
+    # FIFO order, but now up to max_concurrent_jobs songs can hold a slot at
+    # once, bounded so they don't outrun available GPU memory/compute.
     with _processing_condition:
         if song_id not in _processing_queue:
             _processing_queue.append(song_id)
-        while _processing_owner is not None or _processing_queue[0] != song_id:
+        limit = ai_bridge.max_concurrent_jobs()
+        while len(_processing_active) >= limit or _processing_queue[0] != song_id:
             if _is_cancelled(song_id):
                 _processing_queue.remove(song_id)
                 _processing_condition.notify_all()
                 return False
             _processing_condition.wait(timeout=0.2)
         _processing_queue.pop(0)
-        _processing_owner = song_id
+        _processing_active.add(song_id)
         return True
 
 
 def _release_processing_slot(song_id: str) -> None:
-    global _processing_owner
     with _processing_condition:
-        if _processing_owner == song_id:
-            _processing_owner = None
+        _processing_active.discard(song_id)
         _processing_condition.notify_all()
 
 

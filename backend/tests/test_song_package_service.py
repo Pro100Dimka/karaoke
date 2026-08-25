@@ -1,3 +1,4 @@
+import contextlib
 import json
 import zipfile
 from datetime import UTC, datetime
@@ -143,6 +144,37 @@ def test_package_rejects_missing_runtime_file(monkeypatch, tmp_path):
         pass
     else:
         raise AssertionError("incomplete runtime package must be rejected")
+
+
+def test_content_revisions_for_songs_holds_the_library_lock_once_for_the_whole_batch(monkeypatch):
+    lock_acquisitions = []
+
+    @contextlib.contextmanager
+    def counting_lock():
+        lock_acquisitions.append(1)
+        yield
+
+    def fake_content_revision_for_song(_db, song_id):
+        if song_id == "missing":
+            raise ValueError("Song not found")
+        return f"sha256:{song_id}"
+
+    patch_attrs(monkeypatch, song_package_service.song_service, library_write_lock=counting_lock)
+    patch_attrs(
+        monkeypatch, song_package_service,
+        content_revision_for_song=fake_content_revision_for_song,
+    )
+
+    results = song_package_service.content_revisions_for_songs(None, ["a", "missing", "b"])
+
+    assert results == [
+        ("a", "sha256:a", None),
+        ("missing", None, "Song not found"),
+        ("b", "sha256:b", None),
+    ]
+    # One lock acquisition for the whole batch, not one per song -- that's
+    # the entire point of batching instead of calling this once per song.
+    assert lock_acquisitions == [1]
 
 
 def test_member_path_rejects_traversal():

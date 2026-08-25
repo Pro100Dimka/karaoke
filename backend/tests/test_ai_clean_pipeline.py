@@ -361,7 +361,10 @@ def test_long_ukrainian_alignment_uses_acoustic_ctc_when_qwen_remains_invalid(
             assert model_path == "uk-model"
 
         def align(self, _samples, _rate, canonical, offset):
-            assert canonical == tokens
+            # The acoustic CTC model only ever sees a normalized (casefolded,
+            # letters-only) transcript — never the canonical mixed-case lyric
+            # text — so it can encode every token against its vocabulary.
+            assert canonical == [token.casefold() for token in tokens]
             assert offset == 0
             return [
                 Word(index + 0.2, index + 0.8, token, 0.9, index)

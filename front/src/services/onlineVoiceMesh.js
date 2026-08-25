@@ -1,3 +1,4 @@
+import { api } from "../api/client";
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime";
 import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
@@ -52,6 +53,11 @@ export default class OnlineVoiceMesh {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       throw new Error(translateSaved("Захват микрофона не поддерживается в этом окружении"));
     }
+    // Checked before any await below: two calls to start() landing in the
+    // same tick (e.g. two components each mounting and calling voice.start()
+    // on room join) must not both pass the stale-stream cleanup below and
+    // race to close/null the same microphoneGraph.
+    if (this.startPromise) return this.startPromise;
     const liveStream = this.stream?.getAudioTracks?.().some((track) => track.readyState === "live");
     if (liveStream) return this.stream;
     if (this.stream) {
@@ -61,7 +67,6 @@ export default class OnlineVoiceMesh {
       } else this.stream.getTracks?.().forEach((track) => track.stop());
       this.stream = null;
     }
-    if (this.startPromise) return this.startPromise;
     const { lifecycleVersion } = this;
     let capturedStream;
     const startPromise = navigator.mediaDevices
@@ -81,7 +86,14 @@ export default class OnlineVoiceMesh {
           stream.getTracks().forEach((track) => track.stop());
           throw new Error(translateSaved("Запуск микрофона отменён"));
         }
-        this.microphoneGraph = createStudioMicrophoneGraph(stream);
+        // The graph otherwise defaults to a stale/hardcoded noise-suppression
+        // level until some settings save happens to dispatch
+        // "audio-settings-changed" -- read the persisted value up front so a
+        // room call actually starts with whatever the user last saved.
+        const persistedSettings = await api.getAudioSettings().catch(() => null);
+        this.microphoneGraph = createStudioMicrophoneGraph(stream, {
+          noiseSuppression: persistedSettings?.noise_suppression
+        });
         const outgoingStream = this.microphoneGraph.stream || stream;
         this.stream = outgoingStream;
         outgoingStream.getAudioTracks().forEach((track) => {
@@ -133,9 +145,16 @@ export default class OnlineVoiceMesh {
     const peer = new globalThis.RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }]
     });
-    this.stream?.getTracks().forEach((track) => {
-      peer.addTrack(track, this.stream);
-    });
+    if (this.stream) {
+      this.stream.getTracks().forEach((track) => {
+        peer.addTrack(track, this.stream);
+      });
+      // The microphone was already running when this peer joined, so unlike
+      // the peers start() itself walks and optimizes when the mic first
+      // comes up, nothing has applied bitrate/priority encoding params to
+      // this brand-new peer's senders yet.
+      this.optimizeAudioSenders(peer);
+    }
     const isCurrentPeer = () => this.peers.get(participantId) === peer;
     peer.onicecandidate = ({ candidate }) => {
       if (!candidate || !isCurrentPeer()) return;
@@ -381,7 +400,13 @@ export default class OnlineVoiceMesh {
     // "error"/"cancelled" progress event (OnlineRoomContext's pending song
     // command, syncSong()'s promise) would hang until a generic multi-minute
     // timeout instead of failing right away.
-    if (incoming) this.emitTransferProgress(participantId, "cancelled", incoming.lastPercent, incoming.metadata);
+    if (incoming)
+      this.emitTransferProgress(
+        participantId,
+        "cancelled",
+        incoming.lastPercent,
+        incoming.metadata
+      );
     channel?.close();
     this.channels.delete(participantId);
     if (existed) this.onPeerClosed?.(participantId);

@@ -49,12 +49,12 @@ describe("microphoneChannelStrip", () => {
     const destination = new Node();
     const nodes = connectMicrophoneChannelStrip(context, source, destination);
     expect(created.filters.map((node) => node.type)).toEqual(["highpass", "highshelf"]);
-    same([created.filters[0].frequency.value, 70], [created.filters[1].frequency.value, 2200], [created.filters[1].gain.value, 2.5]);
+    same([created.filters[0].frequency.value, 70], [created.filters[1].frequency.value, 2200], [created.filters[1].gain.value, 1.2]);
     verify(
       [created.compressors, "toHaveLength", 1],
       [created.compressors[0].threshold.value, "toBe", -16],
       [created.gains, "toHaveLength", 1],
-      [created.gains[0].gain.value, "toBe", 1.08],
+      [created.gains[0].gain.value, "toBe", 1.04],
       [created.shapers, "toHaveLength", 2],
       [nodes.noiseGate.curve, "toHaveLength", 4096],
       [nodes.limiter.curve, "toHaveLength", 1024]

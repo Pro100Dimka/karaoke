@@ -107,6 +107,11 @@ function useAudio(open) {
           if (writes.current.get(name) === token) {
             setLocal((current) => ({ ...current, ...saved }));
           }
+          // Anything with a live audio graph already running (the room's
+          // microphone capture chain, Karaoke's own mic settings listener)
+          // reacts to this event -- without it, a setting like noise
+          // suppression only takes effect the next time capture restarts.
+          globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: saved }));
           await settings.refresh();
         } catch (error) {
           await alert(

@@ -1,20 +1,20 @@
 {
   "root": ".",
   "summary": {
-    "cssFiles": 29,
-    "sourceFiles": 237,
-    "selectors": 353,
-    "classesDefined": 104,
+    "cssFiles": 30,
+    "sourceFiles": 238,
+    "selectors": 372,
+    "classesDefined": 106,
     "classesUsed": 72,
-    "unusedClassCandidates": 36,
+    "unusedClassCandidates": 38,
     "dynamicClassCandidates": 0,
     "duplicateSelectors": 13,
-    "repeatedValues": 81,
+    "repeatedValues": 85,
     "breakpoints": 0,
-    "issues": 72,
+    "issues": 74,
     "errors": 0,
     "warnings": 35,
-    "info": 37
+    "info": 39
   },
   "fileStats": [
     {
@@ -93,6 +93,11 @@
       "bytes": 2474
     },
     {
+      "file": "src/theme/ui/Badge/badge.css",
+      "lines": 69,
+      "bytes": 3028
+    },
+    {
       "file": "src/theme/features/ProcessingSignal/processing-signal.css",
       "lines": 68,
       "bytes": 1962
@@ -165,6 +170,177 @@
   ],
   "breakpoints": [],
   "unusedClasses": [
+    {
+      "className": "ui-badge",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 2,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 59,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 60,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 61,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 62,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-left\"]"
+        }
+      ]
+    },
+    {
+      "className": "ui-badge__badge",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 9,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 37,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 38,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-size=\"lg\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 40,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"primary\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 41,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"success\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 42,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"danger\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 43,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"warning\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 44,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"info\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 46,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 54,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 55,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 56,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"bottom-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 57,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"bottom-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 59,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 60,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 61,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 62,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 64,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-invisible]"
+        }
+      ]
+    },
     {
       "className": "ui-box",
       "locations": [
@@ -2324,6 +2500,12 @@
           "selector": ":root"
         },
         {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 37,
+          "column": 38,
+          "selector": ".ui-badge__badge[data-size=\"sm\"]"
+        },
+        {
           "file": "src/theme/ui/Card/card.css",
           "line": 44,
           "column": 5,
@@ -2440,132 +2622,6 @@
       ]
     },
     {
-      "property": "color-token-candidate",
-      "value": "color-mix(in srgb, var(--color-bg-deep)",
-      "locations": [
-        {
-          "file": "src/index.css",
-          "line": 52,
-          "column": 3,
-          "selector": "::-webkit-scrollbar-track"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 5,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 6,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 7,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 8,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 31,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 36,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 82,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"outlined\"],\n  .ui-icon-button[data-variant=\"outline\"]"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 92,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"outlined\"]:hover,\n  .ui-icon-button[data-variant=\"outline\"]:hover"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 109,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"contained\"]"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 18,
-          "column": 5,
-          "selector": ".ui-card"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 508,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 508,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 525,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 548,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"]:is(:hover, :focus-within) .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 623,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"laser\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 623,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"laser\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 635,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"laser\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Modal/modal.css",
-          "line": 9,
-          "column": 5,
-          "selector": ".ui-modal-backdrop"
-        },
-        {
-          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
-          "line": 37,
-          "column": 5,
-          "selector": ".karaoke-effect-dial__control"
-        }
-      ]
-    },
-    {
       "property": "align-items",
       "value": "center",
       "locations": [
@@ -2574,6 +2630,12 @@
           "line": 9,
           "column": 5,
           "selector": ".ui-processing-signal"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 18,
+          "column": 5,
+          "selector": ".ui-badge__badge"
         },
         {
           "file": "src/theme/ui/Button/button.css",
@@ -2708,6 +2770,12 @@
           "selector": ".ui-processing-signal strong"
         },
         {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 15,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
           "file": "src/theme/ui/Button/button.css",
           "line": 38,
           "column": 5,
@@ -2814,6 +2882,132 @@
           "line": 114,
           "column": 5,
           "selector": ".ui-tooltip[data-placement=\"right\"]::after"
+        }
+      ]
+    },
+    {
+      "property": "color-token-candidate",
+      "value": "color-mix(in srgb, var(--color-bg-deep)",
+      "locations": [
+        {
+          "file": "src/index.css",
+          "line": 52,
+          "column": 3,
+          "selector": "::-webkit-scrollbar-track"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 5,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 6,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 7,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 8,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 31,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 36,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 82,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"outlined\"],\n  .ui-icon-button[data-variant=\"outline\"]"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 92,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"outlined\"]:hover,\n  .ui-icon-button[data-variant=\"outline\"]:hover"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 109,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"contained\"]"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 18,
+          "column": 5,
+          "selector": ".ui-card"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 508,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 508,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 525,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 548,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"]:is(:hover, :focus-within) .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 623,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"laser\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 623,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"laser\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 635,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"laser\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Modal/modal.css",
+          "line": 9,
+          "column": 5,
+          "selector": ".ui-modal-backdrop"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 37,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__control"
         }
       ]
     },
@@ -2938,6 +3132,120 @@
       ]
     },
     {
+      "property": "position",
+      "value": "relative",
+      "locations": [
+        {
+          "file": "src/theme/features/ProcessingSignal/processing-signal.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-processing-signal"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 7,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 157,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"contained\"] .ui-button-start-icon,\n  .ui-button[data-variant=\"contained\"]> :not(.ui-button-start-icon)"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 15,
+          "column": 5,
+          "selector": ".ui-card"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 24,
+          "column": 5,
+          "selector": ".ui-card"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 113,
+          "column": 5,
+          "selector": ".ui-card--neon"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 284,
+          "column": 5,
+          "selector": ".ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 356,
+          "column": 5,
+          "selector": ".ui-card__content"
+        },
+        {
+          "file": "src/theme/ui/Progress/progress.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-progress"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".karaoke-effect-dial"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 23,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__control"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-select-root"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-switch"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 14,
+          "column": 5,
+          "selector": ".ui-tab"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 9,
+          "column": 5,
+          "selector": ".ui-text-field"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 120,
+          "column": 5,
+          "selector": ".ui-text-field-input"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 154,
+          "column": 5,
+          "selector": ".ui-text-field-slot"
+        }
+      ]
+    },
+    {
       "property": "inline-size",
       "value": "100%",
       "locations": [
@@ -3048,114 +3356,6 @@
           "line": 123,
           "column": 5,
           "selector": ".ui-text-field-input"
-        }
-      ]
-    },
-    {
-      "property": "position",
-      "value": "relative",
-      "locations": [
-        {
-          "file": "src/theme/features/ProcessingSignal/processing-signal.css",
-          "line": 4,
-          "column": 5,
-          "selector": ".ui-processing-signal"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 7,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 157,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"contained\"] .ui-button-start-icon,\n  .ui-button[data-variant=\"contained\"]> :not(.ui-button-start-icon)"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 15,
-          "column": 5,
-          "selector": ".ui-card"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 24,
-          "column": 5,
-          "selector": ".ui-card"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 113,
-          "column": 5,
-          "selector": ".ui-card--neon"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 284,
-          "column": 5,
-          "selector": ".ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 356,
-          "column": 5,
-          "selector": ".ui-card__content"
-        },
-        {
-          "file": "src/theme/ui/Progress/progress.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-progress"
-        },
-        {
-          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".karaoke-effect-dial"
-        },
-        {
-          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
-          "line": 23,
-          "column": 5,
-          "selector": ".karaoke-effect-dial__control"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-select-root"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 4,
-          "column": 5,
-          "selector": ".ui-switch"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 14,
-          "column": 5,
-          "selector": ".ui-tab"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 9,
-          "column": 5,
-          "selector": ".ui-text-field"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 120,
-          "column": 5,
-          "selector": ".ui-text-field-input"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 154,
-          "column": 5,
-          "selector": ".ui-text-field-slot"
         }
       ]
     },
@@ -3358,6 +3558,198 @@
       ]
     },
     {
+      "property": "display",
+      "value": "inline-flex",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-badge"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 17,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 8,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 52,
+          "column": 5,
+          "selector": ".ui-button-start-icon"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-chip"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 88,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__value-editor"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 43,
+          "column": 5,
+          "selector": ".ui-select-start-icon,\n  .ui-select-end-icon,\n  .ui-select-actions"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 178,
+          "column": 5,
+          "selector": ".ui-select-option-mark,\n  .ui-select-option-icon"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 108,
+          "column": 5,
+          "selector": ".ui-switch-label"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 22,
+          "column": 5,
+          "selector": ".ui-tab"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 47,
+          "column": 5,
+          "selector": ".ui-tab-icon"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 76,
+          "column": 5,
+          "selector": ".ui-text-field-label-row"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 156,
+          "column": 5,
+          "selector": ".ui-text-field-slot"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-tooltip-trigger"
+        },
+        {
+          "file": "src/theme/ui/_internal/FieldLabel/field-label.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-field-label-row"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": ".75rem",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 38,
+          "column": 61,
+          "selector": ".ui-badge__badge[data-size=\"lg\"]"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 16,
+          "column": 69,
+          "selector": ".ui-chip[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/NumberField/number-field.css",
+          "line": 65,
+          "column": 5,
+          "selector": ".ui-number-field-step > svg"
+        },
+        {
+          "file": "src/theme/ui/NumberField/number-field.css",
+          "line": 66,
+          "column": 5,
+          "selector": ".ui-number-field-step > svg"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 9,
+          "column": 5,
+          "selector": ".ui-slider-control"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 51,
+          "column": 5,
+          "selector": ".ui-slider::-webkit-slider-thumb"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 82,
+          "column": 5,
+          "selector": ".ui-slider::-moz-range-thumb"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 43,
+          "column": 5,
+          "selector": ".ui-switch:checked"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 51,
+          "column": 5,
+          "selector": ".ui-switch:checked::before"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 60,
+          "column": 5,
+          "selector": ".ui-switch[data-size=\"xs\"]"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 95,
+          "column": 5,
+          "selector": ".ui-switch-control"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 41,
+          "column": 5,
+          "selector": ".ui-text-field-outline legend"
+        },
+        {
+          "file": "src/theme/ui/Typography/typography.css",
+          "line": 64,
+          "column": 5,
+          "selector": ".ui-typography[data-variant=\"caption\"]"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 10,
+          "column": 5,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 13,
+          "column": 5,
+          "selector": ":root"
+        }
+      ]
+    },
+    {
       "property": "size-token-candidate",
       "value": "1.125rem",
       "locations": [
@@ -3448,180 +3840,6 @@
       ]
     },
     {
-      "property": "size-token-candidate",
-      "value": ".75rem",
-      "locations": [
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 16,
-          "column": 69,
-          "selector": ".ui-chip[data-size=\"sm\"]"
-        },
-        {
-          "file": "src/theme/ui/NumberField/number-field.css",
-          "line": 65,
-          "column": 5,
-          "selector": ".ui-number-field-step > svg"
-        },
-        {
-          "file": "src/theme/ui/NumberField/number-field.css",
-          "line": 66,
-          "column": 5,
-          "selector": ".ui-number-field-step > svg"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 9,
-          "column": 5,
-          "selector": ".ui-slider-control"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 51,
-          "column": 5,
-          "selector": ".ui-slider::-webkit-slider-thumb"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 82,
-          "column": 5,
-          "selector": ".ui-slider::-moz-range-thumb"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 43,
-          "column": 5,
-          "selector": ".ui-switch:checked"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 51,
-          "column": 5,
-          "selector": ".ui-switch:checked::before"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 60,
-          "column": 5,
-          "selector": ".ui-switch[data-size=\"xs\"]"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 95,
-          "column": 5,
-          "selector": ".ui-switch-control"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 41,
-          "column": 5,
-          "selector": ".ui-text-field-outline legend"
-        },
-        {
-          "file": "src/theme/ui/Typography/typography.css",
-          "line": 64,
-          "column": 5,
-          "selector": ".ui-typography[data-variant=\"caption\"]"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 10,
-          "column": 5,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 13,
-          "column": 5,
-          "selector": ":root"
-        }
-      ]
-    },
-    {
-      "property": "display",
-      "value": "inline-flex",
-      "locations": [
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 8,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 52,
-          "column": 5,
-          "selector": ".ui-button-start-icon"
-        },
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-chip"
-        },
-        {
-          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
-          "line": 88,
-          "column": 5,
-          "selector": ".karaoke-effect-dial__value-editor"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 43,
-          "column": 5,
-          "selector": ".ui-select-start-icon,\n  .ui-select-end-icon,\n  .ui-select-actions"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 178,
-          "column": 5,
-          "selector": ".ui-select-option-mark,\n  .ui-select-option-icon"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 108,
-          "column": 5,
-          "selector": ".ui-switch-label"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 22,
-          "column": 5,
-          "selector": ".ui-tab"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 47,
-          "column": 5,
-          "selector": ".ui-tab-icon"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 76,
-          "column": 5,
-          "selector": ".ui-text-field-label-row"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 156,
-          "column": 5,
-          "selector": ".ui-text-field-slot"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-tooltip-trigger"
-        },
-        {
-          "file": "src/theme/ui/_internal/FieldLabel/field-label.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-field-label-row"
-        }
-      ]
-    },
-    {
       "property": "color-token-candidate",
       "value": "color-mix(in srgb, var(--color-primary)",
       "locations": [
@@ -3690,6 +3908,150 @@
           "line": 119,
           "column": 5,
           "selector": ".ui-modal-title-media"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": "1.5rem",
+      "locations": [
+        {
+          "file": "src/theme/tokens.css",
+          "line": 5,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/tokens.css",
+          "line": 63,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 38,
+          "column": 38,
+          "selector": ".ui-badge__badge[data-size=\"lg\"]"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 525,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 20,
+          "column": 5,
+          "selector": ".ui-slider"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 7,
+          "column": 5,
+          "selector": ".ui-switch"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 54,
+          "column": 5,
+          "selector": ".ui-text-field-legend-accessory"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 100,
+          "column": 5,
+          "selector": ".ui-text-field-label-row .ui-icon-button"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 101,
+          "column": 5,
+          "selector": ".ui-text-field-label-row .ui-icon-button"
+        },
+        {
+          "file": "src/theme/ui/Typography/typography.css",
+          "line": 31,
+          "column": 5,
+          "selector": ".ui-typography[data-variant=\"h3\"]"
+        },
+        {
+          "file": "src/theme/ui/Typography/typography.css",
+          "line": 36,
+          "column": 5,
+          "selector": ".ui-typography[data-variant=\"h4\"]"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": "1.25rem",
+      "locations": [
+        {
+          "file": "src/theme/tokens.css",
+          "line": 62,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 12,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 529,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 539,
+          "column": 5,
+          "selector": ".ui-card--neon[data-variant=\"aurora\"]:is(:hover, :focus-within) .ui-card__glow"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 104,
+          "column": 57,
+          "selector": ".ui-slider[data-size=\"lg\"]"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 54,
+          "column": 5,
+          "selector": ".ui-switch:checked::before"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 66,
+          "column": 5,
+          "selector": ".ui-switch[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 127,
+          "column": 7,
+          "selector": ".ui-switch:checked:not(:disabled):hover::before"
+        },
+        {
+          "file": "src/theme/ui/Typography/typography.css",
+          "line": 36,
+          "column": 5,
+          "selector": ".ui-typography[data-variant=\"h4\"]"
+        },
+        {
+          "file": "src/theme/ui/Typography/typography.css",
+          "line": 41,
+          "column": 5,
+          "selector": ".ui-typography[data-variant=\"h5\"]"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 21,
+          "column": 5,
+          "selector": ":root"
         }
       ]
     },
@@ -4108,134 +4470,68 @@
       ]
     },
     {
-      "property": "size-token-candidate",
-      "value": "1.5rem",
+      "property": "white-space",
+      "value": "nowrap",
       "locations": [
         {
-          "file": "src/theme/tokens.css",
-          "line": 5,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/tokens.css",
-          "line": 63,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 525,
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 30,
           "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
+          "selector": ".ui-badge__badge"
         },
         {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 20,
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 13,
           "column": 5,
-          "selector": ".ui-slider"
+          "selector": ".ui-chip"
         },
         {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 7,
+          "file": "src/theme/ui/FolderField/folder-field.css",
+          "line": 6,
           "column": 5,
-          "selector": ".ui-switch"
+          "selector": ".ui-folder-field-input"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 67,
+          "column": 5,
+          "selector": ".ui-select-value"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 214,
+          "column": 5,
+          "selector": ".ui-select-option-label"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 225,
+          "column": 5,
+          "selector": ".ui-select-option-description"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 61,
+          "column": 5,
+          "selector": ".ui-tab-label"
         },
         {
           "file": "src/theme/ui/TextField/text-field.css",
-          "line": 54,
+          "line": 43,
           "column": 5,
-          "selector": ".ui-text-field-legend-accessory"
+          "selector": ".ui-text-field-outline legend"
         },
         {
           "file": "src/theme/ui/TextField/text-field.css",
-          "line": 100,
+          "line": 96,
           "column": 5,
-          "selector": ".ui-text-field-label-row .ui-icon-button"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 101,
-          "column": 5,
-          "selector": ".ui-text-field-label-row .ui-icon-button"
+          "selector": ".ui-text-field-label"
         },
         {
           "file": "src/theme/ui/Typography/typography.css",
-          "line": 31,
+          "line": 85,
           "column": 5,
-          "selector": ".ui-typography[data-variant=\"h3\"]"
-        },
-        {
-          "file": "src/theme/ui/Typography/typography.css",
-          "line": 36,
-          "column": 5,
-          "selector": ".ui-typography[data-variant=\"h4\"]"
-        }
-      ]
-    },
-    {
-      "property": "size-token-candidate",
-      "value": "1.25rem",
-      "locations": [
-        {
-          "file": "src/theme/tokens.css",
-          "line": 62,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 529,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"] .ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 539,
-          "column": 5,
-          "selector": ".ui-card--neon[data-variant=\"aurora\"]:is(:hover, :focus-within) .ui-card__glow"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 104,
-          "column": 57,
-          "selector": ".ui-slider[data-size=\"lg\"]"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 54,
-          "column": 5,
-          "selector": ".ui-switch:checked::before"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 66,
-          "column": 5,
-          "selector": ".ui-switch[data-size=\"sm\"]"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 127,
-          "column": 7,
-          "selector": ".ui-switch:checked:not(:disabled):hover::before"
-        },
-        {
-          "file": "src/theme/ui/Typography/typography.css",
-          "line": 36,
-          "column": 5,
-          "selector": ".ui-typography[data-variant=\"h4\"]"
-        },
-        {
-          "file": "src/theme/ui/Typography/typography.css",
-          "line": 41,
-          "column": 5,
-          "selector": ".ui-typography[data-variant=\"h5\"]"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 21,
-          "column": 5,
-          "selector": ":root"
+          "selector": ".ui-typography[data-nowrap=\"true\"]"
         }
       ]
     },
@@ -4296,6 +4592,66 @@
           "line": 63,
           "column": 5,
           "selector": ".ui-text-field:focus-within .ui-text-field-outline"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": "2px",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 23,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 51,
+          "column": 5,
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 69,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__knob::before"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 51,
+          "column": 5,
+          "selector": ".ui-slider::-webkit-slider-thumb"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 82,
+          "column": 5,
+          "selector": ".ui-slider::-moz-range-thumb"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 141,
+          "column": 5,
+          "selector": ".ui-slider:focus-visible::-webkit-slider-thumb"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 51,
+          "column": 5,
+          "selector": ".ui-switch:checked::before"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 34,
+          "column": 5,
+          "selector": ".ui-tab[data-active]::after"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 39,
+          "column": 5,
+          "selector": ".ui-tab:focus-visible"
         }
       ]
     },
@@ -4600,66 +4956,6 @@
       ]
     },
     {
-      "property": "white-space",
-      "value": "nowrap",
-      "locations": [
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 13,
-          "column": 5,
-          "selector": ".ui-chip"
-        },
-        {
-          "file": "src/theme/ui/FolderField/folder-field.css",
-          "line": 6,
-          "column": 5,
-          "selector": ".ui-folder-field-input"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 67,
-          "column": 5,
-          "selector": ".ui-select-value"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 214,
-          "column": 5,
-          "selector": ".ui-select-option-label"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 225,
-          "column": 5,
-          "selector": ".ui-select-option-description"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 61,
-          "column": 5,
-          "selector": ".ui-tab-label"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 43,
-          "column": 5,
-          "selector": ".ui-text-field-outline legend"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 96,
-          "column": 5,
-          "selector": ".ui-text-field-label"
-        },
-        {
-          "file": "src/theme/ui/Typography/typography.css",
-          "line": 85,
-          "column": 5,
-          "selector": ".ui-typography[data-nowrap=\"true\"]"
-        }
-      ]
-    },
-    {
       "property": "display",
       "value": "flex",
       "locations": [
@@ -4770,6 +5066,114 @@
           "line": 54,
           "column": 5,
           "selector": ".ui-tab-icon > svg"
+        }
+      ]
+    },
+    {
+      "property": "justify-content",
+      "value": "center",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 19,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 10,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 54,
+          "column": 5,
+          "selector": ".ui-button-start-icon"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 5,
+          "column": 5,
+          "selector": ".ui-chip"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 45,
+          "column": 5,
+          "selector": ".ui-select-start-icon,\n  .ui-select-end-icon,\n  .ui-select-actions"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 180,
+          "column": 5,
+          "selector": ".ui-select-option-mark,\n  .ui-select-option-icon"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 49,
+          "column": 5,
+          "selector": ".ui-tab-icon"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 158,
+          "column": 5,
+          "selector": ".ui-text-field-slot"
+        }
+      ]
+    },
+    {
+      "property": "pointer-events",
+      "value": "none",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 31,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 43,
+          "column": 5,
+          "selector": ".ui-button::before"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 139,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"contained\"]::before"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 152,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"contained\"]::after"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 146,
+          "column": 5,
+          "selector": ".ui-card__fx"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 29,
+          "column": 5,
+          "selector": ".ui-text-field-outline"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 80,
+          "column": 5,
+          "selector": ".ui-text-field-label-row"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 27,
+          "column": 5,
+          "selector": ".ui-tooltip"
         }
       ]
     },
@@ -4926,102 +5330,6 @@
           "line": 3,
           "column": 5,
           "selector": ".ui-typography"
-        }
-      ]
-    },
-    {
-      "property": "justify-content",
-      "value": "center",
-      "locations": [
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 10,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 54,
-          "column": 5,
-          "selector": ".ui-button-start-icon"
-        },
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 5,
-          "column": 5,
-          "selector": ".ui-chip"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 45,
-          "column": 5,
-          "selector": ".ui-select-start-icon,\n  .ui-select-end-icon,\n  .ui-select-actions"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 180,
-          "column": 5,
-          "selector": ".ui-select-option-mark,\n  .ui-select-option-icon"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 49,
-          "column": 5,
-          "selector": ".ui-tab-icon"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 158,
-          "column": 5,
-          "selector": ".ui-text-field-slot"
-        }
-      ]
-    },
-    {
-      "property": "pointer-events",
-      "value": "none",
-      "locations": [
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 43,
-          "column": 5,
-          "selector": ".ui-button::before"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 139,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"contained\"]::before"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 152,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"contained\"]::after"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 146,
-          "column": 5,
-          "selector": ".ui-card__fx"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 29,
-          "column": 5,
-          "selector": ".ui-text-field-outline"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 80,
-          "column": 5,
-          "selector": ".ui-text-field-label-row"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 27,
-          "column": 5,
-          "selector": ".ui-tooltip"
         }
       ]
     },
@@ -5315,54 +5623,6 @@
     },
     {
       "property": "size-token-candidate",
-      "value": "2px",
-      "locations": [
-        {
-          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
-          "line": 69,
-          "column": 5,
-          "selector": ".karaoke-effect-dial__knob::before"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 51,
-          "column": 5,
-          "selector": ".ui-slider::-webkit-slider-thumb"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 82,
-          "column": 5,
-          "selector": ".ui-slider::-moz-range-thumb"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 141,
-          "column": 5,
-          "selector": ".ui-slider:focus-visible::-webkit-slider-thumb"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 51,
-          "column": 5,
-          "selector": ".ui-switch:checked::before"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 34,
-          "column": 5,
-          "selector": ".ui-tab[data-active]::after"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 39,
-          "column": 5,
-          "selector": ".ui-tab:focus-visible"
-        }
-      ]
-    },
-    {
-      "property": "size-token-candidate",
       "value": "0.0625rem",
       "locations": [
         {
@@ -5484,6 +5744,132 @@
           "line": 4,
           "column": 5,
           "selector": ":root"
+        }
+      ]
+    },
+    {
+      "property": "z-index",
+      "value": "1",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 16,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 158,
+          "column": 5,
+          "selector": ".ui-button[data-variant=\"contained\"] .ui-button-start-icon,\n  .ui-button[data-variant=\"contained\"]> :not(.ui-button-start-icon)"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 189,
+          "column": 5,
+          "selector": ".ui-card__glow-mid"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 57,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__knob"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 121,
+          "column": 5,
+          "selector": ".ui-text-field-input"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 155,
+          "column": 5,
+          "selector": ".ui-text-field-slot"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": ".3125rem",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 22,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 29,
+          "column": 5,
+          "selector": ".ui-slider::-webkit-slider-runnable-track"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 46,
+          "column": 5,
+          "selector": ".ui-slider::-webkit-slider-thumb"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 61,
+          "column": 5,
+          "selector": ".ui-slider::-moz-range-track"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 67,
+          "column": 5,
+          "selector": ".ui-slider::-moz-range-progress"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 103,
+          "column": 32,
+          "selector": ".ui-slider[data-size=\"md\"]"
+        }
+      ]
+    },
+    {
+      "property": "padding",
+      "value": "0",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 50,
+          "column": 5,
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 45,
+          "column": 5,
+          "selector": ".ui-chip-remove"
+        },
+        {
+          "file": "src/theme/ui/Modal/modal.css",
+          "line": 71,
+          "column": 5,
+          "selector": ".ui-modal-close"
+        },
+        {
+          "file": "src/theme/ui/NumberField/number-field.css",
+          "line": 20,
+          "column": 5,
+          "selector": ".ui-number-field > .ui-text-field-slot:last-child"
+        },
+        {
+          "file": "src/theme/ui/NumberField/number-field.css",
+          "line": 38,
+          "column": 5,
+          "selector": ".ui-number-field-step"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 38,
+          "column": 5,
+          "selector": ".ui-text-field-outline legend"
         }
       ]
     },
@@ -5698,6 +6084,42 @@
       ]
     },
     {
+      "property": "box-sizing",
+      "value": "border-box",
+      "locations": [
+        {
+          "file": "src/index.css",
+          "line": 7,
+          "column": 3,
+          "selector": "*,\n*::before,\n*::after"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 32,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Box/box.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-box"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 92,
+          "column": 5,
+          "selector": ".ui-select-popover"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 33,
+          "column": 5,
+          "selector": ".ui-control"
+        }
+      ]
+    },
+    {
       "property": "overflow",
       "value": "visible",
       "locations": [
@@ -5806,6 +6228,150 @@
       ]
     },
     {
+      "property": "size-token-candidate",
+      "value": ".125rem",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 33,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 121,
+          "column": 5,
+          "selector": ".ui-select-options"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 28,
+          "column": 5,
+          "selector": ".ui-switch::before"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 23,
+          "column": 5,
+          "selector": ":root"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 24,
+          "column": 5,
+          "selector": ":root"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": ".625rem",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 37,
+          "column": 59,
+          "selector": ".ui-badge__badge[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 47,
+          "column": 5,
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 48,
+          "column": 5,
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 49,
+          "column": 5,
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 9,
+          "column": 5,
+          "selector": ":root"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": ".25rem",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 37,
+          "column": 83,
+          "selector": ".ui-badge__badge[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/FolderField/folder-field.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-folder-field-input"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 102,
+          "column": 32,
+          "selector": ".ui-slider[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 141,
+          "column": 5,
+          "selector": ".ui-slider:focus-visible::-webkit-slider-thumb"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 79,
+          "column": 5,
+          "selector": ".ui-switch:focus-visible"
+        }
+      ]
+    },
+    {
+      "property": "inset-block-start",
+      "value": "0",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 54,
+          "column": 47,
+          "selector": ".ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 55,
+          "column": 46,
+          "selector": ".ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Modal/modal.css",
+          "line": 67,
+          "column": 5,
+          "selector": ".ui-modal-close"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 67,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__knob::before"
+        },
+        {
+          "file": "src/theme/ui/TextField/text-field.css",
+          "line": 108,
+          "column": 5,
+          "selector": ".ui-text-field:focus-within .ui-text-field-label-row,\n  .ui-text-field[data-filled] .ui-text-field-label-row,\n  .ui-text-field:has(.ui-text-field-input:not(:placeholder-shown)) .ui-text-field-label-row"
+        }
+      ]
+    },
+    {
       "property": "inline-size",
       "value": "auto",
       "locations": [
@@ -5838,78 +6404,6 @@
           "line": 149,
           "column": 5,
           "selector": ".ui-modal-title-actions"
-        }
-      ]
-    },
-    {
-      "property": "z-index",
-      "value": "1",
-      "locations": [
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 158,
-          "column": 5,
-          "selector": ".ui-button[data-variant=\"contained\"] .ui-button-start-icon,\n  .ui-button[data-variant=\"contained\"]> :not(.ui-button-start-icon)"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 189,
-          "column": 5,
-          "selector": ".ui-card__glow-mid"
-        },
-        {
-          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
-          "line": 57,
-          "column": 5,
-          "selector": ".karaoke-effect-dial__knob"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 121,
-          "column": 5,
-          "selector": ".ui-text-field-input"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 155,
-          "column": 5,
-          "selector": ".ui-text-field-slot"
-        }
-      ]
-    },
-    {
-      "property": "padding",
-      "value": "0",
-      "locations": [
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 45,
-          "column": 5,
-          "selector": ".ui-chip-remove"
-        },
-        {
-          "file": "src/theme/ui/Modal/modal.css",
-          "line": 71,
-          "column": 5,
-          "selector": ".ui-modal-close"
-        },
-        {
-          "file": "src/theme/ui/NumberField/number-field.css",
-          "line": 20,
-          "column": 5,
-          "selector": ".ui-number-field > .ui-text-field-slot:last-child"
-        },
-        {
-          "file": "src/theme/ui/NumberField/number-field.css",
-          "line": 38,
-          "column": 5,
-          "selector": ".ui-number-field-step"
-        },
-        {
-          "file": "src/theme/ui/TextField/text-field.css",
-          "line": 38,
-          "column": 5,
-          "selector": ".ui-text-field-outline legend"
         }
       ]
     },
@@ -6018,72 +6512,6 @@
           "line": 120,
           "column": 5,
           "selector": ".ui-tooltip[data-placement=\"right\"]::after"
-        }
-      ]
-    },
-    {
-      "property": "size-token-candidate",
-      "value": ".3125rem",
-      "locations": [
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 29,
-          "column": 5,
-          "selector": ".ui-slider::-webkit-slider-runnable-track"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 46,
-          "column": 5,
-          "selector": ".ui-slider::-webkit-slider-thumb"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 61,
-          "column": 5,
-          "selector": ".ui-slider::-moz-range-track"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 67,
-          "column": 5,
-          "selector": ".ui-slider::-moz-range-progress"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 103,
-          "column": 32,
-          "selector": ".ui-slider[data-size=\"md\"]"
-        }
-      ]
-    },
-    {
-      "property": "box-sizing",
-      "value": "border-box",
-      "locations": [
-        {
-          "file": "src/index.css",
-          "line": 7,
-          "column": 3,
-          "selector": "*,\n*::before,\n*::after"
-        },
-        {
-          "file": "src/theme/ui/Box/box.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-box"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 92,
-          "column": 5,
-          "selector": ".ui-select-popover"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 33,
-          "column": 5,
-          "selector": ".ui-control"
         }
       ]
     },
@@ -6232,6 +6660,66 @@
         {
           "file": "src/theme/ui/_internal/base.css",
           "line": 6,
+          "column": 5,
+          "selector": ":root"
+        }
+      ]
+    },
+    {
+      "property": "line-height",
+      "value": "1",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 29,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 20,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 19,
+          "column": 5,
+          "selector": ".karaoke-effect-dial__label"
+        },
+        {
+          "file": "src/theme/ui/RotaryKnob/rotary-knob.css",
+          "line": 84,
+          "column": 5,
+          "selector": ".karaoke-effect-dial strong,\n  .karaoke-effect-dial__value-editor"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": ".5rem",
+      "locations": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 33,
+          "column": 5,
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 11,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/Slider/slider.css",
+          "line": 91,
+          "column": 5,
+          "selector": ".ui-slider-value"
+        },
+        {
+          "file": "src/theme/ui/_internal/base.css",
+          "line": 8,
           "column": 5,
           "selector": ":root"
         }
@@ -6418,36 +6906,6 @@
       ]
     },
     {
-      "property": "size-token-candidate",
-      "value": ".25rem",
-      "locations": [
-        {
-          "file": "src/theme/ui/FolderField/folder-field.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-folder-field-input"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 102,
-          "column": 32,
-          "selector": ".ui-slider[data-size=\"sm\"]"
-        },
-        {
-          "file": "src/theme/ui/Slider/slider.css",
-          "line": 141,
-          "column": 5,
-          "selector": ".ui-slider:focus-visible::-webkit-slider-thumb"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 79,
-          "column": 5,
-          "selector": ".ui-switch:focus-visible"
-        }
-      ]
-    },
-    {
       "property": "aspect-ratio",
       "value": "1",
       "locations": [
@@ -6504,36 +6962,6 @@
           "line": 131,
           "column": 5,
           "selector": ".ui-text-field-input"
-        }
-      ]
-    },
-    {
-      "property": "size-token-candidate",
-      "value": ".125rem",
-      "locations": [
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 121,
-          "column": 5,
-          "selector": ".ui-select-options"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 28,
-          "column": 5,
-          "selector": ".ui-switch::before"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 23,
-          "column": 5,
-          "selector": ":root"
-        },
-        {
-          "file": "src/theme/ui/_internal/base.css",
-          "line": 24,
-          "column": 5,
-          "selector": ":root"
         }
       ]
     },
@@ -7342,6 +7770,187 @@
           "column": 3,
           "context": "@layer ui.components",
           "selector": ".ui-field-label-row"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .ui-badge не найден в статическом исходном коде.",
+      "file": "src/theme/ui/Badge/badge.css",
+      "line": 2,
+      "selector": ".ui-badge",
+      "details": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 2,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 59,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 60,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 61,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 62,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-left\"]"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .ui-badge__badge не найден в статическом исходном коде.",
+      "file": "src/theme/ui/Badge/badge.css",
+      "line": 9,
+      "selector": ".ui-badge__badge",
+      "details": [
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 9,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 37,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-size=\"sm\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 38,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-size=\"lg\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 40,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"primary\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 41,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"success\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 42,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"danger\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 43,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"warning\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 44,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-tone=\"info\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 46,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-variant=\"dot\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 54,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 55,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 56,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"bottom-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 57,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-anchor=\"bottom-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 59,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 60,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"top-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 61,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-right\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 62,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge[data-overlap=\"circular\"] > .ui-badge__badge[data-anchor=\"bottom-left\"]"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 64,
+          "column": 3,
+          "context": "@layer ui.components",
+          "selector": ".ui-badge__badge[data-invisible]"
         }
       ]
     },

@@ -26,6 +26,11 @@ class CoreConfig:
     max_gap_sec: float = 0.05
     allow_fallback: bool = False
     validate_cached_artifacts: bool = True
+    # How many songs AICoreService will run through the pipeline (or
+    # analyze_pitch) at once. Kept modest by default since concurrent jobs
+    # share GPU memory/compute -- raise it only on hardware known to have
+    # headroom for more than one model resident at a time.
+    max_concurrent_jobs: int = 2
 
     def __post_init__(self) -> None:
         if self.sample_rate <= 0 or self.pitch_sample_rate <= 0:
@@ -34,6 +39,8 @@ class CoreConfig:
             raise ConfigurationError("Invalid pitch range")
         if not 0 <= self.min_voiced_confidence <= 1 or self.min_note_sec <= 0:
             raise ConfigurationError("Invalid melody thresholds")
+        if self.max_concurrent_jobs < 1:
+            raise ConfigurationError("max_concurrent_jobs must be at least 1")
 
     @classmethod
     def from_env(cls) -> CoreConfig:
@@ -48,6 +55,7 @@ class CoreConfig:
             split_note_semitones=_value("KARAOKE_AI_SPLIT_SEMITONES", 0.78, float),
             max_gap_sec=_value("KARAOKE_AI_MAX_GAP_SEC", 0.05, float),
             allow_fallback=os.getenv("KARAOKE_AI_ALLOW_FALLBACK", "0").lower() in {"1", "true"},
+            max_concurrent_jobs=_value("KARAOKE_AI_MAX_CONCURRENT_JOBS", 2, int),
         )
 
     def fingerprint(self) -> dict[str, object]:

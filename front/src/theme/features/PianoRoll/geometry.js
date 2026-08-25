@@ -29,12 +29,19 @@ export function pianoPitchRange(notes, sungMidi) {
   };
 }
 
-export function pianoRollFrame(notes, currentTime, size, sungMidi) {
+// pitchRange ({ min, max }, from pianoPitchRange) is a caller-supplied
+// argument rather than computed here because this runs on every animation
+// frame while playing (both the canvas-2d and Pixi draw loops call it up to
+// ~60 times a second) -- recomputing a full min/max scan over every note in
+// the song on each of those frames was pure waste when only `currentTime`
+// actually changes frame to frame. Callers memoize pitchRange themselves,
+// keyed on the (much more rarely changing) notes/sungMidi.
+export function pianoRollFrame(notes, currentTime, size, pitchRange) {
   const dimensions = size || PIANO_ROLL_VIEW;
   const time = Number(currentTime) || 0;
   const start = Math.max(0, time - PIANO_ROLL_VIEW.lead);
   const end = start + PIANO_ROLL_VIEW.seconds;
-  const { min, max } = pianoPitchRange(notes, sungMidi);
+  const { min, max } = pitchRange;
   const width = dimensions.width || PIANO_ROLL_VIEW.width;
   const height = dimensions.height || PIANO_ROLL_VIEW.height;
   const keyboard = width * PIANO_ROLL_VIEW.keyboardRatio;

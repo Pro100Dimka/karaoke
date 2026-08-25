@@ -268,6 +268,21 @@ def _runs(indices: list[int]) -> list[tuple[int, int]]:
     return [(start, end) for start, end in result]
 
 
+def _longest_false_run(mask) -> int:
+    """Length of the longest run of consecutive False values in mask."""
+    import numpy as np
+
+    if not len(mask):
+        return 0
+    padded = np.concatenate(([True], mask, [True]))
+    edges = np.diff(padded.astype(np.int8))
+    starts = np.flatnonzero(edges == -1)
+    if not len(starts):
+        return 0
+    ends = np.flatnonzero(edges == 1)
+    return int(np.max(ends - starts))
+
+
 def _acoustic_runs(words: list[Word], samples, rate: int) -> list[tuple[int, int]]:
     import numpy as np
 
@@ -299,10 +314,7 @@ def _acoustic_runs(words: list[Word], samples, rate: int) -> list[tuple[int, int
         lower = max(0, round(word.start * rate / frame))
         upper = min(len(active), max(
             lower + 1, round(word.end * rate / frame)))
-        longest = current = 0
-        for voiced in active[lower:upper]:
-            current = 0 if voiced else current + 1
-            longest = max(longest, current)
+        longest = _longest_false_run(active[lower:upper])
         silent_duration = longest * frame / rate
         if silent_duration >= min(0.55, word_duration * 0.45):
             bad.add(index)
@@ -514,7 +526,9 @@ class Qwen3ForcedAligner(Aligner):
         return self._validate(self._raw(audio, text, language), tokenize(text), duration(audio))
 
     def align_timed_lines(self, audio, text, lines, language):
-        import soundfile as sf
+        import numpy as np
+
+        from ..audio import read_mono
 
         tokens, span = tokenize(text), duration(audio)
         entries, flattened = [], []
@@ -532,7 +546,8 @@ class Qwen3ForcedAligner(Aligner):
         if normalized(flattened) != normalized(tokens):
             raise InvalidArtifactError(
                 "Synchronized lyric lines do not match canonical lyrics")
-        samples, rate = sf.read(audio, dtype="float32", always_2d=False)
+        samples, rate = read_mono(audio)
+        samples = samples.astype(np.float32)
         groups, first = [], 0
         while first < len(entries):
             last = first + 1
@@ -754,7 +769,9 @@ class Qwen3ForcedAligner(Aligner):
         return words
 
     def align_long_text(self, audio, text, language):
-        import soundfile as sf
+        import numpy as np
+
+        from ..audio import read_mono
 
         tokens, span = tokenize(text), duration(audio)
         resolved = resolve_alignment_language(text, language)
@@ -770,14 +787,16 @@ class Qwen3ForcedAligner(Aligner):
         # the fallback for genuinely long outliers, not the default path
         # for an ordinary song.
         if span > WINDOWED_ALIGNMENT_THRESHOLD_SECONDS:
-            samples, rate = sf.read(audio, dtype="float32", always_2d=False)
+            samples, rate = read_mono(audio)
+            samples = samples.astype(np.float32)
             words = self._align_windows(samples, rate, tokens, span, resolved)
         else:
             words = self._raw(audio, text, resolved)
         if len(words) != len(tokens):
             return self._validate(words, tokens, span)
         if samples is None:
-            samples, rate = sf.read(audio, dtype="float32", always_2d=False)
+            samples, rate = read_mono(audio)
+            samples = samples.astype(np.float32)
         previous_invalid = len(words) + 1
         while (runs := _invalid_runs(words, span)) and sum(end - start for start, end in runs) < previous_invalid:
             previous_invalid = sum(end - start for start, end in runs)

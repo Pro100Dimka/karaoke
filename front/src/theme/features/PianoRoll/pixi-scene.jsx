@@ -1,16 +1,20 @@
 import "@pixi/unsafe-eval";
 import { Graphics, Stage, useTick } from "@pixi/react";
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { clamp } from "../../../utils/math";
-import { pianoRollFrame } from "./geometry";
+import { pianoPitchRange, pianoRollFrame } from "./geometry";
 
 function RollGraphics({ currentTime, currentTimeRef, isPitchDetected, notes, palette, size, sung }) {
   const graphicsRef = useRef(null);
+  // See the comment on pianoRollFrame: useTick below fires every Pixi frame
+  // while playing, so the pitch range is memoized here rather than
+  // recomputed (a full min/max scan over every note) on each of those ticks.
+  const pitchRange = useMemo(() => pianoPitchRange(notes, sung), [notes, sung]);
   const draw = useCallback(
     (time) => {
       const graphics = graphicsRef.current;
       if (!graphics) return;
-      const frame = pianoRollFrame(notes, time, size, sung);
+      const frame = pianoRollFrame(notes, time, size, pitchRange);
       graphics.clear();
       for (const note of frame.notes) {
         const height = clamp(frame.rowHeight * 0.72, 5, 15);
@@ -49,7 +53,7 @@ function RollGraphics({ currentTime, currentTimeRef, isPitchDetected, notes, pal
         graphics.endFill();
       }
     },
-    [isPitchDetected, notes, palette, size, sung]
+    [isPitchDetected, notes, palette, pitchRange, size, sung]
   );
   useLayoutEffect(
     () => draw(Number(currentTimeRef?.current ?? currentTime) || 0),

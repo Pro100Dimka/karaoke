@@ -1,3 +1,5 @@
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -6,6 +8,98 @@ import models
 from app.services import pipeline_service
 from app.utils.json_files import write_json
 from tests._shared import mock_song_lookup, patch_attrs, patch_many, raises
+
+
+def _reset_processing_slots(monkeypatch, *, limit):
+    monkeypatch.setattr(pipeline_service, "_processing_queue", [])
+    monkeypatch.setattr(pipeline_service, "_processing_active", set())
+    monkeypatch.setattr(pipeline_service, "_cancelled_jobs", set())
+    monkeypatch.setattr(pipeline_service.ai_bridge, "max_concurrent_jobs", Mock(return_value=limit))
+
+
+def test_acquire_processing_slot_allows_up_to_the_configured_limit_at_once(monkeypatch):
+    _reset_processing_slots(monkeypatch, limit=2)
+    assert pipeline_service._acquire_processing_slot("a") is True
+    assert pipeline_service._acquire_processing_slot("b") is True
+    assert pipeline_service._processing_active == {"a", "b"}
+
+    # A job beyond the limit must block until a slot frees, not run
+    # immediately alongside the two already-active ones.
+    result = {}
+    started = threading.Event()
+
+    def waiter():
+        started.set()
+        result["acquired"] = pipeline_service._acquire_processing_slot("c")
+
+    thread = threading.Thread(target=waiter)
+    thread.start()
+    assert started.wait(timeout=2)
+    time.sleep(0.1)
+    assert thread.is_alive() and "c" not in pipeline_service._processing_active
+
+    pipeline_service._release_processing_slot("a")
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert result["acquired"] is True
+    assert pipeline_service._processing_active == {"b", "c"}
+
+    pipeline_service._release_processing_slot("b")
+    pipeline_service._release_processing_slot("c")
+    assert pipeline_service._processing_active == set()
+
+
+def test_acquire_processing_slot_admits_queued_waiters_in_fifo_order(monkeypatch):
+    _reset_processing_slots(monkeypatch, limit=1)
+    assert pipeline_service._acquire_processing_slot("a") is True
+
+    order = []
+
+    def waiter(song_id, ready):
+        ready.set()
+        pipeline_service._acquire_processing_slot(song_id)
+        order.append(song_id)
+
+    ready_b, ready_c = threading.Event(), threading.Event()
+    thread_b = threading.Thread(target=waiter, args=("b", ready_b))
+    thread_b.start()
+    assert ready_b.wait(timeout=2)
+    time.sleep(0.05)  # let b actually enqueue itself before c starts
+    thread_c = threading.Thread(target=waiter, args=("c", ready_c))
+    thread_c.start()
+    assert ready_c.wait(timeout=2)
+    time.sleep(0.05)
+
+    pipeline_service._release_processing_slot("a")
+    thread_b.join(timeout=2)
+    pipeline_service._release_processing_slot("b")
+    thread_c.join(timeout=2)
+    pipeline_service._release_processing_slot("c")
+
+    assert order == ["b", "c"]
+
+
+def test_acquire_processing_slot_returns_false_and_dequeues_when_cancelled_while_waiting(monkeypatch):
+    _reset_processing_slots(monkeypatch, limit=1)
+    assert pipeline_service._acquire_processing_slot("a") is True
+
+    result = {}
+
+    def waiter():
+        result["acquired"] = pipeline_service._acquire_processing_slot("b")
+
+    thread = threading.Thread(target=waiter)
+    thread.start()
+    time.sleep(0.05)
+    pipeline_service._cancelled_jobs.add("b")
+    with pipeline_service._processing_condition:
+        pipeline_service._processing_condition.notify_all()
+    thread.join(timeout=2)
+
+    assert result["acquired"] is False
+    assert "b" not in pipeline_service._processing_queue
+    assert "b" not in pipeline_service._processing_active
+    pipeline_service._release_processing_slot("a")
 
 
 def test_load_job_paths_handles_missing_default_and_persisted_output(monkeypatch, tmp_path):

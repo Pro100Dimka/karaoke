@@ -37,7 +37,7 @@ export default function RoomRadioSync() {
     }
     target.current = { signature: next, startedAt: Date.now() };
     if (roomUi.radio.stationId && remote.stationId !== local.stationId)
-      local.setStation(remote.stationId);
+      local.setStation(remote.stationId, { resume: remote.isPlaying });
     if (Math.abs(remote.volume - local.volume) > 0.001) local.setVolume(remote.volume);
     if (remote.isPlaying && !local.isPlaying) {
       Promise.resolve(

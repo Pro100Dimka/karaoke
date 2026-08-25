@@ -3,6 +3,16 @@ import { playbackGain } from "../utils/data";
 import { getSecondaryMediaPosition, shouldSyncMedia } from "../utils/transport";
 
 const YOUTUBE_NO_COOKIE_ORIGIN = "https://www.youtube-nocookie.com";
+// The rAF loop below runs at ~60fps to keep currentTimeRef and the melody
+// guide frame-accurate, but nothing on screen needs React state updated that
+// often: the lyrics/piano-roll overlays already read currentTimeRef directly
+// in their own rAF loops (and are memoized against the currentTime prop
+// while playing), and the timeline/timecode in the console is just a number
+// and a progress bar -- both look identical to a viewer whether they update
+// 60 times a second or 10. Throttling setCurrentTime this way keeps the
+// whole Karaoke page from re-rendering (and reallocating its many derived
+// prop objects/callbacks) on every single animation frame.
+const REACT_SYNC_INTERVAL_MS = 100;
 
 export default function useKaraokeMediaSync({
   currentTimeRef,
@@ -26,6 +36,7 @@ export default function useKaraokeMediaSync({
   youTubeClipRef
 }) {
   const lastSecondarySyncRef = useRef(0);
+  const lastReactSyncRef = useRef(0);
 
   const sendYouTubeCommand = useCallback(
     (func, args = []) => {
@@ -158,9 +169,12 @@ export default function useKaraokeMediaSync({
       const numericPosition = Number(position);
       if (Number.isFinite(numericPosition) && numericPosition >= 0) {
         currentTimeRef.current = numericPosition;
-        setCurrentTime(numericPosition);
         updateMelodyGuide(numericPosition);
         const now = globalThis.performance?.now?.() ?? Date.now();
+        if (now - lastReactSyncRef.current >= REACT_SYNC_INTERVAL_MS) {
+          setCurrentTime(numericPosition);
+          lastReactSyncRef.current = now;
+        }
         if (now - lastSecondarySyncRef.current > 450) {
           syncSecondaryMedia(numericPosition);
           lastSecondarySyncRef.current = now;

@@ -175,9 +175,20 @@ export function createOnlineRoomMessageHandler(options) {
         !command.revision
       )
         return false;
-      const previousCommandId = pendingCommandRef.current?.commandId;
-      if (previousCommandId && previousCommandId !== command.commandId)
-        voice.cancelTransfersByCommandId?.(previousCommandId);
+      const previous = pendingCommandRef.current;
+      if (previous?.commandId && previous.commandId !== command.commandId) {
+        voice.cancelTransfersByCommandId?.(previous.commandId);
+        // A manual syncSong() call (Library's "open in karaoke" for a peer's
+        // song) leaves its own promise on this ref. Cancelling the transfer
+        // above unblocks the mesh, but that only settles the promise once a
+        // "cancelled"/"error" progress event round-trips back here -- reject
+        // it directly and immediately so the caller isn't left stranded.
+        previous.reject?.(
+          new Error(
+            translateSaved("Запрос синхронизации песни отменён: ведущий запустил другую песню")
+          )
+        );
+      }
       pendingCommandRef.current = command;
       roomApi
         .getSongRevision(command.songId)

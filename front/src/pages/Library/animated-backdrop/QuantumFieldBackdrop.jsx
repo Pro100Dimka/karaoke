@@ -8,7 +8,12 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
-import { QFT_DEFAULT_SETTINGS, getQftThemeName, getQftThemeStyle } from "./qft-settings";
+import {
+  getQftThemeName,
+  getQftThemeStyle,
+  nextAdaptivePixelRatio,
+  QFT_DEFAULT_SETTINGS
+} from "./qft-settings";
 import { createQftAudioReader } from "./qftAudio";
 import { FIELD_TYPES } from "./qftConfig";
 import {
@@ -209,8 +214,17 @@ const POST_SHADER = {
   `
 };
 
+// A fresh `{}` as the default parameter value would be a new object identity
+// on every render, and it's a direct dependency of the effect below that
+// builds the whole WebGL scene/renderer/composer -- so any parent re-render
+// (Library polls songs/status frequently) would tear down and rebuild the
+// entire visualizer instead of just leaving it running. A frozen module-level
+// constant keeps the identity stable across renders when no settings prop is
+// passed (its only caller today never passes one).
+const EMPTY_SETTINGS = Object.freeze({});
+
 export default function QuantumFieldBackdrop({
-  settings: overrides = {},
+  settings: overrides = EMPTY_SETTINGS,
   fieldType,
   sensitivity,
   density,
@@ -476,7 +490,6 @@ export default function QuantumFieldBackdrop({
 
     const animate = () => {
       raf = requestAnimationFrame(animate);
-      updateTheme();
 
       const dt = clock.getDelta();
       const elapsed = clock.getElapsedTime();
@@ -535,7 +548,13 @@ export default function QuantumFieldBackdrop({
       afterimagePass.uniforms.damp.value = settings.motionBlur;
       postPass.uniforms.uTime.value = elapsed;
 
-      renderer.render(scene, camera3d);
+      // Every frame builds up bloomPass/afterimagePass/postPass state (bloom,
+      // motion blur, chromatic aberration, god rays, film grain, depth of
+      // field...) into the composer, so it must actually be the thing that
+      // renders -- calling renderer.render() directly here skipped the whole
+      // pipeline, silently disabling every one of those effects despite
+      // their settings and per-frame updates still running.
+      composer.render();
 
       if (settings.adaptiveQuality) {
         frames += 1;
@@ -544,10 +563,10 @@ export default function QuantumFieldBackdrop({
           const fps = (frames * 1000) / (now - fpsTimer);
           frames = 0;
           fpsTimer = now;
-          if (fps < settings.targetFPS - 8) pixelRatio = Math.max(0.75, pixelRatio - 0.1);
-          if (fps > settings.targetFPS + 6) {
-            pixelRatio = Math.min(settings.pixelRatioMax, pixelRatio + 0.05);
-          }
+          pixelRatio = nextAdaptivePixelRatio(pixelRatio, fps, {
+            targetFPS: settings.targetFPS,
+            pixelRatioMax: settings.pixelRatioMax
+          });
           renderer.setPixelRatio(pixelRatio);
         }
       }
@@ -563,10 +582,22 @@ export default function QuantumFieldBackdrop({
     };
 
     window.addEventListener("resize", resize);
+    // The theme (light/dark) only ever changes when the user toggles it, but
+    // updateTheme() used to run inside the rAF loop, crossing into the DOM to
+    // read documentElement's data-theme attribute up to 60 times a second
+    // just to catch that rare change. A MutationObserver reacts to the
+    // attribute actually changing instead, so this scene's per-frame work no
+    // longer touches the DOM/CSSOM at all.
+    const themeObserver = new MutationObserver(updateTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"]
+    });
     animate();
 
     return () => {
       cancelAnimationFrame(raf);
+      themeObserver.disconnect();
       window.removeEventListener("resize", resize);
       trailSystem.dispose();
       network.dispose();

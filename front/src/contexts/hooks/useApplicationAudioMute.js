@@ -23,6 +23,17 @@ export default function useApplicationAudioMute(enabled) {
     []
   );
 
+  const forgetRemovedAudio = useCallback((root) => {
+    if (!root) return;
+
+    const audioElements = [
+      ...(root instanceof HTMLAudioElement ? [root] : []),
+      ...(root.querySelectorAll?.("audio") || [])
+    ];
+    for (const audio of audioElements) originalMuteStateRef.current.delete(audio);
+    // Stryker disable next-line ArrayDeclaration: the callback closes over refs only.
+  }, []);
+
   const restoreApplicationAudio = useCallback(
     () => {
       for (const [audio, wasMuted] of originalMuteStateRef.current) {
@@ -45,6 +56,13 @@ export default function useApplicationAudioMute(enabled) {
         for (const node of mutation.addedNodes) {
           muteApplicationAudio(node);
         }
+        // KaraokeMedia remounts a fresh <audio>/<video> element per song, so
+        // without this the map below would keep one stale entry (pinning a
+        // detached DOM node) per removed element for as long as room-sound
+        // mute stays enabled across an online-room session.
+        for (const node of mutation.removedNodes) {
+          forgetRemovedAudio(node);
+        }
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -52,7 +70,7 @@ export default function useApplicationAudioMute(enabled) {
       observer.disconnect();
       restoreApplicationAudio();
     };
-  }, [enabled, muteApplicationAudio, restoreApplicationAudio]);
+  }, [enabled, forgetRemovedAudio, muteApplicationAudio, restoreApplicationAudio]);
 
   useEffect(
     () => restoreApplicationAudio,

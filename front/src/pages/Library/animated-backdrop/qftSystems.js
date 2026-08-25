@@ -69,6 +69,41 @@ export function createTrailSystem(scene, { count = 50, length = 12, color = "#00
   };
 }
 
+// Buckets pts into a uniform grid sized to the current connection distance
+// and calls visit(i, j) for every unordered pair (i < j) whose points share
+// or neighbor a grid cell -- i.e. every pair that COULD be within range,
+// without the brute-force O(N^2) all-pairs scan that used to run here every
+// frame (~125k distance checks/frame for the default 500 tracked points).
+// Stops early once visit has accepted `limit` pairs.
+export function forEachNearbyPair(pts, cellSize, limit, visit) {
+  const cellOf = (value) => Math.floor(value / cellSize);
+  const grid = new Map();
+  pts.forEach((point, index) => {
+    const key = `${cellOf(point.x)},${cellOf(point.y)},${cellOf(point.z)}`;
+    const bucket = grid.get(key);
+    if (bucket) bucket.push(index);
+    else grid.set(key, [index]);
+  });
+  let count = 0;
+  for (let i = 0; i < pts.length && count < limit; i += 1) {
+    const cx = cellOf(pts[i].x);
+    const cy = cellOf(pts[i].y);
+    const cz = cellOf(pts[i].z);
+    for (let dx = -1; dx <= 1 && count < limit; dx += 1) {
+      for (let dy = -1; dy <= 1 && count < limit; dy += 1) {
+        for (let dz = -1; dz <= 1 && count < limit; dz += 1) {
+          const bucket = grid.get(`${cx + dx},${cy + dy},${cz + dz}`);
+          if (!bucket) continue;
+          for (const j of bucket) {
+            if (j <= i || count >= limit) continue;
+            if (visit(i, j)) count += 1;
+          }
+        }
+      }
+    }
+  }
+}
+
 export function createForceNetwork(
   scene,
   sourceGeometry,
@@ -141,20 +176,19 @@ export function createForceNetwork(
       const thresholdSq = effective * effective;
       const dynamicMax = Math.floor(maxConnections * (0.3 + Math.min(1, mid + highMid) * 0.7));
       let n = 0;
-      for (let i = 0; i < pts.length && n < dynamicMax; i += 1) {
-        for (let j = i + 1; j < pts.length && n < dynamicMax; j += 1) {
-          const d2 = pts[i].distanceToSquared(pts[j]);
-          if (d2 >= thresholdSq || d2 <= 0.1) continue;
-          const d = Math.sqrt(d2);
-          const centre = 1 - Math.min(((pts[i].length() + pts[j].length()) * 0.5) / fieldRadius, 1);
-          const alpha = (1 - d / effective) * (0.6 + centre * 0.4);
-          const o = n * 6;
-          positions.set([pts[i].x, pts[i].y, pts[i].z, pts[j].x, pts[j].y, pts[j].z], o);
-          alphas[n * 2] = alpha;
-          alphas[n * 2 + 1] = alpha;
-          n += 1;
-        }
-      }
+      forEachNearbyPair(pts, Math.max(effective, 0.001), dynamicMax, (i, j) => {
+        const d2 = pts[i].distanceToSquared(pts[j]);
+        if (d2 >= thresholdSq || d2 <= 0.1) return false;
+        const d = Math.sqrt(d2);
+        const centre = 1 - Math.min(((pts[i].length() + pts[j].length()) * 0.5) / fieldRadius, 1);
+        const alpha = (1 - d / effective) * (0.6 + centre * 0.4);
+        const o = n * 6;
+        positions.set([pts[i].x, pts[i].y, pts[i].z, pts[j].x, pts[j].y, pts[j].z], o);
+        alphas[n * 2] = alpha;
+        alphas[n * 2 + 1] = alpha;
+        n += 1;
+        return true;
+      });
       geometry.attributes.position.needsUpdate = true;
       geometry.attributes.alpha.needsUpdate = true;
       geometry.setDrawRange(0, n * 2);

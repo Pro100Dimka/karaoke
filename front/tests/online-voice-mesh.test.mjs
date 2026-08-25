@@ -38,10 +38,10 @@ describe("online voice mesh", () => {
     expect(capture).toHaveBeenCalledWith({
       audio: {
         echoCancellation: false,
-        noiseSuppression: false,
+        noiseSuppression: true,
         autoGainControl: false,
         channelCount: 1,
-        sampleRate: { ideal: 44_100 },
+        sampleRate: { ideal: 48_000 },
         sampleSize: { ideal: 24 }
       }
     });
@@ -318,7 +318,7 @@ describe("online voice mesh", () => {
     const stopped = track("stopped", "ended");
     mesh.stream = { getAudioTracks: () => [stopped], getTracks: () => [stopped] };
     await mesh.start();
-    expect(stopped.stop).not.toHaveBeenCalled();
+    expect(stopped.stop).toHaveBeenCalled();
     expect(capture).toHaveBeenCalledOnce();
     const live = stream([track("live", "live")]);
     mesh.stream = live;
@@ -382,7 +382,7 @@ describe("online voice mesh", () => {
     expect(mesh.lifecycleVersion).toBe(version + 1);
     expect(peerOnly.close).toHaveBeenCalledOnce();
     expect(channelOnly.close).toHaveBeenCalledOnce();
-    expect(local.stop).not.toHaveBeenCalled();
+    expect(local.stop).toHaveBeenCalledOnce();
     expect(mesh.onPeerClosed.mock.calls.map(([id]) => id).sort()).toEqual(["channel", "peer"]);
     for (const collection of [
       mesh.peers,
@@ -1769,7 +1769,7 @@ describe("online voice mesh", () => {
     const localTrack = track("local");
     mesh.stream = stream([localTrack]);
     mesh.stop();
-    expect(localTrack.stop).not.toHaveBeenCalled();
+    expect(localTrack.stop).toHaveBeenCalledOnce();
   });
   test("cancels stale invites and direct ICE work", async () => {
     const mesh = makeMesh();

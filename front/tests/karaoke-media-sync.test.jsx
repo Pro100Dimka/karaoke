@@ -251,7 +251,10 @@ describe("karaoke media synchronization", () => {
     const hook = renderHook(() => useKaraokeMediaSync(props));
     calledWith([props.setCurrentTime, [4]], [props.updateMelodyGuide, [4]]);
     expect(props.vocalsRef.current.currentTime).toBe(0);
-    now.mockReturnValue(451);
+    // setCurrentTime is throttled to once per REACT_SYNC_INTERVAL_MS (100ms)
+    // -- currentTimeRef and updateMelodyGuide still update every frame, but
+    // the react-state publish only fires once that interval has elapsed.
+    now.mockReturnValue(551);
     props.instrumentalRef.current.currentTime = 5;
     act(() => frame());
     verify(

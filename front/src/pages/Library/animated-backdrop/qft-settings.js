@@ -189,10 +189,30 @@ export const QFT_DEFAULT_SETTINGS = Object.freeze({
   // QUALITY
   // =========================================================
 
-  adaptiveQuality: false,
+  // Off by default meant this safety net never actually ran for anyone --
+  // there is no settings UI that exposes it, so a weak machine just sat at
+  // a fixed pixel ratio and stayed janky forever instead of ever stepping
+  // down. It only ever adjusts pixelRatio when measured FPS drifts outside
+  // targetFPS +-6..8, so a machine already holding 60fps never notices it.
+  adaptiveQuality: true,
 
   targetFPS: 60
 });
+
+// Steps the render pixel ratio down when measured FPS falls behind target
+// (giving up some sharpness for headroom on weak hardware) and back up once
+// FPS comfortably clears it again, capped to [minPixelRatio, pixelRatioMax].
+// A dead zone around targetFPS (-8 to +6) avoids oscillating the pixel ratio
+// back and forth on machines hovering right at the edge.
+export function nextAdaptivePixelRatio(
+  currentPixelRatio,
+  fps,
+  { targetFPS, pixelRatioMax, minPixelRatio = 0.75 }
+) {
+  if (fps < targetFPS - 8) return Math.max(minPixelRatio, currentPixelRatio - 0.1);
+  if (fps > targetFPS + 6) return Math.min(pixelRatioMax, currentPixelRatio + 0.05);
+  return currentPixelRatio;
+}
 
 const readThemeColor = (name) => {
   if (typeof document === "undefined") {

@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import LibraryActions from "../src/pages/Library/components/hero/actions";
+import LibraryActions from "../src/pages/Library/hero/actions";
 import { defaultLibraryFilters } from "../src/pages/Library/utils";
 
 test("library search applies sorting from the theme popover", () => {

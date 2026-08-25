@@ -9,6 +9,15 @@ export const capParticipantSongs = (songs) => {
     result.pop();
   return result;
 };
+// The revisions endpoint caps a single request to the same count (see
+// schemas.SongRevisionsRequest), so a library larger than that still needs
+// chunking -- just far fewer requests than one per song.
+const chunk = (items, size) => {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size)
+    chunks.push(items.slice(index, index + size));
+  return chunks;
+};
 
 export default function useLibraryRoomSync({
   localSongs,
@@ -92,18 +101,29 @@ export default function useLibraryRoomSync({
   useEffect(() => {
     if (!room?.selfId) return undefined;
     let active = true;
+    const doneIds = localSongs.filter((song) => song?.status === "done").map((song) => song.id);
+    // A handful of batched requests for every "done" song's revision instead
+    // of one request per song -- with a large library this turned publishing
+    // it to the room into a burst of N requests all serializing on the
+    // backend's library-wide lock (see
+    // song_package_service.content_revisions_for_songs).
     Promise.all(
-      localSongs.map(async (song) => {
+      chunk(doneIds, MAX_SONGS).map((ids) => api.getSongRevisions(ids).catch(() => null))
+    ).then((results) => {
+      if (!active) return;
+      const revisionById = new Map();
+      results.forEach((result) => {
+        (result?.revisions || []).forEach((entry) => {
+          if (entry.revision) revisionById.set(entry.song_id, entry.revision);
+        });
+      });
+      const songs = localSongs.map((song) => {
         const owned = { ...song, __roomOwnerId: room.selfId };
-        if (song?.status !== "done") return owned;
-        try {
-          const revision = await api.getSongRevision(song.id);
-          return { ...owned, __roomRevision: revision?.revision };
-        } catch {
-          return owned;
-        }
-      })
-    ).then((songs) => active && syncUi({ participantSongs: capParticipantSongs(songs) }));
+        const revision = revisionById.get(song.id);
+        return revision ? { ...owned, __roomRevision: revision } : owned;
+      });
+      syncUi({ participantSongs: capParticipantSongs(songs) });
+    });
     return () => {
       active = false;
     };

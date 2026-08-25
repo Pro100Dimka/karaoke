@@ -9,6 +9,25 @@ from .base import PitchEstimator
 from .device import select_torch_device
 
 
+def _frames_from_frequencies(frequencies, step: float, fmin: float, fmax: float) -> list[PitchFrame]:
+    """Build one PitchFrame per inference frame, masking out-of-range pitches.
+
+    The fmin/fmax range check and value/confidence masking are vectorized
+    once over every frame (thousands per song) instead of being
+    re-evaluated three times per frame inside a Python-level list
+    comprehension; only building the immutable PitchFrame records
+    themselves stays a loop.
+    """
+    frequencies = np.asarray(frequencies)
+    times = np.arange(len(frequencies)) * step
+    voiced = (frequencies >= fmin) & (frequencies <= fmax)
+    values = np.where(voiced, frequencies, 0.0)
+    return [
+        PitchFrame(float(time), float(value), float(is_voiced), bool(is_voiced))
+        for time, value, is_voiced in zip(times, values, voiced, strict=True)
+    ]
+
+
 class FCPEPitchEstimator(PitchEstimator):
     name = "fcpe"
 
@@ -37,7 +56,7 @@ class FCPEPitchEstimator(PitchEstimator):
             raw = model.infer(tensor, sr=self.sr, decoder_mode="local_argmax", threshold=0.006)
         frequencies = np.asarray((raw[0] if isinstance(raw, (tuple, list)) else raw).squeeze().cpu())
         step = len(signal) / self.sr / max(1, len(frequencies))
-        return [PitchFrame(index * step, float(hz) if self.fmin <= hz <= self.fmax else 0, 1.0 if self.fmin <= hz <= self.fmax else 0, self.fmin <= hz <= self.fmax) for index, hz in enumerate(frequencies)]
+        return _frames_from_frequencies(frequencies, step, self.fmin, self.fmax)
 
 
 class PyinFallbackPitchEstimator(FCPEPitchEstimator):

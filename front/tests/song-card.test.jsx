@@ -7,7 +7,7 @@ vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, useI18n: mockUseI18nWithFallback };
 });
-import LibrarySongCard from "../src/pages/Library/components/song-card/index.jsx";
+import LibrarySongCard from "../src/pages/Library/songs-grid/song-card.jsx";
 const handlers = () => ({
   onDelete: vi.fn(),
   onOpenFolder: vi.fn(),
@@ -55,5 +55,5 @@ test("unknown song status uses safe badge fallback", () => {
   const { container } = render(<LibrarySongCard cardIndex={0} song={{ id: "song", title: "Title", status: "custom" }} {...actions} />);
   expect(container.textContent).toContain("custom");
   const empty = render(<LibrarySongCard cardIndex={0} song={{ id: "empty", title: "Title", status: "" }} {...actions} />);
-  expect(empty.container.textContent).toMatch(/Неизвестно|Невідомо/);
+  expect(empty.container.textContent).toMatch(/Ожидает обработки|Очікує обробки/);
 });

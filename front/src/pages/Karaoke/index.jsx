@@ -21,7 +21,6 @@ import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
 import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
-import usePitchDetection from "./hooks/usePitchDetection";
 import usePlaybackMachine from "./hooks/usePlaybackMachine";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
@@ -114,6 +113,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
   const autoStartRequested = Boolean(location.state?.autoPlay);
+  const roomPrepared = Boolean(location.state?.roomPrepared);
   const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
     autoHideEnabled: autoHideConsole
   });
@@ -206,11 +206,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     vocalsRef,
     youTubeClipRef
   });
-  const { sungMidi, isPitchDetected } = usePitchDetection({
-    isPlaying,
-    monitorInputDeviceId,
-    monitoringEnabled
-  });
   const { returnToLibrary, seekTo, skip, stop, togglePlay } = useKaraokeTransport({
     currentTime,
     duration,
@@ -250,6 +245,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   } = useKaraokeSceneFlow({
     analysisRecordingIdRef,
     autoStartRequested,
+    roomPrepared,
     hideControls,
     instrumentalRef,
     isPlaying,
@@ -382,10 +378,11 @@ export default function Karaoke({ onOpenAppSettings }) {
       performanceProps={{
         currentTime: lyricTime,
         currentTimeRef,
-        isPitchDetected,
         isPlaying,
         keyShift,
         lyricsSync,
+        monitorInputDeviceId,
+        monitoringEnabled,
         notes,
         sceneBlackout,
         sceneIntroVisible,
@@ -399,8 +396,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         },
         songId: song.id,
         showLyrics,
-        showNotes,
-        sungMidi
+        showNotes
       }}
       consoleProps={{
         song,
