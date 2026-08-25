@@ -12,14 +12,17 @@ export default function useOnlineRoomCommands({
 }) {
   const syncUi = useCallback(
     (state) => {
-      if (roomRef.current) clientRef.current?.send("ui", { state });
+      // Guests are restricted to broadcasting their own library/effects (the
+      // worker enforces this too); everything else stays host-only.
+      if (roomRef.current?.host || state?.participantEffects || Array.isArray(state?.songs))
+        clientRef.current?.send("ui", { state });
     },
     [clientRef, roomRef]
   );
 
   const syncCommand = useCallback(
     (state) => {
-      if (roomRef.current) clientRef.current?.send("sync", { state });
+      if (roomRef.current?.host) clientRef.current?.send("sync", { state });
     },
     [clientRef, roomRef]
   );

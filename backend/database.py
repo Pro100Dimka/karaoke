@@ -53,6 +53,12 @@ _SONG_COLUMN_MIGRATIONS = {
     ),
 }
 
+_RECORDING_COLUMN_MIGRATIONS = {
+    "playback_offset_sec": (
+        "ALTER TABLE recordings ADD COLUMN playback_offset_sec FLOAT NOT NULL DEFAULT 0"
+    ),
+}
+
 _AUDIO_COLUMN_MIGRATIONS = {
     "audio_driver": ("ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'"),
     "asio_driver_name": "ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR",
@@ -163,9 +169,11 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     inspector = inspect(engine)
     song_columns, audio_columns = {column['name'] for column in inspector.get_columns('songs')}, {column['name'] for column in inspector.get_columns('audio_settings')}
+    recording_columns = {column['name'] for column in inspector.get_columns('recordings')}
     with engine.begin() as connection:
         _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
         _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
+        _apply_additive_migrations(connection, recording_columns, _RECORDING_COLUMN_MIGRATIONS)
         _repair_invalid_audio_settings_datetime(connection)
         _repair_corrupted_audio_settings(connection)
         _mark_interrupted_jobs(connection)

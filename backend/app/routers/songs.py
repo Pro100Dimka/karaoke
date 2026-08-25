@@ -1,6 +1,7 @@
 """Управление песнями + запуск AI-обработки."""
 
 import base64
+import difflib
 import tempfile
 import zipfile
 from collections.abc import Callable
@@ -293,6 +294,13 @@ def process_song(
 ):
     if recording_service.has_active_recording(song.id): raise HTTPException(status_code=409, detail="Нельзя обрабатывать песню во время записи")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Обработка уже запущена")
+    if song_service.original_source_retired(song):
+        raise HTTPException(
+            status_code=409,
+            detail="Исходный файл песни был удалён после обработки — доступна только "
+            "переобработка мелодии (/reprocess). Полная повторная обработка требует "
+            "заново загрузить оригинальный файл.",
+        )
 
     _queue_song_job(
         db,
@@ -429,34 +437,58 @@ def get_result(song: SongDependency, response: Response):
     )
 
 
-@router.put("/{song_id}/lyrics")
-def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
-    if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
-
-    out_dir = song_service.resolve_output_dir(song)
-    lyrics_path = out_dir / "lyricsSync.json"
-    try:
-        reconcile_lyric_words = ai_bridge.reconcile_lyric_words
-        lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
-        current: dict[str, Any] = read_json(lyrics_path, default={}) or {}
-        trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
-        previous = current.get("words", []) if isinstance(current, dict) else []
-        words = []
-        for index, source in enumerate(
-            word for line in lyrics for word in line.get("words", [])
-        ):
-            word = dict(source)
-            word["text"] = str(word.pop("word", word.get("text", ""))).strip()
-            old = previous[index] if index < len(previous) else {}
+def _carry_forward_word_notes(previous: list[Any], words: list[dict[str, Any]]) -> None:
+    """Reassign notes from the previously-saved words onto the freshly-submitted
+    ones by matching word TEXT via sequence alignment, not raw array position.
+    Editing lyrics text can insert/remove words anywhere in the list, which
+    would shift every later word's index — matching by content keeps each
+    unchanged word's notes attached to that same word instead of sliding them
+    onto whichever word now happens to sit at its old index. A matched pair's
+    notes are only carried over if its timing is also unchanged, since a
+    same-text match with different timing is more likely a re-estimated word
+    than the same take."""
+    previous_texts = [
+        str(word.get("text", "")).strip().casefold() if isinstance(word, dict) else ""
+        for word in previous
+    ]
+    new_texts = [str(word.get("text", "")).strip().casefold() for word in words]
+    matcher = difflib.SequenceMatcher(None, previous_texts, new_texts, autojunk=False)
+    for tag, i1, i2, j1, _j2 in matcher.get_opcodes():
+        if tag != "equal": continue
+        for offset in range(i2 - i1):
+            old, word = previous[i1 + offset], words[j1 + offset]
             same_interval = (
                 isinstance(old, dict)
                 and old.get("start") == word.get("start")
                 and old.get("end") == word.get("end")
             )
-            word["notes"] = [dict(note) for note in old.get("notes", [])] if same_interval else []
-            words.append(word)
-        updated = {**current, "text": trusted_text, "words": words, "edited": True}
-        write_json(lyrics_path, validate_lyrics_document(updated))
+            if same_interval: word["notes"] = [dict(note) for note in old.get("notes", [])]
+
+
+@router.put("/{song_id}/lyrics")
+def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency, db: Session = Depends(get_db)):
+    if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
+
+    out_dir = song_service.resolve_output_dir(song)
+    lyrics_path = out_dir / "lyricsSync.json"
+    try:
+        with song_service.song_content_lock(song.id), song_service.library_write_lock():
+            reconcile_lyric_words = ai_bridge.reconcile_lyric_words
+            lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
+            current: dict[str, Any] = read_json(lyrics_path, default={}) or {}
+            trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
+            previous = current.get("words", []) if isinstance(current, dict) else []
+            words = []
+            for source in (word for line in lyrics for word in line.get("words", [])):
+                word = dict(source)
+                word["text"] = str(word.pop("word", word.get("text", ""))).strip()
+                word["notes"] = []
+                words.append(word)
+            _carry_forward_word_notes(previous, words)
+            updated = {**current, "text": trusted_text, "words": words, "edited": True}
+            write_json(lyrics_path, validate_lyrics_document(updated))
+            song_package_service.invalidate_content_revision(song)
     except (OSError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
+    _touch_song(db, song, refresh=False)
     return {"status": "saved"}

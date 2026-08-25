@@ -71,6 +71,17 @@ def _set_state(**changes: str | None) -> None:
     with _lock: _state.update(changes)
 
 
+def has_active_download() -> bool:
+    """True while a model download/repair thread is writing into MODELS_DIR.
+
+    Unlike ``ensure_ready_sync`` (called from inside a registered song-processing
+    job), ``start_download`` spawns its own untracked daemon thread — so callers
+    that need to know "is anything currently writing to the AI models folder"
+    (e.g. before letting the user change it) must check this, not
+    ``pipeline_service.has_active_jobs()``."""
+    with _lock: return _state["state"] == "downloading"
+
+
 def _install_missing_models(
     models_root: Path,
     cache_dir: Path,

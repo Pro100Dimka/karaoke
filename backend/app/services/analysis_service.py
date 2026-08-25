@@ -70,15 +70,21 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict[st
     frames: list[dict[str, float]] = []
     hits = 0
 
+    playback_offset_sec = float(getattr(recording, "playback_offset_sec", 0) or 0)
     for frame in pitch_frames:
         timestamp = frame.get("time")
         user_midi = _to_midi(frame.get("midi") or frame.get("note"))
         if not isinstance(timestamp, (int, float)) or user_midi is None: continue
-        reference_midi = reference_index.note_at(float(timestamp))
+        # `timestamp` is relative to the recorded take (frame 0 = when the user
+        # pressed record); the reference notes and section boundaries are in
+        # absolute song time, so a take started mid-song (via seek) must be
+        # shifted by its persisted start offset before comparison.
+        song_time = float(timestamp) + playback_offset_sec
+        reference_midi = reference_index.note_at(song_time)
         if reference_midi is None: continue
         deviation = abs(user_midi - reference_midi)
         deviations.append(deviation)
-        frames.append({"time": float(timestamp), "deviation_semitones": deviation})
+        frames.append({"time": song_time, "deviation_semitones": deviation})
         hits += deviation <= _HIT_TOLERANCE_SEMITONES
 
     accuracy, mean_deviation, sections = round(hits / len(deviations) * 100, 1) if deviations else None, round(statistics.fmean(deviations), 3) if deviations else None, _sections_breakdown(structure, frames) if isinstance(structure, list) else None

@@ -115,15 +115,21 @@ def resume_recording(session_id: str):
 
 @router.post("/stop", response_model=schemas.RecordingOut)
 def stop_recording(session_id: str, db: Session = Depends(get_db)):
+    # Monitoring must be restored no matter how this ends — success, a mapped
+    # error below, or an unmapped one (e.g. a writer/stream failure surfaces as
+    # RuntimeError) — otherwise the user is left without mic monitoring until
+    # they notice and start a new recording to trigger another restore.
     try:
-        recording = recording_service.stop_recording(session_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
-    _restore_monitoring(db)
+        try:
+            recording = recording_service.stop_recording(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except (OSError, RuntimeError) as exc:
+            raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
+    finally:
+        _restore_monitoring(db)
     return recording
 
 

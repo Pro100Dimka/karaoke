@@ -16,8 +16,7 @@ import {
   rootMeanSquare,
   selectFundamentalLag
 } from "../src/pages/Karaoke/utils/pitch.js";
-import { getSongActions } from "../src/pages/Library/components.jsx";
-import { formatSongKey } from "../src/pages/Library/utils.js";
+import { formatSongKey, getSongActions } from "../src/pages/Library/utils.js";
 import { createSongPayload, getSelectedSong, normalizeText, validateSongSettings } from "../src/pages/Library/song-settings.jsx";
 import { equal, deepEqual } from "./helpers/assertions.mjs";
 describe("analysis normalization and feedback", () => {

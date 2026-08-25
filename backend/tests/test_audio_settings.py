@@ -3,9 +3,9 @@ import importlib
 from unittest.mock import Mock
 
 import numpy as np
+from sqlalchemy.exc import IntegrityError
 
 import models
-from sqlalchemy.exc import IntegrityError
 from app.services import audio_service
 from tests._shared import patch_attrs, patch_many, raises
 

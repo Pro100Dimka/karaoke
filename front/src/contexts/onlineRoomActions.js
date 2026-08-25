@@ -1,5 +1,10 @@
 import { translateSaved } from "../i18n/runtime";
-import { generateId as createCommandId } from "../utils/id";
+
+export function createCommandId() {
+  return typeof globalThis.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 const SONG_READY_TIMEOUT_MS = 5 * 60_000;
 
@@ -22,17 +27,9 @@ export async function openKaraokeInRoom({
   if (!isCurrentConnection()) return false;
 
   const command = { type: "open-karaoke", songId, commandId: createCommandId(), revision };
-  const previous = hostSongCommandRef?.current;
-  if (previous?.commandId && previous.commandId !== command.commandId) {
-    voice?.cancelTransfersByCommandId?.(previous.commandId);
-    // Without this, an earlier still-pending openKaraokeInRoom() call (host picked a
-    // different song before everyone caught up on the first one) would just sit on its own
-    // readyPromise until its 5-minute timeout fires, surfacing a confusing stale error long
-    // after the host has moved on to the next song.
-    previous.rejectReady?.(
-      new Error(translateSaved("Ведущий выбрал другую песню до готовности этой"))
-    );
-  }
+  const previousCommandId = hostSongCommandRef?.current?.commandId;
+  if (previousCommandId && previousCommandId !== command.commandId)
+    voice?.cancelTransfersByCommandId?.(previousCommandId);
 
   const expectedIds = new Set(
     (participantsRef?.current || [])
@@ -40,28 +37,23 @@ export async function openKaraokeInRoom({
       .map((participant) => participant.id)
   );
   let resolveReady;
-  let rejectReadyRaw;
+  let rejectReady;
   const readyPromise = new Promise((resolve, reject) => {
     resolveReady = resolve;
-    rejectReadyRaw = reject;
+    rejectReady = reject;
   });
   const timer = globalThis.setTimeout(
     () =>
-      rejectReadyRaw(
+      rejectReady(
         new Error(translateSaved("Передача песни остановилась: нет ответа от участника"))
       ),
     SONG_READY_TIMEOUT_MS
   );
-  const rejectReady = (error) => {
-    globalThis.clearTimeout(timer);
-    rejectReadyRaw(error);
-  };
   if (hostSongCommandRef) {
     hostSongCommandRef.current = {
       ...command,
       expectedIds,
       readyIds: new Set(),
-      rejectReady,
       markReady(participantId) {
         this.readyIds.add(participantId);
         if ([...this.expectedIds].every((id) => this.readyIds.has(id))) resolveReady(true);

@@ -54,6 +54,26 @@ def test_analysis_filters_invalid_frames_and_calculates_sections(monkeypatch, tm
     assert (result['pitch_accuracy_percent'], result['mean_deviation_semitones'], result['sections']) == (66.7, 0.333, [{'label': 'verse', 'start': 0, 'end': 1, 'accuracy_percent': 50.0, 'mean_deviation_semitones': 0.5}, {'label': 'chorus', 'start': 1, 'end': 2, 'accuracy_percent': 100.0, 'mean_deviation_semitones': 0.0}, {'label': 'empty', 'start': 5, 'end': 6, 'accuracy_percent': None, 'mean_deviation_semitones': None}])
 
 
+def test_analysis_shifts_take_relative_frames_by_persisted_playback_offset(monkeypatch, tmp_path):
+    # The take was started at song time 90s (e.g. the user seeked before recording),
+    # so its own pitch frames are relative to take-time 0 — they must be shifted by
+    # the persisted offset before being compared against absolute song-time notes.
+    recording = models.Recording(song_id='song', filename='take.wav', path='take.wav', playback_offset_sec=90.0)
+    reference = [{'start': 90, 'end': 91, 'note': 60}, {'start': 91, 'end': 92, 'note': 62}]
+    frames = [{'time': 0.25, 'midi': 60}, {'time': 1.25, 'midi': 62}]
+    patch_many(
+        monkeypatch,
+        (analysis_service.song_service, "resolve_output_dir", lambda _song: tmp_path),
+        (analysis_service.ai_bridge, "get_reference_notes", lambda _path: reference),
+        (analysis_service, "read_json", lambda _path: []),
+        (analysis_service.ai_bridge, "analyze_vocal", lambda _p: frames),
+    )
+
+    result = analysis_service.analyze_recording(recording, domain_song(str(tmp_path)))
+
+    assert (result['pitch_accuracy_percent'], result['mean_deviation_semitones']) == (100.0, 0.0)
+
+
 def test_analysis_returns_empty_metrics_without_comparable_frames(monkeypatch, tmp_path):
     recording = models.Recording(song_id="song", filename="take.wav", path="take.wav")
     monkeypatch.setattr(analysis_service.song_service, "resolve_output_dir", lambda _song: tmp_path)

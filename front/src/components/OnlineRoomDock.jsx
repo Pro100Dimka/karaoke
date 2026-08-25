@@ -97,6 +97,11 @@ export function OnlineRoomDock() {
                 />
               ))}
             </Stack>
+            {!online.room.host && !online.participants.some((person) => person.role === "host") && (
+              <Typography role="alert" tone="danger">
+                {t("room.hostLeft")}
+              </Typography>
+            )}
             {transfer?.stage === "error" && (
               <Typography role="alert" tone="danger">
                 {transfer.error || t("room.transfer.unknownError")}

@@ -29,6 +29,8 @@ export const ruMessages = {
   "room.heading": "Комната · {role}",
   "room.role.host": "ведущий",
   "room.role.participant": "участник",
+  "room.hostLeft":
+    "Ведущий покинул комнату. Синхронизация воспроизведения и передача песен приостановлены до его возвращения.",
   "room.hidePanel": "Скрыть панель комнаты",
   "room.showPanel": "Показать панель комнаты",
   "room.copyCode": "Копировать код комнаты",

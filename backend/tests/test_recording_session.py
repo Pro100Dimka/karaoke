@@ -63,6 +63,35 @@ def test_audio_callbacks_queue_clipped_copies(monkeypatch):
     assert not output.any()
 
 
+def test_callback_stops_enqueueing_once_writer_has_died(monkeypatch):
+    # TASK 4.1: once the writer thread has crashed (disk full, I/O error, ...)
+    # nothing drains the queue anymore — the audio callback must stop feeding
+    # it, or RAM grows unbounded for as long as the session stays open.
+    session, _stream = make_session(monkeypatch)
+    input_data = np.zeros((2, 1), dtype=np.float32)
+    session._callback(input_data, 2, None, None)
+    assert session._queue.qsize() == 1
+
+    session._writer_error = RuntimeError("disk full")
+    session._callback(input_data, 2, None, None)
+    assert session._queue.qsize() == 1  # unchanged: the crashed-writer frame was dropped
+
+
+def test_queue_is_bounded_and_drops_frames_instead_of_blocking_the_audio_thread(monkeypatch):
+    # TASK 4.1: a real-time audio callback must never block on a full queue —
+    # dropping the frame is the only safe option, and the queue itself must
+    # have a finite capacity so a slow/stalled writer can't grow RAM forever.
+    session, _stream = make_session(monkeypatch)
+    assert session._queue.maxsize > 0
+    for _ in range(session._queue.maxsize):
+        session._queue.put_nowait(object())
+    assert session._queue.full()
+
+    input_data = np.zeros((2, 1), dtype=np.float32)
+    session._callback(input_data, 2, None, None)  # must not raise/block even though the queue is full
+    assert session._queue.qsize() == session._queue.maxsize
+
+
 def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path):
     session, _stream = make_session(monkeypatch)
     session._temporary_path = tmp_path / "take.wav"
@@ -210,7 +239,7 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
 
     result = recording_service.stop_recording("session")
 
-    assert result.song_id == "song" and result.duration_sec == 3
+    assert result.song_id == "song" and result.duration_sec == 3 and result.playback_offset_sec == 1.5
     database.add.assert_called_once_with(result)
     mix.assert_called_once_with(result, current_song, 1.5, 0.8, {"reverb": 0.2})
     session.close.assert_called_once_with()

@@ -125,6 +125,7 @@ def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp
     outside = tmp_path / "outside"
     outside.mkdir()
     monkeypatch.setattr(pipeline_service.config, "SONG_OUTPUT_DIR", root)
+    monkeypatch.setattr(pipeline_service.config, "SONG_LIBRARY_ROOTS", {root})
     resolve = Mock(return_value=outside)
     monkeypatch.setattr(pipeline_service.song_service, "resolve_output_dir", resolve)
     update = Mock()
@@ -139,6 +140,22 @@ def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp
     patch_attrs(monkeypatch, pipeline_service, _clear_generated_results=rebuild, _run_job=run)
     pipeline_service._run_reprocessing("song")
     rebuild.assert_called_once_with(target)
+    run.assert_called_once_with("song", reuse_vocals=True)
+
+    # A song whose output_dir lives under a HISTORICAL library root (the user
+    # changed the storage location after this song was created) must still be
+    # reprocessable — resolve_output_dir already trusts it for reads, so the
+    # ownership check here must not narrow that back down to only the current root.
+    historical_root = tmp_path / "historical-library"
+    historical_root.mkdir()
+    monkeypatch.setattr(pipeline_service.config, "SONG_LIBRARY_ROOTS", {root, historical_root})
+    historical_target = historical_root / "song"
+    historical_target.mkdir()
+    resolve.return_value = historical_target
+    rebuild.reset_mock()
+    run.reset_mock()
+    pipeline_service._run_reprocessing("song")
+    rebuild.assert_called_once_with(historical_target)
     run.assert_called_once_with("song", reuse_vocals=True)
 
 
@@ -235,6 +252,38 @@ def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch,
     assert (
         pipeline_service._update_progress.call_args.kwargs["status"] == models.SongStatus.CANCELLED
     )
+
+
+def test_run_job_refuses_full_process_when_source_was_retired_to_instrumental(monkeypatch, tmp_path):
+    patch_attrs(
+        monkeypatch, pipeline_service,
+        _load_job_paths=Mock(return_value=('instrumental.flac', tmp_path)),
+        _is_cancelled=Mock(return_value=False),
+        _source_unavailable_for_full_process=Mock(return_value=True),
+        _update_progress=Mock(),
+    )
+    process = Mock()
+    monkeypatch.setattr(pipeline_service.ai_bridge, "process_song", process)
+    pipeline_service._run_job("song")
+    process.assert_not_called()
+    assert pipeline_service._update_progress.call_args.kwargs["status"] == models.SongStatus.ERROR
+
+    # reprocess (reuse_vocals=True) never reads source_path, so the guard must not apply to it
+    reprocess = Mock()
+    monkeypatch.setattr(pipeline_service.ai_bridge, "reprocess_song", reprocess)
+    patch_attrs(
+        monkeypatch, pipeline_service,
+        _load_searchable_title=Mock(return_value=None),
+        _load_ai_inputs=Mock(return_value=(None, None, None)),
+        _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(None, None)),
+        _create_progress_capture=Mock(return_value=Mock()), _acquire_processing_slot=Mock(return_value=True),
+        _configure_ai_runtime=Mock(return_value='cpu'), format_runtime_plan=Mock(return_value=('CPU',)),
+        _create_ai_progress_callback=Mock(return_value=Mock()),
+        _stop_progress_heartbeat=Mock(), _end_runtime_progress=Mock(), _finalize_success=Mock(),
+    )
+    monkeypatch.setattr(pipeline_service.model_install_service, "ensure_ready_sync", Mock())
+    pipeline_service._run_job("song", reuse_vocals=True)
+    reprocess.assert_called_once()
 
 
 def test_run_job_maps_finalization_failure(monkeypatch, tmp_path):

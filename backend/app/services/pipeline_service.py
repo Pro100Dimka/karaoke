@@ -637,9 +637,27 @@ def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
         )
 
 
+def _source_unavailable_for_full_process(song_id: str) -> bool:
+    with _song_session(song_id) as (_db, song):
+        return song is not None and song_service.original_source_retired(song)
+
+
+def _reject_full_process_if_source_retired(song_id: str, *, reuse_vocals: bool) -> bool:
+    if reuse_vocals or not _source_unavailable_for_full_process(song_id): return False
+    _update_progress(
+        song_id,
+        status=models.SongStatus.ERROR,
+        error_message="Исходный файл песни был удалён после обработки — полная "
+        "повторная обработка недоступна. Используйте переобработку мелодии или "
+        "загрузите песню заново.",
+    )
+    return True
+
+
 def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
+    if _reject_full_process_if_source_retired(song_id, reuse_vocals=reuse_vocals): return
     source_path, out_dir = paths
     searchable_title = _load_searchable_title(song_id)
     lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
@@ -730,8 +748,15 @@ def _run_reprocessing(song_id: str) -> None:
         if song is None: return
         out_dir = song_service.resolve_output_dir(song)
         optimized = bool(getattr(song, "optimized", False))
-    output_root, target_dir = config.SONG_OUTPUT_DIR.resolve(), out_dir.resolve()
-    if target_dir.parent != output_root:
+    # A song's output_dir may live under a *historical* library root (the user
+    # changed the storage location after the song was created) rather than the
+    # current one — resolve_output_dir already trusts every root in
+    # SONG_LIBRARY_ROOTS for reads, so this ownership check must trust the same
+    # set, not just the current SONG_OUTPUT_DIR, or reprocessing would wrongly
+    # reject perfectly readable/playable historical-root songs.
+    trusted_roots = {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+    target_dir = out_dir.resolve()
+    if target_dir.parent not in trusted_roots:
         _update_progress(
             song_id,
             status=models.SongStatus.ERROR,

@@ -1,6 +1,6 @@
 import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
-import { Box, Card, Typography } from "../../../theme/ui";
+import { Box, Card, Stack, Typography } from "../../../theme/ui";
 
 export default function LibraryResults({
   canManageLibrary,
@@ -27,9 +27,17 @@ export default function LibraryResults({
     );
   if (!songs.length)
     return (
-      <Card sx={{ padding: "var(--space-8)", textAlign: "center" }}>
-        <Typography tone="muted">{tr("Пока нет ни одной песни — добавьте первую")}</Typography>
-      </Card>
+      <Stack align="center" justify="center" sx={{ minHeight: "30vh" }}>
+        <Card
+          sx={{ textAlign: "center" }}
+          cardContent={{ style: { padding: "var(--space-5)" } }}
+          variant="laser"
+        >
+          <Typography tone="muted" variant="h4">
+            {tr("Пока нет ни одной песни — добавьте первую")}
+          </Typography>
+        </Card>
+      </Stack>
     );
 
   return (

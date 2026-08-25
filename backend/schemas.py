@@ -179,7 +179,16 @@ class RecordingOut(ORMModel):
     filename: str
     duration_sec: float | None = None
     sample_rate: int | None = None
+    playback_offset_sec: float = 0
     created_at: datetime
+
+    @field_validator("playback_offset_sec", mode="before")
+    @classmethod
+    def _default_playback_offset(cls, value: object) -> object:
+        # An unflushed ORM Recording (constructed without this column set
+        # explicitly, e.g. in tests) reports None rather than the column's
+        # SQL-side default until it's committed.
+        return 0 if value is None else value
 
 
 class RecordedSongOut(RecordingOut):

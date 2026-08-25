@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import NoReturn
 
@@ -83,9 +84,93 @@ def save_release_pass() -> None:
 def fail(message: str) -> NoReturn: print(f"\n[RELEASE BLOCKED] {message}", file=sys.stderr); raise SystemExit(1)
 
 
+class StepFailure(Exception):
+    """A gate step exited non-zero. Unlike fail(), this does not exit the
+    process itself, so it can be raised from a worker thread and collected
+    by whichever caller is coordinating parallel chains."""
+
+    def __init__(self, label: str, code: int) -> None:
+        super().__init__(f"{label} failed with exit code {code}")
+        self.label = label
+        self.code = code
+
+
+# Subprocesses currently running as part of any chain (sequential or
+# parallel). run_parallel uses this to kill every sibling step the moment
+# one chain fails, instead of idly waiting for unrelated, possibly
+# multi-minute steps to finish before the release gate can report the
+# failure.
+_active_processes: list[subprocess.Popen] = []
+_active_lock = threading.Lock()
+
+
+def _start_step(label: str, command: list[str], cwd: Path, env: dict[str, str] | None) -> subprocess.Popen:
+    print(f"\n{'=' * 72}\n{label}\n{'=' * 72}", flush=True)
+    print("> " + " ".join(command), flush=True)
+    process = subprocess.Popen(command, cwd=cwd, env=env)
+    with _active_lock:
+        _active_processes.append(process)
+    return process
+
+
+def _finish_step(label: str, process: subprocess.Popen) -> None:
+    try:
+        code = process.wait()
+    finally:
+        with _active_lock:
+            if process in _active_processes:
+                _active_processes.remove(process)
+    if code:
+        raise StepFailure(label, code)
+
+
 def run(label: str, command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
-    print(f"\n{'=' * 72}\n{label}\n{'=' * 72}", flush=True); print("> " + " ".join(command), flush=True); result = subprocess.run(command, cwd=cwd, env=env, check=False)
-    if result.returncode: fail(f"{label} failed with exit code {result.returncode}")
+    process = _start_step(label, command, cwd, env)
+    try:
+        _finish_step(label, process)
+    except StepFailure as error:
+        fail(str(error))
+
+
+def run_chain(jobs: list[tuple[str, list[str], Path]]) -> None:
+    """Run steps one after another, stopping at the first failure. Raises
+    StepFailure (never exits the process) so this can drive one branch of
+    run_parallel from inside a worker thread."""
+    for label, command, cwd in jobs:
+        process = _start_step(label, command, cwd, None)
+        _finish_step(label, process)
+
+
+def run_parallel(chains: list[list[tuple[str, list[str], Path]]]) -> None:
+    """Run independent chains of sequential steps at the same time. Each
+    chain's own steps still run strictly one after another (as separate OS
+    processes), but the chains themselves overlap on separate threads, so
+    e.g. the backend suite and the frontend mutation gate no longer wait on
+    each other. If any step fails, every other currently running process is
+    terminated right away rather than letting an unrelated multi-minute
+    step run to completion before the gate reports the failure. Chains must
+    be independent: none of them may depend on another chain's output."""
+    errors: list[StepFailure] = []
+    errors_lock = threading.Lock()
+
+    def worker(chain: list[tuple[str, list[str], Path]]) -> None:
+        try:
+            run_chain(chain)
+        except StepFailure as error:
+            with errors_lock:
+                errors.append(error)
+            with _active_lock:
+                for process in _active_processes:
+                    process.terminate()
+
+    threads = [threading.Thread(target=worker, args=(chain,)) for chain in chains]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    if errors:
+        fail(str(errors[0]))
 
 
 def parse_node_version(raw: str) -> tuple[int, int, int]:
@@ -127,29 +212,45 @@ def main() -> int:
         print("\n[RELEASE GATE CACHED PASS] Tested inputs are unchanged; reusing the last complete pass.")
         return 0
 
-    run("Backend static/architecture gate", [sys.executable, str(ROOT / "scripts" / "backend" / "check.py")], cwd=BACKEND)
-    run(
-        "Backend full suite + coverage",
+    # The backend suite (Python/venv) and the frontend verify+mutation chain
+    # (Node/npm) never read each other's output, so they run as two
+    # concurrent OS processes instead of one after another. Mutation testing
+    # (test:mutation) is normally the single longest step in this gate, and
+    # it previously could not even start until the entire backend suite had
+    # finished; overlapping them removes that dead time from every release
+    # build. The E2E/Electron/Cloudflare steps below stay sequential because
+    # they build on the frontend's "verify" build output.
+    run_parallel([
         [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "--cov=app",
-            "--cov=AI",
-            "--cov=config",
-            "--cov=database",
-            "--cov=models",
-            "--cov=schemas",
-            "--cov-report=term-missing",
-            "--cov-fail-under=85",
+            (
+                "Backend static/architecture gate",
+                [sys.executable, str(ROOT / "scripts" / "backend" / "check.py")],
+                BACKEND,
+            ),
+            (
+                "Backend full suite + coverage",
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "--cov=app",
+                    "--cov=AI",
+                    "--cov=config",
+                    "--cov=database",
+                    "--cov=models",
+                    "--cov=schemas",
+                    "--cov-report=term-missing",
+                    "--cov-fail-under=85",
+                ],
+                BACKEND,
+            ),
         ],
-        cwd=BACKEND,
-    )
-
-    run("Frontend verify", [npm, "run", "verify"], cwd=FRONT)
-
-    run("Frontend mutation gate", [npm, "run", "test:mutation"], cwd=FRONT)
+        [
+            ("Frontend verify", [npm, "run", "verify"], FRONT),
+            ("Frontend mutation gate", [npm, "run", "test:mutation"], FRONT),
+        ],
+    ])
 
     run("Browser user-journey E2E", [npm, "run", "test:e2e"], cwd=FRONT)
 

@@ -177,6 +177,9 @@ def test_process_reprocess_status_and_cancel(monkeypatch):
     monkeypatch.setattr(songs.pipeline_service, "is_processing", Mock(return_value=True))
     raises(HTTPException, lambda: songs.process_song(current, database))
     songs.pipeline_service.is_processing.return_value = False
+    patch_attrs(monkeypatch, songs.song_service, original_source_retired=Mock(return_value=True))
+    raises(HTTPException, lambda: songs.process_song(current, database))
+    songs.song_service.original_source_retired.return_value = False
     queue = Mock()
     monkeypatch.setattr(songs, "_queue_song_job", queue)
     assert songs.process_song(
@@ -251,9 +254,9 @@ def test_editor_endpoints_validate_state_save_and_reset(monkeypatch):
 
 
 def test_result_and_lyrics_contracts(monkeypatch, tmp_path):
-    current = domain_song(status=models.SongStatus.PENDING, output_dir=None)
+    database, current = Mock(), domain_song(status=models.SongStatus.PENDING, output_dir=None)
     raises(HTTPException, lambda: songs.get_result(current, Response()))
-    raises(HTTPException, lambda: songs.update_lyrics(schemas.LyricsUpdate(lyrics=[]), current))
+    raises(HTTPException, lambda: songs.update_lyrics(schemas.LyricsUpdate(lyrics=[]), current, database))
     current.status = models.SongStatus.DONE
     current.output_dir = str(tmp_path)
     note = {"start": 1.25, "end": 1.75, "note": 64}
@@ -280,13 +283,53 @@ def test_result_and_lyrics_contracts(monkeypatch, tmp_path):
     reconcile = Mock(return_value=[{"text": " Hello "}, {"text": "World"}])
     monkeypatch.setattr(songs.ai_bridge, "reconcile_lyric_words", reconcile)
     body = schemas.LyricsUpdate(lyrics=[schemas.LyricLine(text="Hello", start=0, end=1, words=[])])
-    assert songs.update_lyrics(body, current) == {'status': 'saved'}
+    assert songs.update_lyrics(body, current, database) == {'status': 'saved'}
     saved = json.loads((tmp_path / "lyricsSync.json").read_text(encoding="utf-8"))
     assert saved["text"] == "Hello\nWorld" and saved["edited"] is True
     reconcile.return_value = [{"text": " "}]
-    assert songs.update_lyrics(body, current) == {"status": "saved"}
+    assert songs.update_lyrics(body, current, database) == {"status": "saved"}
     reconcile.side_effect = ValueError("bad lyrics")
-    assert_http_status(400, lambda: songs.update_lyrics(body, current))
+    assert_http_status(400, lambda: songs.update_lyrics(body, current, database))
+
+
+def test_update_lyrics_carries_notes_by_word_identity_not_array_index(monkeypatch, tmp_path):
+    database, current = Mock(), domain_song(status=models.SongStatus.DONE, output_dir=str(tmp_path))
+    hello_note, world_note = {"start": 0.3, "end": 0.8, "note": 60}, {"start": 0.8, "end": 1.3, "note": 62}
+    existing = {
+        "bpm": 120, "key": "C",
+        "words": [
+            {"text": "Hello", "start": 0.3, "end": 0.8, "notes": [hello_note]},
+            {"text": "World", "start": 0.8, "end": 1.3, "notes": [world_note]},
+        ],
+    }
+    (tmp_path / "lyricsSync.json").write_text(json.dumps(existing), encoding="utf-8")
+    patch_many(monkeypatch, (songs.song_service, "resolve_output_dir", Mock(return_value=tmp_path)))
+
+    # A new word ("Well") is inserted BEFORE "Hello" and "World", whose own
+    # timing is unchanged — a purely index-based carry-over would slide
+    # "Hello"'s notes onto "Well" and "World"'s onto "Hello". Matching by text
+    # must keep each word's own notes attached to it despite the index shift.
+    monkeypatch.setattr(
+        songs.ai_bridge, "reconcile_lyric_words",
+        Mock(return_value=[{"text": "Well Hello World", "words": [
+            {"word": "Well", "start": 0.0, "end": 0.3},
+            {"word": "Hello", "start": 0.3, "end": 0.8},
+            {"word": "World", "start": 0.8, "end": 1.3},
+        ]}]),
+    )
+    invalidate = Mock()
+    monkeypatch.setattr(songs.song_package_service, "invalidate_content_revision", invalidate)
+    body = schemas.LyricsUpdate(lyrics=[schemas.LyricLine(text="Well Hello World", start=0, end=1, words=[])])
+    assert songs.update_lyrics(body, current, database) == {"status": "saved"}
+
+    # TASK 3.1: writing lyricsSync.json must invalidate the cached content
+    # revision and bump updated_at, like every other song-content mutation.
+    invalidate.assert_called_once_with(current)
+    database.commit.assert_called_once_with()
+
+    saved = json.loads((tmp_path / "lyricsSync.json").read_text(encoding="utf-8"))
+    by_text = {word["text"]: word["notes"] for word in saved["words"]}
+    assert by_text == {"Well": [], "Hello": [hello_note], "World": [world_note]}
 
 
 def test_song_processing_is_blocked_but_explicit_delete_closes_active_recording(monkeypatch):

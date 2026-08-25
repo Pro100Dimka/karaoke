@@ -249,7 +249,15 @@ def build_package(song: models.Song, *, expected_revision: str | None = None) ->
             if manifest["content_revision"] != current_revision: raise ValueError("Song revision changed before package snapshot")
             with zipfile.ZipFile(package_path, "w", zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
                 archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-                archive.write(source, f"source/{source.name}")
+                # After processing, source_path usually already points at
+                # output/instrumental.flac (see pipeline finalization) — don't
+                # store that file a second time under source/, it would just
+                # double the archive size for no benefit (import discards the
+                # source/ copy and aliases source_path to output/instrumental.flac
+                # anyway). Only write a distinct source/ entry when it's actually
+                # a different file.
+                if source.resolve() != (output_dir / "instrumental.flac").resolve():
+                    archive.write(source, f"source/{source.name}")
                 for name in REQUIRED_OUTPUT_PATHS:
                     path = output_dir / name
                     if not path.is_file(): raise ValueError(f"Song artifact is missing: {name}")
@@ -510,7 +518,21 @@ def _source_member(members: list[zipfile.ZipInfo]) -> zipfile.ZipInfo:
         for member in members
         if _member_path(member).parts[:1] == ("source",) and not member.is_dir()
     ]
-    if len(sources) != 1: raise ValueError("Song package must contain one source file")
+    if len(sources) > 1: raise ValueError("Song package must contain one source file")
+    if not sources:
+        # No source/ entry means the exporter deduplicated it against
+        # output/instrumental.flac (they were byte-identical) — that IS the
+        # canonical source for this package.
+        instrumental = next(
+            (
+                member
+                for member in members
+                if _member_path(member) == PurePosixPath("output/instrumental.flac") and not member.is_dir()
+            ),
+            None,
+        )
+        if instrumental is None: raise ValueError("Song package must contain one source file")
+        return instrumental
     source = sources[0]
     if Path(_member_path(source).name).suffix.lower() not in config.ALLOWED_AUDIO_EXTENSIONS: raise ValueError("Song package source format is not supported")
     return source

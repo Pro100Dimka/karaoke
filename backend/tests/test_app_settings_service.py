@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -88,9 +89,18 @@ def test_settings_recover_when_installer_preferences_cannot_be_read(monkeypatch,
 
 def test_update_settings_validates_compute_and_applies_storage_paths(monkeypatch, tmp_path):
     _settings, paths, _install, _ui = configure_files(monkeypatch, tmp_path)
-    apply_paths = Mock()
+    events: list[str] = []
+    apply_paths = Mock(side_effect=lambda **_kwargs: events.append("apply"))
     monkeypatch.setattr(app_settings_service.config, "apply_storage_paths", apply_paths)
     patch_attrs(monkeypatch, app_settings_service, path_settings=lambda: {'songs_folder': str(tmp_path / 'old-songs'), 'ai_folder': str(tmp_path / 'old-models'), 'cache_folder': str(tmp_path / 'old-cache')})
+
+    @contextmanager
+    def tracking_lock():
+        events.append("enter")
+        yield
+        events.append("exit")
+
+    monkeypatch.setattr(app_settings_service.song_service, "library_write_lock", tracking_lock)
 
     raises(ValueError, lambda: app_settings_service.update_settings({'compute_mode': 'quantum'}), match='Unsupported')
 
@@ -102,6 +112,39 @@ def test_update_settings_validates_compute_and_applies_storage_paths(monkeypatch
     persisted_paths = json.loads(paths.read_text(encoding="utf-8"))
     assert persisted_paths["songs_folder"] == str(selected.resolve())
     apply_paths.assert_called_once_with(**persisted_paths)
+    # TASK 3.2: reassigning the library roots must happen while
+    # library_write_lock is held, so it can't race an in-flight song write.
+    assert events == ["enter", "apply", "exit"]
+
+
+def test_update_settings_rejects_path_changes_during_active_song_processing(monkeypatch, tmp_path):
+    from app.services import pipeline_service
+
+    configure_files(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipeline_service, "has_active_jobs", Mock(return_value=True))
+    raises(
+        ValueError,
+        lambda: app_settings_service.update_settings({"songs_folder": str(tmp_path / "songs")}),
+        match="песни стоят в очереди",
+    )
+
+
+def test_update_settings_rejects_ai_folder_changes_during_active_model_download(monkeypatch, tmp_path):
+    from app.services import model_install_service
+
+    configure_files(monkeypatch, tmp_path)
+    monkeypatch.setattr(model_install_service, "has_active_download", Mock(return_value=True))
+    raises(
+        ValueError,
+        lambda: app_settings_service.update_settings({"ai_folder": str(tmp_path / "models")}),
+        match="загрузка AI-моделей",
+    )
+    # Once no download is active, the same change must go through.
+    monkeypatch.setattr(model_install_service, "has_active_download", Mock(return_value=False))
+    apply_paths = Mock()
+    monkeypatch.setattr(app_settings_service.config, "apply_storage_paths", apply_paths)
+    app_settings_service.update_settings({"ai_folder": str(tmp_path / "models")})
+    apply_paths.assert_called_once()
 
 
 def test_update_optimization_settings_queues_remote_hardware_refresh(monkeypatch, tmp_path):

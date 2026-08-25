@@ -5,11 +5,25 @@ from typing import Any
 from .models import VocalNote, Word, to_dict
 
 LYRICS_TIME_DIGITS = 3
+# Bumped whenever the on-disk lyricsSync.json shape changes in a way that an
+# older build wouldn't understand. There's only ever been one shape so far —
+# this exists so a FUTURE format change has somewhere to check "is this file
+# older/newer than what I support" instead of guessing from field presence.
+LYRICS_SCHEMA_VERSION = 1
 
 
 def validate_lyrics_document(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict) or any(key not in payload for key in ("bpm", "key", "words")) or not isinstance(payload["words"], list):
         raise ValueError("lyricsSync.json must contain bpm, key and words")
+    schema_version = payload.get("schemaVersion", LYRICS_SCHEMA_VERSION)
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version < 1:
+        raise ValueError("lyricsSync.json has an invalid schemaVersion")
+    if schema_version > LYRICS_SCHEMA_VERSION:
+        raise ValueError(
+            f"lyricsSync.json schemaVersion {schema_version} is newer than this "
+            f"application supports (max {LYRICS_SCHEMA_VERSION})"
+        )
+    payload["schemaVersion"] = LYRICS_SCHEMA_VERSION
     previous = 0.0
     for index, word in enumerate(payload["words"]):
         if not isinstance(word, dict) or not isinstance(word.get("text"), str):

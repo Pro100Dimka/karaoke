@@ -30,7 +30,7 @@ export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
           loading="lazy"
           decoding="async"
           onError={handleCoverError}
-          sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          sx={{  width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
         <>

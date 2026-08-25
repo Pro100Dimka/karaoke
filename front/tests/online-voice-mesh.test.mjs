@@ -1892,15 +1892,63 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     mesh.createPeer("guest");
     const admissionTimer = globalThis.setTimeout(() => {}, 15_000);
+    const progress = vi.fn();
+    mesh.onTransferProgress = progress;
     mesh.incomingFileAdmissions.set("guest", {
       channel: new FakeChannel(),
       cancelled: false,
-      timer: admissionTimer
+      timer: admissionTimer,
+      metadata: { transferId: "pending" }
     });
     const clear = vi.spyOn(globalThis, "clearTimeout");
     mesh.removePeer("guest");
     expect(clear).toHaveBeenCalledWith(admissionTimer);
     expect(mesh.incomingFileAdmissions.has("guest")).toBe(false);
+    // TASK 5.4: waiting-for-admission transfers must also surface a terminal
+    // event, or the sender's caller (syncSong/openKaraokeInRoom) hangs.
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ participantId: "guest", stage: "cancelled", metadata: { transferId: "pending" } })
+    );
+  });
+  test("surfaces a cancelled transfer event when the sending peer disconnects mid-receive", () => {
+    // TASK 5.4: the owner of a file we're receiving can disconnect mid-transfer
+    // (host push, network drop, tab closed) — removePeer used to wipe the
+    // incoming-transfer state silently, leaving OnlineRoomContext's pending
+    // song command waiting on an event that would never arrive.
+    const mesh = makeMesh();
+    const progress = vi.fn();
+    mesh.onTransferProgress = progress;
+    mesh.createPeer("host");
+    mesh.incomingFiles.set("host", {
+      metadata: { transferId: "song-1", commandId: "cmd-1" },
+      lastPercent: 42,
+      timer: 0,
+      sink: { cleanup: vi.fn() }
+    });
+    mesh.removePeer("host");
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        participantId: "host",
+        stage: "cancelled",
+        percent: 42,
+        metadata: { transferId: "song-1", commandId: "cmd-1" }
+      })
+    );
+    expect(mesh.incomingFiles.has("host")).toBe(false);
+  });
+  test("surfaces a cancelled transfer event when the receiving data channel closes mid-receive", () => {
+    const { mesh, channel } = setupChannel("host");
+    const progress = vi.fn();
+    mesh.onTransferProgress = progress;
+    mesh.incomingFiles.set("host", {
+      channel,
+      metadata: { transferId: "song-2" },
+      lastPercent: 10,
+      timer: 0,
+      sink: { cleanup: vi.fn() }
+    });
+    channel.onclose();
+    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ participantId: "host", stage: "cancelled", percent: 10 }));
   });
   test("cancels a file transfer when its channel closes after the last chunk", async () => {
     const mesh = makeMesh();

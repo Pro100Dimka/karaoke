@@ -69,7 +69,11 @@ class RecordingSession:
             for name in ("reverb", "echo", "delay")
         }
         self.playback_offset_sec = max(0.0, playback_offset_sec)
-        self._queue: queue.Queue[Any] = queue.Queue()
+        # Bounded so a stalled/dead writer can't make the audio callback pile up
+        # unbounded RAM forever; ~2000 blocks is several seconds of headroom at
+        # the small blocksizes this session uses, generous enough to absorb a
+        # transient write hiccup without ever growing without limit.
+        self._queue: queue.Queue[Any] = queue.Queue(maxsize=2000)
         self._writer_ready = threading.Event()
         self._writer_thread: threading.Thread | None = None
         self._writer_error: BaseException | None = None
@@ -106,15 +110,18 @@ class RecordingSession:
                 callback=self._callback,
             )
 
+    def _enqueue(self, chunk) -> None:
+        if self._writer_error is not None: return  # writer already died; stop feeding a dead consumer
+        # Drop the frame rather than block the real-time audio thread.
+        with contextlib.suppress(queue.Full): self._queue.put_nowait(chunk)
+
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
         if not self._paused:
-            self._queue.put(
-                self._quality.process(indata, self.gain, self.noise_suppression).copy()
-            )
+            self._enqueue(self._quality.process(indata, self.gain, self.noise_suppression).copy())
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
         processed = self._quality.process(indata, self.gain, self.noise_suppression)
-        if not self._paused: self._queue.put(processed.copy())
+        if not self._paused: self._enqueue(processed.copy())
         outdata.fill(0)
         if self._monitoring_enabled:
             for channel in range(outdata.shape[1]): outdata[:, channel] = processed[:, 0]
@@ -392,6 +399,7 @@ def stop_recording(session_id: str) -> models.Recording:
                 path=str(out_path),
                 duration_sec=duration_sec,
                 sample_rate=sample_rate,
+                playback_offset_sec=session.playback_offset_sec,
             )
             db.add(recording)
             commit_refresh(db, recording)

@@ -15,7 +15,7 @@ import config
 import models
 import schemas
 from app import repositories
-from app.services import revision_cache
+from app.services import revision_cache, song_artifacts
 from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
@@ -75,6 +75,19 @@ def resolve_output_dir(song: models.Song) -> Path:
     path = Path(
         song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
     return resolve_library_path(path)
+
+
+def original_source_retired(song: models.Song) -> bool:
+    """True once the true original upload has been deleted and ``source_path``
+    now points at the produced instrumental instead (see pipeline finalization).
+    A full reprocess cannot run from this state because there is no longer a
+    vocal+instrumental mix to separate."""
+    try:
+        source, output_dir = resolve_source_path(song), resolve_output_dir(song)
+    except ValueError:
+        return False
+    instrumental = song_artifacts.resolve_audio_artifact(output_dir, "instrumental")
+    return instrumental is not None and source == instrumental.resolve()
 
 
 def _cover_extension(payload: bytes) -> str | None:
@@ -296,13 +309,17 @@ def _identity_key(artist: str | None, title: str) -> str:
 
 
 def _find_duplicate(db: Session, artist: str | None, title: str) -> models.Song | None:
-    del artist
-    expected = _identity_key(None, title)
+    # Identity is artist+title, not title alone — otherwise unrelated songs that
+    # happen to share a title (e.g. two different artists' "Home") would collide.
+    # When one side has no known artist, _identity_key naturally falls back to a
+    # title-only key, so an untagged upload can still match an existing entry
+    # that also has no artist.
+    expected = _identity_key(artist, title)
     if not expected: return None
     songs = db.scalars(select(models.Song))
     if not hasattr(songs, "__iter__"): return None
     for song in songs:
-        if _identity_key(None, song.title) == expected: return song
+        if _identity_key(song.artist, song.title) == expected: return song
     return None
 
 

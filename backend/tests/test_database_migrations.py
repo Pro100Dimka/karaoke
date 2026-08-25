@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, Mock
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import StaticPool
 
 import database
 from tests._shared import patch_attrs, raises
@@ -127,6 +128,7 @@ def test_init_db_orchestrates_schema_migrations_and_repairs(monkeypatch):
     inspector.get_columns.side_effect = [
         [{"name": "title"}],
         [{"name": "volume"}],
+        [{"name": "filename"}],
     ]
     connection = engine.begin.return_value.__enter__.return_value
     patch_attrs(monkeypatch, database, engine=engine, inspect=Mock(return_value=inspector))
@@ -138,10 +140,63 @@ def test_init_db_orchestrates_schema_migrations_and_repairs(monkeypatch):
     database.init_db()
 
     create_all.assert_called_once_with(bind=engine)
-    assert additive.call_count == 2
+    assert additive.call_count == 3
     datetime_repair.assert_called_once_with(connection)
     settings_repair.assert_called_once_with(connection)
     interrupted.assert_called_once_with(connection)
+
+
+def test_init_db_upgrades_a_real_pre_migration_database_in_place(monkeypatch):
+    # A minimal stand-in for a database file saved by an old release: only the
+    # columns that existed before every additive migration below was added.
+    # This exercises the actual upgrade path end-to-end (not mocked), on a
+    # StaticPool sqlite:// engine so the schema persists across connections
+    # like a real file would, and checks existing data survives untouched.
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE songs (id TEXT PRIMARY KEY, title TEXT NOT NULL, "
+            "original_filename TEXT NOT NULL, source_path TEXT NOT NULL, "
+            "slug TEXT UNIQUE NOT NULL, output_dir TEXT, status TEXT NOT NULL DEFAULT 'PENDING', "
+            "progress_step TEXT, progress_percent FLOAT, error_message TEXT, "
+            "key_override TEXT, tempo_override FLOAT, note_range_min INTEGER, "
+            "note_range_max INTEGER, difficulty_override TEXT, show_lyrics BOOLEAN, "
+            "show_notes BOOLEAN, optimized BOOLEAN, created_at DATETIME, updated_at DATETIME)"
+        ))
+        connection.execute(text(
+            "INSERT INTO songs (id, title, original_filename, source_path, slug) "
+            "VALUES ('old-song', 'Old Song', 'old.mp3', '/library/old-song/source.mp3', 'old-song')"
+        ))
+        connection.execute(text(
+            "CREATE TABLE recordings (id TEXT PRIMARY KEY, song_id TEXT, filename TEXT NOT NULL, "
+            "path TEXT NOT NULL, duration_sec FLOAT, sample_rate INTEGER, created_at DATETIME)"
+        ))
+        connection.execute(text(
+            "INSERT INTO recordings (id, song_id, filename, path) "
+            "VALUES ('old-rec', 'old-song', 'take.wav', '/library/old-song/recordings/take.wav')"
+        ))
+
+    patch_attrs(monkeypatch, database, engine=engine)
+    # Real create_all: it only creates TABLES that don't exist yet (audio_settings,
+    # playback_state, ...) and leaves the already-existing songs/recordings tables
+    # alone, so this still exercises the additive-column-migration path for them.
+    database.init_db()
+
+    with engine.begin() as connection:
+        song_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(songs)"))}
+        recording_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(recordings)"))}
+        assert {"video_url", "artist", "genre", "key_user_edited", "tempo_user_edited"} <= song_columns
+        assert "playback_offset_sec" in recording_columns
+
+        song = connection.execute(text("SELECT title, video_url FROM songs WHERE id = 'old-song'")).one()
+        assert song == ("Old Song", None)
+        recording = connection.execute(
+            text("SELECT filename, playback_offset_sec FROM recordings WHERE id = 'old-rec'")
+        ).one()
+        assert recording == ("take.wav", 0)
+    engine.dispose()
 
 
 def test_database_dependency_closes_session(monkeypatch):

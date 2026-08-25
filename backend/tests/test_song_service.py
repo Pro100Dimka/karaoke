@@ -23,6 +23,25 @@ def test_library_lock_and_owned_path_validation(monkeypatch, tmp_path):
     assert (song_service.resolve_source_path(current) == nested.resolve()) and (song_service.resolve_output_dir(current) == (root / 'song').resolve())
 
 
+def test_original_source_retired_detects_instrumental_takeover(monkeypatch, tmp_path):
+    root = tmp_path / "library"
+    root.mkdir()
+    monkeypatch.setattr(song_service.config, "SONG_OUTPUT_DIR", root)
+    output_dir = root / "song"
+    output_dir.mkdir()
+    instrumental = output_dir / "instrumental.flac"
+    instrumental.write_bytes(b"data")
+
+    still_original = make_song(source_path=str(output_dir / "source.wav"), output_dir=str(output_dir))
+    assert song_service.original_source_retired(still_original) is False
+
+    retired = make_song(source_path=str(instrumental), output_dir=str(output_dir))
+    assert song_service.original_source_retired(retired) is True
+
+    outside = make_song(source_path=str(tmp_path / "outside.wav"), output_dir=str(output_dir))
+    assert song_service.original_source_retired(outside) is False
+
+
 def test_slug_presence_checks_database_and_files(monkeypatch, tmp_path):
     monkeypatch.setattr(song_service.config, "SONG_OUTPUT_DIR", tmp_path)
     database = Mock()
@@ -134,11 +153,18 @@ def test_create_song_persists_bytes_and_cleans_commit_failure(monkeypatch, tmp_p
     assert not (tmp_path / "custom/source.wav").exists()
 
 
-def test_duplicate_title_is_unicode_case_and_artist_insensitive():
+def test_duplicate_identity_is_unicode_and_case_insensitive_but_artist_specific():
     database = Mock()
-    database.scalars.return_value = [SimpleNamespace(artist="Other", title="  МОЯ   ЛЕДИ ")]
-    duplicate = song_service._find_duplicate(database, "Нервы", "Моя леди")
-    assert duplicate is database.scalars.return_value[0]
+    database.scalars.return_value = [SimpleNamespace(artist="Нервы", title="  МОЯ   ЛЕДИ ")]
+    # Same artist+title (modulo unicode normalization/case/whitespace) matches.
+    assert song_service._find_duplicate(database, "Нервы", "Моя леди") is database.scalars.return_value[0]
+    # Same title but a DIFFERENT artist must NOT be treated as the same song.
+    assert song_service._find_duplicate(database, "Other Artist", "Моя леди") is None
+    # Neither side has a known artist: falls back to matching on title alone.
+    database.scalars.return_value = [SimpleNamespace(artist=None, title="Home")]
+    assert song_service._find_duplicate(database, None, "Home") is database.scalars.return_value[0]
+    # A known artist should not silently collide with an untagged same-title entry.
+    assert song_service._find_duplicate(database, "Artist A", "Home") is None
 
 
 def test_create_song_from_streamed_path_moves_nonempty_source(monkeypatch, tmp_path):

@@ -23,7 +23,7 @@ test("installer theme and optional-model handoff remain wired", () => {
     /Result := DrivePath \+ '\{#MyAppName\}';/,
     /\{app\}\\data\\backend/,
     /\{app\}\\data\\models/,
-    /\{app\}\\data\\cache/,
+    /\{app\}\\data\\generated/,
     /\{app\}\\data\\logs/,
     /DestDir: "\{app\}\\\.install"/,
     /FileCopy\(SelectedIconPath\(''\), ThemeIconPath, False\)/,

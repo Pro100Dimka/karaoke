@@ -72,35 +72,16 @@ const logRequest = (payload) =>
     body: JSON.stringify(payload),
   });
 
-test("keeps one root log object per device and appends only warnings and errors", async () => {
+test("stores a plain-text log message under a sanitized per-user key", async () => {
   const bucket = new FakeR2();
-  bucket.objects.set("logs/legacy/old.log", "old");
-  const base = {
-    device_id: "pc-abcdef123456",
-    display_name: "Studio PC",
-    hardware: { cpu: "Test CPU", settings: { thread_count: 8 } },
-    events: [
-      { timestamp: "2026-08-21T10:00:00Z", level: "WARNING", message: "first" },
-      { timestamp: "2026-08-21T10:00:01Z", level: "INFO", message: "discard me" },
-    ],
-  };
-  let response = await handleLogUpload(logRequest(base), { LOGS: bucket });
-  assert.equal(response.status, 200);
-  response = await handleLogUpload(
-    logRequest({
-      device_id: base.device_id,
-      events: [{ timestamp: "2026-08-21T10:01:00Z", level: "ERROR", message: "second" }],
-    }),
+  const response = await handleLogUpload(
+    logRequest({ user: "Studio PC", message: "something went wrong" }),
     { LOGS: bucket }
   );
   assert.equal(response.status, 200);
-  assert.deepEqual([...bucket.objects.keys()], ["pc-abcdef123456.json"]);
-  const stored = JSON.parse(bucket.objects.get("pc-abcdef123456.json"));
-  assert.deepEqual(stored.events.map(({ level, message }) => [level, message]), [
-    ["WARNING", "first"],
-    ["ERROR", "second"],
-  ]);
-  assert.equal(stored.hardware.settings.thread_count, 8);
+  const [key] = [...bucket.objects.keys()];
+  assert.match(key, /^logs\/Studio PC\/.+\.log$/);
+  assert.equal(bucket.objects.get(key), "something went wrong");
 });
 
 test("rejects batches without hardware, warnings or errors", async () => {
@@ -114,8 +95,33 @@ test("rejects batches without hardware, warnings or errors", async () => {
   assert.equal(response.status, 400);
 });
 
-test("guest can broadcast shared library filters including sort", async () => {
-  const sender = new FakeSocket({ id: "sender", role: "guest" });
+test("marks the departure broadcast as wasHost when the host disconnects, but not for a guest", async () => {
+  const host = new FakeSocket({ id: "host", name: "Host", role: "host", micMuted: false });
+  const guest = new FakeSocket({ id: "guest", name: "Guest", role: "guest", micMuted: false });
+  const room = new KaraokeRoom({ getWebSockets: () => [guest] });
+
+  await room.webSocketClose(host, 1000, "gone");
+
+  assert.deepEqual(guest.messages.at(-1), {
+    type: "participant-left",
+    participantId: "host",
+    wasHost: true,
+  });
+
+  const secondGuest = new FakeSocket({ id: "guest-2", name: "Guest 2", role: "guest", micMuted: false });
+  const roomAfterGuestLeaves = new KaraokeRoom({ getWebSockets: () => [secondGuest] });
+
+  await roomAfterGuestLeaves.webSocketClose(guest, 1000, "gone");
+
+  assert.deepEqual(secondGuest.messages.at(-1), {
+    type: "participant-left",
+    participantId: "guest",
+    wasHost: false,
+  });
+});
+
+test("host can broadcast shared library filters including sort", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "host" });
   const target = new FakeSocket({ id: "target", role: "guest" });
   const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
   const filters = { genre: "Rock", key: "Am", status: "done", sort: "artist" };
@@ -130,8 +136,8 @@ test("guest can broadcast shared library filters including sort", async () => {
   });
 });
 
-test("guest can broadcast all shared karaoke preferences", async () => {
-  const sender = new FakeSocket({ id: "sender", role: "guest" });
+test("host can broadcast all shared karaoke preferences", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "host" });
   const target = new FakeSocket({ id: "target", role: "guest" });
   const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
   const karaoke = {
@@ -153,5 +159,39 @@ test("guest can broadcast all shared karaoke preferences", async () => {
     type: "ui",
     fromId: "sender",
     state: { karaoke },
+  });
+});
+
+test("a guest cannot broadcast host-only state like library filters or karaoke preferences", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "guest" });
+  const target = new FakeSocket({ id: "target", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
+
+  await room.webSocketMessage(
+    sender,
+    JSON.stringify({ type: "ui", state: { filters: { genre: "Rock" } } })
+  );
+
+  assert.deepEqual(sender.closed, { code: 1008, reason: "Некорректное сообщение комнаты." });
+  assert.equal(target.messages.length, 0);
+});
+
+test("any participant can broadcast their own effects and shared library songs", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "guest" });
+  const target = new FakeSocket({ id: "target", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
+  const participantEffects = { dry: 0.5, wet: 0.5 };
+  const songs = [{ id: "song-1", title: "Song" }];
+
+  await room.webSocketMessage(
+    sender,
+    JSON.stringify({ type: "ui", state: { participantEffects, songs } })
+  );
+
+  assert.equal(sender.closed, null);
+  assert.deepEqual(target.messages.at(-1), {
+    type: "ui",
+    fromId: "sender",
+    state: { participantEffects, songs },
   });
 });

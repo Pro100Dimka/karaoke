@@ -1,6 +1,7 @@
 import pytest
 
 from AI.lyrics_document import (
+    LYRICS_SCHEMA_VERSION,
     flatten_word_notes,
     replace_word_notes,
     validate_lyrics_document,
@@ -28,6 +29,23 @@ def test_accepts_exact_word_note_contract():
     )
 
     assert validate_lyrics_document(payload) is payload
+
+
+def test_schema_version_defaults_and_rejects_unsupported_values():
+    # A document with no schemaVersion (every file saved before this field
+    # existed) is treated as the current version and stamped with it.
+    legacy = document()
+    assert validate_lyrics_document(legacy)["schemaVersion"] == LYRICS_SCHEMA_VERSION
+
+    current = {**document(), "schemaVersion": LYRICS_SCHEMA_VERSION}
+    assert validate_lyrics_document(current)["schemaVersion"] == LYRICS_SCHEMA_VERSION
+
+    for bad_version in (0, -1, "1", 1.5, True):
+        with pytest.raises(ValueError, match="schemaVersion"):
+            validate_lyrics_document({**document(), "schemaVersion": bad_version})
+
+    with pytest.raises(ValueError, match="newer than this application"):
+        validate_lyrics_document({**document(), "schemaVersion": LYRICS_SCHEMA_VERSION + 1})
 
 
 def test_validation_does_not_rewrite_acoustically_detected_notes():

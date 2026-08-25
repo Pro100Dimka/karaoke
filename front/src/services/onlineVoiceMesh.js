@@ -1,5 +1,10 @@
-import { translateSaved as translate } from "../i18n/runtime";
-import { acquireMicrophone } from "./microphoneCapture";
+// eslint-disable-next-line import/extensions
+import { translateSaved } from "../i18n/runtime";
+import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
+import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
+// Audio is transferred directly between participants. The Worker is used only
+// for signalling, therefore microphone data is never stored in the cloud.
+
 import { cleanupIncomingTransfer } from "./onlineVoiceTransferStorage";
 import {
   cancelOutboundTransfers,
@@ -7,137 +12,170 @@ import {
   createIncomingTransferTimer,
   emitTransferProgress,
   sendFile,
+  sendSongSyncError,
   setupDataChannel,
   waitForDataChannel
 } from "./onlineVoiceTransfers";
 
-const ICE_LIMIT = 256;
-const validParticipant = (id) => typeof id === "string" && id.length > 0 && id.length <= 128;
-
+const MAX_PENDING_ICE_CANDIDATES = 256;
 export default class OnlineVoiceMesh {
   constructor(roomClient) {
-    Object.assign(this, {
-      roomClient,
-      peers: new Map(),
-      pendingCandidates: new Map(),
-      pendingInvites: new Set(),
-      invitePromises: new Map(),
-      signalPromises: new Map(),
-      peerVersions: new Map(),
-      channels: new Map(),
-      incomingFiles: new Map(),
-      incomingFileAdmissions: new Map(),
-      pendingTransferConfirmations: new Map(),
-      pendingTransferAdmissions: new Map(),
-      pendingTransferCredits: new Map(),
-      outboundTransfers: new Map(),
-      disconnectTimers: new Map(),
-      stream: null,
-      microphoneGraph: null,
-      microphoneLease: null,
-      startPromise: null,
-      lifecycleVersion: 0,
-      onRemoteStream: null,
-      onPeerClosed: null,
-      canAcceptFile: null,
-      onFile: null,
-      onTransferProgress: null
-    });
+    this.roomClient = roomClient;
+    this.peers = new Map();
+    this.pendingCandidates = new Map();
+    this.pendingInvites = new Set();
+    this.invitePromises = new Map();
+    this.signalPromises = new Map();
+    this.peerVersions = new Map();
+    this.channels = new Map();
+    this.incomingFiles = new Map();
+    this.incomingFileAdmissions = new Map();
+    this.pendingTransferConfirmations = new Map();
+    this.pendingTransferAdmissions = new Map();
+    this.pendingTransferCredits = new Map();
+    this.outboundTransfers = new Map();
+    this.stream = null;
+    this.microphoneGraph = null;
+    this.startPromise = null;
+    this.lifecycleVersion = 0;
+    this.onRemoteStream = null;
+    this.onPeerClosed = null;
+    this.canAcceptFile = null;
+    this.onFile = null;
+    this.onSongPullRequest = null;
+    this.onSongPullError = null;
+    this.onTransferProgress = null;
+    this.disconnectTimers = new Map();
   }
 
   async start() {
-    if (!globalThis.navigator?.mediaDevices?.getUserMedia)
-      throw new Error(translate("Захват микрофона не поддерживается в этом окружении"));
-    if (this.stream?.getAudioTracks?.().some(({ readyState }) => readyState === "live"))
-      return this.stream;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error(translateSaved("Захват микрофона не поддерживается в этом окружении"));
+    }
+    const liveStream = this.stream?.getAudioTracks?.().some((track) => track.readyState === "live");
+    if (liveStream) return this.stream;
     if (this.stream) {
-      await this.microphoneLease?.release();
-      Object.assign(this, { microphoneLease: null, microphoneGraph: null, stream: null });
+      if (this.microphoneGraph) {
+        await closeAudioContext(this.microphoneGraph);
+        this.microphoneGraph = null;
+      } else this.stream.getTracks?.().forEach((track) => track.stop());
+      this.stream = null;
     }
     if (this.startPromise) return this.startPromise;
-    const version = this.lifecycleVersion;
-    let lease;
-    const operation = acquireMicrophone()
-      .then(async (capture) => {
-        lease = capture;
-        if (version !== this.lifecycleVersion) {
-          await capture.release();
-          throw new Error(translate("Запуск микрофона отменён"));
+    const { lifecycleVersion } = this;
+    let capturedStream;
+    const startPromise = navigator.mediaDevices
+      .getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: true,
+          autoGainControl: false,
+          channelCount: 1,
+          sampleRate: { ideal: 48_000 },
+          sampleSize: { ideal: 24 }
         }
-        this.microphoneLease = capture;
-        this.stream = capture.stream;
-        this.stream.getAudioTracks().forEach((track) => {
+      })
+      .then(async (stream) => {
+        capturedStream = stream;
+        if (lifecycleVersion !== this.lifecycleVersion) {
+          stream.getTracks().forEach((track) => track.stop());
+          throw new Error(translateSaved("Запуск микрофона отменён"));
+        }
+        this.microphoneGraph = createStudioMicrophoneGraph(stream);
+        const outgoingStream = this.microphoneGraph.stream || stream;
+        this.stream = outgoingStream;
+        outgoingStream.getAudioTracks().forEach((track) => {
           track.contentHint = "music";
         });
-        for (const [id, peer] of this.peers) {
-          const sent = new Set(
+        for (const [participantId, peer] of this.peers) {
+          const existingTrackIds = new Set(
+            // Stryker disable next-line MethodExpression: track IDs are non-empty.
             peer
               .getSenders()
-              .map(({ track }) => track?.id)
+              .map((sender) => sender.track?.id)
               .filter(Boolean)
           );
-          this.stream.getTracks().forEach((track) => {
-            if (!sent.has(track.id)) peer.addTrack(track, this.stream);
+          outgoingStream.getTracks().forEach((track) => {
+            if (!existingTrackIds.has(track.id)) peer.addTrack(track, stream);
           });
           await this.optimizeAudioSenders(peer);
-          this.pendingInvites.add(id);
+          this.pendingInvites.add(participantId);
         }
-        const invites = [...this.pendingInvites];
+        const pending = [...this.pendingInvites];
         this.pendingInvites.clear();
-        await Promise.allSettled(invites.map((id) => this.invite(id)));
-        return this.stream;
+        await Promise.allSettled(pending.map((participantId) => this.invite(participantId)));
+        return outgoingStream;
       })
       .catch(async (error) => {
-        if (this.microphoneLease === lease) this.microphoneLease = null;
-        await lease?.release();
-        Object.assign(this, { microphoneGraph: null, stream: null });
+        if (this.microphoneGraph?.rawStream === capturedStream) {
+          await closeAudioContext(this.microphoneGraph);
+          this.microphoneGraph = null;
+          this.stream = null;
+        } else capturedStream?.getTracks?.().forEach((track) => track.stop());
         throw error;
       })
       .finally(() => {
-        if (this.startPromise === operation) this.startPromise = null;
+        if (this.startPromise === startPromise) this.startPromise = null;
       });
-    this.startPromise = operation;
-    return operation;
+    this.startPromise = startPromise;
+    return startPromise;
   }
 
   createPeer(participantId) {
-    if (!validParticipant(participantId))
-      throw new TypeError(translate("Некорректный идентификатор участника"));
-    if (typeof globalThis.RTCPeerConnection !== "function")
-      throw new Error(translate("WebRTC не поддерживается в этом окружении"));
-    if (this.peers.has(participantId)) return this.peers.get(participantId);
-    const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
-    this.stream?.getTracks().forEach((track) => peer.addTrack(track, this.stream));
-    if (this.stream) this.optimizeAudioSenders(peer);
-    const current = () => this.peers.get(participantId) === peer;
+    if (typeof participantId !== "string" || !participantId || participantId.length > 128) {
+      throw new TypeError(translateSaved("Некорректный идентификатор участника"));
+    }
+    if (typeof globalThis.RTCPeerConnection !== "function") {
+      throw new Error(translateSaved("WebRTC не поддерживается в этом окружении"));
+    }
+    const current = this.peers.get(participantId);
+    if (current) return current;
+    const peer = new globalThis.RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }]
+    });
+    this.stream?.getTracks().forEach((track) => {
+      peer.addTrack(track, this.stream);
+    });
+    const isCurrentPeer = () => this.peers.get(participantId) === peer;
     peer.onicecandidate = ({ candidate }) => {
-      if (candidate && current())
-        this.roomClient.send("signal", { targetId: participantId, signal: { candidate } });
+      if (!candidate || !isCurrentPeer()) return;
+      this.roomClient.send("signal", { targetId: participantId, signal: { candidate } });
     };
     peer.ontrack = ({ streams }) => {
       const stream = streams[0];
       if (!stream) return;
-      if (current()) this.onRemoteStream?.(participantId, stream);
-      else stream.getTracks?.().forEach((track) => track.stop());
+      if (!isCurrentPeer()) {
+        stream.getTracks?.().forEach((track) => track.stop());
+        return;
+      }
+      this.onRemoteStream?.(participantId, stream);
     };
-    peer.ondatachannel = ({ channel }) =>
-      current() ? this.setupDataChannel(participantId, channel) : channel.close?.();
+    peer.ondatachannel = ({ channel }) => {
+      if (!isCurrentPeer()) {
+        channel.close?.();
+        return;
+      }
+      this.setupDataChannel(participantId, channel);
+    };
     peer.onconnectionstatechange = () => {
-      if (!current()) return;
-      const timer = this.disconnectTimers.get(participantId);
-      if (timer) clearTimeout(timer);
-      this.disconnectTimers.delete(participantId);
-      if (["failed", "closed"].includes(peer.connectionState))
-        return this.removePeer(participantId);
-      if (peer.connectionState === "disconnected")
-        this.disconnectTimers.set(
-          participantId,
-          setTimeout(() => {
-            this.disconnectTimers.delete(participantId);
-            if (current() && peer.connectionState === "disconnected")
-              this.removePeer(participantId);
-          }, 10_000)
-        );
+      if (!isCurrentPeer()) return;
+      const previousTimer = this.disconnectTimers.get(participantId);
+      if (previousTimer) {
+        globalThis.clearTimeout(previousTimer);
+        this.disconnectTimers.delete(participantId);
+      }
+      if (["failed", "closed"].includes(peer.connectionState)) {
+        this.removePeer(participantId);
+        return;
+      }
+      if (peer.connectionState === "disconnected") {
+        const timer = globalThis.setTimeout(() => {
+          this.disconnectTimers.delete(participantId);
+          if (isCurrentPeer() && peer.connectionState === "disconnected")
+            this.removePeer(participantId);
+        }, 10_000);
+        this.disconnectTimers.set(participantId, timer);
+      }
     };
     this.peers.set(participantId, peer);
     return peer;
@@ -150,131 +188,122 @@ export default class OnlineVoiceMesh {
         .filter((sender) => sender.track?.kind === "audio" && sender.setParameters)
         .map(async (sender) => {
           const parameters = sender.getParameters();
-          parameters.encodings = (parameters.encodings?.length ? parameters.encodings : [{}]).map(
-            (encoding) => ({ ...encoding, maxBitrate: 256_000, networkPriority: "high" })
-          );
+          const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+          parameters.encodings = encodings.map((encoding) => ({
+            ...encoding,
+            maxBitrate: 256_000,
+            networkPriority: "high"
+          }));
           parameters.degradationPreference = "maintain-framerate";
           await sender.setParameters(parameters);
         })
     );
   }
 
-  invite(participantId) {
-    if (!participantId) return Promise.resolve(false);
-    if (this.invitePromises.has(participantId)) return this.invitePromises.get(participantId);
-    const version = this.lifecycleVersion;
+  async invite(participantId) {
+    if (!participantId) return false;
+    const pendingInvite = this.invitePromises.get(participantId);
+    if (pendingInvite) return pendingInvite;
+    const { lifecycleVersion } = this;
     const peer = this.createPeer(participantId);
-    const current = () =>
-      version === this.lifecycleVersion &&
+    const isCurrentPeer = () =>
+      lifecycleVersion === this.lifecycleVersion &&
       this.peers.get(participantId) === peer &&
       peer.connectionState !== "closed";
-    const operation = (async () => {
-      // Do not start a second offer while an incoming/outgoing SDP exchange is still active.
-      // Creating the data channel before setLocalDescription in that state can leave a
-      // permanently `connecting` zombie channel, which later makes song transfers time out.
-      if (
-        this.signalPromises.has(participantId) ||
-        (peer.signalingState && peer.signalingState !== "stable")
-      )
-        return false;
-
-      let createdChannel = null;
-      const discardCreatedChannel = () => {
-        if (!createdChannel || this.channels.get(participantId) !== createdChannel) return;
-        if (createdChannel.readyState === "open") return;
-        this.channels.delete(participantId);
-        createdChannel.close?.();
-      };
-
+    const invitePromise = (async () => {
       if (!this.channels.has(participantId)) {
-        createdChannel = peer.createDataChannel("karaoke-library", { ordered: true });
-        this.setupDataChannel(participantId, createdChannel);
+        this.setupDataChannel(
+          participantId,
+          peer.createDataChannel("karaoke-library", { ordered: true })
+        );
       }
       try {
         const offer = await peer.createOffer();
-        if (!current()) {
-          discardCreatedChannel();
-          return false;
-        }
+        if (!isCurrentPeer()) return false;
         await peer.setLocalDescription(offer);
-        const sent =
-          current() && peer.localDescription
-            ? this.roomClient.send("signal", {
-                targetId: participantId,
-                signal: { description: peer.localDescription }
-              })
-            : false;
-        if (!sent) discardCreatedChannel();
-        return Boolean(sent);
+        if (!isCurrentPeer() || !peer.localDescription) return false;
+        return this.roomClient.send("signal", {
+          targetId: participantId,
+          signal: { description: peer.localDescription }
+        });
       } catch (error) {
-        discardCreatedChannel();
-        if (!current()) return false;
+        if (!isCurrentPeer()) return false;
         throw error;
       }
     })().finally(() => {
-      if (this.invitePromises.get(participantId) === operation)
+      if (this.invitePromises.get(participantId) === invitePromise)
         this.invitePromises.delete(participantId);
     });
-    this.invitePromises.set(participantId, operation);
-    return operation;
+    this.invitePromises.set(participantId, invitePromise);
+    return invitePromise;
   }
 
-  accept(fromId, signal) {
-    if (!validParticipant(fromId) || !signal || typeof signal !== "object" || Array.isArray(signal))
-      return Promise.resolve(false);
+  async accept(fromId, signal) {
+    if (
+      typeof fromId !== "string" ||
+      !fromId ||
+      fromId.length > 128 ||
+      !signal ||
+      typeof signal !== "object" ||
+      Array.isArray(signal)
+    ) {
+      return false;
+    }
     const peerVersion = this.peerVersions.get(fromId) || 0;
-    const previous = this.signalPromises.get(fromId) || Promise.resolve();
-    const operation = previous
+    const previousSignal = this.signalPromises.get(fromId) || Promise.resolve();
+    const signalPromise = previousSignal
       .catch(() => {})
       .then(async () => {
         if ((this.peerVersions.get(fromId) || 0) !== peerVersion) return false;
-        const lifecycle = this.lifecycleVersion;
+        const { lifecycleVersion } = this;
         const peer = this.createPeer(fromId);
-        const current = () =>
-          lifecycle === this.lifecycleVersion &&
+        const isCurrentPeer = () =>
+          lifecycleVersion === this.lifecycleVersion &&
           (this.peerVersions.get(fromId) || 0) === peerVersion &&
           this.peers.get(fromId) === peer &&
           peer.connectionState !== "closed";
         if (signal.candidate) {
-          if (!current()) return false;
+          if (!isCurrentPeer()) return false;
           if (peer.remoteDescription) {
             await peer.addIceCandidate(signal.candidate);
-            return current();
+            return isCurrentPeer();
           }
-          const pending = this.pendingCandidates.get(fromId) || [];
-          if (pending.length >= ICE_LIMIT) {
+          const queue = this.pendingCandidates.get(fromId) || [];
+          if (queue.length >= MAX_PENDING_ICE_CANDIDATES) {
             this.removePeer(fromId);
-            throw new Error(translate("Получено слишком много ICE-кандидатов"));
+            throw new Error(translateSaved("Получено слишком много ICE-кандидатов"));
           }
-          pending.push(signal.candidate);
-          this.pendingCandidates.set(fromId, pending);
+          queue.push(signal.candidate);
+          this.pendingCandidates.set(fromId, queue);
           return true;
         }
         if (!signal.description) return false;
         await peer.setRemoteDescription(signal.description);
-        if (!current()) return false;
+        if (!isCurrentPeer()) return false;
         const candidates = this.pendingCandidates.get(fromId) || [];
         this.pendingCandidates.delete(fromId);
+        // ICE candidates must be applied in arrival order.
+        // eslint-disable-next-line no-restricted-syntax
         for (const candidate of candidates) {
-          if (!current()) return false;
+          if (!isCurrentPeer()) return false;
+          // eslint-disable-next-line no-await-in-loop
           await peer.addIceCandidate(candidate);
         }
         if (signal.description.type !== "offer") return true;
         const answer = await peer.createAnswer();
-        if (!current()) return false;
+        if (!isCurrentPeer()) return false;
         await peer.setLocalDescription(answer);
-        return current() && peer.localDescription
-          ? this.roomClient.send("signal", {
-              targetId: fromId,
-              signal: { description: peer.localDescription }
-            })
-          : false;
+        if (!isCurrentPeer() || !peer.localDescription) return false;
+        return this.roomClient.send("signal", {
+          targetId: fromId,
+          signal: { description: peer.localDescription }
+        });
       })
       .finally(() => {
-        if (this.signalPromises.get(fromId) === operation) this.signalPromises.delete(fromId);
+        if (this.signalPromises.get(fromId) === signalPromise) this.signalPromises.delete(fromId);
       });
-    this.signalPromises.set(fromId, operation);
-    return operation;
+    this.signalPromises.set(fromId, signalPromise);
+    return signalPromise;
   }
 
   setMicrophoneMuted(muted) {
@@ -283,83 +312,102 @@ export default class OnlineVoiceMesh {
     });
   }
 
-  setupDataChannel(id, channel) {
-    return setupDataChannel(this, id, channel);
+  setupDataChannel(participantId, channel) {
+    return setupDataChannel(this, participantId, channel);
   }
 
-  emitTransferProgress(id, stage, percent, metadata = {}) {
-    return emitTransferProgress(this, id, stage, percent, metadata);
+  emitTransferProgress(participantId, stage, percent, metadata = {}) {
+    return emitTransferProgress(this, participantId, stage, percent, metadata);
   }
 
-  createIncomingTransferTimer(id, transferId) {
-    return createIncomingTransferTimer(this, id, transferId);
+  createIncomingTransferTimer(participantId, transferId) {
+    return createIncomingTransferTimer(this, participantId, transferId);
   }
 
-  waitForDataChannel(id, timeout, version, signal) {
-    return waitForDataChannel(this, id, timeout, version ?? this.lifecycleVersion, signal);
+  waitForDataChannel(participantId, timeoutMs, lifecycleVersion, signal) {
+    return waitForDataChannel(
+      this,
+      participantId,
+      timeoutMs,
+      lifecycleVersion ?? this.lifecycleVersion,
+      signal
+    );
   }
 
-  sendFile(id, blob, metadata = {}, options = {}) {
-    return sendFile(this, id, blob, metadata, options);
+  sendFile(participantId, blob, metadata = {}, options = {}) {
+    return sendFile(this, participantId, blob, metadata, options);
+  }
+
+  sendSongSyncError(participantId, commandId, error) {
+    return sendSongSyncError(this, participantId, commandId, error);
   }
 
   cancelTransfersByCommandId(commandId, error) {
     return cancelTransfersByCommandId(this, commandId, error);
   }
 
-  removePeer(id) {
-    const timer = this.disconnectTimers.get(id);
-    if (timer) clearTimeout(timer);
-    this.disconnectTimers.delete(id);
-    const existed = this.peers.has(id) || this.channels.has(id);
-    this.peerVersions.set(id, (this.peerVersions.get(id) || 0) + 1);
-    this.peers.get(id)?.close();
-    this.peers.delete(id);
-    this.pendingCandidates.delete(id);
-    this.pendingInvites.delete(id);
-    this.invitePromises.delete(id);
-    this.signalPromises.delete(id);
+  removePeer(participantId) {
+    const disconnectTimer = this.disconnectTimers.get(participantId);
+    if (disconnectTimer) globalThis.clearTimeout(disconnectTimer);
+    this.disconnectTimers.delete(participantId);
+    const existed = this.peers.has(participantId) || this.channels.has(participantId);
+    this.peerVersions.set(participantId, (this.peerVersions.get(participantId) || 0) + 1);
+    this.peers.get(participantId)?.close();
+    this.peers.delete(participantId);
+    this.pendingCandidates.delete(participantId);
+    this.pendingInvites.delete(participantId);
+    this.invitePromises.delete(participantId);
+    this.signalPromises.delete(participantId);
+    const channel = this.channels.get(participantId);
     cancelOutboundTransfers(
       this,
-      id,
+      participantId,
       null,
-      new Error(translate("Участник отключился во время передачи"))
+      new Error(translateSaved("Участник отключился во время передачи"))
     );
-    const admission = this.incomingFileAdmissions.get(id);
+    const admission = this.incomingFileAdmissions.get(participantId);
     if (admission) {
       admission.cancelled = true;
-      clearTimeout(admission.timer);
+      globalThis.clearTimeout(admission.timer);
+      this.emitTransferProgress(participantId, "cancelled", 0, admission.metadata);
     }
-    this.incomingFileAdmissions.delete(id);
-    cleanupIncomingTransfer(this.incomingFiles.get(id));
-    this.incomingFiles.delete(id);
-    this.channels.get(id)?.close();
-    this.channels.delete(id);
-    if (existed) this.onPeerClosed?.(id);
+    this.incomingFileAdmissions.delete(participantId);
+    const incoming = this.incomingFiles.get(participantId);
+    cleanupIncomingTransfer(incoming);
+    this.incomingFiles.delete(participantId);
+    // A peer we're receiving a file FROM can vanish mid-transfer too (host
+    // disconnects while pushing a song, network drop, tab closed, ...). Without
+    // this, the transfer state was wiped silently and whoever was awaiting an
+    // "error"/"cancelled" progress event (OnlineRoomContext's pending song
+    // command, syncSong()'s promise) would hang until a generic multi-minute
+    // timeout instead of failing right away.
+    if (incoming) this.emitTransferProgress(participantId, "cancelled", incoming.lastPercent, incoming.metadata);
+    channel?.close();
+    this.channels.delete(participantId);
+    if (existed) this.onPeerClosed?.(participantId);
   }
 
   stop() {
     this.lifecycleVersion += 1;
     new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id));
-    this.microphoneLease?.release();
-    Object.assign(this, {
-      microphoneLease: null,
-      microphoneGraph: null,
-      stream: null,
-      startPromise: null
-    });
+    if (this.microphoneGraph) {
+      closeAudioContextQuietly(this.microphoneGraph);
+      this.microphoneGraph = null;
+    } else this.stream?.getTracks().forEach((track) => track.stop());
+    this.stream = null;
+    this.startPromise = null;
     this.pendingInvites.clear();
     this.invitePromises.clear();
     this.signalPromises.clear();
-    this.disconnectTimers.forEach((timer) => clearTimeout(timer));
+    for (const timer of this.disconnectTimers.values()) {
+      globalThis.clearTimeout(timer);
+    }
     this.disconnectTimers.clear();
-    this.incomingFiles.forEach((transfer) => cleanupIncomingTransfer(transfer));
+    for (const transfer of this.incomingFiles.values()) cleanupIncomingTransfer(transfer);
     this.incomingFiles.clear();
-    this.incomingFileAdmissions.forEach((entry) => {
-      entry.cancelled = true;
-    });
+    for (const admission of this.incomingFileAdmissions.values()) admission.cancelled = true;
     this.incomingFileAdmissions.clear();
-    cancelOutboundTransfers(this, null, null, new Error(translate("Передача файла отменена")));
+    cancelOutboundTransfers(this, null, null, new Error(translateSaved("Передача файла отменена")));
     this.outboundTransfers.clear();
     this.channels.clear();
   }

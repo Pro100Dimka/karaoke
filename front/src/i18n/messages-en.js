@@ -28,6 +28,8 @@ export const enMessages = {
   "room.heading": "Room · {role}",
   "room.role.host": "host",
   "room.role.participant": "participant",
+  "room.hostLeft":
+    "The host has left the room. Playback sync and song sharing are paused until they return.",
   "app.controls": "Controls",
   "room.hidePanel": "Hide room panel",
   "room.showPanel": "Show room panel",

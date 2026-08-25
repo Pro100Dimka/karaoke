@@ -28,6 +28,8 @@ export const ukMessages = {
   "room.heading": "Кімната · {role}",
   "room.role.host": "ведучий",
   "room.role.participant": "учасник",
+  "room.hostLeft":
+    "Ведучий покинув кімнату. Синхронізацію відтворення та передавання пісень призупинено до його повернення.",
   "app.controls": "Керування",
   "room.hidePanel": "Сховати панель кімнати",
   "room.showPanel": "Показати панель кімнати",

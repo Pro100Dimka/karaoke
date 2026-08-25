@@ -185,6 +185,36 @@ describe("online room dock", () => {
       [screen.getByText(/room.transfer.unknownError/), "not.toBeNull"]
     );
   });
+  test("warns a guest when no participant currently holds the host role", () => {
+    // TASK 5.1: the host disconnecting isn't announced by a dedicated message —
+    // it's derived from the participants list no longer containing a host, so
+    // this must react purely to that list (works for both "host left" and,
+    // later, "host reconnected").
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: false },
+      participants: [{ id: "guest", name: "Bob", role: "guest", micMuted: false }]
+    });
+    const view = render(<OnlineRoomDock />);
+    expect(screen.getByText("room.hostLeft")).not.toBeNull();
+
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: false },
+      participants: [
+        { id: "guest", name: "Bob", role: "guest", micMuted: false },
+        { id: "host", name: "Alice", role: "host", micMuted: false }
+      ]
+    });
+    view.rerender(<OnlineRoomDock />);
+    expect(screen.queryByText("room.hostLeft")).toBeNull();
+  });
+  test("never warns the host themself even while alone in the room", () => {
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: true },
+      participants: [{ id: "self", name: "Alice", role: "host", micMuted: false }]
+    });
+    render(<OnlineRoomDock />);
+    expect(screen.queryByText("room.hostLeft")).toBeNull();
+  });
 });
 describe("online room modal", () => {
   test("creates a room and closes on success", async () => {

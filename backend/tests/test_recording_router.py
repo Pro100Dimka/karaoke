@@ -115,14 +115,20 @@ def test_recording_actions_and_stop_error_mapping(monkeypatch):
     monkeypatch.setattr(recording, "_restore_monitoring", restore)
     assert recording.stop_recording("session", database) is saved
     restore.assert_called_once_with(database)
+    # TASK 4.2: monitoring must be restored on EVERY outcome, including a
+    # RuntimeError — which is exactly what a writer/stream failure raises
+    # (recording_service.stop_and_save) and was previously left uncaught here.
     for error, status in (
         (KeyError("missing"), 404),
         (ValueError("bad"), 400),
         (OSError("disk"), 500),
+        (RuntimeError("writer crashed"), 500),
     ):
+        restore.reset_mock()
         stop.side_effect = error
         with pytest.raises(HTTPException) as mapped: recording.stop_recording("session", database)
         assert mapped.value.status_code == status
+        restore.assert_called_once_with(database)
 
 
 def persisted_recording(path): return models.Recording(id='recording', song_id='song', filename='take.wav', path=str(path), duration_sec=2, sample_rate=48000, created_at=datetime(2026, 1, 1, tzinfo=UTC))

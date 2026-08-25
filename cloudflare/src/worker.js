@@ -6,10 +6,10 @@ const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 80;
 const MAX_SIGNAL_BYTES = 64 * 1024;
 const MAX_STATE_BYTES = 128 * 1024;
-const MAX_LOG_BYTES = 128 * 1024;
-const MAX_STORED_LOG_BYTES = 1024 * 1024;
+const MAX_LOG_BYTES = 32 * 1024;
 const LOG_RATE_WINDOW_MS = 60_000;
-const LOG_RATE_LIMIT = 6;
+const LOG_RATE_LIMIT = 30;
+const MAX_ROOM_SONGS = 500;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -125,13 +125,7 @@ export class KaraokeRoom {
     if (!this.withinRate(sender.id)) { this.reject(socket, "Rate limit exceeded"); return; }
 
     if (message.type === "signal" && typeof message.targetId === "string") {
-      if (
-        new TextEncoder().encode(JSON.stringify(message.signal ?? null)).byteLength >
-        MAX_SIGNAL_BYTES
-      ) {
-        this.reject(socket, "Signal too large");
-        return;
-      }
+      if (new TextEncoder().encode(JSON.stringify(message.signal ?? null)).byteLength > MAX_SIGNAL_BYTES) { this.reject(socket, "Signal too large"); return; }
       const target = this.ctx
         .getWebSockets()
         .find((candidate) => participantFromSocket(candidate)?.id === message.targetId);
@@ -146,70 +140,44 @@ export class KaraokeRoom {
     }
 
     if (message.type === "ui" && message.state && typeof message.state === "object") {
-      if (JSON.stringify(message.state).length > MAX_STATE_BYTES) { this.reject(socket); return; }
+      if (new TextEncoder().encode(JSON.stringify(message.state)).byteLength > MAX_STATE_BYTES) { this.reject(socket); return; }
       if (sender.role === "host") {
         this.broadcast("ui", { fromId: sender.id, state: message.state }, sender.id);
         return;
       }
-      const participantEffects = message.state.participantEffects;
-      const participantSongs = message.state.participantSongs;
-      const hasEffects = participantEffects && typeof participantEffects === "object" && !Array.isArray(participantEffects);
-      const hasSongs = Array.isArray(participantSongs) && participantSongs.length <= 500 && participantSongs.every((song) => song && typeof song === "object" && !Array.isArray(song));
-      const sharedKeys = ["query", "filters", "radio", "karaoke"];
-      const sharedState = Object.fromEntries(
-        Object.entries(message.state).filter(([key]) => sharedKeys.includes(key))
+      // Guests may not broadcast arbitrary state (that stays host-only, e.g. the
+      // shared search query), but every participant -- host or guest -- owns a
+      // library, so both participantEffects and songs are allowed through here.
+      const { participantEffects, songs } = message.state;
+      const hasEffects = Boolean(
+        participantEffects && typeof participantEffects === "object" && !Array.isArray(participantEffects)
       );
-      if (!hasEffects && !hasSongs && !Object.keys(sharedState).length) { this.reject(socket); return; }
-      this.broadcast("ui", {
-        fromId: sender.id,
-        state: {
-          ...sharedState,
-          ...(hasEffects ? { participantEffects } : {}),
-          ...(hasSongs ? { participantSongs } : {}),
-        },
-      }, sender.id);
+      const hasSongs = Boolean(
+        Array.isArray(songs) &&
+        songs.length <= MAX_ROOM_SONGS &&
+        songs.every((song) => song && typeof song === "object" && !Array.isArray(song))
+      );
+      if (!hasEffects && !hasSongs) { this.reject(socket); return; }
+      const state = {
+        ...(hasEffects ? { participantEffects } : {}),
+        ...(hasSongs ? { songs } : {})
+      };
+      this.broadcast("ui", { fromId: sender.id, state }, sender.id);
       return;
     }
 
     if (message.type === "sync") {
       const state = message.state;
-      if (!state || typeof state !== "object" || Array.isArray(state) || JSON.stringify(state).length > MAX_STATE_BYTES) { this.reject(socket); return; }
+      if (!state || typeof state !== "object" || Array.isArray(state) || new TextEncoder().encode(JSON.stringify(state)).byteLength > MAX_STATE_BYTES) { this.reject(socket); return; }
       if (sender.role === "host") {
         this.broadcast("sync", { state, sentAt: Date.now(), fromId: sender.id }, sender.id);
-        return;
-      }
-      if (
-        state.type === "karaoke-player" &&
-        typeof state.songId === "string" && state.songId.length <= 128 &&
-        ["play", "pause", "stop", "seek", "sync"].includes(state.action) &&
-        Number.isFinite(state.position)
-      ) {
-        this.broadcast("sync", {
-          fromId: sender.id,
-          sentAt: Date.now(),
-          state: {
-            type: "karaoke-player",
-            songId: state.songId,
-            action: state.action,
-            position: state.position,
-          }
-        }, sender.id);
-        return;
-      }
-      if (state.type === "open-library") {
-        this.broadcast("sync", {
-          fromId: sender.id,
-          sentAt: Date.now(),
-          state: { type: "open-library" }
-        }, sender.id);
         return;
       }
       if (
         state.type === "song-request" &&
         typeof state.songId === "string" && state.songId.length <= 128 &&
         typeof state.commandId === "string" && state.commandId.length <= 128 &&
-        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision) &&
-        (state.ownerId === undefined || (typeof state.ownerId === "string" && state.ownerId.length <= 128))
+        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
       ) {
         this.broadcast("sync", {
           fromId: sender.id,
@@ -219,61 +187,12 @@ export class KaraokeRoom {
             songId: state.songId,
             commandId: state.commandId,
             revision: state.revision,
-            ...(state.ownerId ? { ownerId: state.ownerId } : {}),
             requesterId: sender.id
-          }
-        }, sender.id);
-        return;
-      }
-      if (
-        state.type === "song-ready" &&
-        typeof state.songId === "string" && state.songId.length <= 128 &&
-        typeof state.commandId === "string" && state.commandId.length <= 128 &&
-        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
-      ) {
-        this.broadcast("sync", {
-          fromId: sender.id,
-          sentAt: Date.now(),
-          state: {
-            type: "song-ready",
-            songId: state.songId,
-            commandId: state.commandId,
-            revision: state.revision,
-            requesterId: sender.id
-          }
-        }, sender.id);
-        return;
-      }
-      if (
-        state.type === "song-transfer-error" &&
-        typeof state.requesterId === "string" && state.requesterId.length <= 128 &&
-        typeof state.songId === "string" && state.songId.length <= 128 &&
-        typeof state.commandId === "string" && state.commandId.length <= 128 &&
-        typeof state.error === "string" && state.error.length <= 500
-      ) {
-        this.broadcast("sync", {
-          fromId: sender.id,
-          sentAt: Date.now(),
-          state: {
-            type: "song-transfer-error",
-            requesterId: state.requesterId,
-            ownerId: sender.id,
-            songId: state.songId,
-            commandId: state.commandId,
-            error: state.error
           }
         }, sender.id);
         return;
       }
       this.reject(socket);
-      return;
-    }
-
-    if (message.type === "ping") {
-      this.send(socket, "pong", {
-        serverTime: Date.now(),
-        clientTime: Number.isFinite(message.clientTime) ? message.clientTime : null,
-      });
       return;
     }
 
@@ -294,7 +213,15 @@ export class KaraokeRoom {
 
   async webSocketClose(socket, code, reason) {
     const participant = participantFromSocket(socket);
-    if (participant) { this.rate.delete(participant.id); this.broadcast("participant-left", { participantId: participant.id }); }
+    if (participant) {
+      this.rate.delete(participant.id);
+      // wasHost lets guests distinguish "the host left" from "some guest
+      // left" — additive field, existing participant-left consumers that
+      // don't look at it are unaffected. No re-election/room-closure policy
+      // is implemented server-side yet: the room keeps running headless
+      // (host-only sync stops broadcasting) until the host reconnects.
+      this.broadcast("participant-left", { participantId: participant.id, wasHost: participant.role === "host" });
+    }
     if (this.ctx.getWebSockets().length === 0) await this.ctx.storage.delete("hostToken");
     // The edge already closes this endpoint before invoking the callback.
     // Calling close() again can prevent the remaining sockets from receiving
@@ -303,9 +230,10 @@ export class KaraokeRoom {
   }
 }
 
-function sanitizeDeviceId(value) {
-  const id = String(value || "").trim();
-  return /^[a-zA-Z0-9_-]{3,80}$/.test(id) ? id : null;
+function sanitizeLogUser(value) {
+  const raw = String(value || "anonymous").trim().slice(0, 64);
+  const cleaned = raw.replace(/[^\p{L}\p{N} _.-]/gu, "_").trim();
+  return cleaned || "anonymous";
 }
 
 // Module-scope state survives only while this isolate stays warm, so this is
@@ -324,25 +252,6 @@ function withinLogRate(id) {
   return entry.count <= LOG_RATE_LIMIT;
 }
 
-function serializeComputerLog(document) {
-  let encoded = JSON.stringify(document, null, 2);
-  while (new TextEncoder().encode(encoded).byteLength > MAX_STORED_LOG_BYTES && document.events.length > 1) {
-    document.events.splice(0, Math.max(1, Math.ceil(document.events.length / 10)));
-    encoded = JSON.stringify(document, null, 2);
-  }
-  return encoded;
-}
-
-async function removeLegacyLogObjects(bucket) {
-  let cursor;
-  do {
-    const page = await bucket.list({ prefix: "logs/", ...(cursor ? { cursor } : {}) });
-    const keys = page.objects.map(({ key }) => key);
-    if (keys.length) await bucket.delete(keys);
-    cursor = page.truncated ? page.cursor : undefined;
-  } while (cursor);
-}
-
 export async function handleLogUpload(request, env) {
   if (!env.LOGS) return json({ error: "Log storage is not configured" }, 503);
   const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
@@ -358,53 +267,15 @@ export async function handleLogUpload(request, env) {
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
-  const deviceId = sanitizeDeviceId(payload?.device_id);
-  if (!deviceId) return json({ error: "Invalid device id" }, 400);
-  const events = Array.isArray(payload?.events)
-    ? payload.events
-        .filter((event) => event && ["WARNING", "ERROR"].includes(event.level) && String(event.message || "").trim())
-        .map((event) => ({
-          timestamp: String(event.timestamp || "").slice(0, 40),
-          level: event.level,
-          message: String(event.message).trim().slice(0, 16_000),
-        }))
-    : [];
-  const hardware = payload?.hardware && typeof payload.hardware === "object" && !Array.isArray(payload.hardware)
-    ? payload.hardware
-    : null;
-  if (!events.length && !hardware) return json({ error: "No diagnostics supplied" }, 400);
-
-  const key = `${deviceId}.json`;
-  const now = new Date().toISOString();
-  let existing = null;
-  try {
-    const object = await env.LOGS.get(key);
-    if (object) existing = JSON.parse(await object.text());
-  } catch {
-    existing = null;
-  }
-  if (!existing) await removeLegacyLogObjects(env.LOGS);
-  const document = {
-    device_id: deviceId,
-    display_name: String(payload?.display_name || "").trim().slice(0, 80),
-    created_at: existing?.created_at || now,
-    updated_at: now,
-    hardware: hardware
-      ? {
-          ...(existing?.hardware || {}),
-          ...hardware,
-          settings: {
-            ...(existing?.hardware?.settings || {}),
-            ...(hardware.settings || {}),
-          },
-        }
-      : existing?.hardware || null,
-    events: [...(Array.isArray(existing?.events) ? existing.events : []), ...events],
-  };
-  await env.LOGS.put(key, serializeComputerLog(document), {
-    httpMetadata: { contentType: "application/json; charset=utf-8" },
+  const message = String(payload?.message || "").trim();
+  if (!message) return json({ error: "Empty log message" }, 400);
+  const user = sanitizeLogUser(payload?.user);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const key = `logs/${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.log`;
+  await env.LOGS.put(key, message.slice(0, MAX_LOG_BYTES), {
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
   });
-  return json({ ok: true, key, appended: events.length });
+  return json({ ok: true });
 }
 
 export default {
