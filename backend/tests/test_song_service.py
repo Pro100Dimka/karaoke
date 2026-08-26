@@ -23,6 +23,18 @@ def test_library_lock_and_owned_path_validation(monkeypatch, tmp_path):
     assert (song_service.resolve_source_path(current) == nested.resolve()) and (song_service.resolve_output_dir(current) == (root / 'song').resolve())
 
 
+def test_trusted_library_roots_includes_current_and_historical_roots(monkeypatch, tmp_path):
+    current, historical = tmp_path / "current", tmp_path / "historical"
+    current.mkdir()
+    historical.mkdir()
+    patch_many(
+        monkeypatch,
+        (song_service.config, "SONG_OUTPUT_DIR", current),
+        (song_service.config, "SONG_LIBRARY_ROOTS", (str(historical),)),
+    )
+    assert song_service.trusted_library_roots() == {current.resolve(), historical.resolve()}
+
+
 def test_list_recently_updated_songs_orders_by_updated_at_and_respects_limit():
     from datetime import UTC, datetime
 

@@ -13,6 +13,13 @@
 # index choice) by scripts\install-ai-models.bat -- included here only for
 # a complete environment record, not to be installed from this file alone.
 #
+# Known gap: this pins exact VERSIONS but not per-package sha256 hashes, so
+# `pip install --require-hashes` isn't possible against this file yet --
+# generating real hashes for ~190 packages needs either pip-tools or
+# downloading every pinned wheel to hash it, both too slow to do casually.
+# Revisit if supply-chain integrity on install (not just reproducible
+# versions) becomes a real requirement.
+#
 # Last generated: 2026-08-26
 absl-py==2.5.0
 accelerate==1.12.0

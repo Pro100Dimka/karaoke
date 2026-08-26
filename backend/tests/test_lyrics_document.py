@@ -31,6 +31,25 @@ def test_accepts_exact_word_note_contract():
     assert validate_lyrics_document(payload) is payload
 
 
+@pytest.mark.parametrize("bpm", [0, -60, float("nan"), float("inf"), 5, 1000, "120", None])
+def test_rejects_an_absurd_or_wrong_type_bpm(bpm):
+    payload = document()
+    payload["bpm"] = bpm
+
+    with pytest.raises(ValueError, match="invalid bpm"):
+        validate_lyrics_document(payload)
+
+
+def test_accepts_bpm_at_the_boundaries_of_the_realistic_range():
+    payload = document()
+    payload["bpm"] = 20
+    assert validate_lyrics_document(payload)["bpm"] == 20
+
+    payload = document()
+    payload["bpm"] = 400
+    assert validate_lyrics_document(payload)["bpm"] == 400
+
+
 def test_schema_version_defaults_and_rejects_unsupported_values():
     # A document with no schemaVersion (every file saved before this field
     # existed) is treated as the current version and stamped with it.
@@ -208,4 +227,48 @@ def test_rejects_a_word_whose_text_is_not_a_string(text):
     payload["words"][0]["text"] = text
 
     with pytest.raises(ValueError, match="Invalid word"):
+        validate_lyrics_document(payload)
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(float("nan"), float("nan")), (0.0, float("inf")), (float("-inf"), 1.0)],
+)
+def test_rejects_non_finite_word_timings(start, end):
+    payload = document()
+    payload["words"][0]["start"] = start
+    payload["words"][0]["end"] = end
+
+    with pytest.raises(ValueError, match="Invalid word interval"):
+        validate_lyrics_document(payload)
+
+
+def test_a_nan_word_does_not_silently_disable_ordering_checks_for_later_words():
+    # NaN comparisons are always False, so an unguarded NaN word would slip
+    # through *and* leave `previous` as NaN, making the next word's own
+    # ordering check (start + 1e-6 < previous) silently pass too.
+    payload = {
+        "bpm": 120,
+        "key": "Am",
+        "words": [
+            {"text": "la", "start": float("nan"), "end": float("nan"), "notes": []},
+            {"text": "la", "start": 0.0, "end": 1.0, "notes": []},
+        ],
+    }
+    with pytest.raises(ValueError, match="Invalid word interval 0"):
+        validate_lyrics_document(payload)
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "note"),
+    [
+        (float("nan"), 1.4, 60),
+        (1.0, float("inf"), 60),
+        (1.0, 1.4, float("nan")),
+    ],
+)
+def test_rejects_non_finite_note_fields(start, end, note):
+    payload = document([{"note": note, "start": start, "end": end}])
+
+    with pytest.raises(ValueError, match="Invalid note interval"):
         validate_lyrics_document(payload)

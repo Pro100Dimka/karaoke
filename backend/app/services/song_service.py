@@ -57,8 +57,19 @@ def _ensure_path_within(path: Path, root: Path) -> Path:
     raise ValueError("Song file path is outside the application library")
 
 
+def trusted_library_roots() -> set[Path]:
+    """Every root a song's ``output_dir``/``source_path`` may legitimately live under.
+
+    Includes both the *current* library location and every *historical* one
+    the user has ever pointed the app at (``SONG_LIBRARY_ROOTS``) -- a song
+    created before a storage-location change still lives under its original
+    root, and reads/ownership checks must keep trusting that root too.
+    """
+    return {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+
+
 def resolve_library_path(path: Path) -> Path:
-    errors, roots = [], {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+    errors, roots = [], trusted_library_roots()
     for root in roots:
         try:
             return _ensure_path_within(path, root)

@@ -156,6 +156,8 @@ $SmokeScript = Join-Path $Root "scripts\smoke-packaged-backend.ps1"
 $ChecksumScript = Join-Path $Root "scripts\generate-checksums.ps1"
 $ManifestScript = Join-Path $Root "scripts\generate-release-manifest.ps1"
 $ManifestFile = Join-Path $InstallerDir "release-manifest.json"
+$SizeReportScript = Join-Path $Root "scripts\generate-size-report.ps1"
+$SizeReportFile = Join-Path $InstallerDir "size-report.json"
 $script:BackendChanged = $false
 $script:AsioChanged = $false
 $script:FrontendChanged = $false
@@ -2367,6 +2369,24 @@ function Create-ReleaseManifest {
     Require-File $ManifestFile "Release manifest file"
 }
 
+function Create-SizeReport {
+    Write-Host ""
+    Write-Host "Creating size report..."
+
+    Require-File $SizeReportScript "Size report generation script"
+
+    & powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $SizeReportScript `
+        -Directory $Unpacked `
+        -OutputFile $SizeReportFile
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not create size report."
+    }
+}
+
 function Test-IsoPayloadExcluded([string]$Path) {
     return Test-ExcludedPath `
         $Path `
@@ -2939,6 +2959,7 @@ try {
             Build-Installer
             Create-Checksums
             Create-ReleaseManifest
+            Create-SizeReport
             $sw.Stop()
             Set-PreviousDuration "installer" $sw.Elapsed.TotalSeconds
             Set-State "installer" $installerFp
@@ -3220,6 +3241,7 @@ try {
         Build-Installer
         Create-Checksums
         Create-ReleaseManifest
+        Create-SizeReport
         $sw.Stop()
         Set-PreviousDuration "installer" $sw.Elapsed.TotalSeconds
         Set-State "installer" $installerFp

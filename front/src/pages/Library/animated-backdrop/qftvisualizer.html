@@ -448,6 +448,9 @@
 
 <body>
     <div id="scanlines"></div>
+    <!--
+      НЕ УДАЛЯТЬ: служебные кнопки и панели визуализатора временно отключены,
+      чтобы компонент работал только как фон. Они понадобятся для будущей настройки.
     <div id="interaction-hint">space · play/pause &nbsp;·&nbsp; scroll · zoom &nbsp;·&nbsp; drag · rotate &nbsp;·&nbsp; F · focus mode</div>
     <button id="gui-toggle">✦ Configure</button>
     <div id="overlay">
@@ -473,6 +476,7 @@
     </div>
     <div id="status-bar"><span>ready</span> · awaiting input</div>
     <div id="zoom-indicator">zoom <span id="zoom-level">100%</span></div>
+    -->
 
     <!-- Global Error Handler (Must be before module imports) -->
     <script>
@@ -522,27 +526,27 @@
         const CONFIG = {
             maxParticles: 250000,
             secondaryParticles: 50000,
-            initialDensity: 0.043,
+            initialDensity: 0.017,
             fieldRadius: 90,
             minZoom: 1,
             maxZoom: 250,
-            defaultZoom: 200
+            defaultZoom: 88
         };
 
         const STATE = {
-            field: 'Gluon (Strong)',
+            field: 'Neutrino',
             density: CONFIG.initialDensity,
             sensitivity: 1.1,
-            trails: 0.18,
-            bloom: 0.3,
-            timeScale: 1,
-            pixelRatio: Math.max(1.75, Math.min(window.devicePixelRatio, 2)),
-            chromaticAberration: 0.004,
+            trails: 0.5,
+            bloom: 0.6074502496953552,
+            timeScale: 1.311,
+            pixelRatio: 1.75,
+            chromaticAberration: 0,
             filmGrain: 0.001,
-            cameraShake: 0.65,
-            vortexStrength: 0.73,
+            cameraShake: 2,
+            vortexStrength: 0,
             pulseIntensity: 0.15,
-            anamorphicStretch: 0.1,
+            anamorphicStretch: 0,
             bassGateThreshold: 0.12,
             bassGateAttack: 0.3,
             bassGateRelease: 0.136,
@@ -550,21 +554,21 @@
             bassGateEnabled: false,
             // NEW EFFECTS
             godRaysEnabled: false,
-            godRaysIntensity: 0.078,
+            godRaysIntensity: 0,
             godRaysDecay: 0.92,
-            dofEnabled: false,
-            dofFocus: 0.04,
-            dofFocalLength: 0.40,
-            dofBokehStrength: 0.36,
-            lensFlareEnabled: true,
-            lensFlareIntensity: 0.1,
+            dofEnabled: true,
+            dofFocus: 0,
+            dofFocalLength: 0.05,
+            dofBokehStrength: 0,
+            lensFlareEnabled: false,
+            lensFlareIntensity: 2,
             particleTrailsEnabled: true,
             particleTrailOpacity: 1,
             nebulaEnabled: false,
-            nebulaIntensity: 0.3,
+            nebulaIntensity: 0.246,
             connectionsEnabled: true,
-            connectionThreshold: 20.0,
-            connectionOpacity: 0.75,
+            connectionThreshold: 5,
+            connectionOpacity: 1,
             // === ENHANCEMENT PACK v2.0 ===
             // 1. Motion Blur
             motionBlurEnabled: true,
@@ -579,7 +583,7 @@
             // 4. Audio-Reactive Camera
             audioCameraEnabled: true,
             audioCameraSmoothing: 0.2,
-            audioCameraIntensity: 0.3,
+            audioCameraIntensity: 0.12,
             // 5. Waveform Terrain
             waveformTerrainScale: 1.0,
             waveformTerrainHeight: 20.0
@@ -590,7 +594,7 @@
             ctx: null, analyser: null, source: null, gainNode: null, data: null,
             audioBuffer: null, isPlaying: false, isPaused: false,
             startTime: 0, pauseTime: 0, currentTrackName: 'No Track',
-            mode: null, micStream: null,
+            mode: null, micStream: null, external: false,
             bands: { subBass: 0, bass: 0, lowMid: 0, mid: 0, highMid: 0, high: 0, ultraHigh: 0 },
             gatedBands: { subBass: 0, bass: 0, lowMid: 0, mid: 0, highMid: 0, high: 0, ultraHigh: 0 },
             beatThreshold: 0.15, beatDecay: 0.93, beatEnergy: 0,
@@ -751,6 +755,110 @@
 
             resetCalibration() { this.gateState.isCalibrating = true; this.gateState.calibrationSamples = []; },
 
+            applyExternalSpectrum(levels, radioBass, isActive) {
+                if (!isActive || !Array.isArray(levels) || levels.length < 18) {
+                    document.documentElement.dataset.qftAudioActive = '0';
+                    document.documentElement.dataset.qftBass = '0';
+                    this.external = false;
+                    this.active = false;
+                    this.mode = null;
+                    this.isPlaying = false;
+                    Object.keys(this.bands).forEach(band => {
+                        this.bands[band] = 0;
+                        this.gatedBands[band] = 0;
+                    });
+                    this.beatDetected = false;
+                    this.beatEnergy = 0;
+                    this.onsetDetected = false;
+                    this.onsetEnergy = 0;
+                    this.spectralCentroid = 0;
+                    this.spectralFlux = 0;
+                    return;
+                }
+
+                const average = (from, to) => {
+                    let sum = 0;
+                    for (let i = from; i <= to; i++) sum += THREE.MathUtils.clamp(Number(levels[i]) || 0, 0, 1);
+                    return sum / (to - from + 1);
+                };
+                const previous = { ...this.bands };
+                const mapped = {
+                    subBass: average(0, 1),
+                    bass: Math.max(average(2, 4), THREE.MathUtils.clamp(Number(radioBass) || 0, 0, 1)),
+                    lowMid: average(5, 6),
+                    mid: average(7, 11),
+                    highMid: average(12, 13),
+                    high: average(14, 16),
+                    ultraHigh: average(17, 17)
+                };
+
+                this.external = true;
+                this.active = true;
+                this.mode = 'external';
+                this.isPlaying = true;
+                document.documentElement.dataset.qftAudioActive = '1';
+                document.documentElement.dataset.qftBass = mapped.bass.toFixed(3);
+                Object.entries(mapped).forEach(([band, value]) => {
+                    this.bands[band] = value;
+                    this.gatedBands[band] = (band === 'subBass' || band === 'bass' || band === 'lowMid') ? this.applyBassGate(value) : value;
+                });
+
+                const bandValues = Object.values(mapped);
+                const total = bandValues.reduce((sum, value) => sum + value, 0);
+                this.spectralCentroid = total > 0
+                    ? bandValues.reduce((sum, value, index) => sum + value * index, 0) / total / (bandValues.length - 1)
+                    : 0;
+                const positiveFlux = Object.keys(mapped).reduce((sum, band) => {
+                    const rise = mapped[band] - previous[band];
+                    return sum + (rise > 0 ? rise * rise : 0);
+                }, 0);
+                this.spectralFlux = Math.sqrt(positiveFlux / bandValues.length);
+
+                // Percussive transient detector: kick (lows), clap/snare (mids), tick/hat (highs).
+                const kickRise = Math.max(0, mapped.subBass - previous.subBass) * 0.7
+                    + Math.max(0, mapped.bass - previous.bass);
+                const clapRise = Math.max(0, mapped.lowMid - previous.lowMid) * 0.45
+                    + Math.max(0, mapped.mid - previous.mid) * 0.7
+                    + Math.max(0, mapped.highMid - previous.highMid);
+                const tickRise = Math.max(0, mapped.highMid - previous.highMid) * 0.35
+                    + Math.max(0, mapped.high - previous.high)
+                    + Math.max(0, mapped.ultraHigh - previous.ultraHigh) * 0.8;
+                const transientScore = Math.max(
+                    kickRise * 4.5,
+                    clapRise * 5.5,
+                    tickRise * 7.0,
+                    this.spectralFlux * 5.0
+                ) * STATE.sensitivity;
+
+                const currentEnergy = mapped.subBass * 0.35 + mapped.bass * 0.65;
+                this.peakHistory.push(currentEnergy);
+                if (this.peakHistory.length > 45) this.peakHistory.shift();
+                const averageEnergy = this.peakHistory.reduce((sum, value) => sum + value, 0) / this.peakHistory.length;
+                const variance = this.peakHistory.reduce((sum, value) => sum + Math.pow(value - averageEnergy, 2), 0) / this.peakHistory.length;
+                const kickThreshold = Math.max(0.075, averageEnergy + Math.sqrt(variance) * 1.15);
+                const now = performance.now();
+                const adaptiveKick = currentEnergy > kickThreshold && kickRise > 0.012;
+                const percussiveHit = transientScore > 0.08;
+                const hitCooldown = kickRise * 4.5 >= Math.max(clapRise * 5.5, tickRise * 7.0) ? 85 : 45;
+                if ((adaptiveKick || percussiveHit) && now - this.lastBeatTime > hitCooldown) {
+                    const hitStrength = THREE.MathUtils.clamp(
+                        transientScore * 3.2 + (adaptiveKick ? 0.3 : 0),
+                        0.3,
+                        1
+                    );
+                    this.beatDetected = true;
+                    this.beatEnergy = Math.max(this.beatEnergy, hitStrength);
+                    this.lastBeatTime = now;
+                } else {
+                    this.beatDetected = false;
+                }
+
+                this.onsetDetected = percussiveHit;
+                this.onsetEnergy = this.onsetDetected
+                    ? Math.max(this.onsetEnergy, THREE.MathUtils.clamp(transientScore * 3.5, 0.35, 1))
+                    : this.onsetEnergy * STATE.onsetDecay;
+            },
+
             applyBassGate(rawValue) {
                 if (!STATE.bassGateEnabled) return rawValue;
                 const { bassGateThreshold: threshold, bassGateAttack: attack, bassGateRelease: release, bassGateRatio: ratio } = STATE;
@@ -775,6 +883,11 @@
             },
 
             update() {
+                if (this.external) {
+                    this.beatEnergy *= this.beatDecay;
+                    if (!this.onsetDetected) this.onsetEnergy *= STATE.onsetDecay;
+                    return;
+                }
                 if (!this.active) return;
                 this.analyser.getByteFrequencyData(this.data);
                 const len = this.data.length, nyquist = this.ctx.sampleRate / 2;
@@ -868,7 +981,7 @@
         controls.addEventListener('change', () => {
             const dist = camera.position.length();
             const zoomPercent = Math.round((1 - (dist - CONFIG.minZoom) / (CONFIG.maxZoom - CONFIG.minZoom)) * 100);
-            zoomIndicator.textContent = Math.max(0, Math.min(100, zoomPercent)) + '%';
+            if (zoomIndicator) zoomIndicator.textContent = Math.max(0, Math.min(100, zoomPercent)) + '%';
             baseCameraPos.copy(camera.position);
         });
 
@@ -905,7 +1018,7 @@ uniform vec3 uColor1, uColor2, uColor3;
 uniform float uSubBass, uBass, uLowMid, uMid, uHighMid, uHigh, uUltraHigh;
 uniform float uBeatEnergy, uSpectralCentroid, uSpectralFlux;
 uniform float uOnsetEnergy, uTerrainMode, uTerrainHeight;
-uniform float uVortexStrength, uPulseIntensity, uZoomFactor;
+uniform float uVortexStrength, uPulseIntensity, uZoomFactor, uAudioActivity;
 uniform vec3 uMousePos;
 uniform vec2 uMouseVelocity;
 attribute vec3 aRandom;
@@ -998,15 +1111,15 @@ void main() {
     vec3 centerDir = normalize(newPos + vec3(0.001));
 
     float beatRing = sin(distToCenter * 0.25 - uTime * 6.0) * uBeatEnergy * uPulseIntensity;
-    newPos += centerDir * beatRing * 3.5;
+    newPos += centerDir * beatRing * 2.0;
 
-    float breathing = sin(uTime * 1.8 + aPhase) * uSubBass * 4.0;
+    float breathing = sin(uTime * 1.8 + aPhase) * uSubBass * 2.0;
     newPos += centerDir * breathing * exp(-distToCenter * 0.04);
 
-    newPos += centerDir * smoothstep(0.3, 0.8, uBass) * 6.0 * exp(-distToCenter * 0.06);
+    newPos += centerDir * smoothstep(0.3, 0.8, uBass) * 2.0 * exp(-distToCenter * 0.06);
     
     // === ENHANCEMENT: Onset Energy Punch ===
-    float onsetPunch = uOnsetEnergy * 8.0 * exp(-distToCenter * 0.03);
+    float onsetPunch = uOnsetEnergy * 3.0 * exp(-distToCenter * 0.03);
     newPos += centerDir * onsetPunch;
     
     // === ENHANCEMENT: Waveform Terrain Mode ===
@@ -1039,9 +1152,10 @@ void main() {
     vec4 mvPosition = modelViewMatrix * vec4(newPos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
 
-    float size = uSizeBase * (0.85 + uBass * 0.5 + uBeatEnergy * 0.5) * (1.0 + (uZoomFactor - 1.0) * 0.3);
+    float idleScale = mix(2.0, 1.0, uAudioActivity);
+    float size = uSizeBase * 0.35 * idleScale * (0.85 + uBass * 0.18 + uBeatEnergy * 0.22) * (1.0 + (uZoomFactor - 1.0) * 0.3);
     size *= 1.0 + sin(uTime * 10.0 + aPhase * 6.28) * uHigh * 0.35;
-    gl_PointSize = clamp(size * uPixelRatio * (90.0 / -mvPosition.z) * layerMod, 0.5, 120.0);
+    gl_PointSize = clamp(size * uPixelRatio * (90.0 / -mvPosition.z) * layerMod, 0.25, 6.0);
 
     float colorMix = smoothstep(0.0, 2.8, length(flow) + uHighMid * 3.0);
     vec3 baseColor = mix(uColor1, uColor2, colorMix);
@@ -1375,7 +1489,7 @@ void main() {
         geometry.setAttribute('aRandom', new THREE.Float32BufferAttribute(rnd, 3));
         geometry.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase, 1));
         geometry.setAttribute('aLayer', new THREE.Float32BufferAttribute(layer, 1));
-        geometry.setDrawRange(0, Math.floor(CONFIG.maxParticles * STATE.density));
+        geometry.setDrawRange(0, Math.floor((CONFIG.maxParticles + CONFIG.secondaryParticles) * STATE.density));
 
         const FIELD_TYPES = {
             'Photon (EM)': { c1: '#00f2ff', c2: '#0051ff', c3: '#ffffff', s: 1.0, curl: 1.0, sz: 3.0, sc1: '#66d9ff', sc2: '#99eeff' },
@@ -1443,7 +1557,7 @@ void main() {
                 const smooth = STATE.audioCameraSmoothing;
 
                 // Bass-driven zoom pulse
-                this.targetFOV = this.baseFOV - bass * 8 * intensity + AUDIO.beatEnergy * 5 * intensity;
+                this.targetFOV = this.baseFOV + AUDIO.beatEnergy * 2 * intensity;
                 camera.fov += (this.targetFOV - camera.fov) * smooth;
                 camera.updateProjectionMatrix();
 
@@ -1483,6 +1597,7 @@ void main() {
                 uVortexStrength: { value: STATE.vortexStrength },
                 uPulseIntensity: { value: STATE.pulseIntensity },
                 uZoomFactor: { value: 1.0 },
+                uAudioActivity: { value: 0 },
                 uMousePos: { value: new THREE.Vector3(999, 999, 999) },
                 uMouseVelocity: { value: new THREE.Vector2(0, 0) }
             },
@@ -1498,7 +1613,7 @@ uniform float uTime, uPixelRatio;
 uniform float uSubBass, uBass, uLowMid, uMid, uHighMid, uHigh, uUltraHigh;
 uniform float uBeatEnergy, uSpectralCentroid, uSpectralFlux, uOnsetEnergy;
 uniform vec3 uColor1, uColor2;
-uniform float uRadius, uVortexStrength;
+uniform float uRadius, uVortexStrength, uAudioActivity;
 
 attribute vec3 instancePosition;
 attribute vec3 instanceRandom;
@@ -1605,8 +1720,9 @@ void main() {
     // Sparkle on ultraHigh, swell on subBass, punch on beatEnergy
     float sparkle = 1.0 + (instanceRandom.x > 0.85 ? sin(uTime * 15.0 + instanceRandom.y * 200.0) * uUltraHigh * 3.0 : 0.0);
     float swell = 1.0 + uSubBass * 0.6 + uLowMid * 0.3;
-    float size = (1.1 + uBeatEnergy * 0.7) * swell * sparkle;
-    gl_PointSize = clamp(size * uPixelRatio * (55.0 / -mvPosition.z), 0.5, 55.0);
+    float idleScale = mix(2.0, 1.0, uAudioActivity);
+    float size = 0.225 * idleScale * (1.1 + uBeatEnergy * 0.25) * swell * sparkle;
+    gl_PointSize = clamp(size * uPixelRatio * (55.0 / -mvPosition.z), 0.25, 4.0);
 
     // Colour: spectral centroid shifts hue, highMid brightens toward white
     float centroidMix = clamp(uSpectralCentroid * 2.2 + uHighMid * 0.4, 0.0, 1.0);
@@ -1636,9 +1752,9 @@ void main() {
     float r = length(xy);
     if (r > 0.5) discard;
 
-    // Wider, softer glow than main particles — atmospheric haze
-    float glow     = exp(-r * r * 8.0);
-    float softGlow = exp(-r * r * 3.0) * 0.4;
+    // Compact glow keeps bright stars crisp instead of making them look larger.
+    float glow     = exp(-r * r * 14.0);
+    float softGlow = exp(-r * r * 7.0) * 0.3;
     float core     = smoothstep(0.18 - vEnergy * 0.06, 0.10, r);
 
     vec3 finalColor = mix(vColor, vec3(1.0, 0.97, 0.92), core * 0.55);
@@ -1701,6 +1817,7 @@ void main() {
                 uSpectralFlux:     { value: 0 },
                 uOnsetEnergy:      { value: 0 },
                 uVortexStrength:   { value: STATE.vortexStrength },
+                uAudioActivity:    { value: 0 },
                 uColor1:           { value: new THREE.Color(def.sc1) },
                 uColor2:           { value: new THREE.Color(def.sc2) },
                 uRadius:           { value: CONFIG.fieldRadius }
@@ -1746,7 +1863,7 @@ void main() {
 
                     const mat = new THREE.ShaderMaterial({
                         vertexShader: `attribute float alpha; varying float vAlpha; void main() { vAlpha = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-                        fragmentShader: `uniform vec3 uColor; uniform float uOpacity, uBeat; varying float vAlpha; void main() { gl_FragColor = vec4(uColor * (1.0 + uBeat * 0.3), vAlpha * uOpacity * 0.6 * (1.0 + uBeat * 0.5)); }`,
+                        fragmentShader: `uniform vec3 uColor; uniform float uOpacity, uBeat; varying float vAlpha; void main() { vec3 c = min(uColor * (0.78 + uBeat * 0.32), vec3(1.2)); gl_FragColor = vec4(c, clamp(vAlpha * uOpacity * (0.32 + uBeat * 0.28), 0.0, 0.68)); }`,
                         uniforms: { uColor: { value: trail.color }, uOpacity: { value: 0.4 }, uBeat: { value: 0 } },
                         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
                     });
@@ -1816,6 +1933,8 @@ void main() {
         uniform vec3 uColor2;
         uniform float uOpacity;
         uniform float uBeatEnergy;
+        uniform float uOnsetEnergy;
+        uniform float uBass;
         uniform float uHighMid;
         uniform float uSpectralCentroid;
         varying float vAlpha;
@@ -1827,11 +1946,14 @@ void main() {
             float coreBrightness = 1.0 + (1.0 - vDist) * 0.6;
             color *= coreBrightness;
             // Beat pulse flash
-            float beatFlash = 1.0 + uBeatEnergy * 1.2;
-            color *= beatFlash;
-            // Per-line alpha reacts to highMid (attack/presence energy)
-            float lineAlpha = vAlpha * uOpacity * (0.4 + uHighMid * 0.5 + uBeatEnergy * 0.4);
-            gl_FragColor = vec4(color, clamp(lineAlpha, 0.0, 1.0));
+            float bassPulse = smoothstep(0.06, 0.65, uBass);
+            float transientFlash = max(uBeatEnergy, uOnsetEnergy);
+            float lineEnergy = bassPulse * 0.35 + uHighMid * 0.2 + uBeatEnergy * 0.65 + uOnsetEnergy * 0.55;
+            color *= 0.72 + lineEnergy;
+            color = min(color, vec3(1.35));
+            // Lines react through controlled opacity without blowing out Bloom.
+            float lineAlpha = vAlpha * uOpacity * (0.18 + uHighMid * 0.3 + bassPulse * 0.35 + transientFlash * 0.55);
+            gl_FragColor = vec4(color, clamp(lineAlpha, 0.0, 0.72));
         }
     `,
             uniforms: {
@@ -1839,6 +1961,8 @@ void main() {
                 uColor2: { value: new THREE.Color(def.c1) },
                 uOpacity: { value: 1.0 },
                 uBeatEnergy: { value: 0 },
+                uOnsetEnergy: { value: 0 },
+                uBass: { value: 0 },
                 uHighMid: { value: 0 },
                 uSpectralCentroid: { value: 0 }
             },
@@ -1885,11 +2009,11 @@ void main() {
             }
 
             // Threshold breathes with bass, tightens on high energy
-            const effectiveThreshold = threshold * (1.0 + bassBoost * 0.6) * (1.0 - highMid * 0.15);
+            const effectiveThreshold = threshold * (1.0 + bassBoost * 1.4) * (1.0 - highMid * 0.08);
             const thresholdSq = effectiveThreshold * effectiveThreshold;
 
             // Dynamic connection cap — expands with mid+highMid energy
-            const dynamicMax = Math.floor(maxConnections * (0.3 + (mid + highMid) * 0.7));
+            const dynamicMax = Math.floor(maxConnections * Math.min(1.0, 0.22 + bassBoost * 0.55 + mid * 0.45 + highMid * 0.65));
 
             let connIdx = 0;
             for (let i = 0; i < positions.length && connIdx < dynamicMax; i++) {
@@ -1947,8 +2071,8 @@ void main() {
                 uniform float uBeatEnergy;
                 varying float vAlpha;
                 void main() {
-                    vec3 c = uColor * (1.2 + uBeatEnergy * 1.5);
-                    gl_FragColor = vec4(c, vAlpha);
+                    vec3 c = min(uColor * (0.82 + uBeatEnergy * 0.72), vec3(1.25));
+                    gl_FragColor = vec4(c, min(vAlpha, 0.72));
                 }
             `,
             uniforms: {
@@ -2300,6 +2424,7 @@ void main() {
 
         const afterimagePass = new AfterimagePass();
         afterimagePass.uniforms['damp'].value = STATE.trails;
+        afterimagePass.enabled = STATE.motionBlurEnabled;
         composer.addPass(afterimagePass);
 
         const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
@@ -2309,17 +2434,23 @@ void main() {
         composer.addPass(bloomPass);
 
         const godRaysPass = new ShaderPass(GodRaysShader);
-        godRaysPass.enabled = false;
+        godRaysPass.enabled = STATE.godRaysEnabled;
+        godRaysPass.uniforms.uIntensity.value = STATE.godRaysIntensity;
+        godRaysPass.uniforms.uDecay.value = STATE.godRaysDecay;
         composer.addPass(godRaysPass);
 
         const lensFlarePass = new ShaderPass(LensFlareShader);
         lensFlarePass.enabled = STATE.lensFlareEnabled;
+        lensFlarePass.uniforms.uIntensity.value = STATE.lensFlareIntensity;
         composer.addPass(lensFlarePass);
 
         const anamorphicPass = new ShaderPass(AnamorphicShader);
+        anamorphicPass.uniforms.uStretch.value = STATE.anamorphicStretch;
+        anamorphicPass.enabled = STATE.anamorphicStretch > 0;
         composer.addPass(anamorphicPass);
 
         const chromaticPass = new ShaderPass(ChromaticShader);
+        chromaticPass.uniforms.uIntensity.value = STATE.chromaticAberration;
         composer.addPass(chromaticPass);
 
         // Custom DOF pass (radial focus)
@@ -2335,13 +2466,18 @@ void main() {
         composer.addPass(vignettePass);
 
         const grainPass = new ShaderPass(GrainShader);
+        grainPass.uniforms.uIntensity.value = STATE.filmGrain;
         composer.addPass(grainPass);
 
         composer.addPass(new OutputPass());
 
         // ═══════ GUI ═══════
         const gui = new GUI({ title: '✦ Quantum Fields', width: 320 });
-        gui.domElement.classList.add('hidden'); // Default closed
+        gui.domElement.classList.add('hidden');
+        gui.domElement.hidden = true;
+        gui.domElement.inert = true;
+        gui.domElement.setAttribute('aria-hidden', 'true');
+        // НЕ УДАЛЯТЬ: GUI сохранён для будущей настройки, но полностью скрыт в режиме фона.
 
         // === MAIN CONTROLS (always visible) ===
         // Animate lil-gui CSS vars toward target field colours
@@ -2383,13 +2519,17 @@ void main() {
         // Set initial theme
         applyGuiTheme(guiCurrentAccent, guiCurrentAccent2);
 
-        gui.add(STATE, 'field', Object.keys(FIELD_TYPES)).name('⚡ Field Type').onChange(val => {
+        let activeThemePalette = null;
+        const getActivePalette = () => activeThemePalette || FIELD_TYPES[STATE.field];
+
+        function applyFieldAppearance(val) {
             const d = FIELD_TYPES[val];
-            const c1 = new THREE.Color(d.c1), c2 = new THREE.Color(d.c2), c3 = new THREE.Color(d.c3);
-            const sc1 = new THREE.Color(d.sc1), sc2 = new THREE.Color(d.sc2);
+            const palette = activeThemePalette || d;
+            const c1 = new THREE.Color(palette.c1), c2 = new THREE.Color(palette.c2), c3 = new THREE.Color(palette.c3);
+            const sc1 = new THREE.Color(palette.sc1), sc2 = new THREE.Color(palette.sc2);
             // Queue GUI theme transition
-            guiTargetAccent.set(d.c1);
-            guiTargetAccent2.set(d.c2);
+            guiTargetAccent.set(palette.c1);
+            guiTargetAccent2.set(palette.c2);
             function step() {
                 material.uniforms.uColor1.value.lerp(c1, 0.05);
                 material.uniforms.uColor2.value.lerp(c2, 0.05);
@@ -2404,10 +2544,54 @@ void main() {
                 material.uniforms.uNoiseScale.value = THREE.MathUtils.lerp(material.uniforms.uNoiseScale.value, d.s, 0.04);
                 material.uniforms.uCurlStrength.value = THREE.MathUtils.lerp(material.uniforms.uCurlStrength.value, d.curl, 0.04);
                 material.uniforms.uSizeBase.value = THREE.MathUtils.lerp(material.uniforms.uSizeBase.value, d.sz, 0.04);
-                if (Math.abs(material.uniforms.uNoiseScale.value - d.s) > 0.01) requestAnimationFrame(step);
+                const colorDelta = Math.max(
+                    Math.abs(material.uniforms.uColor1.value.r - c1.r),
+                    Math.abs(material.uniforms.uColor1.value.g - c1.g),
+                    Math.abs(material.uniforms.uColor1.value.b - c1.b),
+                    Math.abs(material.uniforms.uColor2.value.r - c2.r),
+                    Math.abs(material.uniforms.uColor2.value.g - c2.g),
+                    Math.abs(material.uniforms.uColor2.value.b - c2.b),
+                    Math.abs(material.uniforms.uColor3.value.r - c3.r),
+                    Math.abs(material.uniforms.uColor3.value.g - c3.g),
+                    Math.abs(material.uniforms.uColor3.value.b - c3.b)
+                );
+                if (Math.abs(material.uniforms.uNoiseScale.value - d.s) > 0.01 || colorDelta > 0.01) requestAnimationFrame(step);
             }
             step();
+        }
+
+        gui.add(STATE, 'field', Object.keys(FIELD_TYPES)).name('⚡ Field Type').onChange(applyFieldAppearance);
+
+        window.addEventListener('message', (event) => {
+            if (event.source !== window.parent) return;
+            if (event.data?.type === 'QFT_AUDIO') {
+                AUDIO.applyExternalSpectrum(event.data.bands, event.data.bass, event.data.active);
+                return;
+            }
+            if (event.data?.type !== 'QFT_THEME') return;
+            const palette = event.data.palette;
+            if (!palette || !['primary', 'primaryHover', 'secondary', 'accent', 'highlight'].every(key => typeof palette[key] === 'string')) return;
+
+            const lightTheme = event.data.theme === 'light';
+            const renderColor = value => {
+                if (!lightTheme) return value;
+                const match = /^#([0-9a-f]{6})$/i.exec(value.trim());
+                if (!match) return value;
+                const inverted = [0, 2, 4].map(offset =>
+                    (255 - Number.parseInt(match[1].slice(offset, offset + 2), 16)).toString(16).padStart(2, '0')
+                ).join('');
+                return `#${inverted}`;
+            };
+            activeThemePalette = {
+                c1: renderColor(palette.primary),
+                c2: renderColor(palette.accent),
+                c3: renderColor(palette.highlight),
+                sc1: renderColor(palette.primaryHover),
+                sc2: renderColor(palette.secondary)
+            };
+            applyFieldAppearance(STATE.field);
         });
+        window.parent.postMessage({ type: 'QFT_READY' }, '*');
         gui.add(STATE, 'sensitivity', 0.1, 3.0).name('🎧 Audio Sensitivity');
         gui.add(STATE, 'density', 0.017, 0.14).name('⭐ Density').onChange(v => geometry.setDrawRange(0, Math.floor((CONFIG.maxParticles + CONFIG.secondaryParticles) * v)));
         gui.add(STATE, 'timeScale', 0.0, 3.0).name('⏱ Time Flow');
@@ -2440,7 +2624,10 @@ void main() {
         f_post.add(bloomPass, 'strength', 0.0, 3.0).name('Bloom');
         f_post.add(afterimagePass.uniforms['damp'], 'value', 0.5, 0.98).name('Motion Blur');
         f_post.add(STATE, 'chromaticAberration', 0.0, 0.025).name('Chromatic').onChange(v => chromaticPass.uniforms.uIntensity.value = v);
-        f_post.add(STATE, 'anamorphicStretch', 0.0, 1.0).name('Anamorphic').onChange(v => anamorphicPass.uniforms.uStretch.value = v);
+        f_post.add(STATE, 'anamorphicStretch', 0.0, 1.0).name('Anamorphic').onChange(v => {
+            anamorphicPass.uniforms.uStretch.value = v;
+            anamorphicPass.enabled = v > 0;
+        });
         f_post.add(STATE, 'godRaysEnabled').name('God Rays').onChange(v => godRaysPass.enabled = v);
         f_post.add(STATE, 'godRaysIntensity', 0.0, 1.0).name('Rays Intensity').onChange(v => godRaysPass.uniforms.uIntensity.value = v);
         f_post.add(STATE, 'filmGrain', 0.0, 0.2).name('Film Grain').onChange(v => grainPass.uniforms.uIntensity.value = v);
@@ -2472,7 +2659,7 @@ void main() {
         f_enhance.close();
 
         let settingsLogTimer;
-        const scheduleSettingsLog = () => {
+        const scheduleSettingsLog = (changed = null) => {
             clearTimeout(settingsLogTimer);
             settingsLogTimer = setTimeout(() => {
                 const snapshot = {
@@ -2483,11 +2670,16 @@ void main() {
                 const serialized = JSON.stringify(snapshot);
                 window.__QFT_LAST_SETTINGS__ = serialized;
                 document.documentElement.dataset.qftSettings = serialized;
-                console.log(`[QFT_SETTINGS] ${serialized}`);
+                window.parent.postMessage({
+                    type: 'QFT_SETTINGS',
+                    changed,
+                    serialized
+                }, '*');
             }, 150);
         };
-        gui.domElement.addEventListener('input', scheduleSettingsLog, true);
-        gui.domElement.addEventListener('change', scheduleSettingsLog, true);
+        gui.onChange(({ property, value }) => scheduleSettingsLog({ property, value }));
+        gui.domElement.addEventListener('input', () => scheduleSettingsLog(), true);
+        gui.domElement.addEventListener('change', () => scheduleSettingsLog(), true);
 
         // ═══════ UI & EVENTS ═══════
         const overlay = document.getElementById('overlay');
@@ -2502,6 +2694,7 @@ void main() {
         const formatTime = s => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
         function updateUI() {
+            if (!playPauseBtn || !progressBar || !timeDisplay) return;
             if (AUDIO.mode === 'mic') {
                 playPauseBtn.textContent = '🎙 live';
                 playPauseBtn.disabled = true;
@@ -2524,24 +2717,26 @@ void main() {
             if (AUDIO.mode !== 'file') return;
             AUDIO.togglePlayPause();
             updateUI();
-            status.innerHTML = AUDIO.isPlaying ? 'SYSTEM: <span>PLAYING</span>' : 'SYSTEM: <span>PAUSED</span>';
+            if (status) status.innerHTML = AUDIO.isPlaying ? 'SYSTEM: <span>PLAYING</span>' : 'SYSTEM: <span>PAUSED</span>';
         }
 
         function activate() {
             AUDIO.init();
             if (AUDIO.ctx.state === 'suspended') AUDIO.ctx.resume();
-            overlay.style.opacity = 0;
-            setTimeout(() => overlay.style.display = 'none', 800);
-            audioControls.classList.add('visible');
+            if (overlay) {
+                overlay.style.opacity = 0;
+                setTimeout(() => overlay.style.display = 'none', 800);
+            }
+            audioControls?.classList.add('visible');
         }
 
         async function loadTrack(file) {
             activate();
             await AUDIO.loadTrack(await file.arrayBuffer(), file.name);
             AUDIO.play();
-            trackName.textContent = file.name.length > 25 ? file.name.slice(0, 22) + '...' : file.name;
+            if (trackName) trackName.textContent = file.name.length > 25 ? file.name.slice(0, 22) + '...' : file.name;
             updateUI();
-            status.innerHTML = 'SYSTEM: <span>PLAYING</span>';
+            if (status) status.innerHTML = 'SYSTEM: <span>PLAYING</span>';
         }
 
         async function startMic(preferredLabel = null) {
@@ -2549,13 +2744,13 @@ void main() {
             try {
                 activate();
                 await AUDIO.startMic(preferredLabel);
-                trackName.textContent = AUDIO.currentTrackName;
+                if (trackName) trackName.textContent = AUDIO.currentTrackName;
                 updateUI();
                 // status update handled in AUDIO.startMic
             } catch (e) {
                 console.error("Global startMic failed:", e);
                 const status = document.getElementById('status-bar');
-                status.innerHTML = `ERROR: <span style="color:#ff6b6b">${e.message}</span>`;
+                if (status) status.innerHTML = `ERROR: <span style="color:#ff6b6b">${e.message}</span>`;
             }
         }
 
@@ -2566,10 +2761,12 @@ void main() {
         const fileInput = document.getElementById('file-input');
         if (fileInput) fileInput.onchange = e => e.target.files[0] && loadTrack(e.target.files[0]);
 
-        document.getElementById('file-input-2').onchange = e => { if (e.target.files[0]) loadTrack(e.target.files[0]); e.target.value = ''; };
-        document.getElementById('mic-btn-2').onclick = () => startMic(null);
-        playPauseBtn.onclick = togglePlayPause;
-        progressContainer.onclick = e => {
+        const fileInput2 = document.getElementById('file-input-2');
+        if (fileInput2) fileInput2.onchange = e => { if (e.target.files[0]) loadTrack(e.target.files[0]); e.target.value = ''; };
+        const micBtn2 = document.getElementById('mic-btn-2');
+        if (micBtn2) micBtn2.onclick = () => startMic(null);
+        if (playPauseBtn) playPauseBtn.onclick = togglePlayPause;
+        if (progressContainer) progressContainer.onclick = e => {
             if (AUDIO.mode !== 'file' || !AUDIO.audioBuffer) return;
             const rect = progressContainer.getBoundingClientRect();
             AUDIO.seek((e.clientX - rect.left) / rect.width * AUDIO.getDuration());
@@ -2599,6 +2796,8 @@ void main() {
             lensFlarePass.uniforms.uTime.value = elapsed;
 
             material.uniforms.uZoomFactor.value = camera.position.length() / CONFIG.defaultZoom;
+            const audioActivity = AUDIO.active && AUDIO.isPlaying ? 1 : 0;
+            material.uniforms.uAudioActivity.value = THREE.MathUtils.lerp(material.uniforms.uAudioActivity.value, audioActivity, 0.08);
             material.uniforms.uMousePos.value.lerp(mouseWorldPos, 0.1);
             material.uniforms.uMouseVelocity.value.lerp(mouseVelocity, 0.08);
 
@@ -2637,6 +2836,7 @@ void main() {
             secondaryMaterial.uniforms.uSpectralFlux.value     = material.uniforms.uSpectralFlux.value;
             secondaryMaterial.uniforms.uOnsetEnergy.value      = material.uniforms.uOnsetEnergy.value;
             secondaryMaterial.uniforms.uVortexStrength.value   = STATE.vortexStrength;
+            secondaryMaterial.uniforms.uAudioActivity.value    = material.uniforms.uAudioActivity.value;
 
             // Update nebula background
             nebulaSphere.visible = STATE.nebulaEnabled;
@@ -2658,6 +2858,8 @@ void main() {
                     material.uniforms.uMid.value
                 );
                 connectionMaterial.uniforms.uBeatEnergy.value = material.uniforms.uBeatEnergy.value;
+                connectionMaterial.uniforms.uOnsetEnergy.value = material.uniforms.uOnsetEnergy.value;
+                connectionMaterial.uniforms.uBass.value = material.uniforms.uBass.value;
                 connectionMaterial.uniforms.uHighMid.value = material.uniforms.uHighMid.value;
                 connectionMaterial.uniforms.uSpectralCentroid.value = material.uniforms.uSpectralCentroid.value;
                 connectionMaterial.uniforms.uOpacity.value = STATE.connectionOpacity;
@@ -2674,8 +2876,8 @@ void main() {
                 );
                 crawlerMaterial.uniforms.uColor.value.lerp(
                     new THREE.Color().lerpColors(
-                        new THREE.Color(FIELD_TYPES[STATE.field]?.c1 || '#ffffff'),
-                        new THREE.Color(FIELD_TYPES[STATE.field]?.c3 || '#ffffff'),
+                        new THREE.Color(getActivePalette()?.c1 || '#ffffff'),
+                        new THREE.Color(getActivePalette()?.c3 || '#ffffff'),
                         material.uniforms.uSpectralCentroid.value
                     ), 0.05
                 );
@@ -2726,9 +2928,16 @@ void main() {
                 camera.position.copy(baseCameraPos).add(cameraShakeOffset);
             }
 
-            controls.autoRotateSpeed = 0.35 + material.uniforms.uMid.value * 2.0 + material.uniforms.uBeatEnergy.value * 2.0;
-            bloomPass.strength = STATE.bloom + (AUDIO.gatedBands.bass + AUDIO.gatedBands.mid + AUDIO.beatEnergy) / 6;
-            anamorphicPass.uniforms.uIntensity.value = 0.3 + AUDIO.gatedBands.bass * 0.4;
+            controls.autoRotateSpeed = 0.35 + material.uniforms.uMid.value * 0.8 + material.uniforms.uBeatEnergy.value * 0.8;
+            const bloomBase = STATE.bloom * (audioActivity > 0.5 ? 0.55 : 1.0);
+            bloomPass.strength = bloomBase + (AUDIO.gatedBands.bass + AUDIO.gatedBands.mid + AUDIO.beatEnergy) / 24;
+            if (anamorphicPass.enabled) anamorphicPass.uniforms.uIntensity.value = 0.3 + AUDIO.gatedBands.bass * 0.4;
+            const targetExposure = audioActivity > 0.5 ? 1.55 : 2.1;
+            renderer.toneMappingExposure = THREE.MathUtils.lerp(
+                renderer.toneMappingExposure,
+                targetExposure,
+                0.06
+            );
 
             controls.update();
             composer.render();
@@ -2743,18 +2952,8 @@ void main() {
             baseCameraPos.copy(camera.position);
         });
 
-        // Auto-start System Audio (BlackHole)
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                console.log("Auto-starting System Audio...");
-                activate();
-                Promise.resolve().catch(e => {
-                    console.warn("Auto-start failed:", e);
-                    const status = document.getElementById('status-bar');
-                    if (status) status.innerHTML = "SYSTEM: <span>CLICK TO START</span>";
-                });
-            }, 1000);
-        });
+        // НЕ УДАЛЯТЬ: локальный микрофон/loopback оставлен для будущей ручной настройки.
+        // В режиме фона аудиореакция приходит напрямую из анализатора радио приложения.
 
         animate();
     </script>

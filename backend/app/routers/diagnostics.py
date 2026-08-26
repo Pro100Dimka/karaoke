@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 import schemas
-from app.services import diagnostics_service, model_install_service
+from app.services import diagnostics_service, model_install_service, pipeline_service
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
@@ -50,3 +50,13 @@ def client_log(entry: schemas.ClientLogIn):
     as the Python backend instead of only ever reaching devtools/the OS console.
     """
     diagnostics_service.record_client_log(entry)
+
+
+@router.post("/shutdown")
+def shutdown():
+    """Best-effort graceful-shutdown hook, called by Electron before it kills
+    this process: ask any active AI processing to cancel cooperatively so it
+    has a bounded window to reach a clean state instead of being force-killed
+    mid-write.
+    """
+    return {"cancelled": pipeline_service.cancel_all_active_processing()}

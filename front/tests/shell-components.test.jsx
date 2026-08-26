@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import TitleBar from "../src/components/TitleBar.jsx";
 import BackendBootLoader from "../src/components/backend-boot-loader.jsx";
 import AppLayout from "../src/components/layout.jsx";
-import { called, verify } from "./helpers/assertions.mjs";
+import { called, calledWith, verify } from "./helpers/assertions.mjs";
 
 const mocks = vi.hoisted(() => ({
   location: { pathname: "/" },
@@ -79,8 +79,10 @@ describe("application shell", () => {
     error.mockRestore();
   });
   test("layout opens global settings, radio and blackout state", async () => {
+    window.electronAPI = { recordStartupMilestone: vi.fn(() => Promise.resolve(true)) };
     const { container, getByLabelText, getByRole, getByTestId, rerender } = render(<AppLayout />);
     verify([container.querySelector(".app-shell").classList.contains("karaoke-app-shell"), "toBe", false]);
+    calledWith([window.electronAPI.recordStartupMilestone, ["app-interactive"]]);
     fireEvent.click(getByLabelText("radio.enable:Radio"));
     expect(mocks.radio.toggle).toHaveBeenCalled();
     mocks.radio.isPlaying = true;
@@ -125,6 +127,7 @@ describe("application shell", () => {
   });
   test("backend loader hydrates preferences and reacts to theme changes", async () => {
     mocks.hydrate.mockRejectedValueOnce(new Error("optional"));
+    window.electronAPI = { recordStartupMilestone: vi.fn(() => Promise.resolve(true)) };
     const { getByRole, getByText } = render(
       <BackendBootLoader>
         <div>ready-child</div>
@@ -134,6 +137,7 @@ describe("application shell", () => {
     document.documentElement.dataset.theme = "green";
     await waitFor(() => expect(mocks.getHealth).toHaveBeenCalled());
     await waitFor(() => expect(getByText("ready-child")).not.toBeNull());
+    calledWith([window.electronAPI.recordStartupMilestone, ["backend-healthy"]]);
   });
   test("backend loader retries health checks", async () => {
     vi.useFakeTimers();

@@ -24,8 +24,20 @@ export function setIconTheme(value) {
   electronAPI()?.setIconTheme?.(value);
 }
 
+export const windowActions = {
+  minimize: () => electronAPI()?.minimize?.(),
+  toggleFullscreen: () => electronAPI()?.toggleFullscreen?.(),
+  close: () => electronAPI()?.close?.()
+};
+
 export function openApplicationLog() {
   electronAPI()?.openApplicationLog?.();
+}
+
+// Fire-and-forget: lets Electron's startup-timeline log (see main.cjs) record
+// renderer-side milestones the main process can't observe on its own.
+export function recordStartupMilestone(name) {
+  electronAPI()?.recordStartupMilestone?.(name)?.catch?.(() => {});
 }
 
 // The scene backdrop video is the only "media URL" this bridge exposes today;

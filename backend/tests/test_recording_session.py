@@ -233,7 +233,7 @@ def test_stop_writer_signals_live_thread(monkeypatch):
     session._writer_thread = thread
     session._stop_writer()
     assert session._queue.get_nowait() is session._WRITER_STOP
-    thread.join.assert_called_once_with()
+    thread.join.assert_called_once_with(timeout=5.0)
     assert session._writer_thread is None
 
 

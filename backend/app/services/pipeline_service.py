@@ -379,6 +379,19 @@ def has_active_jobs() -> bool:
     with _active_jobs_lock: return any(thread.is_alive() for thread in _active_jobs.values())
 
 
+def cancel_all_active_processing() -> int:
+    """Cooperatively cancel every song currently processing.
+
+    Used on app shutdown so a job gets a chance to reach a clean CANCELLED
+    state (and release its AI resources) instead of being killed mid-write
+    a moment later when Electron force-terminates the backend process.
+    """
+    with _active_jobs_lock:
+        song_ids = [song_id for song_id, thread in _active_jobs.items() if thread.is_alive()]
+    for song_id in song_ids: cancel_processing(song_id)
+    return len(song_ids)
+
+
 def _release_active_job(song_id: str) -> None:
     with _active_jobs_lock:
         if _active_jobs.get(song_id) is threading.current_thread(): _active_jobs.pop(song_id, None)
@@ -779,9 +792,8 @@ def _run_reprocessing(song_id: str) -> None:
     # SONG_LIBRARY_ROOTS for reads, so this ownership check must trust the same
     # set, not just the current SONG_OUTPUT_DIR, or reprocessing would wrongly
     # reject perfectly readable/playable historical-root songs.
-    trusted_roots = {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
     target_dir = out_dir.resolve()
-    if target_dir.parent not in trusted_roots:
+    if target_dir.parent not in song_service.trusted_library_roots():
         _update_progress(
             song_id,
             status=models.SongStatus.ERROR,

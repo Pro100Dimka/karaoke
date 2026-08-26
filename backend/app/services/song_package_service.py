@@ -670,20 +670,17 @@ def _prepare_publish_tree(
     return publish
 
 
-def _trusted_library_roots() -> set[Path]: return {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
-
-
 def _safe_library_root(value: object) -> Path:
     if not isinstance(value, str) or not value or "\x00" in value: raise ValueError("Room import recovery journal is invalid")
     candidate = Path(value).expanduser().resolve()
-    if candidate not in _trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
+    if candidate not in song_service.trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
     return candidate
 
 
 def _safe_library_entry(name: object, *, root: Path | None = None) -> Path:
     if not isinstance(name, str) or not name or any(token in name for token in ("/", "\\", ":", "\x00")): raise ValueError("Room import recovery journal is invalid")
     trusted_root = (root or config.SONG_OUTPUT_DIR).resolve()
-    if trusted_root not in _trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
+    if trusted_root not in song_service.trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
     candidate = (trusted_root / name).resolve()
     if candidate.parent != trusted_root: raise ValueError("Room import recovery journal escapes the library root")
     return candidate
@@ -700,7 +697,7 @@ def _preserve_local_output(backup_dir: Path | None, output_dir: Path) -> None:
 
 def _import_journal_path(output_dir: Path) -> Path:
     root = output_dir.resolve().parent
-    if root not in _trusted_library_roots(): raise ValueError("Song output directory is outside the trusted library roots")
+    if root not in song_service.trusted_library_roots(): raise ValueError("Song output directory is outside the trusted library roots")
     return root / f"{_IMPORT_JOURNAL_PREFIX}{uuid4().hex}.json"
 
 
@@ -749,7 +746,7 @@ def _recover_import_journal(db: Session, journal_path: Path) -> None:
 
 
 def recover_import_transactions() -> None:
-    roots = sorted(_trusted_library_roots(), key=lambda path: str(path).casefold())
+    roots = sorted(song_service.trusted_library_roots(), key=lambda path: str(path).casefold())
     journals = [
         journal
         for root in roots if root.exists()

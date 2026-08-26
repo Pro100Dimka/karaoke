@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
-from AI.lyrics_document import validate_lyrics_document
 from app.api.dependencies import SongDependency
 from app.api.errors import http_error
 from app.services import (
@@ -501,7 +500,7 @@ def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency, db: Session 
                 words.append(word)
             _carry_forward_word_notes(previous, words)
             updated = {**current, "text": trusted_text, "words": words, "edited": True}
-            write_json(lyrics_path, validate_lyrics_document(updated))
+            write_json(lyrics_path, ai_bridge.validate_lyrics_document(updated))
             song_package_service.invalidate_content_revision(song)
     except (OSError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc

@@ -24,7 +24,52 @@ def imported_module(node: ast.AST) -> str | None:
     return None
 
 
-def audit_file(path: Path) -> list[str]:
+# Names that indicate a function reaches out past its own process/memory --
+# subprocess spawns, filesystem writes, network calls, threads. A long
+# function that ALSO juggles several of these alongside its own branches and
+# cleanup paths is a real extraction candidate; a long-but-linear function
+# calling one such API isn't automatically one.
+_SIDE_EFFECT_CALLEES = {
+    "run", "Popen", "call", "check_call", "check_output",  # subprocess
+    "Thread", "Process",  # threading/multiprocessing
+    "open", "remove", "unlink", "rmtree", "move", "copyfile", "copy",  # filesystem
+    "request", "get", "post", "put", "delete", "urlopen",  # network
+}
+
+
+def _function_complexity(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, int]:
+    branches = cleanup_paths = exit_points = side_effects = 0
+    for child in ast.walk(node):
+        if child is node:
+            continue
+        if isinstance(child, (ast.If, ast.For, ast.While, ast.Try)):
+            branches += 1
+        if isinstance(child, ast.Try) and child.finalbody:
+            cleanup_paths += 1
+        if isinstance(child, ast.With) or isinstance(child, ast.AsyncWith):
+            cleanup_paths += 1
+        if isinstance(child, (ast.Return, ast.Raise)):
+            exit_points += 1
+        if isinstance(child, ast.Call):
+            callee = child.func.attr if isinstance(child.func, ast.Attribute) else getattr(child.func, "id", None)
+            if callee in _SIDE_EFFECT_CALLEES:
+                side_effects += 1
+    return {
+        "branches": branches,
+        "cleanup_paths": cleanup_paths,
+        "exit_points": exit_points,
+        "side_effects": side_effects,
+    }
+
+
+# A function tripping at least this many of these four signals is doing
+# enough at once that splitting it (or modelling it as an explicit state
+# machine) is worth considering -- advisory, not a build-breaking rule.
+_COMPLEXITY_SIGNAL_THRESHOLDS = {"branches": 8, "cleanup_paths": 2, "exit_points": 6, "side_effects": 3}
+_COMPLEXITY_SIGNALS_TO_FLAG = 3
+
+
+def audit_file(path: Path) -> tuple[list[str], list[str]]:
     relative = path.relative_to(ROOT)
 
     try:
@@ -32,9 +77,9 @@ def audit_file(path: Path) -> list[str]:
             path.read_text(encoding="utf-8"),
             filename=str(relative),
         )
-    except (OSError, SyntaxError, UnicodeError) as exc: return [f"{relative}: cannot parse file: {exc}"]
+    except (OSError, SyntaxError, UnicodeError) as exc: return [f"{relative}: cannot parse file: {exc}"], []
 
-    errors: list[str] = []; parts = relative.parts
+    errors: list[str] = []; warnings: list[str] = []; parts = relative.parts
 
     for node in ast.walk(tree):
         module = imported_module(node)
@@ -57,6 +102,16 @@ def audit_file(path: Path) -> list[str]:
                     "utility imports upper application layer"
                 )
 
+            if (
+                parts[:2] == ("app", "routers")
+                and (module == "AI" or module.startswith("AI."))
+            ):
+                errors.append(
+                    f"{relative}:{node.lineno}: "
+                    "router imports internal AI implementation directly "
+                    "(go through a service, e.g. app.services.ai_bridge)"
+                )
+
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             length = (node.end_lineno or node.lineno) - node.lineno + 1
             limit = FUNCTION_LINE_LIMITS.get(
@@ -65,10 +120,21 @@ def audit_file(path: Path) -> list[str]:
             )
 
             if length > limit:
-                errors.append(
+                warnings.append(
                     f"{relative}:{node.lineno}: "
                     f"function {node.name!r} has {length} lines "
-                    f"(limit {limit})"
+                    f"(advisory limit {limit})"
+                )
+
+            complexity = _function_complexity(node)
+            signals_tripped = sum(
+                1 for signal, count in complexity.items() if count >= _COMPLEXITY_SIGNAL_THRESHOLDS[signal]
+            )
+            if signals_tripped >= _COMPLEXITY_SIGNALS_TO_FLAG:
+                detail = ", ".join(f"{signal}={count}" for signal, count in complexity.items())
+                warnings.append(
+                    f"{relative}:{node.lineno}: function {node.name!r} is doing a lot at once "
+                    f"({detail}) -- consider extraction or an explicit state machine"
                 )
 
             defaults = (*node.args.defaults, *node.args.kw_defaults)
@@ -88,16 +154,23 @@ def audit_file(path: Path) -> list[str]:
 
         if isinstance(node, ast.ExceptHandler) and node.type is None: errors.append(f"{relative}:{node.lineno}: bare except")
 
-    return errors
+    return errors, warnings
 
 
 def main() -> int:
-    files = python_files(); errors = [error for path in files for error in audit_file(path)]
+    files = python_files()
+    results = [audit_file(path) for path in files]
+    errors = [error for file_errors, _ in results for error in file_errors]
+    warnings = [warning for _, file_warnings in results for warning in file_warnings]
+
+    if warnings:
+        print("Architecture audit warnings (advisory, does not fail the build):")
+        print("\n".join(f"- {warning}" for warning in warnings))
 
     if errors:
         print("Architecture audit failed:"); print("\n".join(f"- {error}" for error in errors)); return 1
 
-    print(f"Architecture audit passed ({len(files)} Python files)."); return 0
+    print(f"Architecture audit passed ({len(files)} Python files, {len(warnings)} advisory warning(s))."); return 0
 
 
 if __name__ == "__main__": raise SystemExit(main())

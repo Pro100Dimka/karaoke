@@ -209,6 +209,20 @@ def test_job_registry_start_cancel_release_and_cleanup(monkeypatch):
     assert "bad" not in pipeline_service._active_jobs
 
 
+def test_cancel_all_active_processing_cancels_only_alive_jobs(monkeypatch):
+    alive_a, alive_b = Mock(is_alive=Mock(return_value=True)), Mock(is_alive=Mock(return_value=True))
+    dead = Mock(is_alive=Mock(return_value=False))
+    patch_attrs(
+        monkeypatch, pipeline_service,
+        _active_jobs={"a": alive_a, "b": alive_b, "gone": dead}, _cancelled_jobs=set(),
+    )
+    update = Mock()
+    monkeypatch.setattr(pipeline_service, "_update_progress", update)
+
+    assert pipeline_service.cancel_all_active_processing() == 2
+    assert pipeline_service._cancelled_jobs == {"a", "b"}
+
+
 def test_job_entrypoint_releases_runtime_and_cuda_cache(monkeypatch):
     target, current = Mock(side_effect=RuntimeError('worker failed')), Mock()
     monkeypatch.setattr(pipeline_service.threading, "current_thread", Mock(return_value=current))

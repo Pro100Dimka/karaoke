@@ -5,6 +5,7 @@ import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useI18n } from "../i18n";
 import { Box, IconButton, Slider, Stack } from "../theme/ui";
+import { recordStartupMilestone } from "../utils/platform";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
@@ -80,6 +81,10 @@ export default function AppLayout() {
   const karaoke = pathname === "/karaoke";
   const editor = pathname.startsWith("/editor/");
   useOnlineRoomNavigation();
+  useEffect(() => {
+    recordStartupMilestone("app-interactive");
+    // Stryker disable next-line ArrayDeclaration: fires once, first mount only.
+  }, []);
   return (
     <Box
       className={`app-shell${karaoke ? " karaoke-app-shell" : ""}${editor ? " melody-editor-app-shell" : ""}`}

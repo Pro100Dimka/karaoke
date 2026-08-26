@@ -34,5 +34,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   setIconTheme: (theme) => ipcRenderer.invoke("window:setIconTheme", theme),
 
+  recordStartupMilestone: (name) => ipcRenderer.invoke("startup:milestone", name),
+
   isElectron: true
 });

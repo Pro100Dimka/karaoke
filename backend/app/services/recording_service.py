@@ -182,7 +182,9 @@ class RecordingSession:
         if thread is None: return
         if thread.is_alive():
             self._queue.put(self._WRITER_STOP)
-            thread.join()
+            # Bounded: a stuck writer (e.g. a slow/failing disk) must not hang
+            # app shutdown indefinitely -- see close_all_sessions() below.
+            thread.join(timeout=5.0)
         self._writer_thread = None
 
     def _cleanup_temporary_file(self) -> None:

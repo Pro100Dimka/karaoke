@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .models import VocalNote, Word, to_dict
@@ -12,9 +13,19 @@ LYRICS_TIME_DIGITS = 3
 LYRICS_SCHEMA_VERSION = 1
 
 
+MIN_BPM = 20
+MAX_BPM = 400
+
+
 def validate_lyrics_document(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict) or any(key not in payload for key in ("bpm", "key", "words")) or not isinstance(payload["words"], list):
         raise ValueError("lyricsSync.json must contain bpm, key and words")
+    bpm = payload["bpm"]
+    if (
+        not isinstance(bpm, (int, float)) or isinstance(bpm, bool)
+        or not math.isfinite(bpm) or not MIN_BPM <= bpm <= MAX_BPM
+    ):
+        raise ValueError(f"lyricsSync.json has an invalid bpm (must be {MIN_BPM}..{MAX_BPM})")
     schema_version = payload.get("schemaVersion", LYRICS_SCHEMA_VERSION)
     if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version < 1:
         raise ValueError("lyricsSync.json has an invalid schemaVersion")
@@ -29,14 +40,23 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
         if not isinstance(word, dict) or not isinstance(word.get("text"), str):
             raise ValueError(f"Invalid word {index}")
         start, end = float(word.get("start", -1)), float(word.get("end", -1))
-        if start < 0 or end <= start or start + 1e-6 < previous:
+        # JSON's non-standard NaN/Infinity literals parse straight through to
+        # float() -- and NaN in particular makes every ordering comparison
+        # below silently return False, so a single corrupt word would slip
+        # through unnoticed and then also disable the previous-word ordering
+        # check (start + 1e-6 < previous) for every word after it.
+        if not (math.isfinite(start) and math.isfinite(end)) or start < 0 or end <= start or start + 1e-6 < previous:
             raise ValueError(f"Invalid word interval {index}")
         previous = start
         previous_note_end = -1.0
         for note in word.setdefault("notes", []):
             note_start, note_end = float(note.get("start", -1)), float(note.get("end", -1))
-            midi = int(note.get("note", -1))
-            if note_end <= note_start or note_end <= start or note_start >= end or not 0 <= midi <= 127:
+            raw_midi = note.get("note", -1)
+            midi = int(raw_midi) if isinstance(raw_midi, (int, float)) and not isinstance(raw_midi, bool) and math.isfinite(raw_midi) else -1
+            if (
+                not (math.isfinite(note_start) and math.isfinite(note_end))
+                or note_end <= note_start or note_end <= start or note_start >= end or not 0 <= midi <= 127
+            ):
                 print(
                     f"[lyrics_document] word {index} {word.get('text')!r} "
                     f"[{start!r}..{end!r}] rejects note {note!r}; "

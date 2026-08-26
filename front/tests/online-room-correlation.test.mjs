@@ -92,6 +92,21 @@ test("stale lookup failure never requests superseded song", async () => {
     { state: expect.objectContaining({ type: "song-ready", songId: "B", commandId: "cmd-B" }) }
   ]);
 });
+test("guest never claims song-ready when its local copy's revision differs from the host's", async () => {
+  const h = guestHarness();
+  h.lookups.set("A", deferred());
+  h.handler({
+    type: "sync",
+    fromId: "host",
+    state: { type: "open-karaoke", songId: "A", commandId: "cmd-A", revision: TEST_REVISION }
+  });
+  h.lookups.get("A").resolve({ revision: `sha256:${"b".repeat(64)}` });
+  await flush();
+  expect(h.client.send).not.toHaveBeenCalledWith(
+    "sync",
+    expect.objectContaining({ state: expect.objectContaining({ type: "song-ready" }) })
+  );
+});
 test("stale song-transfer-error cannot clear newer pending command", () => {
   const h = guestHarness();
   h.pendingSongCommandRef.current = { type: "open-karaoke", songId: "B", commandId: "cmd-B" };

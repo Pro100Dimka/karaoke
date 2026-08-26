@@ -1,12 +1,13 @@
 .qft-original-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: 0;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background: transparent;
   mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 .qft-original-frame {
@@ -15,4 +16,14 @@
   height: 100%;
   border: 0;
   background: transparent;
+  pointer-events: none;
+}
+
+.qft-original-backdrop + * {
+  z-index: 1;
+}
+
+:root[data-theme="light"] .qft-original-backdrop {
+  filter: invert(1);
+  mix-blend-mode: multiply;
 }

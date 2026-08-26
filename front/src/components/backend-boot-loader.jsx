@@ -9,6 +9,7 @@ import { translateMessage } from "../i18n";
 import { BACKEND_BOOT_RETRY_MS } from "../runtime-config";
 import { Button, Box, Stack, Typography } from "../theme/ui";
 import { getSavedLanguage } from "../utils/language";
+import { recordStartupMilestone } from "../utils/platform";
 import { getSavedTheme } from "../utils/theme";
 import { hydrateUiPreferences } from "../utils/ui-preferences";
 
@@ -50,6 +51,7 @@ export default function BackendBootLoader({ children }) {
       for (let attempt = 0; active && attempt < MAX_STARTUP_ATTEMPTS; attempt += 1) {
         try {
           await api.getHealth();
+          recordStartupMilestone("backend-healthy");
           await hydrateUiPreferences(api).catch(() => {});
           if (active) setState((value) => ({ ...value, ready: true }));
           return;

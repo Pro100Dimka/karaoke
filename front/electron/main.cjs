@@ -87,6 +87,26 @@ process.env.TEMP = INSTALL_TEMP_DIR;
 process.env.TMP = INSTALL_TEMP_DIR;
 process.env.TMPDIR = INSTALL_TEMP_DIR;
 
+// A small, separate file (not application.log, which the backend owns and
+// rotates) recording cold/warm launch timings: how long each stage of
+// startup took, one line per milestone, so a slow launch can be narrowed
+// down without guessing. Kept tiny -- only ever appended, one line per
+// milestone per run -- so it doesn't need rotation of its own.
+const STARTUP_TIMELINE_PATH = path.join(INSTALL_LOG_DIR, "startup-timeline.log");
+const startupBeganAt = Date.now();
+const recordedStartupMilestones = new Set();
+function recordStartupMilestone(name) {
+  if (recordedStartupMilestones.has(name)) return;
+  recordedStartupMilestones.add(name);
+  const elapsedMs = Date.now() - startupBeganAt;
+  try {
+    fs.appendFileSync(STARTUP_TIMELINE_PATH, `${new Date().toISOString()} +${elapsedMs}ms ${name}\n`);
+  } catch {
+    // Best-effort diagnostics; must never break startup itself.
+  }
+}
+recordStartupMilestone("electron-process-start");
+
 let mainWindow = null;
 let backendProcess = null;
 let isQuitting = false;
@@ -341,6 +361,7 @@ function startBackend() {
     });
     backendProcess = childProcess;
     childProcess.once("spawn", () => {
+      recordStartupMilestone("backend-spawn");
       clearTimeout(backendStableTimer);
       backendStableTimer = setTimeout(() => {
         if (backendProcess === childProcess) backendRestartAttempts = 0;
@@ -403,6 +424,20 @@ function stopBackend() {
       backendProcess = null;
     }
   };
+
+  // Ask any in-progress AI processing to cancel cooperatively before the
+  // grace period below force-kills the process tree, so it has a chance to
+  // reach a clean cancelled state instead of being cut off mid-write.
+  // Best-effort/fire-and-forget: doesn't gate the shutdown timeline below.
+  const shutdownRequest = http.request(`${runtimeBackendUrl}/diagnostics/shutdown`, {
+    method: "POST",
+    timeout: 450,
+    headers: { "X-ADVoice-Token": BACKEND_API_TOKEN }
+  });
+  shutdownRequest.on("response", (response) => response.resume());
+  shutdownRequest.on("error", () => {});
+  shutdownRequest.on("timeout", () => shutdownRequest.destroy());
+  shutdownRequest.end();
 
   // Release the native audio worker before terminating Python. On Windows a
   // direct child-process kill can otherwise leave an isolated monitor holding
@@ -559,6 +594,8 @@ function createWindow() {
       ]
     }
   });
+  recordStartupMilestone("window-create");
+  mainWindow.webContents.once("did-finish-load", () => recordStartupMilestone("frontend-loaded"));
   // Apply the initial window state before loading/rendering so the first
   // visible frame already occupies the full work area (no 1440x900 flash).
   // mainWindow.maximize();
@@ -696,6 +733,13 @@ handleTrustedIpc("dialog:selectFolder", async (currentPath) => {
 handleTrustedIpc("clipboard:writeText", (value) => {
   if (typeof value !== "string" || value.length > 256) return false;
   clipboard.writeText(value);
+  return true;
+});
+
+const RENDERER_STARTUP_MILESTONES = new Set(["backend-healthy", "app-interactive"]);
+handleTrustedIpc("startup:milestone", (name) => {
+  if (!RENDERER_STARTUP_MILESTONES.has(name)) return false;
+  recordStartupMilestone(name);
   return true;
 });
 

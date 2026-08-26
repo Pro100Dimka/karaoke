@@ -1,6 +1,7 @@
 import { Maximize2, Minus, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { IconButton, Stack } from "../theme/ui";
+import { windowActions } from "../utils/platform";
 
 const actions = [
   ["minimize", "common.minimizeWindow", Minus],
@@ -10,10 +11,9 @@ const actions = [
 
 export default function TitleBar({ hideActions = false, title = "A&D Voice" }) {
   const { t } = useI18n();
-  const electron = window.electronAPI;
   if (hideActions) return null;
   const invoke = (action) =>
-    Promise.resolve(electron?.[action]?.()).catch((error) =>
+    Promise.resolve(windowActions[action]?.()).catch((error) =>
       console.error(`Window action failed: ${action}`, error)
     );
 

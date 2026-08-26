@@ -36,6 +36,10 @@ class Song(Base):
     artist: Mapped[str | None] = mapped_column(String)
     genre: Mapped[str | None] = mapped_column(String)
     original_filename: Mapped[str] = mapped_column(String, nullable=False)
+    # Path to the original uploaded/imported audio file (pre-processing),
+    # distinct from output_dir below (where the processed instrumental/
+    # vocals/lyricsSync artifacts are written). Always resolved against the
+    # trusted library roots -- see song_service.resolve_source_path().
     source_path: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     output_dir: Mapped[str | None] = mapped_column(String)
