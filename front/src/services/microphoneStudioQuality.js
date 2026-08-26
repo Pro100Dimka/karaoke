@@ -32,7 +32,9 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
   let source;
   let input = rawStream;
   try {
-    context = new AudioContext({ latencyHint: "interactive", sampleRate: 44_100 });
+    // WebRTC carries Opus at 48 kHz. Keeping the processing graph at the
+    // same rate avoids an unnecessary resampling stage in the live path.
+    context = new AudioContext({ latencyHint: "interactive", sampleRate: 48_000 });
     source = context.createMediaStreamSource(input);
     const destination = context.createMediaStreamDestination();
     const strip = connectMicrophoneChannelStrip(context, source, destination, {

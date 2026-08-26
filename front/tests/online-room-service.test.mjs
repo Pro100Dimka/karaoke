@@ -126,6 +126,28 @@ describe("online room service", () => {
     socket.onclose({ code: 1000 });
     expect(client.socket).toBeNull();
   });
+  test("estimates server time from a midpoint clock probe", async () => {
+    installSocket();
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const client = new OnlineRoomClient("ws://example.test/");
+    const connection = client.connect({ id: "ABCD" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    await connection;
+    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
+      type: "ping",
+      clientTime: 1_000
+    });
+
+    now.mockReturnValue(1_100);
+    socket.onmessage({
+      data: JSON.stringify({ type: "pong", clientTime: 1_000, serverTime: 1_075 })
+    });
+    expect(client.serverNow()).toBe(1_125);
+    now.mockRestore();
+    client.disconnect();
+  });
   test("getOrCreateGuestSessionId persists across calls but tolerates a missing storage", () => {
     const store = new Map();
     const fakeStorage = {

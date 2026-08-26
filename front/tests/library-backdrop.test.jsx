@@ -1,57 +1,8 @@
 /* @vitest-environment jsdom */
 import { render } from "@testing-library/react";
-import { beforeAll, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { QuantumFieldBackdrop as LibraryBackdrop } from "../src/pages/Library/animated-backdrop/index.js";
 
-let rendererInstances = 0;
-// jsdom implements neither WebGL nor 2D canvas contexts without the native
-// "canvas" package, and has no GPU to actually run post-processing passes
-// on. None of that is what these tests check (they only check the static
-// wrapper <div> theme/a11y attributes rendered synchronously, before any of
-// this ever runs) -- so the renderer, the flare texture's 2D context, and
-// the post-processing pipeline are all stubbed out as harmless no-ops, and
-// everything else in "three" stays real.
-// A constructor that answers any method call or property read with another
-// instance of itself, so passes/composers can be chained and called however
-// this component likes without ever needing to know their real API.
-function NoopEffect() {
-  return new Proxy(() => new NoopEffect(), {
-    get: (target, prop) => {
-      if (prop === "then" || typeof prop === "symbol") return undefined;
-      if (!(prop in target)) target[prop] = new NoopEffect();
-      return target[prop];
-    }
-  });
-}
-beforeAll(() => {
-  HTMLCanvasElement.prototype.getContext = () => ({
-    createRadialGradient: () => ({ addColorStop: () => {} }),
-    fillRect: () => {},
-    fillStyle: null
-  });
-});
-vi.mock("three", async (importOriginal) => ({
-  ...(await importOriginal()),
-  WebGLRenderer: class {
-    domElement = document.createElement("canvas");
-    constructor() {
-      rendererInstances += 1;
-    }
-    setPixelRatio() {}
-    setSize() {}
-    setClearColor() {}
-    render() {}
-    dispose() {}
-  }
-}));
-vi.mock("three/addons/postprocessing/AfterimagePass.js", () => ({
-  AfterimagePass: NoopEffect
-}));
-vi.mock("three/addons/postprocessing/EffectComposer.js", () => ({ EffectComposer: NoopEffect }));
-vi.mock("three/addons/postprocessing/OutputPass.js", () => ({ OutputPass: NoopEffect }));
-vi.mock("three/addons/postprocessing/RenderPass.js", () => ({ RenderPass: NoopEffect }));
-vi.mock("three/addons/postprocessing/ShaderPass.js", () => ({ ShaderPass: NoopEffect }));
-vi.mock("three/addons/postprocessing/UnrealBloomPass.js", () => ({ UnrealBloomPass: NoopEffect }));
 test("library backdrop is decorative and cannot intercept controls", () => {
   const { container } = render(<LibraryBackdrop />);
   const backdrop = container.firstElementChild;
@@ -60,18 +11,13 @@ test("library backdrop is decorative and cannot intercept controls", () => {
   expect(backdrop.style.pointerEvents).toBe("none");
 });
 
-test("library backdrop does not rebuild its WebGL scene when re-rendered without a settings prop", () => {
-  // Regression test: a fresh `{}` default for the `settings` prop used to be
-  // a new object identity on every render, and it was a direct dependency of
-  // the effect that builds the renderer/scene/composer -- so every unrelated
-  // parent re-render tore down and rebuilt the whole visualizer. The caller
-  // (Library/index.jsx) never passes a `settings` prop at all, so this is the
-  // exact scenario that used to retrigger the effect on every render.
-  rendererInstances = 0;
-  const { rerender } = render(<LibraryBackdrop />);
-  expect(rendererInstances).toBe(1);
+test("library backdrop keeps its packaged runtime URL stable and query-free", () => {
+  const { container, rerender } = render(<LibraryBackdrop />);
+  const source = container.querySelector("iframe").srcdoc;
+  expect(source).toMatch(/<script type="module" src="[^"]*qftRuntime[^"]*"><\/script>/);
+  expect(source).not.toMatch(/[?&]v=29/);
   rerender(<LibraryBackdrop />);
-  expect(rendererInstances).toBe(1);
+  expect(container.querySelector("iframe").srcdoc).toBe(source);
 });
 
 test("library backdrop watches the theme attribute instead of polling it every frame", () => {
@@ -88,6 +34,7 @@ test("library backdrop watches the theme attribute instead of polling it every f
     observe(...args) {
       observe(...args);
     }
+
     disconnect() {
       disconnect();
     }
@@ -106,20 +53,14 @@ test("library backdrop watches the theme attribute instead of polling it every f
   }
 });
 
-test("library backdrop cleans up its window resize listener on unmount", () => {
-  // jsdom's CSS engine doesn't understand color-mix(), the CSS function
-  // this component uses to read the theme's colors, so that part can't be
-  // verified through a rendered style string here -- what's left to check
-  // (and matters just as much) is that the one thing it does listen for at
-  // the window level, its resize handler for the canvas, doesn't leak past
-  // unmount.
+test("library backdrop cleans up its window message listener on unmount", () => {
   const add = vi.spyOn(window, "addEventListener");
   const remove = vi.spyOn(window, "removeEventListener");
   const { unmount } = render(<LibraryBackdrop />);
-  const resizeCall = add.mock.calls.find(([type]) => type === "resize");
-  expect(resizeCall).toBeDefined();
+  const messageCall = add.mock.calls.find(([type]) => type === "message");
+  expect(messageCall).toBeDefined();
   unmount();
-  expect(remove).toHaveBeenCalledWith("resize", resizeCall[1]);
+  expect(remove).toHaveBeenCalledWith("message", messageCall[1]);
   add.mockRestore();
   remove.mockRestore();
 });

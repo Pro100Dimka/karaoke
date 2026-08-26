@@ -140,6 +140,8 @@ export class OnlineRoomClient {
         new Error(translate("Код комнаты должен содержать минимум 4 символа."))
       );
     this.disconnect();
+    this.clockOffsetMs = 0;
+    this.clockSynchronized = false;
     if (typeof globalThis.WebSocket !== "function")
       return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
     const query = new URLSearchParams({

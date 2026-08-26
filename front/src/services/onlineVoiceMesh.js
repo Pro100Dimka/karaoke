@@ -77,6 +77,7 @@ export default class OnlineVoiceMesh {
           noiseSuppression: true,
           autoGainControl: false,
           channelCount: 1,
+          latency: { ideal: 0 },
           sampleRate: { ideal: 48_000 },
           sampleSize: { ideal: 24 }
         }
@@ -161,12 +162,24 @@ export default class OnlineVoiceMesh {
       if (!candidate || !isCurrentPeer()) return;
       this.roomClient.send("signal", { targetId: participantId, signal: { candidate } });
     };
-    peer.ontrack = ({ streams }) => {
+    peer.ontrack = ({ receiver, streams }) => {
       const stream = streams[0];
       if (!stream) return;
       if (!isCurrentPeer()) {
         stream.getTracks?.().forEach((track) => track.stop());
         return;
+      }
+      // Singing is more sensitive to delay than speech. Chromium still
+      // clamps these hints when the network needs a larger safety buffer.
+      for (const [property, value] of [
+        ["jitterBufferTarget", 0],
+        ["playoutDelayHint", 0]
+      ]) {
+        try {
+          if (property in (receiver || {})) receiver[property] = value;
+        } catch {
+          // Older WebRTC implementations may expose a read-only hint.
+        }
       }
       this.onRemoteStream?.(participantId, stream);
     };

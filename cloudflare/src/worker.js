@@ -200,6 +200,11 @@ export class KaraokeRoom {
     if (!sender || typeof message?.type !== "string") return;
     if (!this.withinRate(sender.id)) { this.reject(socket, "Rate limit exceeded"); return; }
 
+    if (message.type === "ping" && Number.isFinite(message.clientTime)) {
+      this.send(socket, "pong", { clientTime: message.clientTime, serverTime: Date.now() });
+      return;
+    }
+
     if (message.type === "signal" && typeof message.targetId === "string") {
       if (new TextEncoder().encode(JSON.stringify(message.signal ?? null)).byteLength > MAX_SIGNAL_BYTES) { this.reject(socket, "Signal too large"); return; }
       const target = this.ctx

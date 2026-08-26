@@ -45,11 +45,12 @@ export function createOnlineRoomMessageHandler(options) {
   // useKaraokeTransport already reads __serverSentAt/__receivedServerAt for
   // exactly this, so every call site here must actually provide them.
   const publishRoomCommand = (command, eventPrefix, serverSentAt) => {
+    const receivedServerAt = client.serverNow?.() ?? Date.now();
     setRoomCommand({
       ...command,
       __eventId: createEventId(eventPrefix),
       ...(Number.isFinite(serverSentAt)
-        ? { __serverSentAt: serverSentAt, __receivedServerAt: Date.now() }
+        ? { __serverSentAt: serverSentAt, __receivedServerAt: receivedServerAt }
         : {})
     });
   };

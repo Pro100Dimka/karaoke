@@ -41,6 +41,7 @@ describe("online voice mesh", () => {
         noiseSuppression: true,
         autoGainControl: false,
         channelCount: 1,
+        latency: { ideal: 0 },
         sampleRate: { ideal: 48_000 },
         sampleSize: { ideal: 24 }
       }
@@ -349,7 +350,9 @@ describe("online voice mesh", () => {
     const current = mesh.createPeer("current");
     const remote = stream([track("current-remote")]);
     current.ontrack({ streams: [] });
-    current.ontrack({ streams: [remote] });
+    const receiver = { jitterBufferTarget: null, playoutDelayHint: null };
+    current.ontrack({ receiver, streams: [remote] });
+    expect(receiver).toMatchObject({ jitterBufferTarget: 0, playoutDelayHint: 0 });
     expect(mesh.onRemoteStream).toHaveBeenCalledWith("current", remote);
     current.onicecandidate({ candidate: null });
     expect(mesh.roomClient.send).not.toHaveBeenCalled();

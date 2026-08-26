@@ -125,6 +125,17 @@ def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen():
     assert_excludes(runner, 'importlib.import_module("prepro")')
 
 
+def test_audio_monitor_packaging_excludes_unused_ai_frameworks():
+    builder = project_text("scripts/build-installer.ps1", encoding="utf-8-sig")
+    monitor = builder.split('$monitorArgs += @(', 1)[1].split('"app\\services\\monitor_worker.py"', 1)[0]
+    assert_contains(
+        monitor,
+        '"--exclude-module","tensorflow"',
+        '"--exclude-module","torch"',
+        '"--exclude-module","jax"',
+    )
+
+
 def test_backend_packaging_bundles_and_smokes_parselmouth():
     build = project_text("scripts/build-installer.ps1", encoding="utf-8-sig")
     runner = project_text("backend/run.py", encoding="utf-8-sig")

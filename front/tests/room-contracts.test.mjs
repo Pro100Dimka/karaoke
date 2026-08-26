@@ -92,7 +92,7 @@ test("room messages update participants, UI, voice and connection state", async 
   const roomRef = { current: { selfId: "self", host: true, role: "host" } };
   const intentionalDisconnectRef = { current: false };
   const pendingSongCommandRef = { current: null };
-  const client = { send: vi.fn() };
+  const client = { send: vi.fn(), serverNow: vi.fn(() => 555_125) };
   const voice = {
     invite: vi.fn().mockResolvedValue(),
     removePeer: vi.fn(),
@@ -180,7 +180,7 @@ test("room messages update participants, UI, voice and connection state", async 
   });
   const synced = setters.setRoomCommand.mock.calls.at(-1)[0];
   assert.equal(synced.__serverSentAt, 555_000);
-  assert.equal(typeof synced.__receivedServerAt, "number");
+  assert.equal(synced.__receivedServerAt, 555_125);
   ui = { effectsByParticipant: { old: { dry: 1 } } };
   handler({ type: "ui", fromId: "a", state: { radio: true, participantEffects: { echo: 1 } } });
   assert.equal(ui.__eventId.startsWith("ui-"), true);

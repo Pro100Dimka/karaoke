@@ -1849,6 +1849,15 @@ function Build-Backend {
             "--workpath",(Join-Path $Build "backend\audio-monitor"),
             "--specpath",(Join-Path $Build "backend\spec"),
             "--paths",$Backend,
+            # scipy.signal exposes optional Array API adapters for these AI
+            # frameworks. The live monitor never imports them, but PyInstaller
+            # otherwise follows the optional adapters and embeds CUDA/Torch.
+            "--exclude-module","tensorflow",
+            "--exclude-module","torch",
+            "--exclude-module","torchaudio",
+            "--exclude-module","torchvision",
+            "--exclude-module","jax",
+            "--exclude-module","jaxlib",
             "--exclude-module","tkinter",
             "--exclude-module","_tkinter",
             "--exclude-module","idlelib",

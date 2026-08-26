@@ -32,8 +32,10 @@ describe("studio microphone quality", () => {
       stream: { getAudioTracks: () => [processedTrack], getTracks: () => [processedTrack] }
     };
     const created = { filters: [], compressors: [], shapers: [] };
+    let contextOptions;
     globalThis.AudioContext = class {
-      constructor() {
+      constructor(options) {
+        contextOptions = options;
         this.state = "running";
       }
       createMediaStreamSource() {
@@ -71,6 +73,7 @@ describe("studio microphone quality", () => {
     const rawTrack = { kind: "audio", stop: vi.fn() };
     const rawStream = { getTracks: () => [rawTrack] };
     const graph = createStudioMicrophoneGraph(rawStream);
+    expect(contextOptions).toEqual({ latencyHint: "interactive", sampleRate: 48_000 });
     verify(
       [graph.stream, "toBe", destination.stream],
       [graph.getStream(), "toBe", destination.stream],

@@ -73,6 +73,19 @@ test("rejects signaling payloads by UTF-8 byte size", async () => {
   assert.deepEqual(sender.closed, { code: 1008, reason: "Signal too large" });
 });
 
+test("answers a private clock probe without broadcasting it", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "guest" });
+  const target = new FakeSocket({ id: "target", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
+
+  await room.webSocketMessage(sender, JSON.stringify({ type: "ping", clientTime: 1234 }));
+
+  assert.equal(sender.messages.at(-1).type, "pong");
+  assert.equal(sender.messages.at(-1).clientTime, 1234);
+  assert.equal(Number.isFinite(sender.messages.at(-1).serverTime), true);
+  assert.equal(target.messages.length, 0);
+});
+
 class FakeR2 {
   constructor() {
     this.objects = new Map();
