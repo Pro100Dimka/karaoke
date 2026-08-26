@@ -50,6 +50,52 @@ test("working song shows progress and opens its processing modal", () => {
   expect(actions.onOpenProcessing).toHaveBeenCalledWith(song);
   expect(view.queryByRole("button", { name: /Открыть Title|Відкрити Title/ })).toBeNull();
 });
+test("an interrupted room transfer offers a clear retry instead of a stuck progress bar", () => {
+  // A peer-to-peer song transfer has no resume support -- once it's
+  // cancelled or errored, showing a normal progress bar would look like it's
+  // still running. It must instead say so plainly and let a click retry.
+  const actions = handlers();
+  const song = { id: "song", title: "Title", status: "done" };
+  const cancelled = render(
+    <LibrarySongCard
+      cardIndex={0}
+      song={song}
+      transferStatus={{ stage: "cancelled", percent: 40 }}
+      {...actions}
+    />
+  );
+  expect(cancelled.queryByRole("progressbar")).toBeNull();
+  const retryButton = cancelled.getByText(/Передача прервана/).closest("button");
+  fireEvent.click(retryButton);
+  expect(actions.onOpenKaraoke).toHaveBeenCalledWith(song);
+  cancelled.unmount();
+
+  const errored = render(
+    <LibrarySongCard
+      cardIndex={0}
+      song={song}
+      transferStatus={{ stage: "error", percent: 10 }}
+      {...handlers()}
+    />
+  );
+  expect(errored.queryByRole("progressbar")).toBeNull();
+  expect(errored.getByText(/Передача прервана/)).toBeTruthy();
+});
+test("an in-progress room transfer still shows the normal progress bar", () => {
+  const actions = handlers();
+  const song = { id: "song", title: "Title", status: "done" };
+  const view = render(
+    <LibrarySongCard
+      cardIndex={0}
+      song={song}
+      transferStatus={{ stage: "receiving", percent: 55 }}
+      {...actions}
+    />
+  );
+  expect(view.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("55");
+  fireEvent.click(view.getByRole("progressbar").closest("button"));
+  expect(actions.onOpenKaraoke).not.toHaveBeenCalled();
+});
 test("unknown song status uses safe badge fallback", () => {
   const actions = handlers();
   const { container } = render(<LibrarySongCard cardIndex={0} song={{ id: "song", title: "Title", status: "custom" }} {...actions} />);

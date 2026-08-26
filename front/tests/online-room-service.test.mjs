@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-import { DEFAULT_SIGNALING_URL, OnlineRoomClient, createRoomId, normalizeRoomId } from "../src/services/onlineRoom.js";
+import {
+  DEFAULT_SIGNALING_URL,
+  OnlineRoomClient,
+  createRoomId,
+  getOrCreateGuestSessionId,
+  normalizeRoomId
+} from "../src/services/onlineRoom.js";
 import { same, verify } from "./helpers/assertions.mjs";
 class FakeSocket {
   static CONNECTING = 0;
@@ -39,6 +45,7 @@ describe("online room service", () => {
     const connection = client.connect({ id: "ABCD" });
     const socket = FakeSocket.instances[0];
     expect(new URL(socket.url).searchParams.get("name")).toBe(translateSaved("Гость"));
+    expect(new URL(socket.url).searchParams.get("v")).toBe(String(service.ROOM_PROTOCOL_VERSION));
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
     await connection;
@@ -118,6 +125,43 @@ describe("online room service", () => {
     verify([listener, "toHaveBeenCalledTimes", 1], [listener, "toHaveBeenCalledWith", { type: "state" }]);
     socket.onclose({ code: 1000 });
     expect(client.socket).toBeNull();
+  });
+  test("getOrCreateGuestSessionId persists across calls but tolerates a missing storage", () => {
+    const store = new Map();
+    const fakeStorage = {
+      getItem: (key) => store.get(key) ?? null,
+      setItem: (key, value) => store.set(key, value)
+    };
+    const first = getOrCreateGuestSessionId(fakeStorage, { randomUUID: () => "generated-id" });
+    expect(first).toBe("generated-id");
+    // A second call reuses the persisted value instead of generating a new
+    // one -- this is what lets a reconnect within the same session claim
+    // back the same room participant id.
+    const second = getOrCreateGuestSessionId(fakeStorage, { randomUUID: () => "different-id" });
+    expect(second).toBe("generated-id");
+
+    // No storage available (privacy mode, restricted context) must not
+    // throw -- reconnect identity is a nice-to-have, not required.
+    expect(getOrCreateGuestSessionId(undefined, { randomUUID: () => "no-storage-id" })).toBe(
+      "no-storage-id"
+    );
+  });
+  test("only a guest connection carries a reconnect session id, never the host", async () => {
+    installSocket();
+    const client = new OnlineRoomClient();
+    const guestConnection = client.connect({ id: "ABCD" });
+    const guestSocket = FakeSocket.instances[0];
+    expect(new URL(guestSocket.url).searchParams.get("sessionId")).toBeTruthy();
+    guestSocket.readyState = FakeSocket.OPEN;
+    guestSocket.onopen();
+    await guestConnection;
+
+    const hostConnection = client.connect({ id: "EFGH", host: true, hostToken: "x".repeat(32) });
+    const hostSocket = FakeSocket.instances.at(-1);
+    expect(new URL(hostSocket.url).searchParams.has("sessionId")).toBe(false);
+    hostSocket.readyState = FakeSocket.OPEN;
+    hostSocket.onopen();
+    await hostConnection;
   });
   test("uses the guest fallback, sends bounded objects and disconnects", async () => {
     installSocket();
@@ -229,6 +273,18 @@ describe("online room service", () => {
       FakeSocket.instances.at(-1).onclose(event);
       await expect(connection).rejects.toThrow(expectedError(detail));
     }
+  });
+  test("logs the WebSocket close code and reason for diagnostics", async () => {
+    installSocket();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const client = new OnlineRoomClient();
+    const connection = client.connect({ id: "ABCD" });
+    FakeSocket.instances.at(-1).onclose({ code: 4001, reason: "denied", wasClean: false });
+    await expect(connection).rejects.toThrow();
+    expect(error).toHaveBeenCalledWith(
+      "Room WebSocket closed",
+      expect.objectContaining({ code: 4001, reason: "denied", wasClean: false })
+    );
   });
   test("disconnect does not close sockets already closing or closed", async () => {
     installSocket();

@@ -28,7 +28,6 @@ const STATIC_RESPONSES = Object.freeze({
   "/audio/signal-quality": { rms_dbfs: -42 },
   "/recording/pause": { ok: true },
   "/recording/resume": { ok: true },
-  "/models/whisper": [],
   "/diagnostics/ai-models": {
     state: "ready",
     ready: true,
@@ -189,8 +188,7 @@ export async function mockRequest(path, options = {}) {
     return { accuracy_percent: 82, average_deviation_cents: 18, sections: [] };
   }
 
-  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix)))
-    return { ok: true };
+  if (pathname.startsWith("/cache/")) return { ok: true };
 
   throw new Error(`Mock API route is not implemented: ${method} ${pathname}`);
 }

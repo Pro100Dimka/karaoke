@@ -668,7 +668,7 @@ describe("online voice mesh", () => {
     expect(clear).toHaveBeenCalledWith(21);
     expect(clear).toHaveBeenCalledWith(22);
     expect(clear).toHaveBeenCalledWith(23);
-    expect(reject).toHaveBeenCalledWith(expect.objectContaining({ message: "Участник отключился во время передачи" }));
+    expect(reject).toHaveBeenCalledWith(expect.objectContaining({ message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя." }));
     expect(mesh.onPeerClosed).toHaveBeenCalledWith("guest");
     clear.mockClear();
     mesh.incomingFiles.set("untimed", { timer: 0 });
@@ -1833,7 +1833,7 @@ describe("online voice mesh", () => {
       timer: 1
     });
     mesh.removePeer("guest");
-    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ message: "Участник отключился во время передачи" }));
+    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя." }));
     expect(mesh.pendingTransferConfirmations.has("pending")).toBe(false);
   });
   test("cleans detached timers and detects channels closed after waiting", async () => {
@@ -2488,4 +2488,49 @@ test("finalization timeout cleans a stalled transfer", async () => {
   expect(mesh.incomingFiles.has("host")).toBe(false);
   expect(writable.abort).toHaveBeenCalledOnce();
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
+});
+
+test("logs ICE and connection state transitions for diagnostics", () => {
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  const mesh = makeMesh();
+  const peer = mesh.createPeer("guest");
+
+  peer.iceConnectionState = "checking";
+  peer.oniceconnectionstatechange();
+  expect(info).toHaveBeenCalledWith(
+    "WebRTC ICE state changed",
+    expect.objectContaining({ participantId: "guest", iceConnectionState: "checking" })
+  );
+
+  peer.connectionState = "connected";
+  peer.onconnectionstatechange();
+  expect(info).toHaveBeenCalledWith(
+    "WebRTC connection state changed",
+    expect.objectContaining({ participantId: "guest", connectionState: "connected" })
+  );
+});
+
+test("logs data channel open, close and error transitions for diagnostics", () => {
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const { channel } = setupChannel("guest");
+  channel.label = "karaoke-library";
+
+  channel.onopen();
+  expect(info).toHaveBeenCalledWith(
+    "WebRTC data channel opened",
+    expect.objectContaining({ participantId: "guest", label: "karaoke-library" })
+  );
+
+  channel.onclose();
+  expect(info).toHaveBeenCalledWith(
+    "WebRTC data channel closed",
+    expect.objectContaining({ participantId: "guest", label: "karaoke-library" })
+  );
+
+  channel.onerror({ error: new Error("boom") });
+  expect(error).toHaveBeenCalledWith(
+    "WebRTC data channel error",
+    expect.objectContaining({ participantId: "guest", label: "karaoke-library" })
+  );
 });

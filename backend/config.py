@@ -278,6 +278,8 @@ DEFAULT_LANGUAGE = None  # автоопределение
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}
 MAX_AUDIO_UPLOAD_BYTES = _env_int("SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1)
 UPLOAD_CHUNK_SIZE = _env_int("SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4096)
+MAX_SONG_DURATION_SECONDS = _env_int("SONGAPP_MAX_SONG_DURATION_SECONDS", 20 * 60, minimum=1)
+MAX_RECORDING_DURATION_SECONDS = _env_int("SONGAPP_MAX_RECORDING_DURATION_SECONDS", 15 * 60, minimum=1)
 
 # Стандартный формат аудио, который backend гарантирует на выходе
 # (используется при оптимизации/конвертации файлов песни, см. cache_service).

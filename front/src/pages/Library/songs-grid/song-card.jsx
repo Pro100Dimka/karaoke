@@ -35,6 +35,12 @@ const LibrarySongCard = memo(
       .filter(Boolean)
       .join(" · ");
     const activate = () => isReady && onOpenKaraoke(song);
+    // A peer-to-peer song transfer has no resume support -- if it's
+    // interrupted (the sender disconnected, or a stale request was
+    // superseded), the only way forward is a fresh attempt, not a stuck
+    // progress bar the user might mistake for still-running.
+    const transferInterrupted =
+      transferStatus && ["error", "cancelled"].includes(transferStatus.stage);
     return (
       <Card
         variant="laser"
@@ -98,12 +104,24 @@ const LibrarySongCard = memo(
                     variant="outlined"
                     sx={{ background: "unset", border: "unset", boxShadow: "unset" }}
                     fullWidth
-                    onClick={isWorking ? () => onOpenProcessing(song) : undefined}
+                    onClick={
+                      isWorking
+                        ? () => onOpenProcessing(song)
+                        : transferInterrupted
+                          ? activate
+                          : undefined
+                    }
                   >
-                    <ProcessingSignal
-                      progress={transferStatus?.percent ?? song.progress_percent}
-                      compact
-                    />
+                    {transferInterrupted ? (
+                      <Typography variant="body2" tone="danger">
+                        {tr("Передача прервана — нажмите, чтобы повторить")}
+                      </Typography>
+                    ) : (
+                      <ProcessingSignal
+                        progress={transferStatus?.percent ?? song.progress_percent}
+                        compact
+                      />
+                    )}
                   </Button>
                 </Box>
               ) : (

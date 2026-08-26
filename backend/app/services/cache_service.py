@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 import config
@@ -10,6 +11,15 @@ from app.services.db_utils import commit
 from database import SessionLocal
 
 _INTERMEDIATE_DIRS = ("tmp", "__pycache__", ".ai-cache")
+
+# The settings UI polls cache_size() every few seconds, but it walks the
+# entire song library (every stem file of every song) via _dir_size_bytes.
+# A short TTL lets rapid polls -- from one client's interval or several
+# open windows -- share a single walk instead of re-scanning the whole
+# library on every request.
+_CACHE_SIZE_TTL_SECONDS = 15.0
+_cache_size_cache: dict | None = None
+_cache_size_computed_at = 0.0
 
 
 def _dir_size_bytes(path: Path) -> int:
@@ -28,13 +38,24 @@ def _human(num_bytes: int) -> str:
 
 
 def cache_size() -> dict:
+    global _cache_size_cache, _cache_size_computed_at
+    now = time.monotonic()
+    if _cache_size_cache is not None and now - _cache_size_computed_at < _CACHE_SIZE_TTL_SECONDS:
+        return _cache_size_cache
     breakdown = {
         "karaoke_songs": _dir_size_bytes(config.SONG_OUTPUT_DIR),
         "database": Path(config.DB_PATH).stat().st_size if Path(config.DB_PATH).exists() else 0,
         "cache": _dir_size_bytes(config.CACHE_DIR),
     }
     total = sum(breakdown.values())
-    return {"total_bytes": total, "total_human": _human(total), "breakdown": breakdown}
+    result = {"total_bytes": total, "total_human": _human(total), "breakdown": breakdown}
+    _cache_size_cache, _cache_size_computed_at = result, now
+    return result
+
+
+def invalidate_cache_size() -> None:
+    global _cache_size_cache
+    _cache_size_cache = None
 
 
 def free_space() -> dict:
@@ -62,11 +83,13 @@ def _remove_intermediates(output_dir: Path) -> tuple[int, list[str]]:
 def clear_temp_files() -> int:
     if not config.SONG_OUTPUT_DIR.exists():
         return 0
-    return sum(
+    freed = sum(
         _remove_intermediates(song_dir)[0]
         for song_dir in config.SONG_OUTPUT_DIR.iterdir()
         if song_dir.is_dir()
     )
+    invalidate_cache_size()
+    return freed
 
 
 def recover_optimization_state(_output_dir: Path, *, committed: bool) -> None:
@@ -94,6 +117,7 @@ def optimize_song_files(song_id: str) -> dict:
             song.optimized = True
             commit(db)
             revision_cache.invalidate(song)
+            invalidate_cache_size()
             return {
                 "song_id": song_id,
                 "freed_bytes": freed,

@@ -40,8 +40,18 @@ export function createOnlineRoomMessageHandler(options) {
     onConnectionClosed
   } = options;
 
-  const publishRoomCommand = (command, eventPrefix) => {
-    setRoomCommand({ ...command, __eventId: createEventId(eventPrefix) });
+  // serverSentAt (the worker's Date.now() when it relayed this command) lets
+  // the receiver measure delivery latency and catch up its seek target --
+  // useKaraokeTransport already reads __serverSentAt/__receivedServerAt for
+  // exactly this, so every call site here must actually provide them.
+  const publishRoomCommand = (command, eventPrefix, serverSentAt) => {
+    setRoomCommand({
+      ...command,
+      __eventId: createEventId(eventPrefix),
+      ...(Number.isFinite(serverSentAt)
+        ? { __serverSentAt: serverSentAt, __receivedServerAt: Date.now() }
+        : {})
+    });
   };
   const senderIsHost = (message) =>
     participantsRef.current?.some(
@@ -147,7 +157,7 @@ export function createOnlineRoomMessageHandler(options) {
       if (activeRoomRef.current?.host || !senderIsHost(message) || !isCurrentPending(command))
         return false;
       pendingCommandRef.current = null;
-      publishRoomCommand(command, message.sentAt || "start");
+      publishRoomCommand(command, "start", message.sentAt);
       return true;
     },
     "song-transfer-error": (command, message) => {
@@ -234,6 +244,12 @@ export function createOnlineRoomMessageHandler(options) {
           role: self.role
         });
       setParticipants(message.participants || []);
+      // Catches a guest up on the host's last known playback state -- e.g.
+      // after a brief network drop -- instead of leaving it stale until the
+      // host's next explicit command. The host is its own authority and
+      // never follows this.
+      if (message.playbackState && self?.role !== "host")
+        publishRoomCommand(message.playbackState, "room-state", message.playbackSentAt);
     },
     "participant-joined": (message) => {
       const { participant } = message;
@@ -298,7 +314,7 @@ export function createOnlineRoomMessageHandler(options) {
         return;
       }
       if (!senderIsHost(message)) return;
-      publishRoomCommand(command, message.sentAt || "sync");
+      publishRoomCommand(command, "sync", message.sentAt);
     },
     "connection-closed": () => {
       if (disconnectIntentRef.current) return;
@@ -307,6 +323,23 @@ export function createOnlineRoomMessageHandler(options) {
       setRoom(null);
       setParticipants([]);
       setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+    },
+    "room-closed": (message) => {
+      if (disconnectIntentRef.current) return;
+      // The host leaving closes the whole room server-side (see
+      // KaraokeRoom.webSocketClose) -- this message arrives just ahead of
+      // the socket's own close frame, so guests get the real reason instead
+      // of the generic "connection lost" message the plain socket close
+      // would otherwise report.
+      const reason =
+        message.reason === "host-left"
+          ? translateSaved("Хост покинул комнату. Комната закрыта.")
+          : translateSaved("Комната закрыта.");
+      if (onConnectionClosed) return onConnectionClosed(reason);
+      cleanupConnection();
+      setRoom(null);
+      setParticipants([]);
+      setVoiceError(reason);
     }
   };
 

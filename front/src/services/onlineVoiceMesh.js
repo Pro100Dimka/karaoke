@@ -6,6 +6,7 @@ import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
+import { TRANSFER_STAGES } from "./onlineVoiceTransferProtocol";
 import { cleanupIncomingTransfer } from "./onlineVoiceTransferStorage";
 import {
   cancelOutboundTransfers,
@@ -176,8 +177,19 @@ export default class OnlineVoiceMesh {
       }
       this.setupDataChannel(participantId, channel);
     };
+    peer.oniceconnectionstatechange = () => {
+      if (!isCurrentPeer()) return;
+      console.info("WebRTC ICE state changed", {
+        participantId,
+        iceConnectionState: peer.iceConnectionState
+      });
+    };
     peer.onconnectionstatechange = () => {
       if (!isCurrentPeer()) return;
+      console.info("WebRTC connection state changed", {
+        participantId,
+        connectionState: peer.connectionState
+      });
       const previousTimer = this.disconnectTimers.get(participantId);
       if (previousTimer) {
         globalThis.clearTimeout(previousTimer);
@@ -378,17 +390,24 @@ export default class OnlineVoiceMesh {
     this.invitePromises.delete(participantId);
     this.signalPromises.delete(participantId);
     const channel = this.channels.get(participantId);
+    // No partial-transfer resume exists once the peer connection drops -- a
+    // retry always restarts the file from the beginning, so the message
+    // says so up front instead of leaving the sender to discover it.
     cancelOutboundTransfers(
       this,
       participantId,
       null,
-      new Error(translateSaved("Участник отключился во время передачи"))
+      new Error(
+        translateSaved(
+          "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя."
+        )
+      )
     );
     const admission = this.incomingFileAdmissions.get(participantId);
     if (admission) {
       admission.cancelled = true;
       globalThis.clearTimeout(admission.timer);
-      this.emitTransferProgress(participantId, "cancelled", 0, admission.metadata);
+      this.emitTransferProgress(participantId, TRANSFER_STAGES.CANCELLED, 0, admission.metadata);
     }
     this.incomingFileAdmissions.delete(participantId);
     const incoming = this.incomingFiles.get(participantId);

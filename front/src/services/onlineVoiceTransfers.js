@@ -1,5 +1,6 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime";
+import { TRANSFER_STAGES } from "./onlineVoiceTransferProtocol";
 import { cleanupIncomingTransfer, createTransferSink } from "./onlineVoiceTransferStorage";
 
 const wait = (delayMs) =>
@@ -110,7 +111,12 @@ function cancelIncomingByTransferId(mesh, participantId, channel, transferId) {
   if (transfer?.channel === channel && transfer.metadata.transferId === transferId) {
     mesh.incomingFiles.delete(participantId);
     cleanupIncomingTransfer(transfer);
-    mesh.emitTransferProgress(participantId, "cancelled", transfer.lastPercent, transfer.metadata);
+    mesh.emitTransferProgress(
+      participantId,
+      TRANSFER_STAGES.CANCELLED,
+      transfer.lastPercent,
+      transfer.metadata
+    );
   }
 }
 
@@ -291,7 +297,7 @@ function handleFileStart(mesh, participantId, channel, message) {
       writes: Promise.resolve(),
       timer: mesh.createIncomingTransferTimer(participantId, metadata.transferId)
     });
-    mesh.emitTransferProgress(participantId, "receiving", 0, metadata);
+    mesh.emitTransferProgress(participantId, TRANSFER_STAGES.RECEIVING, 0, metadata);
     sendTransferStatus(channel, {
       type: "file-ready",
       transferId: metadata.transferId,
@@ -373,7 +379,12 @@ function rejectIncomingTransfer(mesh, participantId, channel, transfer, error) {
     transferId: transfer.metadata.transferId,
     error
   });
-  mesh.emitTransferProgress(participantId, "error", transfer.lastPercent, transfer.metadata);
+  mesh.emitTransferProgress(
+    participantId,
+    TRANSFER_STAGES.ERROR,
+    transfer.lastPercent,
+    transfer.metadata
+  );
 }
 
 function handleFileEnd(mesh, participantId, channel, message) {
@@ -450,7 +461,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
       );
       transfer.phase = "importing";
       transfer.lastPercent = 100;
-      mesh.emitTransferProgress(participantId, "importing", 100, transfer.metadata);
+      mesh.emitTransferProgress(participantId, TRANSFER_STAGES.IMPORTING, 100, transfer.metadata);
       const accepted = await step(
         mesh.onFile?.(participantId, file, transfer.metadata, transfer.controller?.signal),
         TRANSFER_IMPORT_TIMEOUT_MS,
@@ -464,7 +475,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
       mesh.incomingFiles.delete(participantId);
       globalThis.clearTimeout(transfer.timer);
       sendTransferStatus(channel, { type: "file-complete", transferId: message.transferId });
-      mesh.emitTransferProgress(participantId, "complete", 100, transfer.metadata);
+      mesh.emitTransferProgress(participantId, TRANSFER_STAGES.COMPLETE, 100, transfer.metadata);
     })
     .catch((error) => {
       if (transfer.cancelled || mesh.incomingFiles.get(participantId) !== transfer) return;
@@ -577,7 +588,7 @@ function handleBinaryChunk(mesh, participantId, channel, data) {
   const percent = Math.min(99, Math.floor((transfer.received / transfer.metadata.size) * 100));
   if (percent === transfer.lastPercent) return;
   transfer.lastPercent = percent;
-  mesh.emitTransferProgress(participantId, "receiving", percent, transfer.metadata);
+  mesh.emitTransferProgress(participantId, TRANSFER_STAGES.RECEIVING, percent, transfer.metadata);
 }
 
 export function setupDataChannel(mesh, participantId, channel) {
@@ -599,6 +610,9 @@ export function setupDataChannel(mesh, participantId, channel) {
 
   channel.binaryType = "arraybuffer";
   channel.bufferedAmountLowThreshold = 256 * 1024;
+  channel.onopen = () => {
+    console.info("WebRTC data channel opened", { participantId, label: channel.label });
+  };
   channel.onmessage = ({ data }) => {
     if (mesh.channels.get(participantId) !== channel) return;
     if (typeof data === "string") {
@@ -615,7 +629,7 @@ export function setupDataChannel(mesh, participantId, channel) {
       admission.cancelled = true;
       globalThis.clearTimeout(admission.timer);
       mesh.incomingFileAdmissions.delete(participantId);
-      mesh.emitTransferProgress(participantId, "cancelled", 0, admission.metadata);
+      mesh.emitTransferProgress(participantId, TRANSFER_STAGES.CANCELLED, 0, admission.metadata);
     }
     const incoming = mesh.incomingFiles.get(participantId);
     if (incoming?.channel === channel) {
@@ -626,15 +640,21 @@ export function setupDataChannel(mesh, participantId, channel) {
       // waiting on this transfer is left hanging until a generic timeout.
       mesh.emitTransferProgress(
         participantId,
-        "cancelled",
+        TRANSFER_STAGES.CANCELLED,
         incoming.lastPercent,
         incoming.metadata
       );
     }
     if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
   };
-  channel.onclose = clearChannel;
-  channel.onerror = clearChannel;
+  channel.onclose = () => {
+    console.info("WebRTC data channel closed", { participantId, label: channel.label });
+    clearChannel();
+  };
+  channel.onerror = (event) => {
+    console.error("WebRTC data channel error", { participantId, label: channel.label, error: event?.error });
+    clearChannel();
+  };
   mesh.channels.set(participantId, channel);
 }
 
@@ -655,7 +675,7 @@ export function createIncomingTransferTimer(mesh, participantId, transferId) {
         transferId,
         error: translateSaved("Передача песни остановилась")
       });
-    mesh.emitTransferProgress(participantId, "error", 0, transfer.metadata);
+    mesh.emitTransferProgress(participantId, TRANSFER_STAGES.ERROR, 0, transfer.metadata);
   }, TRANSFER_STALL_TIMEOUT_MS);
 }
 
@@ -829,7 +849,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
   });
   try {
     if (cancelled()) throw new Error(translateSaved("Передача файла отменена"));
-    mesh.emitTransferProgress(participantId, "sending", 0, metadata);
+    mesh.emitTransferProgress(participantId, TRANSFER_STAGES.SENDING, 0, metadata);
     const chunkSize = 32 * 1024;
     let lastProgressAt = Date.now();
     for (let offset = 0; offset < blob.size; offset += chunkSize) {
@@ -873,7 +893,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       lastProgressAt = Date.now();
       mesh.emitTransferProgress(
         participantId,
-        "sending",
+        TRANSFER_STAGES.SENDING,
         Math.min(99, Math.floor((Math.min(offset + chunkSize, blob.size) / blob.size) * 100)),
         metadata
       );
@@ -901,7 +921,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
         reject(error);
       }
     });
-    mesh.emitTransferProgress(participantId, "complete", 100, metadata);
+    mesh.emitTransferProgress(participantId, TRANSFER_STAGES.COMPLETE, 100, metadata);
   } finally {
     const flow = mesh.pendingTransferCredits.get(transferId);
     if (flow) {

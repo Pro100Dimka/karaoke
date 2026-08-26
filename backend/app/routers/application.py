@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 import models
 from app.api.errors import http_error
-from app.services import app_settings_service, diagnostics_service
+from app.services import app_settings_service, diagnostics_service, song_service
 from database import get_db
 
 router = APIRouter(tags=["application"])
@@ -48,17 +48,26 @@ def update_ui_preferences(namespace: str, patch: dict[str, Any]) -> dict[str, An
     with http_error(ValueError, 422): return app_settings_service.update_ui_preferences(namespace, patch)
 
 
+HISTORY_LIMIT = 50
+
+
 @router.get("/history")
 def get_history(db: Session = Depends(get_db)) -> list[dict]:
+    # This backs a simple recent-activity list (no pagination UI, polled
+    # every few seconds), so it only ever needs to show the most recent
+    # HISTORY_LIMIT entries -- fetching (and DB-side sorting/limiting) just
+    # that many from each source instead of every song/recording the library
+    # has ever had keeps the query and the response bounded regardless of
+    # how large the library grows.
     items = [
         {"song_title": song.title, "kind": "processing", "status": song.status.value, "duration_seconds": None, "timestamp": song.updated_at.isoformat() if song.updated_at else None}
-        for song in db.query(models.Song).all()
+        for song in song_service.list_recently_updated_songs(db, HISTORY_LIMIT)
     ]
     items += [
         {"song_title": title, "kind": "recording", "status": "analyzed" if analysis_id else "recorded", "duration_seconds": recording.duration_sec, "timestamp": recording.created_at.isoformat() if recording.created_at else None}
-        for recording, title, analysis_id in db.query(models.Recording, models.Song.title, models.AnalysisResult.id).join(models.Song, models.Recording.song_id == models.Song.id).outerjoin(models.AnalysisResult, models.AnalysisResult.recording_id == models.Recording.id).all()
+        for recording, title, analysis_id in db.query(models.Recording, models.Song.title, models.AnalysisResult.id).join(models.Song, models.Recording.song_id == models.Song.id).outerjoin(models.AnalysisResult, models.AnalysisResult.recording_id == models.Recording.id).order_by(models.Recording.created_at.desc()).limit(HISTORY_LIMIT).all()
     ]
-    return sorted(items, key=lambda item: item["timestamp"] or "", reverse=True)
+    return sorted(items, key=lambda item: item["timestamp"] or "", reverse=True)[:HISTORY_LIMIT]
 
 
 @router.get("/about")

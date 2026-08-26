@@ -59,10 +59,16 @@ def test_ai_install_restores_msst_before_fast_path():
 
 def test_msst_installer_recovery_contract():
     script = project_text("scripts/install-msst-engine.bat", encoding="utf-8-sig")
+    # The engine clone is pinned to an exact commit (not refs/heads/main) so a
+    # fresh bootstrap can't silently fetch code patch-msst-engine.ps1 wasn't
+    # verified against -- both the git fetch and the ZIP fallback must target
+    # that same pinned COMMIT variable, not a moving branch.
     assert_contains(
         script,
         "ZFTurbo/Music-Source-Separation-Training.git",
-        "Music-Source-Separation-Training/archive/refs/heads/main.zip",
+        'set "COMMIT=',
+        "Music-Source-Separation-Training/archive/%COMMIT%.zip",
+        "fetch --quiet --depth 1 origin \"%COMMIT%\"",
         "inference.py",
         "utils\\model_utils.py",
         "models\\bs_roformer\\mel_band_roformer.py",

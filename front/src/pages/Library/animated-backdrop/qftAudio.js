@@ -30,6 +30,11 @@ export function createQftAudioReader({
     beatDecay: 0.93,
     beatEnergy: 0,
     lastBeatTime: 0,
+    kickEnergy: 0,
+    lastKickTime: 0,
+    kickFast: 0,
+    kickSlow: 0,
+    kickHistory: [],
     gate: {
       isOpen: false,
       envelope: 0,
@@ -73,10 +78,14 @@ export function createQftAudioReader({
   return function readQftAudio() {
     const styles = getComputedStyle(document.documentElement);
     const get = (name) => Math.max(0, Number.parseFloat(styles.getPropertyValue(name)) || 0);
-    const spectrum = Array.from({ length: BAND_COUNT }, (_, i) =>
-      Math.min(1, get(`--radio-band-${i}`))
-    );
-    const cssBass = Math.min(1, get("--radio-bass"));
+    const localSpectrum = window.qftLocalSpectrum;
+    const hasLocalSpectrum = Array.isArray(localSpectrum) && localSpectrum.length === BAND_COUNT;
+    const spectrum = hasLocalSpectrum
+      ? localSpectrum.map((value) => Math.min(1, Math.max(0, value)))
+      : Array.from({ length: BAND_COUNT }, (_, i) => Math.min(1, get(`--radio-band-${i}`)));
+    const cssBass = hasLocalSpectrum
+      ? Math.max(...spectrum.slice(0, 4), 0)
+      : Math.min(1, get("--radio-bass"));
 
     // Mapping of the app's 18 analyser bands into the same seven logical regions QFT uses.
     const bands = {
@@ -131,6 +140,27 @@ export function createQftAudioReader({
     }
     state.beatEnergy *= state.beatDecay;
 
+    state.kickHistory.push(currentEnergy);
+    if (state.kickHistory.length > 36) state.kickHistory.shift();
+    const kickAverage =
+      state.kickHistory.reduce((sum, value) => sum + value, 0) /
+      Math.max(1, state.kickHistory.length);
+    const kickVariance =
+      state.kickHistory.reduce((sum, value) => sum + (value - kickAverage) ** 2, 0) /
+      Math.max(1, state.kickHistory.length);
+    state.kickFast += (currentEnergy - state.kickFast) * 0.58;
+    state.kickSlow += (currentEnergy - state.kickSlow) * 0.045;
+    const kickContrast =
+      (state.kickFast - state.kickSlow) / Math.max(0.018, state.kickSlow + 0.012);
+    const sortedKickHistory = [...state.kickHistory].sort((a, b) => a - b);
+    const noiseFloor = sortedKickHistory[Math.floor(sortedKickHistory.length * 0.2)] || 0;
+    const kickGate = Math.max(0.012, noiseFloor * 1.9, kickAverage * 0.32);
+    if (kickContrast > 0.16 && currentEnergy > kickGate && now - state.lastKickTime > 115) {
+      state.kickEnergy = Math.min(1, 0.68 + kickContrast * 1.15 + Math.sqrt(kickVariance) * 2);
+      state.lastKickTime = now;
+    }
+    state.kickEnergy *= 0.88;
+
     state.onsetHistory.push(spectralFlux);
     if (state.onsetHistory.length > 8) state.onsetHistory.shift();
     const recent = state.onsetHistory.slice(-4);
@@ -147,6 +177,7 @@ export function createQftAudioReader({
       bands,
       gatedBands,
       beatEnergy: state.beatEnergy,
+      kickEnergy: state.kickEnergy,
       spectralCentroid,
       spectralFlux,
       onsetEnergy: state.onsetEnergy

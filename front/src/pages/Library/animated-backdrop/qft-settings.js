@@ -19,6 +19,14 @@ export const QFT_DEFAULT_SETTINGS = Object.freeze({
   // 0.05+ = очень много
   density: 0.032,
 
+  // Экранный размер частиц. 0.34 даёт тонкую, почти однопиксельную россыпь,
+  // как в оригинальном QFT Visualizer.
+  particleSize: 0.34,
+
+  // Поле слегка выходит за края viewport; X дополнительно масштабируется
+  // по aspect ratio, поэтому вместо центрального круга частицы заполняют экран.
+  viewportFill: 1.12,
+
   // 0 = остановлено
   // 0.5 = медленно
   // 1 = нормально
@@ -74,17 +82,17 @@ export const QFT_DEFAULT_SETTINGS = Object.freeze({
   // POST PROCESSING
   // =========================================================
 
-  // Свечение
-  bloom: 0.55,
+  // Лёгкое свечение без склеивания соседних точек
+  bloom: 0.22,
 
-  // Шлейф движения
-  motionBlur: 0.72,
+  // Чёткая базовая картинка. Шлейф можно добавить вручную в Configure.
+  motionBlur: 0,
 
-  // RGB-разделение
-  chromaticAberration: 0.0015,
+  // RGB-разделение выключено: даже 0.0015 заметно размывает однопиксельные частицы.
+  chromaticAberration: 0,
 
   // Горизонтальное растягивание свечения
-  anamorphicStretch: 0.08,
+  anamorphicStretch: 0,
 
   godRays: false,
 
@@ -102,6 +110,15 @@ export const QFT_DEFAULT_SETTINGS = Object.freeze({
 
   // Пульсация
   pulseIntensity: 0.32,
+
+  // Чувствительность эквалайзерной реакции частиц на низкие частоты.
+  bassImpact: 2.6,
+
+  // Низкие частоты плавно меняют общий размер 3D-поля.
+  bassScaleStrength: 0.055,
+
+  // Высокие частоты деформируют мелкие детали внешней поверхности.
+  highSurfaceStrength: 3.2,
 
   // =========================================================
   // AUDIO GATE
@@ -168,8 +185,8 @@ export const QFT_DEFAULT_SETTINGS = Object.freeze({
   // Спокойное вращение
   idleRotationSpeed: 0.035,
 
-  // Баланс качества и производительности
-  pixelRatioMax: 1.5,
+  // Как в оригинале: рендерим до DPR 2 для чётких мелких частиц.
+  pixelRatioMax: 2,
 
   // Яркость точек, в том числе когда музыка не играет
   exposure: 2.15,
@@ -195,6 +212,9 @@ export const QFT_DEFAULT_SETTINGS = Object.freeze({
   // down. It only ever adjusts pixelRatio when measured FPS drifts outside
   // targetFPS +-6..8, so a machine already holding 60fps never notices it.
   adaptiveQuality: true,
+
+  // Никогда не рендерим ниже нативного разрешения: 0.75x давал заметное мыло.
+  minPixelRatio: 1,
 
   targetFPS: 60
 });
@@ -235,15 +255,15 @@ export const getQftThemeStyle = () => ({
 
   particle2: readThemeColor("--color-accent"),
 
-  particle3: readThemeColor("--color-highlight"),
+  particle3: readThemeColor("--color-text"),
 
   secondary1: readThemeColor("--color-primary-hover"),
 
-  secondary2: readThemeColor("--color-rose"),
+  secondary2: readThemeColor("--color-secondary"),
 
-  network1: readThemeColor("--color-primary"),
+  network1: readThemeColor("--color-primary-strong"),
 
-  network2: readThemeColor("--color-peach"),
+  network2: readThemeColor("--color-accent-strong"),
 
   trail: readThemeColor("--color-danger"),
 

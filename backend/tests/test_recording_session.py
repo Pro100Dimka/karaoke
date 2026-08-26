@@ -92,7 +92,7 @@ def test_queue_is_bounded_and_drops_frames_instead_of_blocking_the_audio_thread(
     assert session._queue.qsize() == session._queue.maxsize
 
 
-def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path):
+def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path, caplog):
     session, _stream = make_session(monkeypatch)
     session._temporary_path = tmp_path / "take.wav"
     output = MagicMock()
@@ -107,8 +107,60 @@ def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path
     failed, _stream = make_session(monkeypatch)
     failed._temporary_path = tmp_path / "failed.wav"
     patch_attrs(monkeypatch, recording_service.sf, SoundFile=Mock(side_effect=RuntimeError('disk full')))
-    failed._write_audio()
+    with caplog.at_level("ERROR"):
+        failed._write_audio()
     assert (str(failed._writer_error) == 'disk full') and (failed._writer_ready.is_set())
+    assert any(
+        failed.session_id in record.getMessage() and "disk full" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_write_audio_stops_and_signals_once_duration_limit_is_reached(monkeypatch, tmp_path):
+    monkeypatch.setattr(recording_service.config, "MAX_RECORDING_DURATION_SECONDS", 1)
+    session, _stream = make_session(monkeypatch, sample_rate=2)  # max_frames == 2
+    session._temporary_path = tmp_path / "take.wav"
+    output = MagicMock()
+    output.__enter__.return_value = output
+    monkeypatch.setattr(recording_service.sf, "SoundFile", Mock(return_value=output))
+    session._queue.put(np.zeros((3, 1)))  # already exceeds the 2-frame limit
+    session._queue.put(np.zeros((3, 1)))  # must never be consumed
+
+    session._write_audio()
+
+    assert session.limit_reached.is_set() and session._frames_written == 3
+    output.write.assert_called_once()
+
+
+def test_finalize_on_duration_limit_ignores_test_doubles(monkeypatch):
+    stop = Mock()
+    monkeypatch.setattr(recording_service, "stop_recording", stop)
+    recording_service._finalize_on_duration_limit("id", Mock())  # Mock().limit_reached isn't a real Event
+    stop.assert_not_called()
+
+
+def test_finalize_on_duration_limit_stops_a_still_active_session(monkeypatch):
+    session, _stream = make_session(monkeypatch)
+    session.limit_reached.set()
+    monkeypatch.setattr(recording_service, "_sessions", {"id": session})
+    stop = Mock()
+    monkeypatch.setattr(recording_service, "stop_recording", stop)
+
+    recording_service._finalize_on_duration_limit("id", session)
+
+    stop.assert_called_once_with("id")
+
+
+def test_finalize_on_duration_limit_skips_a_session_the_user_already_stopped(monkeypatch):
+    session, _stream = make_session(monkeypatch)
+    session.limit_reached.set()
+    monkeypatch.setattr(recording_service, "_sessions", {})
+    stop = Mock()
+    monkeypatch.setattr(recording_service, "stop_recording", stop)
+
+    recording_service._finalize_on_duration_limit("id", session)
+
+    stop.assert_not_called()
 
 
 def test_start_writer_closes_descriptor_and_cleans_failed_file(monkeypatch, tmp_path):
@@ -203,7 +255,7 @@ def test_stop_and_save_publishes_atomic_recording(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(("failure", "message"), [("stream", "stop"), ("writer", "write")])
-def test_stop_and_save_reports_stream_or_writer_failure(monkeypatch, tmp_path, failure, message):
+def test_stop_and_save_reports_stream_or_writer_failure(monkeypatch, tmp_path, failure, message, caplog):
     session, stream = make_session(monkeypatch)
     temporary = tmp_path / "temporary.wav"
     temporary.write_bytes(b"audio")
@@ -213,8 +265,11 @@ def test_stop_and_save_reports_stream_or_writer_failure(monkeypatch, tmp_path, f
     else:
         session._writer_error = RuntimeError("disk full")
 
-    raises(RuntimeError, lambda: session.stop_and_save(tmp_path / 'take.wav'), match=message)
+    with caplog.at_level("ERROR"):
+        raises(RuntimeError, lambda: session.stop_and_save(tmp_path / 'take.wav'), match=message)
     assert not temporary.exists()
+    if failure == "stream":  # a writer failure was already logged at its own source, in _write_audio
+        assert any(session.session_id in record.getMessage() for record in caplog.records)
 
 
 def test_stop_and_save_requires_initialized_file(monkeypatch, tmp_path):

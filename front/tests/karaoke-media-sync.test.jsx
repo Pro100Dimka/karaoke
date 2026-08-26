@@ -151,6 +151,54 @@ describe("karaoke media synchronization", () => {
     act(() => result.current.syncSecondaryMedia(20));
     expect(props.videoRef.current.currentTime).toBe(22);
   });
+  test("forces an immediate resync when the tab becomes visible again", () => {
+    const props = createProps({ isPlaying: true });
+    props.instrumentalRef.current.currentTime = 42;
+    props.vocalsRef.current.currentTime = 10; // left stale by throttled rAF while hidden
+    renderHook(() => useKaraokeMediaSync(props));
+    props.setCurrentTime.mockClear();
+
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    expect(props.setCurrentTime).toHaveBeenCalledWith(42);
+    expect(props.vocalsRef.current.currentTime).toBe(42);
+    verify([
+      props.youTubeClipRef.current.contentWindow.postMessage,
+      "toHaveBeenLastCalledWith",
+      expect.stringContaining("seekTo"),
+      expect.any(String)
+    ]);
+  });
+  test("nudges playbackRate for small drift instead of seeking, and hard-seeks past the strong band", () => {
+    const props = createProps();
+    const { result } = renderHook(() => useKaraokeMediaSync(props));
+    const vocals = props.vocalsRef.current;
+
+    // 50ms behind (soft band, 20-80ms): small positive rate nudge, no seek.
+    vocals.currentTime = 9.95;
+    act(() => result.current.syncSecondaryMedia(10));
+    expect(vocals.currentTime).toBe(9.95);
+    expect(vocals.playbackRate).toBeCloseTo(1.25 * 1.02, 5);
+
+    // 150ms ahead (strong band, 80-250ms): larger negative rate nudge, no seek.
+    vocals.currentTime = 10.15;
+    act(() => result.current.syncSecondaryMedia(10));
+    expect(vocals.currentTime).toBe(10.15);
+    expect(vocals.playbackRate).toBeCloseTo(1.25 * 0.94, 5);
+
+    // Back within 20ms: rate returns to the plain speed setting.
+    vocals.currentTime = 10.01;
+    act(() => result.current.syncSecondaryMedia(10));
+    expect(vocals.currentTime).toBe(10.01);
+    expect(vocals.playbackRate).toBeCloseTo(1.25, 5);
+
+    // 2s off (past the 250ms strong band): hard seek, rate back to normal.
+    vocals.playbackRate = 1.31;
+    vocals.currentTime = 8;
+    act(() => result.current.syncSecondaryMedia(10));
+    expect(vocals.currentTime).toBe(10);
+    expect(vocals.playbackRate).toBeCloseTo(1.25, 5);
+  });
   test("skips unusable secondary media and isolates detached setters", () => {
     const props = createProps();
     Object.defineProperty(props.vocalsRef.current, "duration", { configurable: true, value: 0 });

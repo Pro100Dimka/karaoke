@@ -10,7 +10,14 @@ set "TMP=%TEMP%\advoice-msst-%RANDOM%-%RANDOM%"
 set "ZIP=%TMP%\msst.zip"
 set "UNPACK=%TMP%\unpack"
 set "REPO=https://github.com/ZFTurbo/Music-Source-Separation-Training.git"
-set "ZIPURL=https://github.com/ZFTurbo/Music-Source-Separation-Training/archive/refs/heads/main.zip"
+rem Pinned, not refs/heads/main: patch-msst-engine.ps1 below assumes an exact
+rem model_utils.py structure and throws if upstream has since changed it, so
+rem an unpinned clone of a moving branch could silently fetch incompatible
+rem code on a fresh bootstrap. This is the commit already verified working
+rem with the patch in this project as of 2026-08-26; bump deliberately (and
+rem re-verify the patch still applies) to update MSST.
+set "COMMIT=e247dfe4abc1f17c69dff719207fe045dc04413a"
+set "ZIPURL=https://github.com/ZFTurbo/Music-Source-Separation-Training/archive/%COMMIT%.zip"
 
 call :verify >nul 2>&1 && (
     echo MSST engine is ready.
@@ -30,8 +37,8 @@ where git.exe >nul 2>&1
 if not errorlevel 1 (
     echo Downloading MSST engine with Git...
     rmdir /s /q "%ENGINE%" >nul 2>&1
-    git clone --quiet --depth 1 "%REPO%" "%ENGINE%" >nul 2>&1
-    if not errorlevel 1 (
+    mkdir "%ENGINE%" >nul 2>&1
+    call :fetch_pinned_commit && (
         call :verify >nul 2>&1
         if not errorlevel 1 goto :ok
     )
@@ -78,6 +85,13 @@ rem Never package Git metadata from the disposable downloads cache.
 rmdir /s /q "%ENGINE%\.git" >nul 2>&1
 rmdir /s /q "%TMP%" >nul 2>&1
 echo MSST engine is ready.
+exit /b 0
+
+:fetch_pinned_commit
+git -C "%ENGINE%" init --quiet >nul 2>&1 || exit /b 1
+git -C "%ENGINE%" remote add origin "%REPO%" >nul 2>&1 || exit /b 1
+git -C "%ENGINE%" fetch --quiet --depth 1 origin "%COMMIT%" >nul 2>&1 || exit /b 1
+git -C "%ENGINE%" checkout --quiet FETCH_HEAD >nul 2>&1 || exit /b 1
 exit /b 0
 
 :verify

@@ -69,6 +69,37 @@ def test_clean_pipeline_publishes_only_canonical_runtime_artifacts(tmp_path, mon
     assert sf.info(output / "vocals.flac").channels == 1
 
 
+def test_stage_reports_carry_device_dtype_and_memory_telemetry(tmp_path, monkeypatch):
+    from AI.runtime import BackendSpec, HardwareProfile, RuntimePlan
+
+    source, lyrics, output = tmp_path / "source.wav", tmp_path / "lyrics.txt", tmp_path / "out"
+    sf.write(source, np.zeros((44100 * 2, 2), dtype=np.float32), 44100)
+    lyrics.write_text("hello", encoding="utf-8")
+    monkeypatch.setattr("AI.pipeline.analyze_music", lambda _path: {"bpm": 120, "key": "A minor"})
+    plan = RuntimePlan(
+        HardwareProfile("cpu", 4),
+        {
+            "separation": BackendSpec("pytorch:cuda", "cuda", "fp16"),
+            "pitch": BackendSpec("pytorch:cpu", "cpu", "fp32"),
+            "aligner": BackendSpec("pytorch:cpu", "cpu", "fp32"),
+        },
+    )
+    monkeypatch.setattr("AI.pipeline.get_runtime_plan", lambda: plan)
+    engines = SimpleNamespace(
+        separator=Separator(), pitch=Pitch(), transcriber=None, aligner=Aligner()
+    )
+
+    result = KaraokePipeline(engines=engines).run(PipelineRequest(source, output, lyrics_path=lyrics))
+
+    by_stage = {report.stage: report for report in result.reports}
+    assert (by_stage["separate"].details["device"], by_stage["separate"].details["dtype"]) == ("cuda", "fp16")
+    assert (by_stage["pitch"].details["device"], by_stage["pitch"].details["dtype"]) == ("cpu", "fp32")
+    assert (by_stage["lyrics"].details["device"], by_stage["lyrics"].details["dtype"]) == ("cpu", "fp32")
+    # decode has no backend role, but every stage still reports process memory use.
+    assert all(report.details.get("rss_bytes", 0) > 0 for report in result.reports)
+    assert "device" not in by_stage["decode"].details
+
+
 def test_reprocess_rebuilds_timing_from_existing_vocals_without_separation(tmp_path):
     output = tmp_path / "out"
     output.mkdir()
@@ -142,6 +173,44 @@ def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
     assert result is not None
     assert result.source == "pisni.org.ua"
     assert result.text.count("Рядок приспіву один") == 2
+
+
+def test_lyrics_discovery_skips_pisni_once_the_lookup_budget_is_spent(monkeypatch):
+    import AI.lyrics_sources as lyrics_sources
+
+    monkeypatch.setattr(lyrics_sources, "_request", lambda url, encoding="utf-8": "[]")
+    # The whole lookup already ran out its budget by the time LRCLIB replied
+    # (a slow/hanging network, not a fast failure) -- pisni.org.ua must not
+    # be attempted at all rather than adding its own request chain on top.
+    clock = iter([0.0, lyrics_sources.LOOKUP_BUDGET_SECONDS + 1])
+    monkeypatch.setattr(lyrics_sources.time, "monotonic", lambda: next(clock))
+    pisni_called = []
+    monkeypatch.setattr(
+        lyrics_sources, "_pisni", lambda *args: pisni_called.append(args) or None
+    )
+
+    assert discover_lyrics("Антитiла - Лови момент") is None
+    assert pisni_called == []
+
+
+def test_pisni_stops_walking_candidate_links_once_the_deadline_passes(monkeypatch):
+    import AI.lyrics_sources as lyrics_sources
+
+    search = '<a href="/songs/1.html">A</a><a href="/songs/2.html">B</a>'
+    requested = []
+
+    def response(url, encoding="utf-8"):
+        del encoding
+        requested.append(url)
+        return search if "search.php" in url else "<h1></h1>"
+
+    monkeypatch.setattr(lyrics_sources, "_request", response)
+    # Budget expires the moment the search page comes back, before the first
+    # candidate detail page would be fetched.
+    result = lyrics_sources._pisni("Антитіла", "Лови момент", "query", deadline=0.0)
+
+    assert result is None
+    assert len(requested) == 1 and "search.php" in requested[0]
 
 
 def test_source_repeat_notation_is_expanded_without_leaking_markers():
@@ -475,6 +544,57 @@ def test_msst_separator_accepts_flac_vocal_output(tmp_path, monkeypatch):
     assert vocal_audio.shape == backing_audio.shape == stereo.shape
     assert np.max(np.abs(vocal_audio)) > 0.1
     assert np.max(np.abs((vocal_audio + backing_audio) - stereo)) < 2e-4
+
+
+def test_msst_separator_uses_the_backing_stem_directly_without_rereading_the_full_mix(
+    tmp_path, monkeypatch
+):
+    # When MSST produces its own no_vocal/instrumental stem, the instrumental
+    # output must come straight from that stem (not from a recomputed
+    # mix - vocal, which would need the full mix decoded again). A backing
+    # signal deliberately different from mix - vocal makes the two paths
+    # distinguishable: matching it only happens if the stem itself was used.
+    engine = tmp_path / "msst"
+    engine.mkdir()
+    (engine / "inference.py").write_text("# stub", encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    checkpoint = tmp_path / "model.ckpt"
+    config.write_text("stub", encoding="utf-8")
+    checkpoint.write_bytes(b"stub")
+
+    mix = tmp_path / "mix.wav"
+    vocals = tmp_path / "vocals.flac"
+    instrumental = tmp_path / "instrumental.flac"
+    audio = np.linspace(-0.2, 0.2, 4410, dtype=np.float32)
+    stereo = np.column_stack((audio, audio))
+    sf.write(mix, stereo, 44100)
+    vocal_stem = stereo * 0.75
+    backing_stem = stereo * 0.1
+
+    separator = MSSTMelRoformerSeparator(engine_dir=engine, config=config, checkpoint=checkpoint)
+
+    def fake_run(_source, output, _tuning, **_kwargs):
+        stem_dir = output / "song"
+        stem_dir.mkdir(parents=True)
+        sf.write(stem_dir / "vocals.flac", vocal_stem, 44100, subtype="PCM_24")
+        sf.write(stem_dir / "no_vocal.flac", backing_stem, 44100, subtype="PCM_24")
+
+    monkeypatch.setattr(separator, "_run", fake_run)
+
+    real_read = sf.read
+    read_calls = []
+
+    def counting_read(path, *args, **kwargs):
+        read_calls.append(str(path))
+        return real_read(path, *args, **kwargs)
+
+    monkeypatch.setattr(sf, "read", counting_read)
+    separator.separate(mix, vocals, instrumental)
+
+    backing_audio, backing_rate = sf.read(instrumental, dtype="float32", always_2d=True)
+    assert backing_rate == 44100
+    assert np.max(np.abs(backing_audio - backing_stem)) < 2e-4
+    assert str(mix) not in read_calls
 
 
 def test_msst_separator_reports_actual_audio_outputs_when_vocal_is_missing(tmp_path, monkeypatch):

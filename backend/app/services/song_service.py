@@ -77,6 +77,46 @@ def resolve_output_dir(song: models.Song) -> Path:
     return resolve_library_path(path)
 
 
+def is_done(song: models.Song) -> bool: return song.status == models.SongStatus.DONE
+
+
+class InvalidStatusTransition(ValueError):
+    """A caller asked for a song.status change that the state machine forbids."""
+
+    def __init__(self, current: models.SongStatus | None, requested: models.SongStatus):
+        super().__init__(f"Cannot move song from {current} to {requested}")
+        self.current, self.requested = current, requested
+
+
+# PENDING is the only status a brand-new song can start in (see
+# create_song_from_path); every other entry describes the statuses a song may
+# legally move to FROM the key. QUEUED accepts every terminal status (retry)
+# plus itself (a second /process call before the background thread has
+# registered is a harmless no-op, not a new transition). DONE/CANCELLED/ERROR
+# are themselves reachable only from an active run, never from each other or
+# from PENDING directly -- a paused/never-started song has nothing to finish.
+ALLOWED_STATUS_TRANSITIONS: dict[models.SongStatus | None, frozenset[models.SongStatus]] = {
+    None: frozenset({models.SongStatus.PENDING}),
+    models.SongStatus.PENDING: frozenset({models.SongStatus.QUEUED}),
+    models.SongStatus.QUEUED: frozenset({
+        models.SongStatus.QUEUED, models.SongStatus.PROCESSING, models.SongStatus.CANCELLED,
+    }),
+    models.SongStatus.PROCESSING: frozenset({
+        models.SongStatus.DONE, models.SongStatus.ERROR,
+        models.SongStatus.CANCELLING, models.SongStatus.CANCELLED,
+    }),
+    models.SongStatus.CANCELLING: frozenset({models.SongStatus.CANCELLED, models.SongStatus.ERROR}),
+    models.SongStatus.ERROR: frozenset({models.SongStatus.QUEUED}),
+    models.SongStatus.CANCELLED: frozenset({models.SongStatus.QUEUED}),
+    models.SongStatus.DONE: frozenset({models.SongStatus.QUEUED}),
+}
+
+
+def validate_status_transition(current: models.SongStatus | None, requested: models.SongStatus) -> None:
+    if requested not in ALLOWED_STATUS_TRANSITIONS.get(current, frozenset()):
+        raise InvalidStatusTransition(current, requested)
+
+
 def original_source_retired(song: models.Song) -> bool:
     """True once the true original upload has been deleted and ``source_path``
     now points at the produced instrumental instead (see pipeline finalization).
@@ -381,6 +421,18 @@ def create_song(db: Session, title: str, original_filename: str, file_bytes: byt
     )
 
 
+def _check_duration_limit(source: Path) -> None:
+    from AI.audio import duration as audio_duration
+
+    try:
+        length_seconds = audio_duration(source)
+    except (RuntimeError, OSError):
+        return  # Unreadable audio is rejected later, by the pipeline itself.
+    if length_seconds > config.MAX_SONG_DURATION_SECONDS:
+        limit_minutes = config.MAX_SONG_DURATION_SECONDS // 60
+        raise ValueError(f"Song is longer than the {limit_minutes}-minute limit")
+
+
 def create_song_from_path(
     db: Session,
     title: str,
@@ -390,6 +442,7 @@ def create_song_from_path(
 ) -> models.Song:
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0: raise ValueError("Audio file is empty")
+    _check_duration_limit(temporary_source)
 
     detected_artist, detected_title = _read_source_identity(
         temporary_source, safe_name, clean_title)
@@ -413,6 +466,22 @@ def create_song_from_path(
 def list_songs(db: Session) -> list[models.Song]:
     return list(
         db.scalars(select(models.Song).order_by(models.Song.created_at.desc(), models.Song.id.desc()))
+    )
+
+
+def list_recently_updated_songs(db: Session, limit: int) -> list[models.Song]:
+    """The most recently touched songs, for bounded "recent activity" views.
+
+    Ordered by updated_at (falling back to id for a stable tie-break/NULL
+    order) rather than created_at, since "recent activity" cares about the
+    last time a song was processed/reprocessed, not when it was first added.
+    """
+    return list(
+        db.scalars(
+            select(models.Song)
+            .order_by(models.Song.updated_at.desc().nullslast(), models.Song.id.desc())
+            .limit(limit)
+        )
     )
 
 

@@ -32,8 +32,7 @@ def test_application_router_translates_service_validation(monkeypatch):
 
 
 def test_application_history_merges_and_sorts_processing_and_recordings():
-    song_query = Mock()
-    song_query.all.return_value = [
+    songs = [
         SimpleNamespace(
             title="Processing",
             status=SimpleNamespace(value="processing"),
@@ -41,12 +40,13 @@ def test_application_history_merges_and_sorts_processing_and_recordings():
         )
     ]
     recording, recording_query = SimpleNamespace(duration_sec=12.5, created_at=SimpleNamespace(isoformat=lambda: '2026-01-02T00:00:00')), Mock()
-    recording_query.join.return_value.outerjoin.return_value.all.return_value = [
+    recording_query.join.return_value.outerjoin.return_value.order_by.return_value.limit.return_value.all.return_value = [
         (recording, "Recorded", "analysis"),
         (SimpleNamespace(duration_sec=None, created_at=None), "Raw", None),
     ]
     database = Mock()
-    database.query.side_effect = [song_query, recording_query]
+    database.scalars.return_value = songs
+    database.query.return_value = recording_query
 
     history = application.get_history(database)
 

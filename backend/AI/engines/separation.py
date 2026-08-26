@@ -136,7 +136,16 @@ class MSSTMelRoformerSeparator(Separator):
             source, output = Path(temporary) / "input", Path(temporary) / "output"
             source.mkdir()
             output.mkdir()
-            shutil.copy2(mix, source / "song.wav")
+            staged = source / "song.wav"
+            try:
+                # source lives on the same volume as mix (see the
+                # TemporaryDirectory dir= above), so a hardlink gives the
+                # worker its own isolated single-file input folder -- MSST
+                # must not also see the pipeline's other temp files sitting
+                # next to mix -- without actually copying the mix's bytes.
+                os.link(mix, staged)
+            except OSError:
+                shutil.copy2(mix, staged)
             tuning = {
                 "num_overlap": profile.separation_overlap,
                 "batch_size": profile.separation_batch_size,
@@ -169,12 +178,23 @@ class MSSTMelRoformerSeparator(Separator):
             if vocal is None:
                 produced = ", ".join(str(item.relative_to(output)) for item in files) or "<none>"
                 raise AICoreError(f"MSST produced no vocal stem; audio outputs: {produced}")
-            mix_audio, rate = sf.read(mix, dtype="float32", always_2d=True)
+            # _fit() only ever needs the mix's target frame/channel count, not
+            # its samples -- reading that from metadata instead of decoding
+            # the whole file avoids holding a full extra copy of the song in
+            # memory on the (common) path where MSST already produced a
+            # backing stem. The full mix only has to be decoded when there is
+            # no backing stem and it must be computed as mix - vocal.
+            mix_info = sf.info(mix)
+            rate, target_frames, channels = mix_info.samplerate, mix_info.frames, mix_info.channels
             vocal_audio, vocal_rate = sf.read(vocal, dtype="float32", always_2d=True)
             if vocal_rate != rate:
                 raise AICoreError("MSST sample-rate mismatch")
-            vocal_audio = _fit(vocal_audio, len(mix_audio), mix_audio.shape[1])
-            backing_audio = _fit(sf.read(backing, dtype="float32", always_2d=True)[0], len(mix_audio), mix_audio.shape[1]) if backing else mix_audio - vocal_audio
+            vocal_audio = _fit(vocal_audio, target_frames, channels)
+            if backing:
+                backing_audio = _fit(sf.read(backing, dtype="float32", always_2d=True)[0], target_frames, channels)
+            else:
+                mix_audio = sf.read(mix, dtype="float32", always_2d=True)[0]
+                backing_audio = mix_audio - vocal_audio
             sf.write(vocals, np.clip(vocal_audio, -1, 1), rate, subtype="PCM_24")
             sf.write(instrumental, np.clip(backing_audio, -1, 1), rate, subtype="PCM_24")
 

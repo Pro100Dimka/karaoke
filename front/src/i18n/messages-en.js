@@ -139,7 +139,8 @@ export const enMessages = {
   "settings.ai.cache_folder.tooltip": "Temporary file folder",
   "settings.ai.models.title": "AI models",
   "settings.ai.models.ready": "All models are installed and verified.",
-  "settings.ai.models.missing": "Missing or damaged models: {count}.",
+  "settings.ai.models.missing":
+    "Missing or damaged models: {count}. An internet connection is required to download them.",
   "settings.ai.models.downloading":
     "Downloading: {model}. Completed files will not be downloaded again.",
   "settings.ai.models.preparing": "preparing",

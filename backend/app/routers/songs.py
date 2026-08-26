@@ -73,6 +73,10 @@ def _queue_song_job(
     **queued_values: object,
 ) -> None:
     previous = {field: getattr(song, field) for field in queued_values}
+    requested_status = queued_values.get("status")
+    if isinstance(requested_status, models.SongStatus):
+        with http_error(song_service.InvalidStatusTransition, 409):
+            song_service.validate_status_transition(song.status, requested_status)
 
     def restore_previous_state() -> None:
         for field, value in previous.items(): setattr(song, field, value)
@@ -330,7 +334,7 @@ def process_song(
 def reprocess_melody(song: SongDependency, db: Session = Depends(get_db)):
     """Clear prior generated files and rebuild the vocal melody from vocals.flac."""
     if recording_service.has_active_recording(song.id): raise HTTPException(status_code=409, detail="Нельзя переобрабатывать песню во время записи")
-    if not song.output_dir or song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
+    if not song.output_dir or not song_service.is_done(song): raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Обработка уже запущена")
     _queue_song_job(
         db,
@@ -400,7 +404,7 @@ def get_audio_track(track: str, song: SongDependency):
 
 @router.get("/{song_id}/editor", response_model=schemas.SongEditorOut)
 def get_song_editor(song: SongDependency):
-    if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    if not song_service.is_done(song): raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 409):
         lyrics_sync, backup_exists = song_editor_service.load_editor(
             song_service.resolve_output_dir(song)
@@ -412,7 +416,7 @@ def get_song_editor(song: SongDependency):
 def save_song_editor(
     payload: schemas.SongEditorUpdate, song: SongDependency, db: Session = Depends(get_db)
 ):
-    if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    if not song_service.is_done(song): raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 400), song_service.song_content_lock(song.id), song_service.library_write_lock():
         lyrics_sync = song_editor_service.save_editor(
             song_service.resolve_output_dir(song), payload.notes,
@@ -425,7 +429,7 @@ def save_song_editor(
 
 @router.post("/{song_id}/editor/reset", response_model=schemas.SongEditorOut)
 def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
-    if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    if not song_service.is_done(song): raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 409), song_service.song_content_lock(song.id), song_service.library_write_lock():
         lyrics_sync = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
         song_package_service.invalidate_content_revision(song)
@@ -435,7 +439,7 @@ def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)
 def get_result(song: SongDependency, response: Response):
-    if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    if not song_service.is_done(song) or not song.output_dir: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
     out_dir = song_service.resolve_output_dir(song)
     lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
@@ -478,7 +482,7 @@ def _carry_forward_word_notes(previous: list[Any], words: list[dict[str, Any]]) 
 
 @router.put("/{song_id}/lyrics")
 def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency, db: Session = Depends(get_db)):
-    if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
+    if not song_service.is_done(song) or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
     out_dir = song_service.resolve_output_dir(song)
     lyrics_path = out_dir / "lyricsSync.json"

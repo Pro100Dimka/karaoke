@@ -124,12 +124,14 @@ export function createForceNetwork(
 
   const material = new THREE.ShaderMaterial({
     vertexShader: `attribute float alpha; varying float vAlpha; varying float vDist; void main(){vAlpha=alpha; vec4 mvPos=modelViewMatrix*vec4(position,1.0); vDist=length(position)/90.0; gl_Position=projectionMatrix*mvPos;}`,
-    fragmentShader: `uniform vec3 uColor; uniform vec3 uColor2; uniform float uOpacity; uniform float uBeatEnergy; uniform float uHighMid; uniform float uSpectralCentroid; varying float vAlpha; varying float vDist; void main(){vec3 color=mix(uColor,uColor2,clamp(uSpectralCentroid*2.0,0.0,1.0)); color*=1.0+(1.0-vDist)*0.6; color*=1.0+uBeatEnergy*1.2; float a=vAlpha*uOpacity*(0.4+uHighMid*0.5+uBeatEnergy*0.4); gl_FragColor=vec4(color,clamp(a,0.0,1.0));}`,
+    fragmentShader: `uniform vec3 uColor; uniform vec3 uColor2; uniform float uOpacity; uniform float uBeatEnergy; uniform float uKickEnergy; uniform float uBassEnvelope; uniform float uHighMid; uniform float uSpectralCentroid; varying float vAlpha; varying float vDist; void main(){vec3 color=mix(uColor,uColor2,clamp(uSpectralCentroid*2.0,0.0,1.0)); color*=1.0+(1.0-vDist)*0.45; color*=1.0+uBeatEnergy*0.12+uBassEnvelope*1.25+uKickEnergy*1.65; float a=vAlpha*uOpacity*(0.12+uHighMid*0.16+uBeatEnergy*0.08+uBassEnvelope*0.7+uKickEnergy*0.62); gl_FragColor=vec4(color,clamp(a,0.0,1.0));}`,
     uniforms: {
       uColor: { value: new THREE.Color(color1) },
       uColor2: { value: new THREE.Color(color2) },
       uOpacity: { value: 1 },
       uBeatEnergy: { value: 0 },
+      uKickEnergy: { value: 0 },
+      uBassEnvelope: { value: 0 },
       uHighMid: { value: 0 },
       uSpectralCentroid: { value: 0 }
     },
@@ -153,10 +155,11 @@ export function createForceNetwork(
     tracked,
     update({
       threshold = 14,
-      bass = 0,
       highMid = 0,
       mid = 0,
       beat = 0,
+      kick = 0,
+      bassEnvelope = 0,
       centroid = 0,
       opacity = 1,
       enabled = true
@@ -172,9 +175,13 @@ export function createForceNetwork(
       const pts = tracked.map(
         (idx) => new THREE.Vector3(attr.getX(idx), attr.getY(idx), attr.getZ(idx))
       );
-      const effective = threshold * (1 + bass * 0.6) * (1 - highMid * 0.15);
+      const effective =
+        threshold * (0.86 + bassEnvelope * 0.38 + kick * 0.12) * (1 - highMid * 0.05);
       const thresholdSq = effective * effective;
-      const dynamicMax = Math.floor(maxConnections * (0.3 + Math.min(1, mid + highMid) * 0.7));
+      const dynamicMax = Math.floor(
+        maxConnections *
+          (0.1 + Math.min(1, bassEnvelope * 0.38 + kick * 0.12 + mid * 0.06 + highMid * 0.04))
+      );
       let n = 0;
       forEachNearbyPair(pts, Math.max(effective, 0.001), dynamicMax, (i, j) => {
         const d2 = pts[i].distanceToSquared(pts[j]);
@@ -193,6 +200,8 @@ export function createForceNetwork(
       geometry.attributes.alpha.needsUpdate = true;
       geometry.setDrawRange(0, n * 2);
       material.uniforms.uBeatEnergy.value = beat;
+      material.uniforms.uKickEnergy.value = kick;
+      material.uniforms.uBassEnvelope.value = bassEnvelope;
       material.uniforms.uHighMid.value = highMid;
       material.uniforms.uSpectralCentroid.value = centroid;
       material.uniforms.uOpacity.value = opacity;

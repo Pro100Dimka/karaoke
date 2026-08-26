@@ -531,12 +531,12 @@ export function OnlineRoomProvider({ children }) {
           setVoiceError,
           setTransferStatus,
           onParticipantJoined: playParticipantJoinedSound,
-          onConnectionClosed: () => {
+          onConnectionClosed: (message = translateSaved("Соединение с комнатой потеряно.")) => {
             connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
             cleanupConnection();
             resetRoomState();
-            setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+            setVoiceError(message);
           }
         })
       );

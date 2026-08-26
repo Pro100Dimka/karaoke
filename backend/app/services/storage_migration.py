@@ -8,6 +8,7 @@ from pathlib import Path
 
 import config
 import models
+from app.services import song_service
 from app.services.db_utils import commit
 from app.utils.atomic_files import move_path
 from database import SessionLocal
@@ -190,7 +191,7 @@ def migrate_legacy_song_storage() -> None:
     try:
         library_root = config.SONG_OUTPUT_DIR.resolve()
 
-        for song in db.query(models.Song).all():
+        for song in song_service.list_songs(db):
             original = _migrate_song(
                 song,
                 library_root,

@@ -168,15 +168,15 @@ def test_heartbeat_capture_start_stop_and_error_helpers(monkeypatch, tmp_path):
     assert (pipeline_service._format_processing_error(ValueError('bad')) == 'ValueError: bad') and (pipeline_service._format_processing_error(RuntimeError()) == 'RuntimeError')
     logger = Mock()
     monkeypatch.setattr(pipeline_service, "logger", logger)
-    pipeline_service._write_pipeline_error(None, RuntimeError("bad"))
+    pipeline_service._write_pipeline_error("song", None, RuntimeError("bad"))
     logger.error.assert_called_once()
     logger.reset_mock()
     writer = Mock()
-    pipeline_service._write_pipeline_error(writer, RuntimeError("bad"))
+    pipeline_service._write_pipeline_error("song", writer, RuntimeError("bad"))
     logger.error.assert_called_once()
     writer.write.assert_called_once()
     writer.write.side_effect = OSError("disk")
-    pipeline_service._write_pipeline_error(writer, RuntimeError("bad"))
+    pipeline_service._write_pipeline_error("song", writer, RuntimeError("bad"))
 
 
 def test_ai_progress_callback_updates_semantic_runtime_and_cancels(monkeypatch):
@@ -304,7 +304,7 @@ def test_finalize_success_commits_metadata_and_best_effort_optimization(monkeypa
     pipeline_service._finalize_success("missing", tmp_path)
 
 
-def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch, tmp_path):
+def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch, tmp_path, caplog):
     events = []
     patch_attrs(monkeypatch, pipeline_service, _load_job_paths=Mock(return_value=('source', tmp_path)), _load_searchable_title=Mock(return_value='Title'), _load_ai_inputs=Mock(return_value=(None, None, None)), _is_cancelled=Mock(return_value=False), _update_progress=Mock(), _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())), _acquire_processing_slot=Mock(return_value=True), _release_processing_slot=Mock(side_effect=lambda _song_id: events.append("release")))
     capture = Mock()
@@ -315,8 +315,12 @@ def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch,
     patch_attrs(monkeypatch, pipeline_service, _stop_progress_heartbeat=Mock(), _end_runtime_progress=Mock())
     finalize = Mock(side_effect=lambda *_args: events.append("finalize"))
     monkeypatch.setattr(pipeline_service, "_finalize_success", finalize)
-    pipeline_service._run_job("song")
+    with caplog.at_level("INFO", logger=pipeline_service.logger.name):
+        pipeline_service._run_job("song")
     process.assert_called_once()
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Song processing started: song_id=song" in message for message in messages)
+    assert any("Song processing finished: song_id=song" in message for message in messages)
     finalize.assert_called_once_with("song", tmp_path)
     assert events[:2] == ["finalize", "release"]
     capture.close.assert_called_once()

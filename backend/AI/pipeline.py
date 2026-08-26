@@ -30,6 +30,24 @@ ProgressCallback = callable
 CancelCallback = callable
 
 
+def _process_rss_bytes() -> int:
+    try:
+        import psutil
+        return psutil.Process().memory_info().rss
+    except Exception:  # best-effort telemetry -- must never fail a stage
+        return 0
+
+
+def _cuda_memory_bytes() -> tuple[int, int]:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
+    except Exception:  # best-effort telemetry -- must never fail a stage
+        pass
+    return 0, 0
+
+
 @dataclass(frozen=True, slots=True)
 class PipelineRequest:
     source_path: str | Path
@@ -70,8 +88,17 @@ class KaraokePipeline:
             request.progress(stage, progress, detail)
 
     @staticmethod
-    def _stage(reports: list[StageReport], name: str, engine: str, started: float) -> None:
-        reports.append(StageReport(name, time.perf_counter() - started, False, engine))
+    def _stage(
+        reports: list[StageReport], name: str, engine: str, started: float, *, role: str | None = None,
+    ) -> None:
+        details: dict[str, object] = {"rss_bytes": _process_rss_bytes()}
+        allocated, reserved = _cuda_memory_bytes()
+        if allocated or reserved:
+            details["cuda_allocated_bytes"], details["cuda_reserved_bytes"] = allocated, reserved
+        backend = get_runtime_plan().selected.get(role) if role is not None else None
+        if backend is not None:
+            details["device"], details["dtype"] = backend.device, backend.precision
+        reports.append(StageReport(name, time.perf_counter() - started, False, engine, details))
 
     def _lyrics(
         self,
@@ -134,7 +161,7 @@ class KaraokePipeline:
                 mix, raw_vocals, instrumental,
                 profile=profile, cancelled=request.cancelled,
             )
-            self._stage(reports, "separate", self.engines.separator.name, started)
+            self._stage(reports, "separate", self.engines.separator.name, started, role="separation")
 
             music_started = time.perf_counter()
             music_future = parallel.submit(analyze_music, instrumental)
@@ -147,7 +174,7 @@ class KaraokePipeline:
             self._notify(request, "analysis", 48, "Анализ музыки и мелодии по vocals.flac")
             pitch_started = time.perf_counter()
             pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
-            self._stage(reports, "pitch", self.engines.pitch.name, pitch_started)
+            self._stage(reports, "pitch", self.engines.pitch.name, pitch_started, role="pitch")
             music = music_future.result()
             self._stage(reports, "music", "librosa", music_started)
 
@@ -158,7 +185,7 @@ class KaraokePipeline:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
             words = self._align(vocals, text, request.language, direct)
             words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
-            self._stage(reports, "lyrics", self.engines.aligner.name, started)
+            self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
 
             self._notify(request, "notes", 84, "Построение мелодии голоса")
             started = time.perf_counter()
@@ -207,13 +234,13 @@ class KaraokePipeline:
             self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
             started = time.perf_counter()
             pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
-            self._stage(reports, "pitch", self.engines.pitch.name, started)
+            self._stage(reports, "pitch", self.engines.pitch.name, started, role="pitch")
 
             self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
             started = time.perf_counter()
             words = self._align(vocals, text, request.language, [])
             words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
-            self._stage(reports, "lyrics", self.engines.aligner.name, started)
+            self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
 
         self._notify(request, "notes", 84, "Построение мелодии голоса")
         started = time.perf_counter()

@@ -273,20 +273,8 @@ describe("API domains", () => {
     fetch.mockRejectedValueOnce(Error("closed"));
     equal([await audioApi.releaseDirectMonitoring(), null]);
   });
-  test("routes model and recording operations and normalizes collections", async () => {
-    const [{ modelsApi }, { recordingsApi }] = await Promise.all([importDomain("models"), importDomain("recordings")]);
-    fetch.mockResolvedValueOnce(response({ body: '[{"name":" x ","size":-1}]' }));
-    deepEqual([await modelsApi.listWhisperModels(), [{ name: "x", size: 0, downloaded: false, selected: false }]]);
-    equal([pathOf(lastCall()[0]), "/models/whisper"]);
-    fetch.mockResolvedValueOnce(response({ body: "null" }));
-    deepEqual([await modelsApi.listWhisperModels(), []]);
-    equal([pathOf(lastCall()[0]), "/models/whisper"]);
-    for (const [invoke, path, method] of [
-      [() => modelsApi.downloadModel("a/b"), "/models/whisper/a%2Fb/download", "POST"],
-      [() => modelsApi.deleteModel("a/b"), "/models/whisper/a%2Fb", "DELETE"],
-      [() => modelsApi.selectModel("a/b"), "/models/whisper/a%2Fb/select", "POST"]
-    ])
-      await assertRequest(invoke, { path, method });
+  test("routes recording operations and normalizes collections", async () => {
+    const { recordingsApi } = await importDomain("recordings");
     for (const [args, body] of [
       [
         ["song"],

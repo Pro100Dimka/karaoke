@@ -107,11 +107,13 @@ test("injects one runtime backend URL and allows required renderer resources", (
   const preload = fs.readFileSync(new URL("../electron/preload.cjs", import.meta.url), "utf8");
   const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
   const runtime = fs.readFileSync(new URL("../src/runtime-config.js", import.meta.url), "utf8");
+  const platform = fs.readFileSync(new URL("../src/utils/platform.js", import.meta.url), "utf8");
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   verify(
     [main, "toContain", "--advoice-backend-url=${runtimeBackendUrl}"],
     [preload, "toContain", "backendUrl"],
-    [runtime, "toContain", "globalThis.electronAPI?.backendUrl"],
+    [runtime, "toContain", "platform.backendUrl()"],
+    [platform, "toContain", "electronAPI()?.backendUrl"],
     [html, "toContain", "http://127.0.0.1:*"],
     [html, "toContain", "http://localhost:*"],
     [html, "toContain", "worker-src 'self' blob:"]

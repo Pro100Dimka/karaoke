@@ -143,6 +143,19 @@ def test_semantic_progress_keeps_advancing_for_long_separation(monkeypatch):
     at_40 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
     assert (10.0 < at_20 < 42.0) and (at_20 < at_40 < 42.0)
 
+def test_update_progress_logs_but_still_applies_an_unexpected_transition(monkeypatch, caplog):
+    current = SimpleNamespace(status=models.SongStatus.DONE)
+    mock_song_lookup(monkeypatch, pipeline_service, current)
+    monkeypatch.setattr(pipeline_service, "commit", Mock())
+    with caplog.at_level("WARNING"):
+        pipeline_service._update_progress("song", status=models.SongStatus.ERROR)
+    assert current.status == models.SongStatus.ERROR  # applied despite DONE -> ERROR being invalid
+    assert any(
+        "song_id=song" in record.getMessage() and "done -> error" in record.getMessage()
+        for record in caplog.records
+    )
+
+
 def test_update_progress_persists_fields_and_closes_database(monkeypatch):
     current = SimpleNamespace()
     database, _ = mock_song_lookup(monkeypatch, pipeline_service, current)

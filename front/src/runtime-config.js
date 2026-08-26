@@ -1,3 +1,5 @@
+import * as platform from "./utils/platform";
+
 const positive = (value, fallback) => {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
@@ -5,9 +7,7 @@ const positive = (value, fallback) => {
 const scale = positive(import.meta.env.VITE_POLLING_SCALE, 1);
 const interval = (milliseconds) => Math.max(16, Math.round(milliseconds * scale));
 
-export const API_BASE_URL = String(
-  globalThis.electronAPI?.backendUrl || import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
-).replace(/\/+$/, "");
+export const API_BASE_URL = String(platform.backendUrl()).replace(/\/+$/, "");
 export const BACKEND_BOOT_RETRY_MS = positive(import.meta.env.VITE_BACKEND_RETRY_MS, 450);
 export const POLLING_INTERVALS = Object.freeze(
   Object.fromEntries(

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { translateSaved as t } from "../../../../i18n/runtime";
 import { Box, Card, Chip, Stack, Typography } from "../../../../theme/ui";
+import * as platform from "../../../../utils/platform";
 import { SongCoverArt } from "../../../Library/components";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import usePitchDetection from "../../hooks/usePitchDetection";
@@ -38,7 +39,7 @@ export default function KaraokePerformanceStage({
   const videoRef = useRef(null);
   const timerRef = useRef(null);
   const [switching, setSwitching] = useState(false);
-  const sceneVideo = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
+  const sceneVideo = platform.mediaUrl();
   const jump = useCallback(() => {
     const video = videoRef.current;
     if (video?.duration > 1)

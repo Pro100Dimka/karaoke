@@ -3,6 +3,7 @@ import { api } from "../../../api/client";
 import { isAmbiguousTransportError } from "../../../api/core";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
+import * as platform from "../../../utils/platform";
 
 const removeFromSet = (setter, id) =>
   setter((ids) => {
@@ -161,18 +162,13 @@ export default function useLibrarySongActions({
 
   const openSongFolder = useCallback(
     async (song) => {
-      if (!globalThis.electronAPI?.openSongFolder) {
-        await notify(tr("Открытие папки доступно только в установленном приложении."));
-        return;
-      }
       try {
-        const error = await globalThis.electronAPI.openSongFolder({
-          path: song.output_dir ?? "",
-          slug: song.slug ?? "",
-          title: song.title ?? "",
-          id: song.id ?? ""
-        });
-        if (error) await notify(error, tr("Не удалось открыть папку"));
+        const result = await platform.openSongFolder(song);
+        if (!result.supported) {
+          await notify(tr("Открытие папки доступно только в установленном приложении."));
+          return;
+        }
+        if (result.error) await notify(result.error, tr("Не удалось открыть папку"));
       } catch (error) {
         await notify(
           tr("Не удалось открыть папку: {0}", { 0: getErrorMessage(error) }),

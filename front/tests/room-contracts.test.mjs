@@ -139,6 +139,14 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.deepEqual(participants, []);
   handler({ type: "room-state", self: { id: "guest", role: "guest" }, participants: [] });
   assert.equal(room.host, false);
+  const playbackState = { type: "karaoke-player", action: "seek", songId: "song", position: 42 };
+  handler({ type: "room-state", self: { id: "guest", role: "guest" }, participants: [], playbackState });
+  const published = setters.setRoomCommand.mock.calls.at(-1)[0];
+  assert.deepEqual(published, { ...playbackState, __eventId: published.__eventId });
+  assert.equal(published.__eventId.startsWith("room-state-"), true);
+  setters.setRoomCommand.mockClear();
+  handler({ type: "room-state", self: { id: "self", role: "host" }, participants: [], playbackState });
+  assert.equal(setters.setRoomCommand.mock.calls.length, 0);
   handler({ type: "participant-joined", participant: { id: "b" } });
   handler({ type: "participant-joined", participant: null });
   handler({ type: "participant-updated", participant: { id: "b", speaking: true } });
@@ -161,6 +169,18 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.deepEqual(voice.removePeer.mock.calls.at(-1), ["b"]);
   handler({ type: "signal", fromId: "a", signal: {} });
   participantsRef.current = [{ id: "a", role: "host" }, { id: "guest", role: "guest" }];
+  // useKaraokeTransport reads __serverSentAt/__receivedServerAt off the
+  // published command to correct for delivery latency -- a live "sync" from
+  // the host must actually carry them through, not just an __eventId.
+  handler({
+    type: "sync",
+    fromId: "a",
+    sentAt: 555_000,
+    state: { type: "karaoke-player", action: "sync", songId: "song", position: 10 }
+  });
+  const synced = setters.setRoomCommand.mock.calls.at(-1)[0];
+  assert.equal(synced.__serverSentAt, 555_000);
+  assert.equal(typeof synced.__receivedServerAt, "number");
   ui = { effectsByParticipant: { old: { dry: 1 } } };
   handler({ type: "ui", fromId: "a", state: { radio: true, participantEffects: { echo: 1 } } });
   assert.equal(ui.__eventId.startsWith("ui-"), true);
@@ -220,6 +240,36 @@ test("room messages update participants, UI, voice and connection state", async 
     ...setters
   })({ type: "connection-closed" });
   assert.equal(onConnectionClosed.mock.calls.length, 1);
+
+  // The host leaving closes the whole room server-side (KaraokeRoom sends a
+  // "room-closed" message ahead of its close frame) -- guests get this
+  // specific reason instead of the generic "connection lost" text above.
+  handler({ type: "room-closed", reason: "host-left" });
+  assert.deepEqual(setters.setVoiceError.mock.calls.at(-1), [
+    translateSaved("Хост покинул комнату. Комната закрыта.")
+  ]);
+  assert.deepEqual(setters.setRoom.mock.calls.at(-1), [null]);
+  const cleanupCallsBeforeIntentional = setters.cleanupConnection.mock.calls.length;
+  intentionalDisconnectRef.current = true;
+  handler({ type: "room-closed", reason: "host-left" });
+  assert.equal(setters.cleanupConnection.mock.calls.length, cleanupCallsBeforeIntentional);
+  intentionalDisconnectRef.current = false;
+
+  const onRoomClosed = vi.fn();
+  createOnlineRoomMessageHandler({
+    id: "room",
+    client,
+    voice,
+    roomApi,
+    roomRef,
+    intentionalDisconnectRef,
+    pendingSongCommandRef,
+    onConnectionClosed: onRoomClosed,
+    ...setters
+  })({ type: "room-closed", reason: "host-left" });
+  assert.deepEqual(onRoomClosed.mock.calls.at(-1), [
+    translateSaved("Хост покинул комнату. Комната закрыта.")
+  ]);
 
   const rejectedVoice = {
     ...voice,

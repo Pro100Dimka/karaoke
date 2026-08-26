@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { Box } from "../../../theme/ui";
+import * as platform from "../../../utils/platform";
 import { playbackGain, youTubeEmbedUrl } from "../utils/data";
 
 function useTrack(songId, track) {
   const direct = api.getAudioTrackUrl(songId, track);
-  const desktop = globalThis.electronAPI?.isElectron === true;
+  const desktop = platform.isElectron();
   const [source, setSource] = useState(desktop ? direct : "");
   useEffect(() => {
     if (desktop) return setSource(direct);

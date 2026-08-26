@@ -23,6 +23,106 @@ def test_library_lock_and_owned_path_validation(monkeypatch, tmp_path):
     assert (song_service.resolve_source_path(current) == nested.resolve()) and (song_service.resolve_output_dir(current) == (root / 'song').resolve())
 
 
+def test_list_recently_updated_songs_orders_by_updated_at_and_respects_limit():
+    from datetime import UTC, datetime
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    import database
+
+    engine = create_engine("sqlite://")
+    database.Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    try:
+        for song_id, day in [("a", 1), ("b", 3), ("c", 2)]:
+            db.add(make_song(id=song_id, slug=song_id, updated_at=datetime(2026, 1, day, tzinfo=UTC)))
+        db.commit()
+
+        # Most recently updated first, not most recently created -- a song
+        # touched again by a reprocess must outrank one that's merely older.
+        assert [song.id for song in song_service.list_recently_updated_songs(db, limit=2)] == [
+            "b",
+            "c",
+        ]
+        assert [song.id for song in song_service.list_recently_updated_songs(db, limit=10)] == [
+            "b",
+            "c",
+            "a",
+        ]
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_check_duration_limit_rejects_songs_longer_than_the_configured_cap(monkeypatch, tmp_path):
+    import AI.audio
+
+    monkeypatch.setattr(song_service.config, "MAX_SONG_DURATION_SECONDS", 60)
+    source = tmp_path / "song.wav"
+    source.write_bytes(b"audio")
+
+    monkeypatch.setattr(AI.audio, "duration", Mock(return_value=30))
+    song_service._check_duration_limit(source)  # under the limit: no error
+
+    monkeypatch.setattr(AI.audio, "duration", Mock(return_value=90))
+    raises(ValueError, lambda: song_service._check_duration_limit(source), match="1-minute limit")
+
+    monkeypatch.setattr(AI.audio, "duration", Mock(side_effect=RuntimeError("not audio")))
+    song_service._check_duration_limit(source)  # unreadable file: leave rejection to the pipeline
+
+
+def test_is_done_matches_only_the_done_status():
+    import models
+
+    assert song_service.is_done(make_song(status=models.SongStatus.DONE)) is True
+    assert song_service.is_done(make_song(status=models.SongStatus.PROCESSING)) is False
+    assert song_service.is_done(make_song(status=models.SongStatus.ERROR)) is False
+
+
+def test_validate_status_transition_allows_the_documented_lifecycle():
+    import models
+
+    S = models.SongStatus
+    for current, requested in [
+        (None, S.PENDING),
+        (S.PENDING, S.QUEUED),
+        (S.QUEUED, S.QUEUED),
+        (S.QUEUED, S.PROCESSING),
+        (S.QUEUED, S.CANCELLED),
+        (S.PROCESSING, S.DONE),
+        (S.PROCESSING, S.ERROR),
+        (S.PROCESSING, S.CANCELLING),
+        (S.PROCESSING, S.CANCELLED),
+        (S.CANCELLING, S.CANCELLED),
+        (S.CANCELLING, S.ERROR),
+        (S.ERROR, S.QUEUED),
+        (S.CANCELLED, S.QUEUED),
+        (S.DONE, S.QUEUED),
+    ]:
+        song_service.validate_status_transition(current, requested)  # must not raise
+
+
+def test_validate_status_transition_rejects_impossible_jumps():
+    import pytest
+
+    import models
+
+    S = models.SongStatus
+    for current, requested in [
+        (None, S.PROCESSING),
+        (S.PENDING, S.DONE),
+        (S.DONE, S.PROCESSING),
+        (S.DONE, S.ERROR),
+        (S.CANCELLED, S.PROCESSING),
+        (S.ERROR, S.DONE),
+        (S.QUEUED, S.DONE),
+    ]:
+        with pytest.raises(song_service.InvalidStatusTransition) as info:
+            song_service.validate_status_transition(current, requested)
+        assert (info.value.current, info.value.requested) == (current, requested)
+
+
 def test_original_source_retired_detects_instrumental_takeover(monkeypatch, tmp_path):
     root = tmp_path / "library"
     root.mkdir()

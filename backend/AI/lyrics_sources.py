@@ -3,10 +3,19 @@ from __future__ import annotations
 import html
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+
+# Each individual request already has its own 8s socket timeout, but pisni.org.ua
+# lookups can chain up to 8 detail-page fetches after the search page -- on a
+# network that hangs (not fails fast) rather than being cleanly unreachable,
+# that chain alone could take over a minute before falling back to ASR. This
+# wall-clock budget bounds the whole lookup regardless of how many sources or
+# candidate links it walks through.
+LOOKUP_BUDGET_SECONDS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +94,7 @@ def _expand_notation(value: str) -> str:
     return "\n".join(output).strip()
 
 
-def _pisni(artist: str, track: str, query: str) -> LyricsDiscovery | None:
+def _pisni(artist: str, track: str, query: str, deadline: float) -> LyricsDiscovery | None:
     try:
         encoded = urllib.parse.quote_from_bytes(track.encode("cp1251"))
         page = _request(
@@ -93,6 +102,8 @@ def _pisni(artist: str, track: str, query: str) -> LyricsDiscovery | None:
         )
         links = dict.fromkeys(re.findall(r'href=["\'](/songs/\d+\.html)["\']', page, re.I))
         for link in list(links)[:8]:
+            if time.monotonic() >= deadline:
+                break
             detail = _request(f"https://www.pisni.org.ua{link}", "cp1251")
             title = re.search(r'<h1[^>]*>(.*?)</h1>', detail, re.I | re.S)
             performer = re.search(r'<a href=["\']/persons/[^"\']+["\'][^>]*>(.*?)</a>', detail, re.I | re.S)
@@ -116,6 +127,7 @@ def discover_lyrics(title: str | None, *_args, **_kwargs) -> LyricsDiscovery | N
     if not query:
         return None
     artist, track = _parts(query)
+    deadline = time.monotonic() + LOOKUP_BUDGET_SECONDS
     params = {"track_name": track, "artist_name": artist} if artist else {"q": query}
     url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(params)
     try:
@@ -131,4 +143,6 @@ def discover_lyrics(title: str | None, *_args, **_kwargs) -> LyricsDiscovery | N
         text = row.get("plainLyrics") or _plain(synced)
         if str(text).strip():
             return LyricsDiscovery(str(text).strip(), "LRCLIB", query, lines=_timed(synced))
-    return _pisni(artist, track, query)
+    if time.monotonic() >= deadline:
+        return None
+    return _pisni(artist, track, query, deadline)

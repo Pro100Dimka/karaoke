@@ -187,7 +187,7 @@ def _fresh_song(db: Session, song_id: str) -> models.Song:
 def _locked_done_song(db: Session, song_id: str) -> Iterator[models.Song]:
     with song_service.song_content_lock(song_id), song_service.library_write_lock():
         song = _fresh_song(db, song_id)
-        if song.status != models.SongStatus.DONE: raise ValueError("Song processing is not complete")
+        if not song_service.is_done(song): raise ValueError("Song processing is not complete")
         yield song
 
 
@@ -259,7 +259,12 @@ def build_package(song: models.Song, *, expected_revision: str | None = None) ->
         source = song_service.resolve_source_path(song)
         output_dir = song_service.resolve_output_dir(song)
         if not source.is_file() or not output_dir.is_dir(): raise ValueError("Song files are incomplete")
-        current_revision = compute_content_revision(song)
+        # Cached, not compute_content_revision() directly: the lock held for
+        # this whole method means nothing can change the signature before
+        # _manifest() below asks for the same revision again, so routing
+        # through the cache here lets that second call hit it instead of
+        # re-hashing every artifact a second time.
+        current_revision = content_revision(song)
         if expected_revision is not None and current_revision != expected_revision: raise ValueError("Song revision changed before package export")
 
         with tempfile.NamedTemporaryFile(
@@ -734,7 +739,8 @@ def _recover_import_journal(db: Session, journal_path: Path) -> None:
         _preserve_local_output(backup_dir, output_dir)
         if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
         journal_path.unlink(missing_ok=True)
-        revision_cache.invalidate(song)
+        assert song is not None  # noqa: S101 -- committed can only be True when song was found above
+        invalidate_content_revision(song)
         return
 
     if output_dir.exists(): shutil.rmtree(output_dir, ignore_errors=True)
@@ -807,7 +813,7 @@ def _publish_imported_package(
         if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
         shutil.rmtree(staging_root, ignore_errors=True)
         journal_path.unlink(missing_ok=True)
-        revision_cache.invalidate(saved)
+        invalidate_content_revision(saved)
         return saved
     except Exception:
         if db_committed:

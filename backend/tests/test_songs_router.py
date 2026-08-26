@@ -93,6 +93,16 @@ def test_queue_song_job_commits_and_compensates_all_worker_failures():
     database.rollback.assert_called()
 
 
+def test_queue_song_job_rejects_a_status_the_state_machine_forbids():
+    current, database, start = domain_song(status=models.SongStatus.PROCESSING), Mock(), Mock(return_value=True)
+    assert_http_status(
+        409, lambda: songs._queue_song_job(database, current, start, status=models.SongStatus.QUEUED)
+    )
+    assert current.status == models.SongStatus.PROCESSING  # rejected before any mutation
+    start.assert_not_called()
+    database.commit.assert_not_called()
+
+
 def test_add_song_streams_upload_maps_validation_and_cleans_temp(monkeypatch, tmp_path):
     monkeypatch.setattr(songs.config, "UPLOAD_TEMP_DIR", tmp_path)
     save = AsyncMock()

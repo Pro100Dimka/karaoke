@@ -139,7 +139,8 @@ export const ruMessages = {
   "settings.ai.cache_folder.tooltip": "Папка временных файлов",
   "settings.ai.models.title": "AI-модели",
   "settings.ai.models.ready": "Все модели установлены и проверены.",
-  "settings.ai.models.missing": "Отсутствуют или повреждены модели: {count}.",
+  "settings.ai.models.missing":
+    "Отсутствуют или повреждены модели: {count}. Для загрузки требуется подключение к интернету.",
   "settings.ai.models.downloading":
     "Загружаем: {model}. Уже готовые файлы повторно не скачиваются.",
   "settings.ai.models.preparing": "подготовка",

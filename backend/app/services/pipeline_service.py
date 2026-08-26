@@ -351,7 +351,20 @@ def _update_progress(
         if song is None: return
         if step_label is not None: song.progress_step = step_label
         if percent is not None: song.progress_percent = percent
-        if status is not None: song.status = status
+        if status is not None:
+            # Log-only, not enforced: this funnel runs deep inside job
+            # recovery/error handling, where refusing the write could leave a
+            # song stuck in a non-terminal status forever -- worse than an
+            # occasional transition this table doesn't yet recognize.
+            current_status = getattr(song, "status", None)
+            try:
+                song_service.validate_status_transition(current_status, status)
+            except song_service.InvalidStatusTransition:
+                logger.warning(
+                    "Unexpected song status transition: song_id=%s %s -> %s",
+                    song_id, current_status, status,
+                )
+            song.status = status
         if error_message is not None: song.error_message = error_message
         commit(db)
 
@@ -524,9 +537,9 @@ def _format_processing_error(exc: BaseException) -> str:
     return f"{error_type}: {message}" if message else error_type
 
 
-def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> None:
-    logger.error("Song processing failed: %s",
-                 _format_processing_error(exc), exc_info=exc)
+def _write_pipeline_error(song_id: str, capture: _ProgressCapture | None, exc: Exception) -> None:
+    logger.error("Song processing failed: song_id=%s error=%s",
+                 song_id, _format_processing_error(exc), exc_info=exc)
     if capture is None: return
     with contextlib.suppress(OSError, ValueError):
         capture.write(
@@ -658,6 +671,14 @@ def _reject_full_process_if_source_retired(song_id: str, *, reuse_vocals: bool) 
     return True
 
 
+def _log_processing_started(song_id: str, processing_mode: str, reuse_vocals: bool) -> None:
+    logger.info("Song processing started: song_id=%s mode=%s reuse_vocals=%s", song_id, processing_mode, reuse_vocals)
+
+
+def _log_processing_finished(song_id: str, started_at: float) -> None:
+    logger.info("Song processing finished: song_id=%s elapsed_sec=%.1f", song_id, time.monotonic() - started_at)
+
+
 def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
@@ -671,19 +692,18 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
     heartbeat_thread: threading.Thread | None = None
     slot_acquired = False
     pipeline_succeeded = False
+    started_at = time.monotonic()
     try:
         slot_acquired = _acquire_processing_slot(song_id)
         if not slot_acquired: return
-        _update_progress(
-            song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
+        _log_processing_started(song_id, processing_mode, reuse_vocals)
+        _update_progress(song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
         _begin_runtime_progress(song_id)
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
         _ensure_cover_extracted(source_path, out_dir)
-        _update_progress(
-            song_id, step_label="Проверка AI-моделей", percent=1.0)
-        model_install_service.ensure_ready_sync(
-            cancelled=lambda: _is_cancelled(song_id))
+        _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
+        model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
 
         runtime_plan = _configure_ai_runtime()
         capture.write(
@@ -700,7 +720,7 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
-            logger.warning("Song processing warning: %s", warning)
+            logger.warning("Song processing warning: song_id=%s warning=%s", song_id, warning)
         result_reports = getattr(result, "reports", ())
         _write_stage_reports(
             capture, result_reports if isinstance(result_reports, (list, tuple)) else ()
@@ -715,7 +735,7 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
             _update_progress(
                 song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
-        _write_pipeline_error(capture, exc)
+        _write_pipeline_error(song_id, capture, exc)
         _update_progress(song_id, status=models.SongStatus.ERROR,
                          error_message=_format_processing_error(exc))
         return
@@ -736,6 +756,7 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         _finalize_processed_job(song_id, out_dir)
     finally:
         if slot_acquired: _release_processing_slot(song_id)
+    _log_processing_finished(song_id, started_at)
 
 
 def _clear_generated_results(out_dir: Path) -> None:

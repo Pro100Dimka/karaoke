@@ -352,6 +352,7 @@ export default function useKaraokeTransport({
   const togglePlayRef = useLatestRef(togglePlay);
   const seekToRef = useLatestRef(seekTo);
   const stopRef = useLatestRef(stop);
+  const lastAppliedCommandIdRef = useRef(null);
   const roomCommand = onlineRoom?.roomCommand;
   useEffect(() => {
     if (
@@ -361,6 +362,11 @@ export default function useKaraokeTransport({
       !instrumentalRef.current
     )
       return;
+    // A duplicate WebSocket delivery (or a retry after a flaky connection)
+    // must not re-apply the same play/pause/seek a second time -- most
+    // visibly, a repeated "seek" would otherwise snap playback backward.
+    if (roomCommand.commandId && roomCommand.commandId === lastAppliedCommandIdRef.current) return;
+    lastAppliedCommandIdRef.current = roomCommand.commandId ?? lastAppliedCommandIdRef.current;
 
     const position = Number(roomCommand.position);
     const sentAt = Number(roomCommand.__serverSentAt);

@@ -126,10 +126,8 @@ test("mock API implements the complete development contract", async () => {
   deepEqual([await mockRequest("/recording/library"), [retainedRecording]], [await mockRequest("/analysis/id/run"), { queued: true }]);
   equal([(await mockRequest("/analysis/id")).accuracy_percent, 82]);
   deepEqual(
-    [await mockRequest("/analysis/id"), { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }],
-    [await mockRequest("/models/whisper"), []]
+    [await mockRequest("/analysis/id"), { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }]
   );
-  equal([(await mockRequest("/models/whisper/base/download")).ok, true]);
   deepEqual(
     [
       await mockRequest("/diagnostics/ai-models"),

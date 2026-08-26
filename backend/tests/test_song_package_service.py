@@ -80,6 +80,28 @@ def test_package_contains_only_strict_runtime_files(monkeypatch, tmp_path):
         package.unlink()
 
 
+def test_build_package_hashes_artifacts_only_once(monkeypatch, tmp_path):
+    # build_package() used to call compute_content_revision() directly for its
+    # own pre-check, bypassing the signature cache, and then _manifest() asked
+    # for the same revision again -- two full hash passes over every artifact
+    # for one export. It must now go through the cache so the second ask is
+    # a cache hit.
+    from unittest.mock import Mock
+
+    output = tmp_path / "song"
+    write_runtime(output)
+    patch_attrs(monkeypatch, song_package_service.config, CACHE_DIR=tmp_path, SONG_OUTPUT_DIR=tmp_path)
+
+    hashing = Mock(wraps=song_package_service.compute_content_revision)
+    monkeypatch.setattr(song_package_service, "compute_content_revision", hashing)
+
+    package = song_package_service.build_package(song(output))
+    try:
+        assert hashing.call_count == 1
+    finally:
+        package.unlink()
+
+
 def test_package_preserves_a_source_distinct_from_the_instrumental(monkeypatch, tmp_path):
     output = tmp_path / "song"
     write_runtime(output)

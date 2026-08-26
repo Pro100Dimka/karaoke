@@ -8,6 +8,25 @@ export const TRANSFER_LIMITS = Object.freeze({
   message: 16 * 1024,
   pendingWriteBytes: 512 * 1024
 });
+// The single source of truth for every transfer progress stage this project
+// emits. Sender and receiver each track their own local view of a transfer
+// (there is no one shared authoritative status the way song.status is one
+// row in a database), so this is a canonical vocabulary rather than a
+// validated state machine -- but every emitTransferProgress() call site uses
+// one of these instead of an ad hoc string literal, and COMPLETE/CANCELLED/
+// ERROR are the only terminal ones.
+export const TRANSFER_STAGES = Object.freeze({
+  WAITING: "waiting",
+  SENDING: "sending",
+  RECEIVING: "receiving",
+  IMPORTING: "importing",
+  COMPLETE: "complete",
+  CANCELLED: "cancelled",
+  ERROR: "error"
+});
+export const TERMINAL_TRANSFER_STAGES = Object.freeze(
+  new Set([TRANSFER_STAGES.COMPLETE, TRANSFER_STAGES.CANCELLED, TRANSFER_STAGES.ERROR])
+);
 export const TRANSFER_TIMEOUTS = Object.freeze({
   stall: 30_000,
   admission: 15_000,

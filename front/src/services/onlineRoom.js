@@ -1,6 +1,9 @@
 import { translateSaved as translate } from "../i18n/runtime";
 
 export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
+// Keep in sync with ROOM_PROTOCOL_VERSION in cloudflare/src/worker.js -- bump
+// both together only when the message schema itself changes incompatibly.
+export const ROOM_PROTOCOL_VERSION = 1;
 const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 20_000, signal: 64 * 1024 };
 const bytes = (value) => new TextEncoder().encode(value).byteLength;
 const hex = (values) => [...values].map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -21,6 +24,36 @@ export function createHostToken(crypto = globalThis.crypto) {
   if (crypto?.randomUUID) return `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
   if (crypto?.getRandomValues) return hex(crypto.getRandomValues(new Uint8Array(32)));
   throw new Error(translate("Безопасный генератор случайных чисел недоступен"));
+}
+
+const GUEST_SESSION_STORAGE_KEY = "advoice-online-room-session-id";
+
+// A brief network drop shouldn't make a guest look like a brand new person
+// to everyone else in the room -- the worker reclaims their previous
+// participant id (and therefore their volume/mute/effect settings in every
+// other client) for a reconnect carrying the same session id. sessionStorage
+// keeps this stable across a reconnect within the same running app/tab, but
+// starts fresh after a full app restart, matching the room-recovery
+// contract: membership does not silently resume after the app relaunches.
+export function getOrCreateGuestSessionId(
+  storage = globalThis.sessionStorage,
+  crypto = globalThis.crypto
+) {
+  try {
+    const existing = storage?.getItem(GUEST_SESSION_STORAGE_KEY);
+    if (existing) return existing;
+    const created = crypto?.randomUUID
+      ? crypto.randomUUID()
+      : crypto?.getRandomValues
+        ? hex(crypto.getRandomValues(new Uint8Array(16)))
+        : "";
+    if (created) storage?.setItem(GUEST_SESSION_STORAGE_KEY, created);
+    return created;
+  } catch {
+    // sessionStorage may be unavailable (privacy mode, restricted context);
+    // reconnect identity is a nice-to-have, not required for the room to work.
+    return crypto?.randomUUID ? crypto.randomUUID() : "";
+  }
 }
 
 export const normalizeRoomId = (value) =>
@@ -111,11 +144,15 @@ export class OnlineRoomClient {
       return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
     const query = new URLSearchParams({
       name: participantName(name),
-      role: host ? "host" : "guest"
+      role: host ? "host" : "guest",
+      v: String(ROOM_PROTOCOL_VERSION)
     });
     if (host) {
       query.set("create", "1");
       query.set("hostToken", String(hostToken));
+    } else {
+      const sessionId = getOrCreateGuestSessionId();
+      if (sessionId) query.set("sessionId", sessionId);
     }
     let socket;
     try {
@@ -176,6 +213,11 @@ export class OnlineRoomClient {
       socket.onerror = () => {};
       socket.onclose = (event) => {
         const wasCurrent = current();
+        console.error("Room WebSocket closed", {
+          code: event?.code,
+          reason: event?.reason || null,
+          wasClean: event?.wasClean ?? null
+        });
         if (wasCurrent) {
           this.socket = null;
           this.stopPing();

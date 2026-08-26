@@ -164,6 +164,17 @@ describe("online room provider", () => {
     });
   });
 
+  test("shows a specific reason when the room closes (e.g. the host left)", async () => {
+    const { result } = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => result.current.createRoom("Alice"));
+    const { onConnectionClosed } = mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
+    await act(async () => onConnectionClosed("Хост покинул комнату. Комната закрыта."));
+    await waitFor(() => {
+      expect(result.current.room).toBeNull();
+      expect(result.current.voiceError).toBe("Хост покинул комнату. Комната закрыта.");
+    });
+  });
+
   test("creates a room, starts voice and exposes synchronization actions", async () => {
     const { result } = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => result.current.createRoom("Alice"));

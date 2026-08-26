@@ -69,6 +69,8 @@ class RecordingSession:
             for name in ("reverb", "echo", "delay")
         }
         self.playback_offset_sec = max(0.0, playback_offset_sec)
+        self._max_frames = int(round(sample_rate * config.MAX_RECORDING_DURATION_SECONDS))
+        self.limit_reached = threading.Event()
         # Bounded so a stalled/dead writer can't make the audio callback pile up
         # unbounded RAM forever; ~2000 blocks is several seconds of headroom at
         # the small blocksizes this session uses, generous enough to absorb a
@@ -142,7 +144,16 @@ class RecordingSession:
                     if chunk is self._WRITER_STOP: break
                     output.write(chunk)
                     self._frames_written += len(chunk)
+                    if self._frames_written >= self._max_frames:
+                        self.limit_reached.set()
+                        break
         except BaseException as exc:  # Store library/thread errors for the API thread.
+            logger.error(
+                "Recording writer failed: session_id=%s song_id=%s frames_written=%d "
+                "queue_size=%d path=%s error=%s",
+                self.session_id, self.song_id, self._frames_written,
+                self._queue.qsize(), self._temporary_path, exc,
+            )
             self._writer_error = exc
             self._writer_ready.set()
 
@@ -214,6 +225,10 @@ class RecordingSession:
             self._stop_writer()
 
         if stream_error is not None:
+            logger.error(
+                "Recording device failed to stop: session_id=%s song_id=%s error=%s",
+                self.session_id, self.song_id, stream_error,
+            )
             self._cleanup_temporary_file()
             raise RuntimeError(f"Could not stop recording stream: {stream_error}") from stream_error
         if self._writer_error is not None:
@@ -324,7 +339,27 @@ def start_recording(
         detail = errors[-1] if errors else "no compatible capture mode"
         raise RuntimeError(f"Could not start recording stream: {detail}")
     with _sessions_lock: _sessions[session_id] = session
+    threading.Thread(
+        target=_finalize_on_duration_limit,
+        args=(session_id, session),
+        daemon=True,
+    ).start()
     return session_id
+
+
+def _finalize_on_duration_limit(session_id: str, session: RecordingSession) -> None:
+    # Test doubles stand in for RecordingSession with a plain Mock, whose
+    # .limit_reached is an auto-created Mock rather than a real Event --
+    # checking the type (instead of isinstance(session, RecordingSession),
+    # which breaks once tests monkeypatch that name to a factory) keeps this
+    # watcher a no-op against anything that isn't a real recording session.
+    if not isinstance(session.limit_reached, threading.Event): return
+    session.limit_reached.wait()
+    with _sessions_lock:
+        still_active = _sessions.get(session_id) is session
+    if not still_active: return  # user already stopped it themselves
+    with contextlib.suppress(KeyError, ValueError, RuntimeError, OSError):
+        stop_recording(session_id)
 
 
 def _require_session(session_id: str) -> RecordingSession:

@@ -1,3 +1,5 @@
+import * as platform from "../../utils/platform";
+
 const BINDINGS = {
   app: ({ app }, name) => ({
     value: app.form[name],
@@ -30,7 +32,6 @@ const resolveOptions = (settings, definition) => {
 export const bindField = (settings, definition) => {
   const { source, optionsKey: _, percent, ...field } = definition;
   const binding = BINDINGS[source](settings, definition.name);
-  const selectFolder = globalThis.electronAPI?.selectFolder;
   return {
     ...field,
     options: resolveOptions(settings, definition),
@@ -39,8 +40,8 @@ export const bindField = (settings, definition) => {
     setValue: (_, value) => binding.change(value),
     saveValue: binding.save ? (_, value) => binding.save(value) : undefined,
     pick:
-      definition.type === "folder" && typeof selectFolder === "function"
-        ? async (_, value) => selectFolder(value || undefined)
+      definition.type === "folder" && platform.canPickFolder()
+        ? async (_, value) => platform.pickFolder(value || undefined)
         : undefined
   };
 };

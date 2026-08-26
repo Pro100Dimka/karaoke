@@ -10,6 +10,21 @@ const MAX_LOG_BYTES = 32 * 1024;
 const LOG_RATE_WINDOW_MS = 60_000;
 const LOG_RATE_LIMIT = 30;
 const MAX_ROOM_SONGS = 500;
+// How long a guest's participant id (and therefore their volume/mute/effect
+// settings in every other client's UI, which are keyed by that id) is held
+// for them to reclaim on a reconnect -- a brief network drop shouldn't make
+// them look like a brand new person to everyone else. The host has no such
+// grace period: per the chosen host-lifecycle contract, the room closes the
+// moment the host disconnects (see webSocketClose), so there is nothing to
+// reclaim.
+const GUEST_RECONNECT_GRACE_MS = 45_000;
+// Bumped only when the message schema itself changes incompatibly (a field
+// renamed/removed/retyped in a message the other side must understand) --
+// not on every worker/frontend release. Without this, an old frontend build
+// talking to a newer worker (or vice versa) after such a change would just
+// silently drop/misinterpret messages instead of failing the connection with
+// an explicit reason.
+export const ROOM_PROTOCOL_VERSION = 1;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -35,10 +50,32 @@ function participantFromSocket(socket) {
   return socket.deserializeAttachment();
 }
 
+// recentGuests is sessionToken -> { id, disconnectedAt }, for guests only.
+// Exported as plain functions over a Map (rather than KaraokeRoom methods)
+// so the grace-window/one-time-consumption logic is testable without
+// standing up the Durable Object's WebSocket/storage runtime.
+export function pruneRecentGuests(recentGuests, now = Date.now()) {
+  const cutoff = now - GUEST_RECONNECT_GRACE_MS;
+  for (const [token, entry] of recentGuests) {
+    if (entry.disconnectedAt < cutoff) recentGuests.delete(token);
+  }
+}
+
+export function reclaimGuestId(recentGuests, sessionToken, now = Date.now()) {
+  pruneRecentGuests(recentGuests, now);
+  if (!sessionToken) return null;
+  const entry = recentGuests.get(sessionToken);
+  if (!entry) return null;
+  recentGuests.delete(sessionToken);
+  return entry.id;
+}
+
 export class KaraokeRoom {
   constructor(ctx) {
     this.ctx = ctx;
     this.rate = new Map();
+    this.recentGuests = new Map();
+    this.playbackState = null;
   }
 
   reject(socket, message = "Некорректное сообщение комнаты.") {
@@ -84,6 +121,10 @@ export class KaraokeRoom {
       return json({ error: "WebSocket upgrade required" }, 426);
     }
     const url = new URL(request.url);
+    const clientVersion = Number.parseInt(url.searchParams.get("v") || "", 10);
+    if (clientVersion !== ROOM_PROTOCOL_VERSION) {
+      return json({ error: "Unsupported room protocol version", expected: ROOM_PROTOCOL_VERSION }, 400);
+    }
     const requestedRole = url.searchParams.get("role") === "host" ? "host" : "guest";
     const currentParticipants = this.participants();
     if (currentParticipants.length >= MAX_PARTICIPANTS) return json({ error: "Room is full" }, 429);
@@ -99,21 +140,56 @@ export class KaraokeRoom {
       if (currentParticipants.some((participant) => participant.role === "host")) return json({ error: "Host is already connected" }, 409);
       role = "host";
     }
-    const participant = {
-      id: crypto.randomUUID(),
+    // A guest that reconnects within the grace window (see
+    // GUEST_RECONNECT_GRACE_MS) reclaims their previous id instead of
+    // getting a fresh one, so the volume/mute/effect settings every other
+    // client already has recorded for that id keep applying -- otherwise
+    // reconnecting looked exactly like a brand new person joining.
+    const sessionToken = String(url.searchParams.get("sessionId") || "").slice(0, 128);
+    const reclaimedId = role === "guest" ? reclaimGuestId(this.recentGuests, sessionToken) : null;
+    const publicParticipant = {
+      id: reclaimedId || crypto.randomUUID(),
       name: normalizeName(url.searchParams.get("name")),
       role,
       micMuted: false,
     };
+    // sessionToken is kept in the socket's own attachment for this server to
+    // recognize a future reconnect -- it must never be broadcast to other
+    // participants, unlike the rest of this object.
+    const participant = { ...publicParticipant, sessionToken: role === "guest" ? sessionToken : "" };
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.serializeAttachment(participant);
     this.ctx.acceptWebSocket(server);
-    this.send(server, "room-state", { self: participant, participants: this.participants() });
-    this.broadcast("participant-joined", { participant }, participant.id);
+    this.send(server, "room-state", {
+      self: publicParticipant,
+      participants: this.participants(),
+      ...(this.playbackState
+        ? { playbackState: this.playbackState.state, playbackSentAt: this.playbackState.sentAt }
+        : {}),
+    });
+    this.broadcast("participant-joined", { participant: publicParticipant }, publicParticipant.id);
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  // Permission matrix this method enforces (server-side -- the frontend UI
+  // hiding a button is a courtesy, not the actual guard):
+  //
+  // | Action                                    | Host | Guest         |
+  // |-------------------------------------------|------|---------------|
+  // | select song / play / pause / seek         | yes  | no (rejected) |
+  // | tempo/key/radio/search filters (ui state) | yes  | no (rejected) |
+  // | own participant audio effects             | yes  | yes           |
+  // | own shared library (songs)                | yes  | yes           |
+  // | song-request / song-ready handshake       | n/a  | yes           |
+  // | mic mute presence                         | yes  | yes           |
+  // | signal (WebRTC SDP/ICE relay)              | yes  | yes           |
+  // | chat                                       | yes  | yes           |
+  //
+  // Participant volume is never sent here at all -- it is a purely local
+  // per-listener preference (see front/src/contexts/hooks/useOnlineRoomAudio.js)
+  // with no room-wide meaning. Kicking a participant is not a feature this
+  // product has; there is nothing to authorize.
   async webSocketMessage(socket, rawMessage) {
     const text = typeof rawMessage === "string" ? rawMessage : new TextDecoder().decode(rawMessage);
     if (new TextEncoder().encode(text).byteLength > MAX_MESSAGE_BYTES) { this.reject(socket, "Message too large"); return; }
@@ -170,7 +246,13 @@ export class KaraokeRoom {
       const state = message.state;
       if (!state || typeof state !== "object" || Array.isArray(state) || new TextEncoder().encode(JSON.stringify(state)).byteLength > MAX_STATE_BYTES) { this.reject(socket); return; }
       if (sender.role === "host") {
-        this.broadcast("sync", { state, sentAt: Date.now(), fromId: sender.id }, sender.id);
+        // Remembered so a guest who (re)joins after this was sent -- not
+        // live for it, e.g. a brief network drop -- can be caught up via
+        // room-state instead of staying on stale playback until the host's
+        // next command.
+        const sentAt = Date.now();
+        if (state.type === "karaoke-player") this.playbackState = { state, sentAt };
+        this.broadcast("sync", { state, sentAt, fromId: sender.id }, sender.id);
         return;
       }
       if (
@@ -215,18 +297,36 @@ export class KaraokeRoom {
     const participant = participantFromSocket(socket);
     if (participant) {
       this.rate.delete(participant.id);
-      // wasHost lets guests distinguish "the host left" from "some guest
-      // left" — additive field, existing participant-left consumers that
-      // don't look at it are unaffected. No re-election/room-closure policy
-      // is implemented server-side yet: the room keeps running headless
-      // (host-only sync stops broadcasting) until the host reconnects.
-      this.broadcast("participant-left", { participantId: participant.id, wasHost: participant.role === "host" });
+      if (participant.role === "host") {
+        // The room closes the moment its host leaves rather than persisting
+        // in an undefined "headless" state (no re-election, no host-only
+        // sync) until/unless the same host token reconnects. Every
+        // remaining guest gets an explicit reason as a message first (so it
+        // arrives ahead of the close frame on the same socket), then their
+        // connection is closed server-side so their own disconnect/cleanup
+        // path runs immediately instead of sitting in a hostless room.
+        this.broadcast("room-closed", { reason: "host-left" });
+        for (const remaining of this.ctx.getWebSockets()) {
+          try {
+            remaining.close(4000, "Host left the room");
+          } catch {
+            // Already closing/closed.
+          }
+        }
+        await this.ctx.storage.delete("hostToken");
+      } else {
+        if (participant.sessionToken) {
+          this.recentGuests.set(participant.sessionToken, {
+            id: participant.id,
+            disconnectedAt: Date.now(),
+          });
+        }
+        this.broadcast("participant-left", { participantId: participant.id });
+      }
     }
-    if (this.ctx.getWebSockets().length === 0) await this.ctx.storage.delete("hostToken");
     // The edge already closes this endpoint before invoking the callback.
-    // Calling close() again can prevent the remaining sockets from receiving
-    // the participant-left event.
-
+    // Calling close() again on THIS socket can prevent the remaining
+    // sockets from receiving the broadcasts above.
   }
 }
 

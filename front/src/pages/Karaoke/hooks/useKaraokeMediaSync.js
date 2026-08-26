@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { playbackGain } from "../utils/data";
-import { getSecondaryMediaPosition, shouldSyncMedia } from "../utils/transport";
+import {
+  classifyDrift,
+  driftCorrectedRate,
+  getSecondaryMediaPosition,
+  normalizePlaybackRate
+} from "../utils/transport";
 
 const YOUTUBE_NO_COOKIE_ORIGIN = "https://www.youtube-nocookie.com";
 // The rAF loop below runs at ~60fps to keep currentTimeRef and the melody
@@ -61,19 +66,28 @@ export default function useKaraokeMediaSync({
 
   const syncSecondaryMedia = useCallback(
     (position, force = false) => {
+      const baseRate = normalizePlaybackRate(speed);
       [vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
         if (!Number.isFinite(media.duration) || media.duration <= 0) return;
-        if (force || shouldSyncMedia(media.currentTime, position)) {
-          try {
-            media.currentTime = getSecondaryMediaPosition(position, media.duration);
-          } catch {
-            // Media may become unavailable while sources are being replaced.
+        const target = getSecondaryMediaPosition(position, media.duration);
+        const classification = force ? "hard" : classifyDrift(media.currentTime - target);
+        try {
+          if (classification === "hard") {
+            media.currentTime = target;
+            media.playbackRate = baseRate;
+          } else if (classification === "none") {
+            media.playbackRate = baseRate;
+          } else {
+            const drift = media.currentTime - target;
+            media.playbackRate = driftCorrectedRate(baseRate, drift, classification);
           }
+        } catch {
+          // Media may become unavailable while sources are being replaced.
         }
       });
       if (force) sendYouTubeCommand("seekTo", [position, true]);
     },
-    [sendYouTubeCommand, videoRef, vocalsRef]
+    [sendYouTubeCommand, speed, videoRef, vocalsRef]
   );
 
   useEffect(() => {
@@ -184,10 +198,29 @@ export default function useKaraokeMediaSync({
     };
 
     if (typeof globalThis.requestAnimationFrame !== "function") return undefined;
+    // Backgrounded/minimized tabs throttle rAF (sometimes to ~1fps or less),
+    // so the vocals/video followers can drift well past the instrumental
+    // master clock while hidden -- the master itself keeps accurate time
+    // since browsers don't throttle audio playback the same way. Force an
+    // immediate resync the moment the tab is visible again instead of
+    // waiting for the next (possibly still-throttled) natural tick.
+    const handleVisibilityChange = () => {
+      if (globalThis.document?.visibilityState !== "visible") return;
+      const position = instrumentalRef.current?.currentTime;
+      const numericPosition = Number(position);
+      if (!Number.isFinite(numericPosition) || numericPosition < 0) return;
+      currentTimeRef.current = numericPosition;
+      setCurrentTime(numericPosition);
+      lastReactSyncRef.current = globalThis.performance?.now?.() ?? Date.now();
+      syncSecondaryMedia(numericPosition, true);
+      lastSecondarySyncRef.current = lastReactSyncRef.current;
+    };
+    globalThis.document?.addEventListener?.("visibilitychange", handleVisibilityChange);
     updatePosition();
     return () => {
       active = false;
       if (animationFrameId != null) globalThis.cancelAnimationFrame(animationFrameId);
+      globalThis.document?.removeEventListener?.("visibilitychange", handleVisibilityChange);
     };
   }, [
     currentTimeRef,

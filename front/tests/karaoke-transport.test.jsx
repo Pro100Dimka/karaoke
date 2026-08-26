@@ -94,7 +94,7 @@ describe("karaoke transport", () => {
     verify([
       props.onlineRoom.syncCommand,
       "toHaveBeenCalledWith",
-      { type: "karaoke-player", action: "pause", songId: "song", position: 4 }
+      expect.objectContaining({ type: "karaoke-player", action: "pause", songId: "song", position: 4 })
     ]);
   });
   test("pauses without touching the recording API when no session exists", async () => {
@@ -201,7 +201,7 @@ describe("karaoke transport", () => {
     verify([
       props.onlineRoom.syncCommand,
       "toHaveBeenLastCalledWith",
-      { type: "karaoke-player", action: "seek", songId: "song", position: 100 }
+      expect.objectContaining({ type: "karaoke-player", action: "seek", songId: "song", position: 100 })
     ]);
     act(() => result.current.skip(-10));
     expect(props.instrumentalRef.current.currentTime).toBe(0);
@@ -228,7 +228,11 @@ describe("karaoke transport", () => {
     const props = createProps();
     const hook = renderHook(() => useKaraokeTransport(props));
     await expect(hook.result.current.stop()).resolves.toBe(true);
-    verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", { type: "karaoke-player", action: "stop", songId: "song", position: 0 }]);
+    verify([
+      props.onlineRoom.syncCommand,
+      "toHaveBeenCalledWith",
+      expect.objectContaining({ type: "karaoke-player", action: "stop", songId: "song", position: 0 })
+    ]);
   });
   test("keeps a failed recording pending without blocking stop or exit", async () => {
     const props = createProps({ recordingSessionId: "existing" });
@@ -278,6 +282,62 @@ describe("karaoke transport", () => {
       }
     });
     await waitFor(() => expect(props.setIsPlaying).toHaveBeenCalledWith(true));
+  });
+  test("ignores a duplicate delivery of an already-applied room command", async () => {
+    const props = createProps();
+    const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: { type: "karaoke-player", songId: "song", action: "seek", position: 12, commandId: "cmd-1" }
+      }
+    });
+    expect(props.setCurrentTime).toHaveBeenCalledWith(12);
+    props.setCurrentTime.mockClear();
+
+    // Same commandId, a fresh object (a retried send or duplicate WS
+    // delivery would not reuse the same reference either) -- must not seek
+    // again.
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: { type: "karaoke-player", songId: "song", action: "seek", position: 12, commandId: "cmd-1" }
+      }
+    });
+    expect(props.setCurrentTime).not.toHaveBeenCalled();
+
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: { type: "karaoke-player", songId: "song", action: "seek", position: 30, commandId: "cmd-2" }
+      }
+    });
+    expect(props.setCurrentTime).toHaveBeenCalledWith(30);
+  });
+  test("corrects a synced position for measured delivery latency", async () => {
+    const props = createProps();
+    const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
+    const now = Date.now();
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: {
+          type: "karaoke-player",
+          songId: "song",
+          action: "sync",
+          position: 10,
+          commandId: "cmd-sync",
+          __serverSentAt: now - 2000,
+          __receivedServerAt: now
+        }
+      }
+    });
+    // 10s position + ~2s measured delivery delay = seek to ~12s, not the raw 10s.
+    expect(props.instrumentalRef.current.currentTime).toBeCloseTo(12, 0);
   });
   test("finishes an active session when the song changes or unmounts", async () => {
     const props = createProps({ recordingSessionId: "existing" });

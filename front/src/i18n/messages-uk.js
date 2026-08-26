@@ -139,7 +139,8 @@ export const ukMessages = {
   "settings.ai.cache_folder.tooltip": "Папка тимчасових файлів",
   "settings.ai.models.title": "AI-моделі",
   "settings.ai.models.ready": "Усі моделі встановлено та перевірено.",
-  "settings.ai.models.missing": "Відсутні або пошкоджені моделі: {count}.",
+  "settings.ai.models.missing":
+    "Відсутні або пошкоджені моделі: {count}. Для завантаження потрібне підключення до інтернету.",
   "settings.ai.models.downloading":
     "Завантажуємо: {model}. Уже готові файли не завантажуються повторно.",
   "settings.ai.models.preparing": "підготовка",

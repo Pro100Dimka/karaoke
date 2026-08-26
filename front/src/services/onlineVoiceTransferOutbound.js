@@ -4,6 +4,7 @@ import {
   cancelOutboundTransferById,
   sendTransferStatus,
   TRANSFER_LIMITS,
+  TRANSFER_STAGES,
   TRANSFER_TIMEOUTS,
   wait,
   waitAbortable
@@ -107,7 +108,7 @@ async function reserveCredit(mesh, transferId, bytes) {
 async function streamFile(mesh, transfer, blob, metadata, signal) {
   const { active, channel, lifecycle, participantId, transferId } = transfer;
   const cancelled = () => isCancelled(mesh, channel, lifecycle, active, signal);
-  mesh.emitTransferProgress(participantId, "sending", 0, metadata);
+  mesh.emitTransferProgress(participantId, TRANSFER_STAGES.SENDING, 0, metadata);
   const chunkSize = 32 * 1024;
   let lastProgressAt = Date.now();
   for (let offset = 0; offset < blob.size; offset += chunkSize) {
@@ -129,7 +130,7 @@ async function streamFile(mesh, transfer, blob, metadata, signal) {
     lastProgressAt = Date.now();
     mesh.emitTransferProgress(
       participantId,
-      "sending",
+      TRANSFER_STAGES.SENDING,
       Math.min(99, Math.floor((Math.min(offset + chunkSize, blob.size) / blob.size) * 100)),
       metadata
     );
@@ -225,7 +226,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     );
     channel.send(JSON.stringify({ type: "file-end", transferId }));
     await confirmation;
-    mesh.emitTransferProgress(participantId, "complete", 100, metadata);
+    mesh.emitTransferProgress(participantId, TRANSFER_STAGES.COMPLETE, 100, metadata);
   } finally {
     admission?.catch(() => {});
     confirmation?.catch(() => {});

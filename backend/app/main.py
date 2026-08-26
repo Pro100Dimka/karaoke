@@ -7,15 +7,18 @@
 
 import asyncio
 import hmac
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import config
 from AI import service as ai_service
+from app.api.correlation import get_current, new_id, set_current
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
 from app.services import (
     audio_service,
@@ -26,6 +29,8 @@ from app.services import (
     storage_migration,
 )
 from database import init_db
+
+logger = logging.getLogger(__name__)
 
 _BENIGN_WINDOWS_DISCONNECTS = {64, 109, 232, 10053, 10054}
 
@@ -128,6 +133,35 @@ async def require_launch_token(request: Request, call_next):
         supplied = request.headers.get("X-ADVoice-Token", "")
         if not supplied or not hmac.compare_digest(supplied, _API_TOKEN): return JSONResponse({"detail": "Invalid local API token"}, status_code=403)
     return await call_next(request)
+
+
+@app.middleware("http")
+async def attach_correlation_id(request: Request, call_next):
+    """Tag this request so its error responses and log lines share one id.
+
+    Registered after require_launch_token, so it wraps that middleware too
+    and every response -- including a rejected-token 403 -- carries the id.
+    """
+    correlation_id = request.headers.get("X-Request-Id") or new_id()
+    set_current(correlation_id)
+    response = await call_next(request)
+    response.headers["X-Request-Id"] = correlation_id
+    return response
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    correlation_id = get_current() or "-"
+    logger.error(
+        "HTTP %s on %s %s: %s (request_id=%s)",
+        exc.status_code, request.method, request.url.path, exc.detail, correlation_id,
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "correlationId": correlation_id},
+        headers=exc.headers,
+    )
+
 
 app.include_router(songs.router)
 app.include_router(player.router)

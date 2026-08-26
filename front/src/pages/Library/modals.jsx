@@ -28,6 +28,7 @@ import {
   TextField,
   Typography
 } from "../../theme/ui";
+import * as platform from "../../utils/platform";
 import { ProcessingSignal } from "./components";
 import useSongCover from "./hooks/useSongCover";
 import { getProcessingModeOptions } from "./processing-modes";
@@ -301,10 +302,7 @@ export function ProcessingModal({
               <Typography variant="body2" tone="muted">
                 {failure.hint}
               </Typography>
-              <Button
-                variant="outlined"
-                onClick={() => globalThis.electronAPI?.openApplicationLog?.()}
-              >
+              <Button variant="outlined" onClick={() => platform.openApplicationLog()}>
                 {tr("Открыть журнал выполнения")}
               </Button>
             </Stack>

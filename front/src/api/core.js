@@ -1,5 +1,6 @@
 import { translateSaved } from "../i18n/runtime";
 import { API_BASE_URL } from "../runtime-config";
+import * as platform from "../utils/platform";
 /* eslint-disable import/extensions */
 // eslint-disable-next-line import/extensions
 import { MOCK_SILENT_AUDIO_URL } from "./mock/media";
@@ -54,7 +55,7 @@ function buildRequestOptions(options = {}) {
   const FormDataCtor = globalThis.FormData;
   const isFormData = typeof FormDataCtor === "function" && body instanceof FormDataCtor;
   const normalizedHeaders = normalizeHeaders(headers);
-  const apiToken = globalThis.electronAPI?.apiToken || import.meta.env.VITE_API_TOKEN;
+  const apiToken = platform.apiToken();
   if (isFormData || body == null) {
     const nextHeaders = normalizedHeaders || {};
     if (apiToken) nextHeaders["X-ADVoice-Token"] = apiToken;

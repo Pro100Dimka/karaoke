@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { Waveform } from "../../../theme/ui";
+import * as platform from "../../../utils/platform";
 
 export default function WaveformTimeline({ songId, value, duration, onChange }) {
-  const token = globalThis.electronAPI?.apiToken || import.meta.env.VITE_API_TOKEN;
+  const token = platform.apiToken();
   const fetchParams = useMemo(
     () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
     [token]

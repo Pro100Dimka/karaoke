@@ -6,11 +6,11 @@ import "./index.css";
 import { queryClient } from "./query-client";
 import { installGlobalErrorReporting } from "./utils/error-reporter";
 import { applyPerformanceProfile } from "./utils/performance-profile";
+import * as platform from "./utils/platform";
 import { getSavedTheme, saveTheme } from "./utils/theme";
 
-document.documentElement.dataset.theme = window.electronAPI?.initialTheme
-  ? saveTheme(window.electronAPI.initialTheme)
-  : getSavedTheme();
+const electronTheme = platform.initialTheme();
+document.documentElement.dataset.theme = electronTheme ? saveTheme(electronTheme) : getSavedTheme();
 applyPerformanceProfile(window);
 installGlobalErrorReporting();
 ReactDOM.createRoot(document.getElementById("root")).render(

@@ -52,10 +52,17 @@ export default function useOnlineRoomAudio({
 
   const removeRemoteAudio = useCallback(
     (participantId) => {
-      remoteEffectVersionsRef.current.set(
-        participantId,
-        (remoteEffectVersionsRef.current.get(participantId) || 0) + 1
-      );
+      // Deleting (rather than just bumping) still invalidates any in-flight
+      // applyParticipantEffects activation for this participant -- it reads
+      // undefined back, which never equals a real (>=1) effectVersion, so a
+      // stale activation still correctly closes its context instead of
+      // attaching. Participant ids are fresh crypto.randomUUID()s per
+      // connection (see cloudflare/src/worker.js), never reused, so a
+      // future join can't collide with a version number left behind here.
+      // OnlineRoomProvider mounts once for the whole app session, so
+      // without this the map only ever grew, one entry per participant who
+      // ever passed through any room, for the process's entire lifetime.
+      remoteEffectVersionsRef.current.delete(participantId);
       stopSpeakingMeter(participantId);
       const effectGraph = remoteEffectsRef.current.get(participantId);
       remoteEffectsRef.current.delete(participantId);
