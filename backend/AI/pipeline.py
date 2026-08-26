@@ -238,7 +238,9 @@ class KaraokePipeline:
             # global VAD can merge repeated adjacent lines and collapse one of
             # them to a fraction of a second. The VAD repair remains valuable
             # for un-timed whole-song/ASR alignment only.
-            if not timed_lines:
+            if not timed_lines and getattr(
+                self.engines.aligner, "needs_voice_anchoring", True
+            ):
                 words = anchor_words_to_voice(
                     words, voice_activity_intervals(vocals), duration(vocals)
                 )
@@ -310,7 +312,9 @@ class KaraokePipeline:
                 words = self._align(vocals, text, request.language, [], timed_lines)
             finally:
                 self._release_engines(self.engines.transcriber, self.engines.aligner)
-            if not timed_lines:
+            if not timed_lines and getattr(
+                self.engines.aligner, "needs_voice_anchoring", True
+            ):
                 words = anchor_words_to_voice(
                     words, voice_activity_intervals(vocals), duration(vocals)
                 )

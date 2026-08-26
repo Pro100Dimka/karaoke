@@ -504,6 +504,7 @@ class Qwen3ForcedAligner(Aligner):
 
     def __init__(self, model: str):
         self.model_name, self._model, self._ctc = model, None, {}
+        self.needs_voice_anchoring = True
 
     def _load(self):
         try:
@@ -873,6 +874,41 @@ class Qwen3ForcedAligner(Aligner):
         tokens, span = tokenize(text), duration(audio)
         resolved = resolve_alignment_language(text, language)
         samples = rate = None
+        self.needs_voice_anchoring = True
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if model_path and tokens:
+            samples, rate = read_mono(audio)
+            samples = samples.astype(np.float32)
+            try:
+                from .ctc import CTCWordAligner
+
+                ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+                aligned = ctc.align(
+                    samples, rate, _ctc_tokens(tokens, resolved), 0
+                )
+                words = _relabel_ctc_words(aligned, tokens, 0)
+                validated = self._validate(words, tokens, span)
+                self.needs_voice_anchoring = False
+                print(
+                    f"[AI] alignment=ctc-full language={resolved} words={len(words)}",
+                    flush=True,
+                )
+                return validated
+            except (
+                EngineUnavailableError,
+                InvalidArtifactError,
+                OSError,
+                RuntimeError,
+                ValueError,
+            ) as error:
+                print(
+                    f"[AI] alignment=ctc-full unavailable; falling back to Qwen: {error}",
+                    flush=True,
+                )
         # Windowing exists only because a single aligner call has *some*
         # practical limit -- it is not a quality improvement, it's a
         # necessary evil that trades one long, consistent alignment for

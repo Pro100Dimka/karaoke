@@ -105,6 +105,40 @@ def test_pipeline_releases_separator_before_loading_later_gpu_models(tmp_path, m
     assert events == ["separated", "released"]
 
 
+def test_pipeline_keeps_full_ctc_word_boundaries_without_global_vad_reanchoring(
+    tmp_path, monkeypatch
+):
+    source, lyrics, output = tmp_path / "source.wav", tmp_path / "lyrics.txt", tmp_path / "out"
+    sf.write(source, np.zeros((44100 * 2, 2), dtype=np.float32), 44100)
+    lyrics.write_text("first second", encoding="utf-8")
+    monkeypatch.setattr("AI.pipeline.analyze_music", lambda _path: {"bpm": 120, "key": "A minor"})
+    monkeypatch.setattr(
+        "AI.pipeline.anchor_words_to_voice",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("CTC boundaries must stay intact")),
+    )
+    aligner = SimpleNamespace(
+        name="ctc-full",
+        needs_voice_anchoring=False,
+        align_long_text=lambda *_args: [
+            Word(0.2, 0.6, "first", index=0),
+            Word(1.1, 1.6, "second", index=1),
+        ],
+    )
+    engines = SimpleNamespace(
+        separator=Separator(), pitch=Pitch(), transcriber=None, aligner=aligner
+    )
+
+    KaraokePipeline(engines=engines).run(
+        PipelineRequest(source, output, lyrics_path=lyrics)
+    )
+
+    payload = __import__("json").loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+    assert [(word["start"], word["end"]) for word in payload["words"]] == [
+        (0.2, 0.6),
+        (1.1, 1.6),
+    ]
+
+
 def test_stage_reports_carry_device_dtype_and_memory_telemetry(tmp_path, monkeypatch):
     from AI.runtime import BackendSpec, HardwareProfile, RuntimePlan
 
@@ -626,6 +660,7 @@ def test_long_ukrainian_alignment_uses_acoustic_ctc_when_qwen_remains_invalid(
         ("у", 1.2, 1.8),
         ("очі", 2.2, 2.8),
     ]
+    assert aligner.needs_voice_anchoring is False
 
 
 def test_timed_lines_only_define_acoustic_windows(tmp_path):
