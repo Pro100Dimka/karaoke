@@ -157,12 +157,29 @@ describe("application shell", () => {
         <div>ready-after-manual-retry</div>
       </BackendBootLoader>
     );
-    await vi.advanceTimersByTimeAsync(40 * 5);
-    verify([view.getByText("backend.failed"), "not.toBeNull"], [mocks.getHealth, "toHaveBeenCalledTimes", 40]);
+    await vi.advanceTimersByTimeAsync(160 * 5);
+    verify([view.getByText("backend.failed"), "not.toBeNull"], [mocks.getHealth, "toHaveBeenCalledTimes", 160]);
     mocks.getHealth.mockResolvedValue({ ok: true });
     fireEvent.click(view.getByText("backend.retry"));
     await act(async () => Promise.resolve());
-    verify([mocks.getHealth, "toHaveBeenCalledTimes", 41], [view.getByText("ready-after-manual-retry"), "not.toBeNull"]);
+    verify(
+      [mocks.getHealth, "toHaveBeenCalledTimes", 161],
+      [view.getByText("ready-after-manual-retry"), "not.toBeNull"]
+    );
+  });
+  test("backend loader explains a slow first launch before giving up", async () => {
+    vi.useFakeTimers();
+    mocks.getHealth.mockRejectedValue(new Error("offline"));
+    const view = render(
+      <BackendBootLoader>
+        <div>ready-after-slow-start</div>
+      </BackendBootLoader>
+    );
+    await vi.advanceTimersByTimeAsync(18 * 5);
+    verify([view.getByText("backend.starting.slow"), "not.toBeNull"]);
+    mocks.getHealth.mockResolvedValueOnce({ ok: true });
+    await vi.advanceTimersByTimeAsync(5);
+    verify([view.getByText("ready-after-slow-start"), "not.toBeNull"]);
   });
   test("backend loader falls back for unknown themes and ignores late health", async () => {
     mocks.getTheme.mockReturnValue("unknown");

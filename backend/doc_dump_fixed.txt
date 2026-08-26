@@ -1,0 +1,4350 @@
+# A&D Voice — ЕДИНОЕ ПОЛНОЕ ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+## Исправление, стабилизация, оптимизация, восстановление, совместимость и подготовка к production release
+
+**Исходный проект:** `karaoke-main (5).zip`  
+**Назначение документа:** это полностью автономное техническое задание. Для его выполнения не нужны никакие другие отчёты или аудиты: контекст, причины, требования, проверки и критерии готовности описаны непосредственно здесь.
+
+---
+
+# 0. Главная цель
+
+Нужно не «подправить несколько ошибок», а привести проект в состояние, в котором:
+
+- пользовательские данные не теряются и не портятся;
+- повторная обработка песен работает предсказуемо;
+- запись и анализ вокала дают корректный результат;
+- Online Room переживает отключения, reconnect и transfer failures;
+- приложение не деградирует по памяти после долгой работы;
+- UI не фризит из-за React/WebGL/high-frequency state;
+- AI pipeline не выполняет заведомо лишние гигабайты чтения и повторные decode;
+- frontend/backend/Electron/Cloudflare используют согласованные контракты;
+- изменения storage/model paths безопасны;
+- ошибки не проглатываются и имеют диагностируемую причину;
+- проект можно установить на чистую Windows и обновить поверх предыдущей версии;
+- все критические пользовательские сценарии покрыты integration/E2E/regression проверками;
+- после всех исправлений приложение проходит финальный release-readiness gate.
+
+---
+
+# 1. Обязательные правила выполнения
+
+Эти правила действуют для **каждого этапа** ниже.
+
+## 1.1. Не переписывать проект с нуля
+
+Исправления делать постепенно. Сначала фиксировать существующее поведение, потом менять внутреннюю реализацию.
+
+Запрещено одновременно:
+- менять архитектуру;
+- менять API;
+- менять формат данных;
+- менять UI;
+- менять runtime-поведение;
+
+если это не требуется конкретной задачей.
+
+## 1.2. Сначала root cause, потом код
+
+Для каждой проблемы исполнитель обязан сначала подтвердить:
+1. где находится причина;
+2. какой пользовательский сценарий её вызывает;
+3. какие файлы участвуют;
+4. какое состояние системы до ошибки;
+5. какое состояние после ошибки;
+6. почему существующие проверки не остановили проблему.
+
+Только после этого менять код.
+
+## 1.3. Не маскировать ошибки
+
+Нельзя исправлять проблему только:
+- дополнительным `try/except`;
+- `.catch(() => {})`;
+- увеличением timeout;
+- повтором запроса;
+- отключением проверки;
+- скрытием кнопки;
+- suppress warning;
+
+если root cause остаётся.
+
+## 1.4. Сохранять обратную совместимость
+
+Особенно для:
+- SQLite;
+- старых песен;
+- старых `lyricsSync.json`;
+- `.karaoke.zip`;
+- library folders;
+- recordings;
+- settings;
+- ранее обработанных песен.
+
+Если обратная совместимость невозможна — должна быть явная миграция.
+
+## 1.5. Один source of truth
+
+После рефакторинга не должно оставаться двух параллельных реализаций:
+- нового и старого Models API;
+- двух схем room messages;
+- двух трактовок `source_path`;
+- нескольких version constants;
+- нескольких разных locking policies;
+- нескольких независимых validation rules для `lyricsSync.json`.
+
+## 1.6. После каждого этапа нужен отчёт
+
+Для каждой задачи указывать:
+
+- `DONE / PARTIAL / BLOCKED`;
+- root cause;
+- изменённые файлы;
+- что именно исправлено;
+- какие старые реализации удалены;
+- какие проверки выполнены;
+- результат проверок;
+- остались ли известные риски.
+
+Нельзя писать просто «исправлено».
+
+---
+
+# 2. Правильная последовательность работ
+
+Работы выполнять именно в следующем порядке.
+
+1. **Зафиксировать инварианты и baseline.**
+2. **Исправить критические runtime/data bugs.**
+3. **Добавить диагностику критических операций.**
+4. **Исправить concurrency/race/recovery.**
+5. **Стабилизировать Recording/Audio.**
+6. **Стабилизировать Online Room.**
+7. **Исправить AI pipeline correctness и лишние вычисления.**
+8. **Исправить frontend/React/QFT performance.**
+9. **Исправить memory/resource lifecycle.**
+10. **Исправить Electron desktop boundary.**
+11. **Усилить data layer/migrations.**
+12. **После стабилизации выполнить архитектурный рефакторинг.**
+13. **Почистить code quality/dead code/legacy API.**
+14. **Исправить масштабирование.**
+15. **Нормализовать dependencies/runtime contracts.**
+16. **Закрыть testing gaps.**
+17. **Закрыть UX/error handling.**
+18. **Проверить build/installer/update.**
+19. **Финальный release-readiness gate.**
+
+Почему порядок именно такой:
+
+> Нельзя сначала красиво декомпозировать сломанный код.  
+> Сначала нужно исправить пользовательскую семантику и целостность данных, затем concurrency и recovery, затем производительность, и только после этого дробить архитектуру.
+
+---
+
+# PHASE 0 — BASELINE И ИНВАРИАНТЫ
+
+## 0.1. Зафиксировать основные пользовательские инварианты
+
+До изменений явно закрепить:
+
+### Song
+- одна песня имеет стабильный `song.id`;
+- artist + title не должны конфликтовать с другой песней только из-за одинакового title;
+- DONE означает, что обязательные artifacts существуют и валидны;
+- source и instrumental — разные понятия;
+- reprocess не должен ломать уже существующую библиотеку.
+
+### lyricsSync.json
+- единственный authoritative документ текста/нот;
+- `word.start < word.end`;
+- ноты находятся внутри слова;
+- ноты не перекрываются некорректно;
+- note start/end finite;
+- BPM/key валидны;
+- документ можно безопасно редактировать, импортировать и мигрировать.
+
+### Recording
+- запись знает, с какого времени песни она началась;
+- анализ использует абсолютное время песни;
+- ошибка writer/device не должна оставлять runaway session.
+
+### Room
+- известно, кто host;
+- известно, что происходит при выходе host;
+- reconnect имеет определённую семантику;
+- transfer имеет terminal state;
+- song revision однозначен.
+
+### Storage
+- current и historical library roots имеют единый trust contract;
+- изменение paths не происходит внутри другой файловой транзакции.
+
+---
+
+# PHASE 1 — КРИТИЧЕСКИЕ RUNTIME И DATA BUGS
+
+Этот этап выполнять **до оптимизаций и крупных рефакторингов**.
+
+---
+
+## TASK 1.1 — Разделить original source и instrumental
+
+**Приоритет:** CRITICAL  
+
+### Проблема
+
+После успешного pipeline:
+
+```python
+song.source_path = instrumental
+```
+
+То есть поле `source_path` сначала означает оригинальный upload, а после обработки — instrumental.
+
+Если песня позже попадает в `ERROR`/`CANCELLED` и обычный `/process` запускается снова, pipeline может получить **instrumental вместо исходной песни**.
+
+### Требуется
+
+Убрать двойную семантику.
+
+Предпочтительный контракт:
+
+```text
+original_source_path
+instrumental_path
+vocals_path
+lyrics_document_path
+```
+
+Если оригинал намеренно удаляется после обработки:
+- это должно быть отдельное явное состояние;
+- полный reprocess без original должен быть запрещён;
+- UI не должен предлагать действие, которое невозможно корректно выполнить.
+
+### Проверить все места
+
+- Song model;
+- create/import;
+- pipeline start;
+- finalization;
+- reprocess;
+- delete;
+- package export;
+- package import;
+- karaoke open;
+- room transfer;
+- diagnostics;
+- tests;
+- migrations.
+
+### Acceptance
+
+- ранее обработанная песня никогда не идёт в separation от instrumental как будто это original;
+- `reprocess melody` работает без original;
+- `full process` либо использует original, либо возвращает понятную ошибку;
+- существующие библиотеки корректно мигрируют.
+
+---
+
+## TASK 1.2 — Исправить recording playback offset
+
+**Приоритет:** CRITICAL  
+
+### Проблема
+
+`position_sec` существует только в live `RecordingSession`.
+
+После сохранения Recording не знает, с какой позиции песни началась запись.
+
+Analysis сейчас сравнивает:
+
+```text
+recording t=0
+```
+
+с:
+
+```text
+song t=0
+```
+
+вместо:
+
+```text
+song t=recording_offset
+```
+
+### Требуется
+
+Добавить persistent:
+
+```text
+playback_offset_sec
+```
+
+в Recording model/schema/API.
+
+Analysis:
+
+```python
+song_time = recording.playback_offset_sec + frame_time
+```
+
+Performance mix и analysis должны использовать **один и тот же offset contract**.
+
+### Миграция
+
+Для старых Recording:
+- `playback_offset_sec = 0`;
+- не ломать history.
+
+### Acceptance
+
+Запись, начатая на:
+- 0 сек;
+- 30 сек;
+- 90 сек;
+- 180 сек;
+
+сравнивается именно с соответствующим участком reference.
+
+---
+
+## TASK 1.3 — Исправить duplicate identity песен
+
+**Приоритет:** HIGH  
+
+### Сейчас
+
+```python
+def _find_duplicate(db, artist, title):
+    del artist
+```
+
+Сравнивается фактически только title.
+
+### Требуется
+
+Identity:
+
+```text
+normalized artist + normalized title
+```
+
+Продумать fallback, когда artist неизвестен.
+
+### Нельзя
+
+Нельзя просто разрешить любые дубли — иначе один и тот же файл будет импортироваться десятки раз.
+
+### Acceptance
+
+Разрешено:
+
+```text
+Artist A — Home
+Artist B — Home
+```
+
+Но повторный импорт:
+
+```text
+Artist A — Home
+```
+
+распознаётся корректно.
+
+---
+
+## TASK 1.4 — Исправить historical library reprocess
+
+**Приоритет:** HIGH  
+
+### Проблема
+
+Старые roots считаются trusted для чтения, но `_run_reprocessing()` разрешает только current `SONG_OUTPUT_DIR`.
+
+### Требуется
+
+Один общий path trust contract.
+
+Либо:
+- разрешить reprocess в historical root;
+
+либо:
+- атомарно мигрировать песню в current root перед reprocess.
+
+### Acceptance
+
+1. Песня создана в library A.
+2. Пользователь меняет library на B.
+3. Песня из A остаётся доступной.
+4. Reprocess работает и не переводит её в ERROR.
+
+---
+
+## TASK 1.5 — Исправить package export/import round-trip
+
+**Приоритет:** HIGH  
+
+### Проблема
+
+Legacy source включается в revision/export, но import его не публикует и canonical source становится instrumental.
+
+Revision после import может отличаться.
+
+### Требуется
+
+Определить canonical portable package schema.
+
+Рекомендуется:
+- не дублировать source, если он равен instrumental;
+- если source является самостоятельным обязательным artifact — реально сохранять его;
+- revision должен вычисляться из canonical portable content;
+- manifest должен явно описывать aliases.
+
+### Acceptance
+
+Обязательные cases:
+
+```text
+source == instrumental
+source != instrumental
+cover есть/нет
+Unicode filenames
+старый package
+новый package
+```
+
+Для всех:
+
+```text
+export → import → compute revision
+```
+
+должен давать ожидаемый результат.
+
+---
+
+## TASK 1.6 — Исправить перенос notes при изменении lyrics
+
+**Приоритет:** HIGH  
+
+### Проблема
+
+Notes сохраняются по индексу:
+
+```python
+previous[index]
+```
+
+Если слово вставили в начале — индексы всех последующих слов сдвинулись.
+
+### Требуется
+
+Не связывать identity слова с array position.
+
+Варианты:
+- stable `word.id`;
+- `(start,end)` key;
+- migration-aware matching.
+
+### Acceptance
+
+Если вставлено новое слово перед существующими, notes у неизменённых timed words не исчезают.
+
+---
+
+# PHASE 2 — ДИАГНОСТИКА ДО СЛОЖНЫХ STABILITY FIXES
+
+Сначала сделать проблему наблюдаемой, потом чинить редкие races.
+
+---
+
+## TASK 2.1 — Ввести correlation IDs
+
+
+Нужны:
+
+```text
+app_session_id
+request_id
+processing_job_id
+recording_session_id
+room_id
+room_command_id
+participant_session_id
+transfer_id
+```
+
+### Требование
+
+Один пользовательский сценарий должен быть трассируем:
+
+```text
+frontend action
+→ backend request
+→ job
+→ AI stage
+→ filesystem
+→ result/error
+```
+
+---
+
+## TASK 2.2 — Structured errors
+
+
+Backend не должен отдавать только произвольные строки.
+
+Формат:
+
+```json
+{
+  "code": "RECORDING_WRITE_FAILED",
+  "message": "...",
+  "details": {...},
+  "correlationId": "..."
+}
+```
+
+UI локализует по `code`.
+
+---
+
+## TASK 2.3 — Улучшить Room diagnostics
+
+Логировать отдельно:
+- WebSocket close code;
+- close reason;
+- offline;
+- reconnect attempt;
+- ICE state;
+- DataChannel state;
+- host leave;
+- transfer stage;
+- transfer throughput;
+- import stage.
+
+---
+
+## TASK 2.4 — AI stage telemetry
+
+Для каждого этапа:
+
+```text
+stage
+duration_ms
+device
+dtype
+model
+input duration
+RSS
+VRAM allocated/reserved
+result status
+```
+
+---
+
+## TASK 2.5 — Recording telemetry
+
+При writer/device failure логировать:
+- recording id;
+- session id;
+- device;
+- sample rate;
+- frames;
+- queue size;
+- path;
+- writer error;
+- stop error.
+
+---
+
+# PHASE 3 — CONCURRENCY, LOCKS, RECOVERY
+
+---
+
+## TASK 3.1 — Исправить `PUT /lyrics` transaction
+
+**Приоритет:** HIGH  
+
+### Требуется
+
+Использовать ту же discipline, что Editor:
+
+```text
+song content lock
+library transaction
+validate
+atomic write
+invalidate revision
+touch Song
+```
+
+### Не допускать
+
+```text
+read A
+parallel write B
+write A
+```
+
+с потерей B.
+
+---
+
+## TASK 3.2 — Сделать storage path mutation транзакционной
+
+**Приоритет:** HIGH  
+
+### Сейчас
+
+Global paths меняются без `library_write_lock()`.
+
+### Требуется
+
+Storage settings operation:
+1. acquire global storage/library mutation lock;
+2. убедиться, что нет несовместимых operations;
+3. validate destination;
+4. atomically switch configuration;
+5. release;
+6. notify dependent services.
+
+Каждая операция должна использовать immutable path snapshot.
+
+---
+
+## TASK 3.3 — Запретить смену AI/cache folder во время model operation
+
+**Приоритет:** HIGH  
+
+### Требуется
+
+Если model installer:
+
+```text
+downloading
+verifying
+repairing
+```
+
+storage selectors должны быть disabled/rejected.
+
+Альтернатива — полноценная cancel/migration, но простое безопасное решение лучше.
+
+---
+
+## TASK 3.4 — Формализовать lock order
+
+
+Например:
+
+```text
+global library lock
+→ song content lock
+→ DB operation
+```
+
+Никогда наоборот.
+
+Создать helper transaction вместо ручного nesting.
+
+---
+
+## TASK 3.5 — Lifecycle ProcessingJobManager
+
+
+Состояния:
+
+```text
+created
+queued
+running
+cancelling
+cancelled
+finalizing
+done
+error
+```
+
+Терминальный state должен быть idempotent.
+
+---
+
+## TASK 3.6 — Единая cancellation semantics
+
+
+Различить:
+
+```text
+client HTTP cancellation
+server job cancellation
+subprocess termination
+room transfer cancellation
+model download cancellation
+```
+
+Нельзя считать HTTP Abort отменой server operation.
+
+---
+
+## TASK 3.7 — Startup recovery
+
+
+На запуске:
+- stale `PROCESSING` jobs → interrupted/error/recover;
+- unfinished package journals → finish/rollback;
+- stale `.part` transfers → cleanup;
+- orphan recording sessions/temp files → reconcile;
+- incomplete publications → verify.
+
+---
+
+# PHASE 4 — RECORDING И AUDIO STABILITY
+
+---
+
+## TASK 4.1 — Bounded recording queue + fatal writer state
+
+**Приоритет:** CRITICAL  
+
+### Требуется
+
+`queue.Queue(maxsize=...)`.
+
+При writer exception:
+1. session получает fatal state;
+2. capture прекращается;
+3. producer перестаёт писать;
+4. partial file закрывается;
+5. API получает контролируемую ошибку;
+6. monitoring восстанавливается.
+
+### Важно
+
+Audio callback нельзя блокировать на полной очереди.
+
+---
+
+## TASK 4.2 — Monitoring restore в `finally`
+
+
+Любой Stop:
+- success;
+- writer error;
+- device error;
+- stream stop error;
+
+должен приводить к восстановлению предыдущего monitoring configuration.
+
+---
+
+## TASK 4.3 — Master playback clock
+
+
+Нужно определить **один authoritative clock**.
+
+Рекомендуется:
+
+```text
+instrumental/current master media clock
+```
+
+Lyrics/PianoRoll/vocals/melody/room являются followers.
+
+---
+
+## TASK 4.4 — Улучшить audio drift correction
+
+Editor vocals сейчас hard-seek при ~80 ms drift.
+
+Для небольшого drift:
+- мягкая playbackRate correction;
+- hard seek только при большом расхождении.
+
+---
+
+## TASK 4.5 — Shared Room AudioContext
+
+
+Не создавать отдельный AudioContext на каждого participant/effect, если можно использовать один room engine.
+
+---
+
+## TASK 4.6 — Sample-rate contract
+
+Документировать и централизовать:
+
+```text
+capture SR
+recording SR
+WebRTC/browser SR
+playback SR
+AI pitch SR
+ASR SR
+music-analysis SR
+```
+
+Любой resample должен быть явным.
+
+---
+
+## TASK 4.7 — Audio hardware fault cases
+
+Обязательно проверить:
+- unplug mic;
+- unplug output;
+- default device change;
+- ASIO loss;
+- sleep/resume;
+- unsupported sample rate.
+
+Программа не должна зависать.
+
+---
+
+# PHASE 5 — ONLINE ROOM
+
+---
+
+## TASK 5.1 — Host migration policy
+
+**Приоритет:** CRITICAL/HIGH  
+
+Сейчас host может уйти, а guests остаются.
+
+Нужно выбрать **один** контракт:
+
+### Вариант A — host migration
+- deterministic next host;
+- worker меняет role;
+- frontend получает `host-changed`;
+- permissions обновляются;
+- transfer/UI ownership восстанавливается.
+
+### Вариант B — host leaves → room closes
+- guests получают explicit reason;
+- transfers cancel;
+- UI выходит из room;
+- никаких hostless rooms.
+
+Нельзя оставлять текущее неопределённое состояние.
+
+---
+
+## TASK 5.2 — Stable participant identity при reconnect
+
+
+Нужен stable client/session id, чтобы reconnect не выглядел как полностью новый человек.
+
+Сохранять:
+- participant volume;
+- effects;
+- ownership;
+- UI identity;
+- transfer relation;
+
+где это безопасно.
+
+---
+
+## TASK 5.3 — Resumable song transfer
+
+
+Для больших package:
+
+```text
+transfer id
+revision
+total bytes
+confirmed offset/chunk
+```
+
+После reconnect продолжать с подтверждённой позиции.
+
+Если resume не реализуется — UI должен ясно сообщить restart.
+
+---
+
+## TASK 5.4 — Host disconnect mid-transfer
+
+Любая transfer command должна немедленно перейти в terminal error/cancel при потере owner/host, а не ждать длинный timeout.
+
+---
+
+## TASK 5.5 — Shared Room Protocol
+
+
+Frontend и Cloudflare должны использовать один:
+- message schema;
+- limits;
+- enums;
+- version;
+- validation corpus.
+
+---
+
+## TASK 5.6 — Исправить byte limits
+
+
+Использовать UTF-8:
+
+```js
+new TextEncoder().encode(JSON.stringify(state)).byteLength
+```
+
+---
+
+## TASK 5.7 — Permission model Room
+
+Определить:
+- кто может play/pause/seek;
+- кто меняет song;
+- кто меняет radio;
+- кто меняет room-wide effects/state;
+- что guest может broadcast.
+
+Если authority = host, worker должен enforce.
+
+---
+
+## TASK 5.8 — Room state compact DTO
+
+Не передавать огромный Song object там, где достаточно:
+
+```json
+{
+  "id": "...",
+  "revision": "...",
+  "title": "...",
+  "artist": "..."
+}
+```
+
+---
+
+## TASK 5.9 — Cleanup invariant
+
+После leave/provider unmount должны быть пусты:
+- PeerConnections;
+- DataChannels;
+- incoming/outgoing transfers;
+- timers;
+- admission timers;
+- remote audio DOM;
+- AudioContexts;
+- meters;
+- command timers.
+
+---
+
+## TASK 5.10 — Practical room limit
+
+P2P mesh растёт O(N²).
+
+Benchmark:
+- 2;
+- 4;
+- 6;
+- 8+ participants.
+
+После benchmark установить supported maximum.
+
+---
+
+# PHASE 6 — AI PIPELINE CORRECTNESS И PERFORMANCE
+
+---
+
+## TASK 6.1 — Убрать повторный SHA 913 MB модели
+
+
+Не читать checkpoint два раза перед каждой песней.
+
+Создать trusted metadata cache:
+
+```text
+path
+size
+mtime_ns
+sha256
+verified_at
+```
+
+Полный SHA только:
+- после download;
+- если metadata изменилась;
+- explicit deep verify.
+
+---
+
+## TASK 6.2 — Реальный audio buffer/cache strategy
+
+
+`audio_buffer_cache()` либо реализовать, либо удалить.
+
+Повторно использовать decoded mono buffers там, где algorithms требуют одинаковый SR.
+
+---
+
+## TASK 6.3 — Уменьшить full-file reads
+
+Оптимизировать:
+- VAD;
+- RMS;
+- gate threshold;
+- pitch pre-processing;
+- alignment repair inputs.
+
+Использовать:
+- float32;
+- block streaming;
+- one decode;
+- reusable feature buffer.
+
+---
+
+## TASK 6.4 — Separation memory/I/O
+
+
+Не делать без необходимости:
+- copy full mix;
+- read full mix;
+- read full vocals;
+- read full backing;
+- create ещё несколько full arrays.
+
+Использовать metadata/streaming/FFmpeg where appropriate.
+
+---
+
+## TASK 6.5 — Cold/warm model lifecycle
+
+Профилировать:
+- first song;
+- second song;
+- 20th song.
+
+Модель не должна unnecessarily reload.
+
+---
+
+## TASK 6.6 — GPU telemetry и VRAM recovery
+
+После каждой песни записывать:
+- allocated;
+- reserved;
+- peak.
+
+20 последовательных songs не должны давать монотонный runaway VRAM.
+
+---
+
+## TASK 6.7 — AI fault injection
+
+Обязательно:
+- CUDA OOM;
+- FFmpeg failure;
+- model missing;
+- corrupt model;
+- child process hang;
+- ASR empty;
+- aligner partial;
+- invalid timings;
+- cancellation.
+
+Ни один failure не должен оставлять song в ложном DONE.
+
+---
+
+## TASK 6.8 — Artifact validation перед DONE
+
+Проверять:
+- audio decodable;
+- durations sane;
+- `lyricsSync.json` schema;
+- finite numbers;
+- note/word invariants;
+- required artifacts present.
+
+---
+
+## TASK 6.9 — Artifact dependency graph
+
+Если меняется только melody/note processing — не повторять separation/ASR.
+
+Явно определить, какие stages invalidated каким изменением.
+
+---
+
+# PHASE 7 — FRONTEND / REACT / QFT
+
+---
+
+## TASK 7.1 — Исправить QFT full recreation
+
+**Приоритет:** CRITICAL UI  
+
+Default:
+
+```js
+settings: overrides = {}
+```
+
+создаёт новый object на render.
+
+Нужен immutable:
+
+```js
+const EMPTY_SETTINGS = Object.freeze({})
+```
+
+Но этого мало: lifecycle effect нужно разделить на:
+- renderer/geometry lifecycle;
+- runtime settings via refs/uniforms.
+
+---
+
+## TASK 7.2 — Split OnlineRoomContext
+
+
+High-frequency:
+- speaking levels;
+- transfer progress;
+
+не должны менять глобальный application context.
+
+Разделить stores/providers или использовать selector-based external store.
+
+---
+
+## TASK 7.3 — Убрать 60 FPS React `setCurrentTime`
+
+
+`currentTimeRef` — frame clock.
+
+React state:
+- slider;
+- time label;
+
+обновлять 4–10 Hz.
+
+---
+
+## TASK 7.4 — Изолировать pitch state
+
+
+Pitch marker не должен ререндерить весь Karaoke до 66 раз/с.
+
+---
+
+## TASK 7.5 — Stabilize Library derived data
+
+
+`localSongs`, filters, sorts, options, ready counts — `useMemo`/selector store.
+
+Room revision sync не должен запускаться на unrelated render.
+
+---
+
+## TASK 7.6 — Batch/cache song revisions
+
+Вместо N requests:
+
+```text
+GET /songs/:id/revision × N
+```
+
+создать batch API или incremental revision data.
+
+---
+
+## TASK 7.7 — Melody Editor virtualization
+
+
+При drag:
+- не `notes.map()` на каждом pointer event;
+- визуальный delta через ref/transform;
+- commit onPointerUp;
+- rAF throttle.
+
+Рендерить только viewport notes.
+
+---
+
+## TASK 7.8 — Optimize PianoRoll frame
+
+
+Не пересчитывать pitch range на каждый frame.
+
+Sorted notes + moving range/binary search.
+
+---
+
+## TASK 7.9 — QFT O(N²) network
+
+
+500 points:
+
+```text
+124,750 pair comparisons/frame
+```
+
+Оптимизировать spatial grid/KNN/update frequency.
+
+---
+
+## TASK 7.10 — Убрать CSSOM bridge radio→QFT
+
+
+Не писать/читать ~20 CSS variables каждый frame для JS audio spectrum.
+
+Shared typed array/ref.
+
+---
+
+## TASK 7.11 — Удалить unused EffectComposer или реально использовать
+
+
+В текущем виде это GPU memory overhead.
+
+---
+
+## TASK 7.12 — Adaptive QFT quality
+
+
+- quality tiers;
+- pause hidden;
+- reduce FPS unfocused;
+- adaptive particles/network;
+- avoid 300k allocation if unnecessary.
+
+---
+
+# PHASE 8 — MEMORY И RESOURCE LIFECYCLE
+
+---
+
+## TASK 8.1 — Resource registry/debug counters
+
+В debug diagnostics показать:
+- AudioContexts;
+- PeerConnections;
+- DataChannels;
+- Workers;
+- active timers;
+- backend children;
+- recording sessions;
+- transfer temp files;
+- WebGL contexts if possible.
+
+---
+
+## TASK 8.2 — Shared audio resources
+
+Не создавать uncontrolled AudioContexts/impulses per participant.
+
+---
+
+## TASK 8.3 — Worker lifecycle
+
+Editor worker singleton должен иметь explicit terminate path для:
+- renderer shutdown;
+- tests;
+- HMR/dev replacement.
+
+---
+
+## TASK 8.4 — Object URL lifecycle helper
+
+Все `URL.createObjectURL` должны иметь paired revoke.
+
+Сделать общий utility/hook.
+
+---
+
+## TASK 8.5 — Stale temp cleanup
+
+На startup чистить по безопасным правилам:
+- old `.part`;
+- transfer temp;
+- abandoned package staging;
+- incomplete recording temporary files.
+
+---
+
+## TASK 8.6 — Long soak
+
+2+ часа:
+- room reconnect;
+- karaoke switching;
+- recordings;
+- QFT;
+- radio;
+- AI jobs.
+
+Снимать:
+- renderer heap;
+- backend RSS;
+- handles;
+- audio contexts;
+- VRAM.
+
+---
+
+# PHASE 9 — ELECTRON
+
+---
+
+## TASK 9.1 — Вынести backend supervisor из `main.cjs`
+
+State machine:
+
+```text
+stopped
+starting
+healthy
+failed
+restarting
+stopping
+```
+
+---
+
+## TASK 9.2 — Разделить IPC handlers
+
+Структура:
+
+```text
+electron/ipc/window
+electron/ipc/shell
+electron/ipc/dialog
+electron/ipc/clipboard
+electron/protocol/media
+electron/backend-supervisor
+```
+
+---
+
+## TASK 9.3 — Platform adapter во frontend
+
+Feature code не должен обращаться напрямую:
+
+```js
+window.electronAPI
+globalThis.electronAPI
+```
+
+Использовать:
+
+```js
+platform.openFolder()
+platform.pickFolder()
+platform.mediaUrl()
+platform.clipboard()
+```
+
+---
+
+## TASK 9.4 — Исправить authenticated backend health probe
+
+
+Token-protected health request должен передавать token.
+
+---
+
+## TASK 9.5 — Async fs в user-triggered main paths
+
+Sync fs допустим на коротком startup.
+
+IPC операции с directories/files делать через async APIs.
+
+---
+
+## TASK 9.6 — Backend process-tree shutdown
+
+Проверить:
+- normal quit;
+- force close;
+- backend hang;
+- second instance;
+- Windows shutdown/update.
+
+Не должно оставаться orphan Python/FFmpeg/MSST.
+
+---
+
+## TASK 9.7 — Custom protocol security tests
+
+Проверить:
+- `..`;
+- URL encoding;
+- symlink/reparse point;
+- range;
+- arbitrary local file.
+
+---
+
+# PHASE 10 — DATA LAYER И MIGRATIONS
+
+---
+
+## TASK 10.1 — Перенести lyrics schema в domain
+
+
+Например:
+
+```text
+backend/domain/lyrics_document.py
+```
+
+AI, API, package, editor используют один validator.
+
+---
+
+## TASK 10.2 — Добавить schema version
+
+`lyricsSync.json`:
+
+```json
+{
+  "schemaVersion": 1
+}
+```
+
+Migration chain должна быть детерминированной.
+
+---
+
+## TASK 10.3 — Один validator всех write paths
+
+Применять на:
+- AI finalization;
+- Editor save;
+- lyrics endpoint;
+- package import;
+- migration.
+
+---
+
+## TASK 10.4 — SQLite migration strategy
+
+
+Не полагаться на:
+
+```python
+Base.metadata.create_all()
+```
+
+для изменения existing tables.
+
+Нужны migration steps/versions.
+
+---
+
+## TASK 10.5 — Historical DB fixtures
+
+Хранить representative DB schemas предыдущих releases и прогонять upgrade.
+
+---
+
+## TASK 10.6 — Song aggregate Repository
+
+DB + filesystem + revision должны иметь единый application boundary.
+
+Например:
+
+```text
+SongRepository
+SongDocumentRepository
+SongArtifactStore
+```
+
+---
+
+## TASK 10.7 — Backup user edits
+
+Перед:
+- reset editor;
+- destructive reprocess;
+- package overwrite;
+
+сохранять bounded previous `lyricsSync` revision, если это не создаёт большой storage overhead.
+
+---
+
+# PHASE 11 — АРХИТЕКТУРНЫЙ РЕФАКТОРИНГ
+
+Выполнять **только после Phase 1–10**, когда behavior защищён.
+
+---
+
+## TASK 11.1 — Декомпозировать `pipeline_service.py`
+
+Цель:
+
+```text
+ProcessingJobManager
+ProgressService
+PipelineOrchestrator
+PipelineFinalizer
+ReprocessService
+```
+
+Старый public API временно может быть facade.
+
+---
+
+## TASK 11.2 — Декомпозировать `song_package_service.py`
+
+Цель:
+
+```text
+revision
+manifest
+archive validator
+exporter
+importer
+import transaction
+recovery
+```
+
+---
+
+## TASK 11.3 — Декомпозировать `audio_service.py`
+
+```text
+AudioDeviceRepository
+AudioDeviceResolver
+AudioSettingsService
+AudioMonitorSupervisor
+AudioDiagnostics
+```
+
+---
+
+## TASK 11.4 — Разделить recording capture и offline rendering
+
+```text
+RecordingCapture
+RecordingSessionManager
+RecordingRepository
+PerformanceMixRenderer
+```
+
+---
+
+## TASK 11.5 — Утончить `songs.py` router
+
+Router не должен напрямую импортировать `AI.*`.
+
+HTTP:
+```text
+Router → Application Service → Domain → Infrastructure
+```
+
+---
+
+## TASK 11.6 — Разделить schemas
+
+```text
+schemas/songs.py
+schemas/recording.py
+schemas/audio.py
+schemas/settings.py
+schemas/diagnostics.py
+```
+
+---
+
+## TASK 11.7 — Разделить Melody Editor controller
+
+```text
+useEditorViewport
+useEditorSelection
+useNoteDrag
+useWordResize
+useMarquee
+useEditorKeyboard
+useEditorTransport
+```
+
+---
+
+## TASK 11.8 — Вынести QFT engine из React
+
+React component — mount/unmount wrapper.
+
+Plain engine отвечает за renderer/update/dispose.
+
+---
+
+## TASK 11.9 — Frontend API generated contract
+
+FastAPI OpenAPI → generated TS transport/types.
+
+Удалить paths, которых нет в OpenAPI.
+
+---
+
+## TASK 11.10 — Single source version
+
+Одна версия генерирует:
+- frontend;
+- backend metadata;
+- diagnostics;
+- Cloudflare;
+- installer.
+
+---
+
+# PHASE 12 — CODE QUALITY И CLEANUP
+
+---
+
+## TASK 12.1 — Удалить legacy `/models/whisper`
+
+
+Удалить:
+- frontend API;
+- mocks;
+- tests;
+- dead imports;
+
+если endpoint не возвращается намеренно.
+
+---
+
+## TASK 12.2 — Dead code inventory
+
+Проверить:
+- unused exports;
+- old adapters;
+- duplicate helpers;
+- unreachable fallbacks;
+- obsolete settings;
+- stale migration shims.
+
+Не удалять код только потому, что simple static search его не нашёл — учесть dynamic imports/IPC.
+
+---
+
+## TASK 12.3 — Уменьшить функции с высокой сложностью
+
+В первую очередь:
+- room message routing;
+- transfer protocol;
+- pipeline finalization;
+- package import;
+- editor pointer handlers;
+- QFT update loop.
+
+---
+
+## TASK 12.4 — Typed errors/state enums
+
+Не использовать произвольные строки как state machine.
+
+---
+
+# PHASE 13 — SCALABILITY
+
+---
+
+## TASK 13.1 — Library 1k–10k songs
+
+Убрать O(N) work на high-frequency renders.
+
+Добавить:
+- pagination/virtualized grid if needed;
+- indexed filters;
+- stable selectors.
+
+---
+
+## TASK 13.2 — History pagination
+
+Не:
+
+```text
+query all
++ build all
++ Python sort all
+```
+
+Использовать DB ORDER/LIMIT.
+
+---
+
+## TASK 13.3 — Cache size accounting
+
+Не делать full recursive `rglob/stat` каждые 5 sec.
+
+Кэш/инкрементальный счётчик/manual refresh.
+
+---
+
+## TASK 13.4 — Model download progress
+
+Не обходить model directory recursive каждую секунду.
+
+Получать bytes progress из downloader.
+
+---
+
+## TASK 13.5 — Package optimization
+
+
+Не:
+- повторно хешировать те же artifacts;
+- распаковывать/читать package лишний раз;
+- класть instrumental дважды.
+
+---
+
+## TASK 13.6 — Large-file limits
+
+Определить supported:
+- source max size;
+- duration;
+- package max;
+- room transfer max;
+- recording max duration.
+
+Не использовать случайные platform limits как продуктовый контракт.
+
+---
+
+# PHASE 14 — DEPENDENCIES
+
+---
+
+## TASK 14.1 — Frozen release dependency graph
+
+Для release Python нужен полностью воспроизводимый constraints/lock, а не только широкие `>=`.
+
+---
+
+## TASK 14.2 — Rationalize frontend rendering/state packages
+
+Проверить реальное использование:
+- XState;
+- Zustand;
+- React Query;
+- Pixi;
+- Three;
+- Konva;
+- WaveSurfer.
+
+Не удалять нужное, но убрать фактически неиспользуемые runtime dependencies.
+
+---
+
+## TASK 14.3 — Patch ownership
+
+Каждый `patch-package` patch:
+- причина;
+- upstream issue;
+- версия;
+- критерий удаления.
+
+---
+
+## TASK 14.4 — SBOM/license manifest
+
+Собрать:
+- npm;
+- Python;
+- native;
+- models.
+
+---
+
+# PHASE 15 — TESTING HARDENING
+
+Тесты не отдельная «последняя работа». Regression tests добавлять при каждом fix. Здесь закрываются системные gaps.
+
+---
+
+## TASK 15.1 — Frontend ↔ Backend contract test
+
+Каждый production frontend request должен существовать в FastAPI OpenAPI.
+
+Проверять:
+- method;
+- path;
+- required params.
+
+---
+
+## TASK 15.2 — Frontend ↔ Cloudflare protocol tests
+
+Один corpus сообщений проходит validation в обоих runtimes.
+
+---
+
+## TASK 15.3 — Critical E2E journeys
+
+Обязательно автоматизировать:
+
+### Local
+1. add song;
+2. process;
+3. library;
+4. karaoke;
+5. editor save;
+6. reopen;
+7. record from seek;
+8. analysis;
+9. reprocess;
+10. delete.
+
+### Room
+1. create;
+2. second client join;
+3. transfer song;
+4. verify revision;
+5. start playback;
+6. seek/pause;
+7. disconnect guest;
+8. reconnect;
+9. host leave;
+10. transfer failure.
+
+---
+
+## TASK 15.4 — Concurrency regression tests
+
+Parallel:
+- lyrics save + editor;
+- package export + lyrics;
+- reprocess + delete;
+- storage settings + import;
+- model download + path change.
+
+---
+
+## TASK 15.5 — Fault injection
+
+- disk full/write failure;
+- device disconnect;
+- subprocess hang;
+- network drop;
+- corrupt package;
+- corrupt JSON;
+- model corruption;
+- CUDA OOM.
+
+---
+
+## TASK 15.6 — Soak
+
+Long-running automation with resource counters.
+
+---
+
+# PHASE 16 — UX / ERROR HANDLING
+
+---
+
+## TASK 16.1 — Object-local errors
+
+Processing/transfer/model error показывать на конкретной карточке/операции.
+
+---
+
+## TASK 16.2 — Room reconnect UI
+
+Показывать:
+- reconnecting;
+- restored;
+- failed;
+- host left.
+
+---
+
+## TASK 16.3 — Transfer recovery UX
+
+Не бесконечный spinner.
+
+Нужны:
+- failed;
+- retry;
+- restart/resume;
+- reason.
+
+---
+
+## TASK 16.4 — Recording failure UX
+
+Сообщить:
+- что случилось;
+- сохранён ли partial file;
+- monitoring восстановлен;
+- что сделать пользователю.
+
+---
+
+## TASK 16.5 — Offline distinction
+
+Local karaoke остаётся рабочим, Online Room показывает offline state.
+
+---
+
+## TASK 16.6 — Autoplay/audio blocked
+
+Один понятный action:
+`Включить звук`.
+
+---
+
+## TASK 16.7 — Prevent double commands
+
+Pending operations:
+- disable button;
+- backend idempotency;
+- no double recording/process/import.
+
+---
+
+# PHASE 17 — BUILD / INSTALLER / UPDATE
+
+---
+
+## TASK 17.1 — Один shipping path
+
+Определить, какой installer является production source of truth.
+
+Не поддерживать два независимых packaging flow без причины.
+
+---
+
+## TASK 17.2 — Декомпозировать installer build
+
+Большой PowerShell script разделить на:
+- prerequisites;
+- version;
+- backend;
+- frontend;
+- models;
+- installer;
+- verify.
+
+---
+
+## TASK 17.3 — Clean Windows VM
+
+На машине **без**:
+- Node;
+- Python;
+- FFmpeg;
+- dev environment;
+
+установить приложение и выполнить smoke journey.
+
+---
+
+## TASK 17.4 — Unicode/space/long paths
+
+Проверить:
+- username на кириллице;
+- library с пробелами;
+- длинный title;
+- external drive.
+
+---
+
+## TASK 17.5 — Upgrade N-1 → N
+
+Проверить:
+- DB;
+- settings;
+- library;
+- `lyricsSync`;
+- models;
+- cache;
+- shortcuts.
+
+---
+
+## TASK 17.6 — Uninstall/reinstall
+
+Не удалять пользовательскую library без явного контракта.
+
+Не оставлять orphan backend processes.
+
+---
+
+# PHASE 18 — FINAL RELEASE READINESS
+
+До выполнения следующих критериев считать проект **NO-GO** для стабильного релиза.
+
+---
+
+## 18.1. Runtime blockers должны быть закрыты
+
+Обязательно:
+- source semantics;
+- recording offset;
+- recording queue;
+- monitoring restore;
+- historical reprocess;
+- package round-trip;
+- storage races;
+- host lifecycle.
+
+---
+
+## 18.2. Performance blockers
+
+- QFT не пересоздаётся на обычном render;
+- Karaoke top-level не commit 60 Hz;
+- speaking levels не ререндерят приложение;
+- room revision sync не делает N requests на unrelated render;
+- model readiness не читает ~1.8 GB каждый pipeline;
+- package не дублирует instrumental;
+- editor 10k notes usable.
+
+---
+
+## 18.3. Stability gates
+
+- 50 add/process/reprocess/delete cycles;
+- 30+ minute recording;
+- forced writer failure;
+- 20 sequential AI jobs;
+- 1–2 hour room soak;
+- reconnect storms;
+- host disconnect;
+- disk/network fault injection.
+
+---
+
+## 18.4. Data gates
+
+- old DB upgrades;
+- old song libraries;
+- old packages;
+- old recordings;
+- malformed `lyricsSync`;
+- partial filesystem states.
+
+---
+
+## 18.5. Installation gate
+
+Clean Windows:
+
+```text
+install
+→ launch
+→ add song
+→ process
+→ karaoke
+→ edit
+→ record
+→ analyze
+→ room
+→ close
+→ relaunch
+→ upgrade
+```
+
+---
+
+# 19. Обязательный порядок отчёта исполнителя
+
+После завершения всего задания подготовить `IMPLEMENTATION-REPORT.md`.
+
+Для каждой TASK:
+
+```text
+TASK X.Y
+Status:
+Root cause:
+Changed files:
+Old behavior:
+New behavior:
+Backward compatibility:
+Tests/checks:
+Result:
+Remaining risks:
+```
+
+В конце:
+
+## Итоговые метрики
+
+- число исправленных CRITICAL;
+- HIGH;
+- MEDIUM;
+- удалённые legacy implementations;
+- число новых migrations;
+- число contract tests;
+- E2E journeys;
+- CPU/RAM/VRAM before/after;
+- package size before/after;
+- AI processing timing before/after;
+- room sync drift before/after.
+
+---
+
+# 20. Что нельзя считать завершением задания
+
+Задание **не завершено**, если:
+
+- просто скрыты ошибки в UI;
+- увеличены timeout без root cause;
+- race остался, но стал реже;
+- старые данные больше не открываются;
+- UI работает только после clean install;
+- tests зелёные только на mocks;
+- room проверен только с одним клиентом;
+- installer проверен только на developer PC;
+- performance улучшена «на глаз» без measurements;
+- новый код добавлен рядом со старым и оба остаются активны;
+- storage/data schema поменялись без migration;
+- ошибки всё ещё невозможно связать с конкретной operation.
+
+---
+
+# 21. Рекомендуемые контрольные точки
+
+## Milestone A — Data Safe
+
+Должны быть закрыты:
+- 1.1–1.6;
+- 3.1–3.4;
+- 10.1–10.5.
+
+После этого пользовательские данные не должны портиться от основных известных bugs/races.
+
+## Milestone B — Stable Audio
+
+Закрыты:
+- Phase 4;
+- recording fault tests.
+
+## Milestone C — Stable Room
+
+Закрыты:
+- Phase 5;
+- multi-client E2E;
+- reconnect/host/transfer fault cases.
+
+## Milestone D — Fast Runtime
+
+Закрыты:
+- Phase 6;
+- Phase 7;
+- Phase 8;
+- Phase 13.
+
+## Milestone E — Maintainable
+
+Закрыты:
+- Phase 9–12;
+- API/protocol contracts.
+
+## Milestone F — Release Candidate
+
+Закрыты:
+- Phase 14–17;
+- все final gates.
+
+## Milestone G — GO
+
+Только после Phase 18.
+
+---
+
+# 22. Краткий список P0 / P1
+
+## P0 — нельзя откладывать
+
+1. Source/original vs instrumental.
+2. Recording offset.
+3. Recording writer runaway queue.
+4. Monitoring restore.
+5. Historical reprocess.
+6. Package round-trip.
+7. Storage/model path races.
+8. Host lifecycle.
+9. Lyrics locking/note identity.
+10. QFT recreation.
+11. Global Room high-frequency context.
+12. 60 FPS Karaoke React state.
+13. Repeated huge model hash.
+14. Room revision request storm.
+
+## P1
+
+15. Reconnect identity.
+16. Resumable transfer.
+17. Shared Room schema.
+18. Master audio clock.
+19. AI repeated decodes.
+20. Separation peak memory.
+21. PianoRoll/Editor scaling.
+22. Data migrations.
+23. Song repository boundary.
+24. Electron/platform adapter.
+25. API contract generation.
+26. Diagnostics/correlation.
+27. History/cache scalability.
+28. Dependency freeze.
+29. Installer clean VM.
+30. Upgrade E2E.
+
+---
+
+# 23. Финальная цель проекта после выполнения задания
+
+После выполнения этого документа A&D Voice должен иметь следующую модель:
+
+```text
+React UI
+  ↓ typed application APIs
+Frontend feature controllers
+  ↓
+Platform Adapter / Room Protocol
+  ↓
+FastAPI application services
+  ↓
+Domain contracts
+  ↓
+Repositories / Infrastructure
+  ↓
+SQLite + Filesystem + AI + Audio
+
+Cloudflare
+  ↕ shared room protocol
+Frontend Room subsystem
+
+Electron
+  → только desktop/platform responsibilities
+```
+
+А ключевой runtime flow:
+
+```text
+Original song
+→ validated processing job
+→ AI stages with explicit artifacts
+→ atomic publication
+→ valid lyricsSync domain document
+→ Library
+→ Karaoke master clock
+→ Recording with persisted offset
+→ correct Analysis
+```
+
+Room flow:
+
+```text
+Create/Join
+→ stable participant session
+→ explicit host ownership
+→ revision negotiation
+→ resumable package transfer
+→ import validation
+→ scheduled synchronized playback
+→ reconnect/host migration
+→ deterministic cleanup
+```
+
+---
+
+# 24. Итог
+
+Это задание является **единым планом работ**, собранным из полного анализа проекта.
+
+Главный принцип выполнения:
+
+> Сначала защитить данные и пользовательскую корректность.  
+> Затем устранить races и сбои.  
+> Затем стабилизировать audio/room/AI.  
+> Затем убрать фризы и resource degradation.  
+> Только после этого делать крупный архитектурный cleanup и готовить installer/release.
+
+Нарушение этой последовательности увеличит риск того, что большой refactor замаскирует существующие bugs или создаст новые.
+
+
+---
+---
+
+# PHASE 19 — ОТКАЗОУСТОЙЧИВОСТЬ ВСЕЙ СИСТЕМЫ
+
+Цель этапа — доказать, что отказ любой внешней или внутренней подсистемы переводит операцию в понятное терминальное состояние, не портит пользовательские данные и не оставляет процессы/ресурсы работать бесконтрольно.
+
+## TASK 19.1 — Падение backend процесса
+
+### Проблема
+
+Electron запускает backend как отдельный процесс. Если backend аварийно завершается во время обычной работы, frontend теряет API, а активные операции живут только частично в SQLite/filesystem.
+
+Необходимо различать:
+
+```text
+backend ещё запускается
+backend healthy
+backend упал
+backend был намеренно остановлен
+backend завис
+порт занят другим процессом
+backend перезапускается
+```
+
+### Требуется
+
+Создать явный `BackendSupervisor` с состояниями:
+
+```text
+STOPPED
+STARTING
+HEALTHY
+DEGRADED
+RESTARTING
+FAILED
+STOPPING
+```
+
+При unexpected exit:
+
+1. записать exit code/signal;
+2. зафиксировать app session/correlation id;
+3. проверить наличие активных processing/recording операций;
+4. не делать бесконечный restart loop;
+5. выполнить bounded retry policy;
+6. после исчерпания попыток показать пользователю конкретный error screen;
+7. на следующем успешном старте выполнить recovery незавершённых операций.
+
+### Обязательно проверить
+
+- backend убит сразу после запуска;
+- backend убит после healthy;
+- backend убит в середине AI processing;
+- backend завис и не отвечает health endpoint;
+- порт занят;
+- backend executable отсутствует;
+- SQLite невозможно открыть;
+- backend перезапустился, пока frontend открыт.
+
+### Definition of Done
+
+После любого из этих сценариев нет вечного loading, frontend знает состояние backend, а незавершённые Song/Recording состояния либо безопасно восстанавливаются, либо явно помечаются interrupted/error.
+
+---
+
+## TASK 19.2 — Падение AI/FFmpeg subprocess
+
+### Проблема
+
+AI pipeline зависит от внешних процессов/движков. Ошибка дочернего процесса не должна оставлять:
+
+- `PROCESSING` навсегда;
+- частичные outputs как финальные;
+- orphan process;
+- заблокированные файлы;
+- ложный `DONE`.
+
+### Требуется
+
+Каждый child process должен иметь единый lifecycle:
+
+```text
+spawn
+→ running
+→ success
+или
+→ terminate requested
+→ graceful terminate
+→ timeout
+→ kill process tree
+→ await exit
+→ cleanup
+```
+
+Finalization должна происходить только после проверки exit code и обязательных artifacts.
+
+### Проверки
+
+Искусственно:
+- вернуть exit code 1;
+- зависнуть навсегда;
+- создать только один из output files;
+- создать нулевой FLAC;
+- завершиться во время cancellation;
+- завершиться после того, как пользователь уже нажал Delete.
+
+---
+
+## TASK 19.3 — Disk full / read-only / исчезнувший диск
+
+### Требуется
+
+Все операции записи должны корректно обрабатывать:
+
+```text
+ENOSPC / disk full
+permission denied
+read-only filesystem
+external drive removed
+target folder deleted
+rename failure
+temporary folder unavailable
+```
+
+Особенно:
+
+- recording;
+- song processing;
+- package import;
+- package export;
+- model download;
+- settings save;
+- database writes.
+
+Перед длительными записями/скачиванием можно делать best-effort free-space preflight, но preflight не заменяет обработку реальной ошибки записи.
+
+### Definition of Done
+
+Ни одна ошибка диска не приводит к runaway RAM, ложному DONE или повреждению уже существующей рабочей версии песни.
+
+---
+
+## TASK 19.4 — CUDA/GPU failure
+
+### Требуется
+
+Обработать:
+
+- CUDA недоступна при запуске;
+- CUDA исчезла/driver error;
+- `CUDA out of memory`;
+- модель не помещается в VRAM;
+- GPU занята другим процессом;
+- unsupported capability.
+
+Policy должна быть явной:
+
+```text
+GPU attempt
+→ controlled cleanup
+→ optional CPU fallback
+или
+→ понятная terminal error
+```
+
+Нельзя silently бесконечно повторять GPU operation.
+
+---
+
+# PHASE 20 — ВОССТАНОВЛЕНИЕ ПОСЛЕ ПЕРЕЗАПУСКА
+
+## TASK 20.1 — Recovery незавершённой обработки песни
+
+На startup найти Song со статусами, которые предполагают живую in-memory operation, но operation отсутствует.
+
+Например:
+
+```text
+PROCESSING
+CANCELLING
+FINALIZING
+```
+
+Нужно:
+
+1. проверить staging/artifacts;
+2. определить, была ли publication завершена;
+3. если результат полностью валиден — завершить recovery;
+4. если нет — пометить `INTERRUPTED/ERROR`;
+5. сохранить понятную причину;
+6. разрешить безопасный retry.
+
+Запрещено оставлять вечный PROCESSING.
+
+---
+
+## TASK 20.2 — Recovery package import/export
+
+Импорт должен быть crash-safe.
+
+Для каждой стадии:
+
+```text
+downloaded/received
+extracted
+validated
+prepared
+published filesystem
+committed DB
+cleanup
+```
+
+должен быть известен recovery action.
+
+Нужны fault points после каждой стадии и restart test.
+
+---
+
+## TASK 20.3 — Recovery передачи файла
+
+После restart renderer/app незавершённый transfer не может продолжаться из старой памяти.
+
+Нужно:
+
+- очистить stale transfer records/temp files;
+- не показывать transfer как живой;
+- сообщить пользователю, что передача была прервана;
+- позволить retry/resume по новой session policy.
+
+Если реализован resumable transfer — persisted resume metadata должно быть проверяемым и ограниченным по времени.
+
+---
+
+## TASK 20.4 — Recovery комнаты
+
+После полного restart приложения пользователь не должен автоматически считаться тем же живым WebRTC peer без нового handshake.
+
+Нужно чётко решить:
+
+```text
+room membership не восстанавливается после app restart
+```
+
+или:
+
+```text
+восстанавливается через stable session token и серверную проверку
+```
+
+Не допускать ghost participant.
+
+---
+
+# PHASE 21 — LIFECYCLE ВСЕХ РЕСУРСОВ
+
+## TASK 21.1 — Общий lifecycle registry для диагностики
+
+В debug/diagnostics режиме показывать количество:
+
+```text
+backend child processes
+FFmpeg/AI child processes
+Recording sessions
+Threads
+Workers
+WebSocket
+RTCPeerConnection
+RTCDataChannel
+AudioContext
+remote <audio> elements
+timers/intervals
+active transfers
+temporary files
+WebGL contexts
+```
+
+Эти counters нужны для soak tests.
+
+---
+
+## TASK 21.2 — Idempotent dispose
+
+Каждая подсистема должна иметь безопасный повторный cleanup:
+
+```text
+dispose()
+dispose()
+```
+
+не вызывает новую ошибку.
+
+Особенно:
+
+- Online Room;
+- recording;
+- radio;
+- QFT;
+- Melody Editor;
+- Web Worker;
+- Electron backend supervisor.
+
+---
+
+## TASK 21.3 — Window lifecycle
+
+Проверить:
+
+- создание главного окна;
+- ready-to-show;
+- minimize;
+- maximize;
+- fullscreen;
+- restore;
+- renderer crash;
+- close;
+- app quit;
+- second instance;
+- monitor disconnect.
+
+Backend lifecycle не должен случайно зависеть от transient rerender/window event.
+
+---
+
+# PHASE 22 — ФАЙЛОВАЯ СИСТЕМА И WINDOWS PATHS
+
+## TASK 22.1 — Все temporary files должны иметь owner
+
+Для каждого temp/staging файла должен быть понятен:
+
+```text
+кто создаёт
+где хранится
+когда считается завершённым
+кто удаляет
+что происходит после crash
+```
+
+Использовать unique operation/session identifiers, а не только filename песни.
+
+---
+
+## TASK 22.2 — Коллизии имён
+
+Проверить:
+
+- две песни с одинаковым filename;
+- одинаковый title разных artists;
+- повторный import;
+- параллельный import;
+- package с одинаковыми member names;
+- Windows case-insensitive collisions.
+
+Display title не должен быть filesystem identity.
+
+---
+
+## TASK 22.3 — Windows reserved/Unicode/long filenames
+
+Протестировать:
+
+```text
+CON
+PRN
+AUX
+NUL
+COM1
+LPT1
+trailing dot
+trailing space
+кириллица
+украинские символы
+emoji
+quotes
+ampersand
+brackets
+very long title
+```
+
+Filesystem-safe filename должен отделяться от display metadata.
+
+---
+
+## TASK 22.4 — Reparse points / junction / symlink
+
+Trusted root validation должна учитывать Windows reparse points.
+
+Путь, текстово находящийся внутри library root, не должен через junction вести к arbitrary location.
+
+---
+
+# PHASE 23 — СОВМЕСТИМОСТЬ АУДИОФОРМАТОВ
+
+## TASK 23.1 — Preflight decode
+
+До запуска тяжёлого AI pipeline входной файл должен быть реально декодируем.
+
+Не доверять расширению.
+
+Проверить:
+
+- MP3 CBR/VBR;
+- WAV PCM 16/24/32;
+- WAV float;
+- FLAC;
+- M4A/AAC;
+- mono;
+- stereo;
+- multichannel;
+- 44.1/48/88.2/96 kHz;
+- повреждённый header;
+- расширение не соответствует codec.
+
+---
+
+## TASK 23.2 — Canonical internal audio format
+
+Зафиксировать один contract для persistent processing artifacts.
+
+Например:
+
+```text
+instrumental/vocals:
+FLAC
+sample rate: documented
+channels: documented
+sample format: documented
+```
+
+Все AI-specific resampling делать только на model boundary.
+
+---
+
+## TASK 23.3 — Metadata best-effort
+
+Повреждённая cover/tag metadata не должна делать валидный audio unusable.
+
+Разделить:
+
+```text
+audio decode validity
+metadata availability
+```
+
+---
+
+# PHASE 24 — ЕДИНАЯ ВРЕМЕННАЯ ШКАЛА
+
+## TASK 24.1 — Time domains
+
+Явно описать используемые временные домены:
+
+```text
+song time
+HTMLMediaElement local time
+recording local time
+AI frame time
+lyrics word time
+note time
+room server time
+room client monotonic time
+editor viewport time
+```
+
+Для каждого перехода должна быть одна функция преобразования.
+
+---
+
+## TASK 24.2 — Recording local → song time
+
+После добавления persistent playback offset любое analysis событие должно преобразовываться:
+
+```text
+songTime = playbackOffset + recordingLocalTime
+```
+
+---
+
+## TASK 24.3 — Tempo/time-stretch
+
+Определить, что хранят timestamps `lyricsSync.json`.
+
+Рекомендуется хранить время в **оригинальной timeline песни**.
+
+Playback при tempo/rate должен преобразовывать отображаемое время, но не переписывать source document.
+
+---
+
+## TASK 24.4 — Room time
+
+Все синхронные player commands должны иметь:
+
+```text
+transport revision
+target server timestamp
+song position
+rate/tempo
+key if relevant
+```
+
+Client применяет состояние в запланированный момент, а не просто «когда сообщение приехало».
+
+---
+
+# PHASE 25 — LATENCY И DSP QUALITY
+
+## TASK 25.1 — Latency budget
+
+Снять отдельные задержки:
+
+```text
+mic hardware buffer
+browser/AudioContext
+local monitor DSP
+recording path
+WebRTC encode/jitter/decode
+room remote playback
+player command synchronization
+```
+
+Для каждой hardware configuration записывать measured latency.
+
+---
+
+## TASK 25.2 — Gain staging
+
+Определить dB contract.
+
+Не использовать произвольные множители без headroom.
+
+Проверить peak при:
+
+- microphone gain max;
+- EQ/effects;
+- reverb/delay;
+- participant volume;
+- monitoring;
+- recording mix.
+
+Если разрешён gain выше 100%, должен быть понятный limiter/headroom strategy.
+
+---
+
+## TASK 25.3 — Clipping tests
+
+Synthetic full-scale sine/noise не должен производить неконтролируемый digital clipping после цепочки DSP.
+
+Сохранять peak/RMS diagnostics в test.
+
+---
+
+## TASK 25.4 — Noise suppression artifacts
+
+Создать audio corpus:
+
+- тихий вокал;
+- громкий вокал;
+- согласные;
+- дыхание;
+- background fan;
+- broadband noise;
+- music bleed.
+
+Проверить, что denoise/gate не уничтожает полезный сигнал.
+
+---
+
+# PHASE 26 — AI FALLBACK, MODELS, QUALITY И DETERMINISM
+
+## TASK 26.1 — CPU-only supported configuration
+
+На чистой Windows без NVIDIA:
+
+```text
+app starts
+models detected
+processing can start
+progress works
+cancel works
+result valid
+```
+
+Если конкретная модель не имеет CPU path — UI должен сообщать это заранее, а не падать во время inference.
+
+---
+
+## TASK 26.2 — Low VRAM
+
+Проверить GPU 4/6/8GB или ограничить VRAM искусственно.
+
+Runtime должен:
+
+- не загружать одновременно ненужные models;
+- освобождать временные tensors;
+- не держать QFT heavy quality без необходимости во время CUDA processing;
+- показывать fallback/error.
+
+---
+
+## TASK 26.3 — Model manifest
+
+Каждая модель:
+
+```text
+model id
+version
+engine compatibility
+expected size
+SHA-256
+download source
+installed path
+verified timestamp
+```
+
+Не определять compatibility только по filename.
+
+---
+
+## TASK 26.4 — Повреждённая модель
+
+После изменения bytes/partial download:
+
+- model не считается ready;
+- processing не стартует;
+- UI предлагает repair/download;
+- старый valid model не удаляется до успешной замены, если возможно.
+
+---
+
+## TASK 26.5 — AI quality golden corpus
+
+Создать фиксированный набор песен/фрагментов с manually verified expectations.
+
+Измерять отдельно:
+
+### Separation
+- vocal loss;
+- instrumental vocal bleed;
+- artifacts.
+
+### ASR
+- WER/CER;
+- missing words.
+
+### Alignment
+- median/P95 word boundary error;
+- accumulated drift.
+
+### Pitch/notes
+- cents error;
+- octave errors;
+- false short notes;
+- fragmentation;
+- note precision/recall.
+
+Новый faster pipeline нельзя принимать, если он существенно ухудшает quality thresholds.
+
+---
+
+## TASK 26.6 — Determinism contract
+
+Для одинаковых:
+
+```text
+input bytes
+model versions
+settings
+device class
+```
+
+определить допустимое изменение output.
+
+Если byte-identical невозможно — сравнивать canonical semantic result с tolerance.
+
+Зафиксировать random seeds/shifts, где поддерживается.
+
+Canonical JSON должен иметь стабильную сортировку и округление.
+
+---
+
+# PHASE 27 — КЭШИРОВАНИЕ И INVALIDATION
+
+## TASK 27.1 — Кэшировать только по content identity
+
+Кэш должен иметь зависимость от:
+
+```text
+input content hash/revision
+model version
+relevant settings
+algorithm version
+```
+
+Не только от song id.
+
+---
+
+## TASK 27.2 — Artifact dependency cache
+
+Пример:
+
+```text
+instrumental changed
+→ music analysis invalid
+→ pitch/lyrics maybe invalid depending source
+
+only note-display algorithm changed
+→ separation/ASR unchanged
+```
+
+Описать dependency graph.
+
+---
+
+## TASK 27.3 — Revision invalidation централизовать
+
+Любая canonical mutation должна автоматически инвалидировать/обновлять revision через repository.
+
+Caller не должен помнить отдельный `invalidate_content_revision()`.
+
+---
+
+## TASK 27.4 — Кэш не должен скрывать corruption
+
+Если metadata говорит «не изменилось», но пользователь запросил deep verify/repair — сделать полный hash.
+
+---
+
+# PHASE 28 — PROCESSING QUEUE И SONG STATE MACHINE
+
+## TASK 28.1 — Device-aware processing scheduler
+
+Определить максимальную concurrency.
+
+Рекомендуемый безопасный default:
+
+```text
+heavy GPU processing jobs: 1
+CPU jobs: configurable bounded
+light metadata tasks: separate pool
+```
+
+Пять одновременных requests не должны запускать пять тяжёлых CUDA pipelines.
+
+---
+
+## TASK 28.2 — Priority
+
+Предусмотреть хотя бы архитектурно:
+
+```text
+interactive user request
+background repair
+model verification
+maintenance
+```
+
+Не обязательно делать сложную очередь сразу, но maintenance не должна вытеснять active user processing.
+
+---
+
+## TASK 28.3 — Song state transitions
+
+Ввести централизованную проверку:
+
+```text
+PENDING → PROCESSING
+PROCESSING → DONE
+PROCESSING → ERROR
+PROCESSING → CANCELLING → CANCELLED
+ERROR → PROCESSING (если retry prerequisites выполнены)
+CANCELLED → PROCESSING
+DONE → REPROCESSING → DONE/ERROR
+```
+
+Невозможные переходы возвращают typed conflict error.
+
+---
+
+## TASK 28.4 — Terminal operation guarantee
+
+Каждая operation через timeout/recovery в конечном счёте имеет:
+
+```text
+DONE
+ERROR
+CANCELLED
+INTERRUPTED
+```
+
+Никаких вечных промежуточных состояний.
+
+---
+
+# PHASE 29 — API И WEBSOCKET PROTOCOL
+
+## TASK 29.1 — OpenAPI как источник API schema
+
+Сгенерировать frontend types/client из FastAPI OpenAPI.
+
+Manual wrappers могут оставаться business-friendly facade, но method/path/body/response schema не должны вручную дублироваться.
+
+---
+
+## TASK 29.2 — Nullable/default compatibility
+
+Для каждого поля различать:
+
+```text
+missing
+null
+empty string
+0
+false
+[]
+```
+
+Не использовать truthiness там, где `0`/`false` валидны.
+
+---
+
+## TASK 29.3 — Protocol version
+
+Room WebSocket handshake должен передавать protocol version.
+
+Несовместимый client/server получает явную ошибку, а не странное частичное поведение.
+
+---
+
+## TASK 29.4 — Message sequence/revision
+
+Mutating room state messages должны содержать sequence/revision.
+
+Старое состояние не может примениться поверх нового после delayed async callback/reconnect.
+
+---
+
+## TASK 29.5 — Ack/idempotency
+
+Critical commands:
+
+```text
+play
+pause
+seek
+select song
+begin transfer
+cancel transfer
+```
+
+должны иметь command id.
+
+Duplicate message с тем же id не выполняет действие повторно.
+
+---
+
+# PHASE 30 — SONG TRANSFER И NETWORK DEGRADATION
+
+## TASK 30.1 — Transfer state machine
+
+Оформить:
+
+```text
+CREATED
+WAITING_CHANNEL
+ADMITTED
+SENDING
+WAITING_VERIFY
+IMPORTING
+DONE
+CANCELLED
+ERROR
+```
+
+Хранить terminal reason.
+
+---
+
+## TASK 30.2 — Resume
+
+Минимальная metadata:
+
+```text
+transferId
+contentRevision
+totalBytes
+chunkSize
+confirmedChunk/offset
+```
+
+Если resume не реализован — это должно быть явным продуктовым ограничением и UI говорит, что transfer начнётся заново.
+
+---
+
+## TASK 30.3 — Timeout policy
+
+Разделить:
+
+```text
+channel open timeout
+idle/no-progress timeout
+verification timeout
+import timeout
+```
+
+Не использовать один огромный timeout на всё.
+
+Медленная, но прогрессирующая передача не должна ошибочно считаться зависшей.
+
+---
+
+## TASK 30.4 — Network shaping tests
+
+Протестировать:
+
+```text
+RTT 20 / 100 / 300 / 800 ms
+packet loss 1 / 5 / 10 %
+jitter
+50 KB/s
+200 KB/s
+1 MB/s
+offline 1 / 5 / 30 sec
+```
+
+---
+
+# PHASE 31 — ROOM STATE MACHINE И PERMISSIONS
+
+## TASK 31.1 — Формальная state machine комнаты
+
+Client states:
+
+```text
+DISCONNECTED
+CONNECTING
+JOINED
+RECONNECTING
+LEAVING
+ERROR
+```
+
+Server participant states и host ownership должны быть однозначны.
+
+---
+
+## TASK 31.2 — Host disconnect
+
+Реализовать выбранный ранее policy полностью.
+
+Если migration:
+
+- deterministic successor;
+- worker authoritative;
+- `host-changed`;
+- permissions immediately update;
+- player/transfer ownership reconciled.
+
+Если close-room:
+
+- explicit close reason;
+- guests leave;
+- transfers terminate.
+
+---
+
+## TASK 31.3 — Kick/leave
+
+Определить server-side authority для kick.
+
+Guest не может кикнуть host/другого guest, если это не разрешено product requirements.
+
+Kick должен отличаться от network disconnect для UX/logging.
+
+---
+
+## TASK 31.4 — Permission matrix
+
+Создать таблицу:
+
+| Action | Host | Guest | Local-only |
+|---|---:|---:|---:|
+| select song | ... | ... | ... |
+| play/pause | ... | ... | ... |
+| seek | ... | ... | ... |
+| tempo/key | ... | ... | ... |
+| radio | ... | ... | ... |
+| kick | ... | ... | ... |
+| participant volume | ... | ... | ... |
+| own microphone | ... | ... | ... |
+
+Worker должен enforce общие permissions, а не только UI.
+
+---
+
+# PHASE 32 — PLAYER SYNC
+
+## TASK 32.1 — Transport state
+
+Room transport state должен включать минимум:
+
+```text
+songRevision
+playing
+positionAtReferenceTime
+referenceServerTime
+playbackRate/tempo
+key shift
+transportRevision
+```
+
+---
+
+## TASK 32.2 — Drift correction policy
+
+Пример:
+
+```text
+< 20 ms: ничего
+20–80 ms: very small rate convergence
+80–250 ms: stronger temporary rate correction
+> 250 ms: hard seek
+```
+
+Порог подобрать измерениями, а не вслепую.
+
+---
+
+## TASK 32.3 — Background/minimized renderer
+
+Chromium throttling не должен разрушать synchronization при restore.
+
+После возвращения client должен сразу пересчитать expected position от server-time state.
+
+---
+
+# PHASE 33 — OFFLINE MODE
+
+## TASK 33.1 — Offline startup
+
+При уже установленных моделях без internet должны работать:
+
+- Library;
+- local processing;
+- Karaoke;
+- Melody Editor;
+- Recording;
+- Analysis;
+- Settings, не требующие сети.
+
+Online Room отдельно показывает offline.
+
+---
+
+## TASK 33.2 — External lyrics/network sources
+
+Любой online lookup имеет короткий bounded timeout и fallback.
+
+Нельзя держать весь processing несколько минут из-за недоступного сайта.
+
+---
+
+## TASK 33.3 — Model download
+
+Если модели отсутствуют, UI чётко сообщает, что именно требует internet.
+
+---
+
+# PHASE 34 — SECURITY, SECRETS И PRIVACY
+
+## TASK 34.1 — Electron backend token
+
+Не отдавать backend auth token обычному feature JS, если можно избежать.
+
+Предпочтительно:
+
+```text
+renderer calls isolated preload API
+preload/internal transport injects token
+```
+
+Не логировать token.
+
+---
+
+## TASK 34.2 — IPC schemas
+
+Каждый IPC handler:
+
+- принимает строго определённый shape;
+- валидирует type/length/path;
+- имеет ограниченную capability;
+- не позволяет произвольный shell/file access.
+
+---
+
+## TASK 34.3 — `openExternal` / shell
+
+Разрешить только нужные schemes, например `https:`/`http:`.
+
+Не открывать arbitrary `file:`, custom executable protocols и command-like inputs из renderer.
+
+---
+
+## TASK 34.4 — Secret scan
+
+В release check искать:
+
+```text
+private keys
+tokens
+password=
+secret=
+API keys
+.env production files
+```
+
+Test fixtures можно allowlist с явным marker.
+
+---
+
+## TASK 34.5 — Privacy data map
+
+Документировать:
+
+### Локально
+- songs/stems;
+- lyrics;
+- recordings;
+- DB/history;
+- audio device settings;
+- models/cache;
+- logs.
+
+### Уходит в сеть
+- room signaling metadata;
+- participant info;
+- song metadata/revisions;
+- remote diagnostic logs, если функция используется.
+
+Не отправлять raw recordings/song audio куда-либо, кроме явно необходимого P2P transfer, без product requirement.
+
+---
+
+## TASK 34.6 — Log redaction
+
+Санитизировать:
+
+```text
+API token
+host token
+authorization headers
+home directory / username where not needed
+full sensitive local paths
+room secrets
+```
+
+---
+
+# PHASE 35 — LOGGING, OBSERVABILITY И ERROR PROPAGATION
+
+## TASK 35.1 — Liveness/readiness separation
+
+Diagnostics:
+
+```text
+liveness: process responds
+readiness:
+  DB readable/writable
+  library writable
+  ffmpeg available
+  required models ready
+  audio subsystem status
+```
+
+Не блокировать startup на optional capability, но показывать её состояние.
+
+---
+
+## TASK 35.2 — State transition logs
+
+Для Song/Recording/Room/Transfer:
+
+```text
+oldState
+newState
+reason
+operationId
+duration
+```
+
+---
+
+## TASK 35.3 — Ошибки нельзя превращать в silent null
+
+Audit каждого:
+
+```text
+except: pass
+except Exception: return None
+.catch(() => {})
+```
+
+Для каждого решить:
+
+1. expected and harmless cleanup;
+2. optional degraded feature;
+3. fatal operation error.
+
+В первом случае допустим debug log, в остальных ошибка должна propagatе.
+
+---
+
+## TASK 35.4 — Log rotation
+
+Ограничить:
+
+```text
+max file size
+number of files
+max total bytes
+retention days
+```
+
+---
+
+# PHASE 36 — FRONTEND STATE, HOOKS И RENDERING
+
+## TASK 36.1 — Классифицировать state
+
+Каждый state должен относиться к одному типу:
+
+```text
+server state
+local UI state
+high-frequency stream state
+room synchronized state
+persistent settings
+```
+
+High-frequency stream state не хранить в широком Context.
+
+---
+
+## TASK 36.2 — Dependency arrays
+
+После refactor проверить effects на:
+
+- unstable objects/arrays/functions;
+- пропущенные dependencies;
+- stale closure;
+- cleanup generation.
+
+Особенно:
+
+```text
+QFT
+useRoomSync
+media effects
+WebRTC lifecycle
+editor blob/media loading
+```
+
+---
+
+## TASK 36.3 — React keys
+
+Lists должны использовать stable entity ids, не index, если list может insert/delete/reorder.
+
+Особенно notes/words/participants/songs.
+
+---
+
+# PHASE 37 — ACCESSIBILITY, I18N, DPI И ВИЗУАЛЬНАЯ КОНСИСТЕНТНОСТЬ
+
+## TASK 37.1 — Keyboard-only journey
+
+Без мыши пройти:
+
+```text
+Library
+search/filter
+open song
+Karaoke controls
+Settings
+room controls
+Melody Editor core actions
+modal dialogs
+```
+
+---
+
+## TASK 37.2 — Focus management
+
+Modal/popover:
+
+- focus trap;
+- Escape;
+- restore focus;
+- background inert;
+- no focus lost to body.
+
+---
+
+## TASK 37.3 — ARIA
+
+Все icon-only buttons имеют accessible name.
+
+Custom sliders имеют:
+
+```text
+role
+aria-valuemin
+aria-valuemax
+aria-valuenow
+aria-valuetext
+keyboard arrows
+```
+
+---
+
+## TASK 37.4 — Localization completeness
+
+Для RU/UA/EN:
+
+- одинаковый набор keys;
+- никаких UI key fallbacks;
+- plural forms;
+- durations/numbers/filesizes через locale-aware formatter.
+
+Backend возвращает codes, не русский/украинский текст как machine contract.
+
+---
+
+## TASK 37.5 — DPI
+
+Windows:
+
+```text
+100%
+125%
+150%
+175%
+200%
+```
+
+Проверить:
+
+- canvas sharpness;
+- QFT;
+- PianoRoll;
+- Melody Editor pointer coordinates;
+- modals;
+- drag/resize hit testing.
+
+---
+
+## TASK 37.6 — Z-index contract
+
+Создать semantic levels:
+
+```text
+base
+sticky
+dropdown
+popover
+toast
+modal backdrop
+modal
+critical overlay
+```
+
+Feature не должна писать случайные `z-index: 999999`.
+
+---
+
+# PHASE 38 — WINDOWS DESKTOP UX
+
+## TASK 38.1 — Multi-monitor bounds
+
+Если приложение было закрыто на monitor, которого больше нет, при следующем запуске окно возвращается на доступный display.
+
+---
+
+## TASK 38.2 — Non-admin execution
+
+После установки обычный пользователь должен иметь write permissions на все mutable dirs.
+
+Program Files/application binary directory не используется для user-generated data, если это требует admin.
+
+---
+
+## TASK 38.3 — Sleep/resume
+
+Проверить sleep во время:
+
+- idle;
+- Karaoke playback;
+- Online Room;
+- Recording;
+- model download.
+
+После resume:
+
+- audio devices revalidate;
+- room reconnects;
+- timers/clocks recalibrate;
+- backend не считается mysteriously dead без retry.
+
+---
+
+## TASK 38.4 — Defender/antivirus delays
+
+Backend readiness timeout не должен быть настолько коротким, что небольшой Defender first-launch scan выглядит как failure.
+
+Но нельзя просто сделать огромный timeout: UI показывает startup progress и причину.
+
+---
+
+# PHASE 39 — INSTALLER, UPGRADE, UNINSTALL, PORTABILITY
+
+## TASK 39.1 — Clean install
+
+На Windows VM без dev tools:
+
+```text
+install
+launch
+process a song
+play
+record
+analyze
+close/reopen
+```
+
+---
+
+## TASK 39.2 — Upgrade fixtures
+
+Подготовить данные из предыдущих поддерживаемых releases:
+
+- DB;
+- settings;
+- songs;
+- lyricsSync;
+- recordings;
+- package;
+- models.
+
+Установить новую версию поверх и проверить.
+
+---
+
+## TASK 39.3 — Uninstall policy
+
+Явно решить отдельно для:
+
+```text
+application binaries
+database
+settings
+songs/library
+recordings
+models
+cache
+logs
+```
+
+User library/recordings нельзя удалять неожиданно.
+
+---
+
+## TASK 39.4 — Portable transfer на другой PC
+
+Экспорт portable Song проекта на PC A, импорт на PC B:
+
+- без original absolute paths;
+- без dependence на old drive;
+- с preserved revision/lyrics/notes.
+
+Machine-specific audio device ids не переносить как mandatory setting.
+
+---
+
+# PHASE 40 — BUILD REPRODUCIBILITY И SIZE
+
+## TASK 40.1 — Release manifest
+
+Каждая сборка генерирует:
+
+```json
+{
+  "appVersion": "...",
+  "sourceRevisionOrBuildId": "...",
+  "node": "...",
+  "npm": "...",
+  "python": "...",
+  "dependencies": {...},
+  "models": [{"id":"...","sha256":"..."}],
+  "ffmpeg": "...",
+  "files": [{"path":"...","sha256":"..."}]
+}
+```
+
+Это не зависит от наличия Git в пользовательском архиве: build id может задаваться build system/env.
+
+---
+
+## TASK 40.2 — Python lock
+
+Release install использует frozen exact dependency set с hashes.
+
+---
+
+## TASK 40.3 — Build twice
+
+Две чистые машины с одинаковыми inputs должны дать одинаковый logical manifest.
+
+Byte-identical installer может различаться из-за timestamp/signing; это нужно учитывать отдельно.
+
+---
+
+## TASK 40.4 — Size report
+
+Вывести top contributors:
+
+```text
+models
+Python packages
+Electron runtime
+native DLL
+frontend chunks
+assets
+duplicate files
+```
+
+Оптимизировать только после проверки runtime necessity.
+
+---
+
+# PHASE 41 — STARTUP И SHUTDOWN
+
+## TASK 41.1 — Startup timeline
+
+Логировать timestamps:
+
+```text
+electron process start
+backend spawn
+backend first output
+backend healthy
+window create
+frontend loaded
+library ready
+interactive
+```
+
+Сравнить cold/warm.
+
+---
+
+## TASK 41.2 — Lazy expensive work
+
+Не делать до первого meaningful user request:
+
+- deep model SHA;
+- heavy cache scan;
+- unnecessary ffmpeg version subprocess;
+- network room connection, если room не используется.
+
+---
+
+## TASK 41.3 — Shutdown active processing
+
+При app quit:
+
+- запросить cancel;
+- bounded wait;
+- terminate/kill-tree;
+- DB terminal state;
+- temp cleanup/recovery marker.
+
+---
+
+## TASK 41.4 — Shutdown recording
+
+Перед закрытием:
+
+- stop input stream;
+- flush/close file writer;
+- bounded wait;
+- restore/close monitoring;
+- persist recording state.
+
+---
+
+# PHASE 42 — CODE QUALITY, OWNERSHIP, COMPLEXITY И PUBLIC INTERFACES
+
+## TASK 42.1 — Ownership map
+
+Назначить повышенный review уровень зонам:
+
+```text
+AI/Pipeline
+Song data/package
+Online Room
+Audio/Recording
+Electron/Installer
+Melody Editor/Karaoke timing
+```
+
+Любое изменение этих зон запускает соответствующий critical test subset.
+
+---
+
+## TASK 42.2 — Complexity threshold
+
+Использовать LOC/complexity как warning, а не слепой hard fail.
+
+При функции с большим числом:
+
+- branches;
+- async exits;
+- cleanup paths;
+- external side effects;
+
+требовать extraction/state machine.
+
+---
+
+## TASK 42.3 — Дублированная бизнес-логика
+
+Особенно устранить повторение:
+
+- API route schemas;
+- Room protocol schema;
+- lyrics validation;
+- version constants;
+- path trust logic;
+- locking rules;
+- state transitions.
+
+---
+
+## TASK 42.4 — Public interfaces
+
+Внутренние детали не должны протекать наружу:
+
+- router не импортирует внутренний AI implementation;
+- feature UI не знает raw Electron bridge;
+- Song не использует двусмысленный `source_path`;
+- frontend API не экспортирует nonexistent backend methods.
+
+---
+
+# PHASE 43 — TEST ARCHITECTURE И MUTATION
+
+## TASK 43.1 — Test pyramid по реальным boundaries
+
+Unit:
+- pure validators;
+- state reducers;
+- transformations.
+
+Integration:
+- FastAPI + SQLite + temp filesystem;
+- package round-trip;
+- pipeline orchestration with fake engines.
+
+E2E:
+- packaged/full frontend-backend journey;
+- multi-client Room.
+
+Hardware:
+- audio;
+- CUDA.
+
+---
+
+## TASK 43.2 — Mutation на safety invariants
+
+Намеренно удалить/инвертировать:
+
+- path check;
+- lock;
+- note boundary;
+- content revision check;
+- room role check;
+- transport revision check;
+- monitoring finally;
+- recording fatal writer handling.
+
+Тесты обязаны падать.
+
+---
+
+# PHASE 44 — STRESS, SOAK И FAULT INJECTION
+
+## TASK 44.1 — Stress matrix
+
+### Library
+```text
+100
+1 000
+10 000 songs
+```
+
+### Editor
+```text
+500
+2 000
+10 000 notes
+```
+
+### Package
+```text
+50 MB
+300 MB
+1 GB
+```
+
+### Room
+```text
+2
+4
+6
+8 participants
+```
+
+### Audio
+```text
+5
+30
+60+ minute tracks
+```
+
+---
+
+## TASK 44.2 — 8–24 hour soak
+
+Автоматически выполнять:
+
+- song switching;
+- room join/leave/reconnect;
+- recording cycles;
+- QFT/radio;
+- API polling;
+- transfers.
+
+Собирать resource time series.
+
+Pass criterion: показатели достигают plateau, а не растут линейно.
+
+---
+
+## TASK 44.3 — Fault injection library
+
+Создать test helpers, позволяющие детерминированно:
+
+```text
+fail write
+fail rename
+delay operation
+kill child
+return corrupt data
+drop websocket
+close datachannel
+simulate OOM
+simulate device loss
+```
+
+---
+
+# PHASE 45 — ГРАНИЧНЫЕ СЛУЧАИ И BACKWARD COMPATIBILITY
+
+## TASK 45.1 — Numeric edge cases
+
+Reject/handle:
+
+```text
+NaN
+Infinity
+negative time
+zero duration
+start == end
+end beyond song
+MIDI outside 0..127
+absurd BPM
+```
+
+---
+
+## TASK 45.2 — Empty states
+
+Valid UI для:
+
+- no lyrics;
+- no notes;
+- no cover;
+- empty library;
+- no microphone;
+- no output device;
+- no models;
+- no internet;
+- room alone.
+
+---
+
+## TASK 45.3 — Старые форматы
+
+Хранить fixture corpus предыдущих:
+
+- DB schemas;
+- lyricsSync;
+- package manifests;
+- Song directory layouts.
+
+Каждый новый release прогоняет forward compatibility.
+
+---
+
+# PHASE 46 — RELEASE BLOCKERS И PRODUCTION READINESS
+
+Стабильный релиз **запрещён**, пока остаётся хотя бы один из следующих классов проблем:
+
+## Блокирующие correctness
+
+- full process может принять instrumental за original;
+- recording analysis не учитывает playback offset;
+- user-edited lyrics/notes могут быть потеряны из-за write/matching logic;
+- portable package не round-trip;
+- old library song ломается на reprocess.
+
+## Блокирующие stability
+
+- recording writer failure может бесконечно наращивать RAM;
+- monitoring не восстанавливается после fatal recording stop;
+- storage/model path race;
+- Song может зависнуть в PROCESSING после crash.
+
+## Блокирующие Online Room
+
+- не определено поведение host disconnect;
+- reconnect identity/state не согласованы;
+- transfer failure/reconnect не имеет надёжного terminal/recovery поведения;
+- player sync не выдерживает сетевую деградацию в заявленных пределах.
+
+## Блокирующие compatibility
+
+- нет доказанного upgrade старых DB/song formats;
+- clean Windows install не проходит полный critical journey.
+
+---
+
+# PHASE 47 — ROADMAP ПО ПРИОРИТЕТАМ
+
+## P0 — немедленно
+
+1. original source / instrumental separation;
+2. recording playback offset;
+3. recording bounded queue + fatal writer state;
+4. monitoring restore;
+5. lyrics locking;
+6. notes preservation;
+7. historical root reprocess;
+8. canonical package/revision;
+9. storage/model path concurrency;
+10. Song state/recovery;
+11. host disconnect policy;
+12. transfer terminal states.
+
+## P1 — до Release Candidate
+
+13. reconnect stable identity;
+14. room command revisions/acks;
+15. player scheduled sync/drift correction;
+16. AI artifact validation;
+17. model manifest/cache;
+18. CPU/GPU fallback tests;
+19. QFT lifecycle fix;
+20. high-frequency React state isolation;
+21. library revision batching;
+22. editor virtualization;
+23. startup/shutdown hardening;
+24. DB/lyrics/package migrations;
+25. Electron IPC/platform boundary;
+26. structured logs/error codes;
+27. clean Windows install/upgrade.
+
+## P2 — после устранения correctness/stability blockers, но желательно до stable release
+
+28. decomposition God services;
+29. build script decomposition;
+30. secondary QFT allocations;
+31. full dependency cleanup;
+32. design-system structure cleanup;
+33. extra bundle size optimization.
+
+---
+
+# PHASE 48 — ФИНАЛЬНЫЙ ФОРМАТ ОТЧЁТА ИСПОЛНИТЕЛЯ
+
+После каждой задачи исполнитель обязан заполнить:
+
+```text
+TASK:
+Status: DONE / PARTIAL / BLOCKED
+
+Root cause:
+Почему происходила проблема:
+
+User-visible failure:
+Как пользователь видел проблему:
+
+Changed files:
+-
+
+Data/schema changes:
+-
+
+Migration/backward compatibility:
+-
+
+Old implementation removed:
+-
+
+New implementation:
+-
+
+Error/recovery behavior:
+-
+
+Tests added:
+-
+
+Fault tests:
+-
+
+Performance/resource impact:
+-
+
+Commands/checks executed:
+-
+
+Results:
+-
+
+Remaining risks:
+-
+```
+
+---
+
+# PHASE 49 — ФИНАЛЬНЫЕ ИЗМЕРИМЫЕ КРИТЕРИИ
+
+Проект можно объявить готовым только если одновременно выполнено следующее.
+
+## Correctness
+
+- critical user journeys зелёные;
+- golden AI corpus не ухудшен сверх thresholds;
+- recording from seek анализируется правильно;
+- package round-trip preserves project;
+- old supported project fixtures открываются.
+
+## Stability
+
+- disk/process/network/GPU fault matrix зелёная;
+- нет вечных intermediate states;
+- нет runaway queue;
+- recovery после crash детерминирован.
+
+## Resources
+
+После soak:
+- RSS имеет plateau;
+- renderer heap имеет plateau;
+- AudioContexts возвращаются к expected count;
+- PeerConnections/DataChannels очищаются;
+- VRAM не растёт от песни к песне без bounds;
+- temp files не накапливаются.
+
+## Performance
+
+- Library 1k songs usable;
+- Editor 10k notes usable в согласованном target;
+- QFT не rebuild на обычном parent render;
+- Karaoke не делает top-level React commit каждый animation frame;
+- unchanged model readiness не перечитывает гигабайтный checkpoint;
+- room revision sync не делает N requests на unrelated render.
+
+## Room
+
+- host disconnect работает согласно documented policy;
+- reconnect работает предсказуемо;
+- transfer failure имеет terminal reason;
+- player drift находится в измеренном допустимом диапазоне.
+
+## Desktop/Windows
+
+- clean non-admin Windows install;
+- Unicode/DPI/long paths;
+- sleep/resume;
+- second instance;
+- close during processing/recording;
+- upgrade N-1→N;
+- uninstall policy проверен.
+
+## Diagnostics
+
+По одному пользовательскому diagnostic bundle можно восстановить:
+- app/backend version;
+- operation;
+- state transitions;
+- failure subsystem;
+- error code;
+- relevant timings;
+- resource condition;
+- без раскрытия secrets.
+
+---
+
+# ФИНАЛЬНАЯ ЦЕЛЕВАЯ МОДЕЛЬ
+
+После выполнения задания система должна выглядеть концептуально так:
+
+```text
+Electron Desktop Shell
+    │
+    ├── BackendSupervisor
+    ├── strict IPC/platform adapter
+    └── React renderer
+            │
+            ├── feature-local UI state
+            ├── server state client
+            ├── high-frequency external stores
+            └── Room client
+                    │
+                    ├── shared versioned protocol
+                    ├── stable participant session
+                    ├── transfer state machine
+                    └── transport synchronization
+
+FastAPI
+    │
+    ├── API adapters
+    ├── Application services
+    │      ├── ProcessingJobManager
+    │      ├── Song service
+    │      ├── Recording manager
+    │      └── Package importer/exporter
+    │
+    ├── Domain
+    │      ├── Song aggregate
+    │      ├── lyricsSync schema/version
+    │      ├── Recording timing
+    │      └── state/error contracts
+    │
+    └── Infrastructure
+           ├── SQLite
+           ├── filesystem
+           ├── FFmpeg/audio
+           └── AI processor/model registry
+```
+
+Ключевой принцип:
+
+```text
+данные и state machines сначала
+→ отказоустойчивость и recovery
+→ audio/room/AI correctness
+→ performance/resources
+→ архитектурная декомпозиция
+→ installer/production release
+```
+
+Нельзя менять эту последовательность ради косметического рефакторинга.

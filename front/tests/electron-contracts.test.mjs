@@ -286,9 +286,10 @@ describe("song folder matching", () => {
   });
 });
 describe("preload bridge", () => {
-  function runPreload(arguments_ = []) {
+  function runPreload(arguments_ = [], { sendSyncResult = "test-api-token" } = {}) {
     const invoke = vi.fn((...values) => values);
     const exposeInMainWorld = vi.fn();
+    const sendSync = vi.fn(() => sendSyncResult);
     const originalArguments = process.argv;
     // Loading through Node's CJS loader keeps coverage attributable while replacing
     // only Electron's process-bound bridge with this local contract fake.
@@ -296,7 +297,8 @@ describe("preload bridge", () => {
     const originalLoad = nodeModule._load;
     // eslint-disable-next-line no-underscore-dangle
     nodeModule._load = function load(specifier, parent, isMain) {
-      if (specifier === "electron") return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } };
+      if (specifier === "electron")
+        return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke, sendSync } };
       return originalLoad.call(this, specifier, parent, isMain);
     };
     process.argv = ["electron", "app", ...arguments_];
@@ -310,18 +312,20 @@ describe("preload bridge", () => {
       // eslint-disable-next-line no-underscore-dangle
       nodeModule._load = originalLoad;
     }
-    return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke };
+    return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke, sendSync };
   }
   test("exposes the minimal frozen-channel renderer API", () => {
-    const { api, exposeInMainWorld, invoke } = runPreload(["--advoice-theme=violet", "--advoice-backend-url=http://127.0.0.1:8123"]);
+    const { api, exposeInMainWorld, invoke, sendSync } = runPreload(["--advoice-theme=violet", "--advoice-backend-url=http://127.0.0.1:8123"]);
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     same(
       [exposeInMainWorld.mock.calls[0][0], "electronAPI"],
       [api.initialTheme, "violet"],
       [api.backendUrl, "http://127.0.0.1:8123"],
+      [api.apiToken, "test-api-token"],
       [api.isElectron, true],
       [api.getSceneVideoUrl(), "karaoke-media://scene/main"]
     );
+    expect(sendSync).toHaveBeenCalledWith("advoice:get-api-token");
     sameDeep(
       [api.minimize(), ["window:minimize"]],
       [api.maximize(), ["window:maximize"]],
@@ -336,5 +340,9 @@ describe("preload bridge", () => {
   });
   test("leaves runtime arguments undefined when Electron did not inject them", () => {
     expect(runPreload().api).toMatchObject({ initialTheme: undefined, backendUrl: undefined });
+  });
+  test("normalizes a rejected/missing token to undefined instead of an empty string", () => {
+    const { api } = runPreload([], { sendSyncResult: "" });
+    expect(api.apiToken).toBeUndefined();
   });
 });

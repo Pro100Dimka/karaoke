@@ -22,6 +22,7 @@ export const enMessages = {
   "error.screen.title": "Could not open the screen",
   "error.screen.restart": "Restart interface",
   "backend.starting": "Starting local server…",
+  "backend.starting.slow": "The first launch is taking longer than usual — your antivirus may be scanning the app files. Please wait, this is normal.",
   "backend.failed": "Local server did not start.",
   "backend.retry": "Retry",
   "room.participants": "Room participants",

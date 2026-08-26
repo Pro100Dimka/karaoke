@@ -18,6 +18,7 @@ export const ruMessages = {
   "error.screen.title": "Не удалось открыть экран",
   "error.screen.restart": "Перезапустить интерфейс",
   "backend.starting": "Запускаем локальный сервер…",
+  "backend.starting.slow": "Первый запуск занимает больше времени, чем обычно — возможно, антивирус проверяет файлы приложения. Подождите, это нормально.",
   "app.controls": "Управление",
   "library.sort.relevance": "По умолчанию",
   "library.sort.title": "Название",

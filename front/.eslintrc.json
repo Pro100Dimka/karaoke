@@ -97,7 +97,7 @@
     "react/jsx-wrap-multilines": 0,
     "lines-between-class-members": 1,
     "react-hooks/rules-of-hooks": 2,
-    "react-hooks/exhaustive-deps": 0,
+    "react-hooks/exhaustive-deps": 1,
     "no-useless-return": 0,
     "import/prefer-default-export": 0,
     "react/jsx-one-expression-per-line": 0,

@@ -12,7 +12,9 @@ SONGAPP_HOST / SONGAPP_PORT — см. config.py).
 import importlib
 import json
 import logging
+import logging.handlers
 import os
+import re
 import shutil
 import socket
 import sys
@@ -21,6 +23,32 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 import uvicorn
+
+_HOME_DIRECTORY_PATTERNS = (
+    re.compile(r"([A-Za-z]:\\Users\\)[^\\]+"),
+    re.compile(r"(/home/)[^/]+"),
+    re.compile(r"(/Users/)[^/]+"),
+)
+_BEARER_TOKEN_PATTERN = re.compile(r"(Bearer|Token)\s+[A-Za-z0-9._~+/=-]{16,}", re.IGNORECASE)
+
+
+def _redact_log_text(text: str) -> str:
+    # Electron passes the loopback API token to the backend as
+    # SONGAPP_API_TOKEN (see app.main's require_launch_token); redact the
+    # exact value wherever it shows up (an echoed header, a failed-auth
+    # error message, ...) rather than trying to recognize it by shape.
+    token = os.environ.get("SONGAPP_API_TOKEN")
+    if token:
+        text = text.replace(token, "<redacted-token>")
+    text = _BEARER_TOKEN_PATTERN.sub(r"\1 <redacted>", text)
+    for pattern in _HOME_DIRECTORY_PATTERNS:
+        text = pattern.sub(r"\1<user>", text)
+    return text
+
+
+class _RedactingFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return _redact_log_text(super().format(record))
 
 
 def _is_useful_record(record: logging.LogRecord) -> bool:
@@ -70,27 +98,43 @@ class _StreamToLogFile:
     def isatty(self) -> bool: return False
 
 
+def _is_unrelated_legacy_log(candidate: Path, log_path: Path) -> bool:
+    # Preserve application.log's own rotated backups (application.log.1, .2,
+    # ...) across restarts -- this predates rotation and originally only had
+    # to protect the one active file from truly unrelated leftovers.
+    return candidate.is_file() and candidate.resolve() != log_path.resolve() and not candidate.name.startswith(
+        log_path.name
+    )
+
+
 def configure_logging() -> None:
     import config
     from app.services.remote_log_service import RemoteErrorLogHandler
 
     log_path = config.APP_LOG_DIR / "application.log"
     for legacy in config.APP_LOG_DIR.iterdir():
-        if legacy.is_file() and legacy.resolve() != log_path.resolve(): legacy.unlink(missing_ok=True)
+        if _is_unrelated_legacy_log(legacy, log_path): legacy.unlink(missing_ok=True)
     library_root = config.SONG_OUTPUT_DIR.resolve()
     if library_root.is_dir():
         for song_dir in library_root.iterdir():
             legacy_logs = song_dir / config.LOGS_DIRNAME
             if song_dir.is_dir() and legacy_logs.is_dir() and legacy_logs.resolve().parent == song_dir.resolve():
                 shutil.rmtree(legacy_logs, ignore_errors=True)
-    file_handler, remote_handler = logging.FileHandler(log_path, encoding='utf-8'), RemoteErrorLogHandler()
-    file_handler.addFilter(_UsefulLogFilter())
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[file_handler, logging.StreamHandler(sys.stdout), remote_handler],
-        force=True,
+    # Bounded so a long-lived install can't grow application.log forever:
+    # 10MB active file, 3 rotated backups kept alongside it (~40MB ceiling).
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_path, encoding="utf-8", maxBytes=10 * 1024 * 1024, backupCount=3
     )
+    remote_handler = RemoteErrorLogHandler()
+    file_handler.addFilter(_UsefulLogFilter())
+    handlers: list[logging.Handler] = [file_handler, logging.StreamHandler(sys.stdout), remote_handler]
+    logging.basicConfig(level=logging.INFO, handlers=handlers, force=True)
+    # Set explicitly rather than via basicConfig's format= kwarg: that applies
+    # a plain Formatter, and every handler here -- including the one that
+    # ships lines off-machine -- must redact secrets/local paths first.
+    formatter = _RedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    for handler in handlers:
+        handler.setFormatter(formatter)
     sys.stdout = _StreamToLogFile(file_handler, remote_handler, logging.INFO, sys.stdout)
     sys.stderr = _StreamToLogFile(file_handler, remote_handler, logging.ERROR, sys.stderr)
 

@@ -41,6 +41,7 @@ const {
   getPackagedRendererUrl,
   isAllowedPermissionRequest,
   isAllowedRendererUrl,
+  isTrustedIpcEvent,
   registerTrustedIpc
 } = require("./security.cjs");
 const { findMatchingSongFolder } = require("./song-folders.cjs");
@@ -546,10 +547,15 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The API token is deliberately NOT included here: additionalArguments
+      // become part of the renderer process's own OS command line, readable
+      // by any other process on the machine (Task Manager, `ps`, etc.), not
+      // just this renderer's JS. It is instead handed to preload over a
+      // synchronous IPC round trip (see the "advoice:get-api-token" handler
+      // below), which only this window's own webContents can reach.
       additionalArguments: [
         `--advoice-theme=${initialTheme}`,
-        `--advoice-backend-url=${runtimeBackendUrl}`,
-        `--advoice-api-token=${BACKEND_API_TOKEN}`
+        `--advoice-backend-url=${runtimeBackendUrl}`
       ]
     }
   });
@@ -597,6 +603,16 @@ function createWindow() {
 function handleTrustedIpc(channel, handler) {
   registerTrustedIpc(ipcMain, channel, () => mainWindow?.webContents, handler);
 }
+
+// Synchronous (not registerTrustedIpc's invoke/handle) because preload reads
+// this once, at script load, before contextBridge exposes apiToken() to the
+// renderer -- an async round trip there would leave a window where early
+// API calls have no token. Only this window's own webContents may ask.
+ipcMain.on("advoice:get-api-token", (event) => {
+  event.returnValue = isTrustedIpcEvent(event, mainWindow?.webContents)
+    ? BACKEND_API_TOKEN
+    : "";
+});
 
 handleTrustedIpc("window:minimize", () => mainWindow?.minimize());
 handleTrustedIpc("window:maximize", () => {

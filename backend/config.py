@@ -78,7 +78,63 @@ def _install_root() -> Path:
     return PROJECT_ROOT
 
 
-def _default_data_dir() -> Path: return PROJECT_ROOT / 'data' if not IS_FROZEN else _install_root() / 'data' / 'backend'
+def _per_user_fallback_root() -> Path:
+    """Per-user directory that never requires admin rights to write to.
+
+    Used only when the install root itself turns out to be read-only for the
+    current user (e.g. an administrator pointed the NSIS installer at
+    ``C:\\Program Files\\...``); this app's own generated data -- DB, song
+    library, downloaded AI models -- must never require elevation just to run.
+    """
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "A&D Voice"
+
+
+def _migrate_rescued_data(root: Path) -> None:
+    """Reclaim data rescued from a previous in-place upgrade, if any.
+
+    electron-builder's NSIS installer runs the *previous* version's
+    uninstaller before installing an upgrade, not just on a real uninstall --
+    and that uninstaller recursively deletes the whole install directory.
+    ``front/build/installer.nsh`` reacts by moving this app's ``data``
+    folder (DB, song library, downloaded models) out to
+    ``%LOCALAPPDATA%\\A&D Voice\\data`` first so an upgrade can't destroy it;
+    this moves it back under the freshly (re)installed root so the new
+    version finds its data where it expects it, instead of appearing to
+    have lost the user's library.
+    """
+    rescued = _per_user_fallback_root() / "data"
+    target = root / "data"
+    if rescued == target or not rescued.is_dir(): return
+    if target.exists() and any(target.iterdir()): return  # real data already in place; don't clobber it
+    try:
+        if target.exists(): target.rmdir()  # an empty stub from an earlier ensure_directories() call
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(rescued), str(target))
+    except OSError:
+        pass  # best-effort: leave the rescued copy where it is rather than crash startup
+
+
+def _writable_install_root() -> Path:
+    """``_install_root()``, falling back to a per-user directory if unwritable."""
+    root = _install_root()
+    if not IS_FROZEN: return root
+    probe = root / ".write-test"
+    try:
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.touch()
+        probe.unlink()
+    except OSError:
+        root = _per_user_fallback_root()
+    _migrate_rescued_data(root)
+    return root
+
+
+def _default_data_dir() -> Path:
+    return PROJECT_ROOT / 'data' if not IS_FROZEN else _writable_install_root() / 'data' / 'backend'
 
 
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
@@ -122,12 +178,12 @@ def _saved_path(name: str, default: Path) -> Path:
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path(
     "SONGAPP_DOWNLOADS_DIR",
-    _install_root() / "data" / "downloads" if IS_FROZEN else PROJECT_ROOT / "downloads",
+    _writable_install_root() / "data" / "downloads" if IS_FROZEN else PROJECT_ROOT / "downloads",
 )
 
 
 # Packaged models stay under the selected installation root together with the app.
-def _default_models_dir() -> Path: return DOWNLOADS_DIR / 'models' if not IS_FROZEN else _install_root() / 'data' / 'models'
+def _default_models_dir() -> Path: return DOWNLOADS_DIR / 'models' if not IS_FROZEN else _writable_install_root() / 'data' / 'models'
 
 
 _DEFAULT_MODELS_DIR = _default_models_dir()

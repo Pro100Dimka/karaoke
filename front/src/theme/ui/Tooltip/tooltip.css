@@ -5,7 +5,7 @@
 
   .ui-tooltip {
     position: fixed;
-    z-index: 999999;
+    z-index: var(--z-index-tooltip, 1500);
 
     width: max-content;
     max-width: 260px;

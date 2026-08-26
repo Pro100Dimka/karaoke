@@ -22,6 +22,7 @@ export const ukMessages = {
   "error.screen.title": "Не вдалося відкрити екран",
   "error.screen.restart": "Перезапустити інтерфейс",
   "backend.starting": "Запускаємо локальний сервер…",
+  "backend.starting.slow": "Перший запуск триває довше, ніж зазвичай — можливо, антивірус перевіряє файли застосунку. Зачекайте, це нормально.",
   "backend.failed": "Локальний сервер не запустився.",
   "backend.retry": "Повторити",
   "room.participants": "Учасники кімнати",

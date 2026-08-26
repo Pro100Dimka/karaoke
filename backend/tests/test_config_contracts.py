@@ -61,6 +61,65 @@ def test_default_data_and_models_directories_cover_runtime_modes(monkeypatch, tm
     assert (config._default_data_dir() == tmp_path / 'portable' / 'data' / 'backend') and (config._default_models_dir() == tmp_path / 'portable' / 'data' / 'models')
 
 
+def test_default_data_dir_falls_back_to_per_user_dir_when_install_root_is_unwritable(monkeypatch, tmp_path):
+    # e.g. an administrator installed to C:\Program Files\...; a standard
+    # user's process can't write there, so app data must not live under it.
+    root = tmp_path / "Program Files" / "installed"
+    local_appdata = tmp_path / "local-appdata"
+    monkeypatch.setattr(config, "IS_FROZEN", True)
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(root))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    original_mkdir = config.Path.mkdir
+
+    def unwritable_mkdir(self, *args, **kwargs):
+        if self == root:
+            raise PermissionError("simulated read-only install root")
+        return original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(config.Path, "mkdir", unwritable_mkdir)
+
+    fallback_root = local_appdata / "A&D Voice"
+    assert config._default_data_dir() == fallback_root / "data" / "backend"
+    assert config._default_models_dir() == fallback_root / "data" / "models"
+
+
+def test_default_data_dir_reclaims_data_rescued_from_an_in_place_upgrade(monkeypatch, tmp_path):
+    # front/build/installer.nsh moves "data" out to %LOCALAPPDATA%\A&D Voice
+    # before electron-builder's old-version uninstaller wipes $INSTDIR during
+    # an upgrade; the freshly (re)installed root must pick that data back up.
+    root = tmp_path / "installed"
+    local_appdata = tmp_path / "local-appdata"
+    rescued = local_appdata / "A&D Voice" / "data"
+    (rescued / "backend").mkdir(parents=True)
+    (rescued / "backend" / "app.db").write_text("real database")
+    monkeypatch.setattr(config, "IS_FROZEN", True)
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(root))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    assert config._default_data_dir() == root / "data" / "backend"
+    assert (root / "data" / "backend" / "app.db").read_text() == "real database"
+    assert not rescued.exists()
+
+
+def test_default_data_dir_does_not_clobber_real_data_with_a_stale_rescue_copy(monkeypatch, tmp_path):
+    root = tmp_path / "installed"
+    local_appdata = tmp_path / "local-appdata"
+    rescued = local_appdata / "A&D Voice" / "data"
+    (rescued / "backend").mkdir(parents=True)
+    (rescued / "backend" / "app.db").write_text("stale rescue copy")
+    current = root / "data" / "backend"
+    current.mkdir(parents=True)
+    (current / "app.db").write_text("current database")
+    monkeypatch.setattr(config, "IS_FROZEN", True)
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(root))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    assert config._default_data_dir() == root / "data" / "backend"
+    assert (root / "data" / "backend" / "app.db").read_text() == "current database"
+    assert rescued.exists()  # left alone rather than silently discarded
+
+
 def test_saved_storage_path_is_validated(monkeypatch, tmp_path):
     settings, default = tmp_path / 'paths.json', tmp_path / 'default'
     monkeypatch.setattr(config, "PATH_SETTINGS_FILE", settings)

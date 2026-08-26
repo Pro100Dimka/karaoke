@@ -32,6 +32,8 @@ htmlcov/
 *.egg-info/
 docs/
 build/
+!front/build/
+!front/build/installer.nsh
 dist/
 codex-temp-tests/
 test-results/

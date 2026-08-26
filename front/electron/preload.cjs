@@ -4,7 +4,10 @@ const argumentValue = (name) =>
   process.argv.find((argument) => argument.startsWith(`--${name}=`))?.slice(name.length + 3);
 const initialTheme = argumentValue("advoice-theme");
 const backendUrl = argumentValue("advoice-backend-url");
-const apiToken = argumentValue("advoice-api-token");
+// Fetched over IPC rather than a launch argument -- CLI arguments are part
+// of this renderer process's own OS command line, visible to any other
+// process on the machine, not just this window's JS.
+const apiToken = ipcRenderer.sendSync("advoice:get-api-token") || undefined;
 
 contextBridge.exposeInMainWorld("electronAPI", {
   initialTheme,
