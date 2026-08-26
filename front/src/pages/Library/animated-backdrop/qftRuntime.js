@@ -25,8 +25,8 @@ import * as THREE from 'three';
             field: 'Gluon (Strong)',
             density: CONFIG.initialDensity,
             sensitivity: 1.1,
-            trails: 0.08,
-            bloom: 0.12,
+            trails: 0.18,
+            bloom: 0.3,
             timeScale: 1,
             pixelRatio: Math.max(1.75, Math.min(window.devicePixelRatio, 2)),
             chromaticAberration: 0.004,
@@ -1795,9 +1795,9 @@ void main() {
         composer.addPass(afterimagePass);
 
         const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 0.55;
+        bloomPass.threshold = 0.3;
         bloomPass.strength = STATE.bloom;
-        bloomPass.radius = 0.12;
+        bloomPass.radius = 0.22;
         composer.addPass(bloomPass);
 
         const godRaysPass = new ShaderPass(GodRaysShader);
@@ -1841,7 +1841,8 @@ void main() {
                 varying vec2 vUv;
                 void main() {
                     vec4 color = texture2D(tDiffuse, vUv);
-                    gl_FragColor = vec4(color.rgb, 1.0);
+                    vec3 detailLift = pow(max(color.rgb, vec3(0.0)), vec3(0.82)) * 1.2;
+                    gl_FragColor = vec4(detailLift, 1.0);
                 }`
         }));
 
@@ -1980,16 +1981,23 @@ void main() {
         f_enhance.add({ fps: () => QUALITY_SYSTEM.currentFPS.toFixed(1) }, 'fps').name('Current FPS').listen();
         f_enhance.close();
 
-        gui.onFinishChange(() => {
-            const snapshot = {
-                ...STATE,
-                bloom: bloomPass.strength,
-                trails: afterimagePass.uniforms['damp'].value
-            };
-            const serialized = JSON.stringify(snapshot);
-            window.__QFT_LAST_SETTINGS__ = serialized;
-            console.log(`[QFT_SETTINGS] ${serialized}`);
-        });
+        let settingsLogTimer;
+        const scheduleSettingsLog = () => {
+            clearTimeout(settingsLogTimer);
+            settingsLogTimer = setTimeout(() => {
+                const snapshot = {
+                    ...STATE,
+                    bloom: bloomPass.strength,
+                    trails: afterimagePass.uniforms['damp'].value
+                };
+                const serialized = JSON.stringify(snapshot);
+                window.__QFT_LAST_SETTINGS__ = serialized;
+                document.documentElement.dataset.qftSettings = serialized;
+                console.log(`[QFT_SETTINGS] ${serialized}`);
+            }, 150);
+        };
+        gui.domElement.addEventListener('input', scheduleSettingsLog, true);
+        gui.domElement.addEventListener('change', scheduleSettingsLog, true);
 
         // ═══════ UI & EVENTS ═══════
         const overlay = document.getElementById('overlay');
@@ -2088,11 +2096,13 @@ void main() {
         });
 
         // ═══════ ANIMATION LOOP ═══════
-        const clock = new THREE.Clock();
+        const clock = new THREE.Timer();
+        clock.connect(document);
 
-        function animate() {
+        function animate(timestamp) {
             requestAnimationFrame(animate);
-            const dt = clock.getDelta(), elapsed = clock.getElapsedTime();
+            clock.update(timestamp);
+            const dt = clock.getDelta(), elapsed = clock.getElapsed();
 
             material.uniforms.uTime.value += dt * STATE.timeScale;
             grainPass.uniforms.uTime.value = elapsed;

@@ -154,6 +154,8 @@ $RuntimeArchive = Join-Path $PackagesDir "app-runtime.zip"
 
 $SmokeScript = Join-Path $Root "scripts\smoke-packaged-backend.ps1"
 $ChecksumScript = Join-Path $Root "scripts\generate-checksums.ps1"
+$ManifestScript = Join-Path $Root "scripts\generate-release-manifest.ps1"
+$ManifestFile = Join-Path $InstallerDir "release-manifest.json"
 $script:BackendChanged = $false
 $script:AsioChanged = $false
 $script:FrontendChanged = $false
@@ -2343,6 +2345,28 @@ function Create-Checksums {
     Require-File $ChecksumFile "SHA-256 checksum file"
 }
 
+function Create-ReleaseManifest {
+    Write-Host ""
+    Write-Host "Creating release manifest..."
+
+    Require-File $ManifestScript "Release manifest generation script"
+
+    & powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $ManifestScript `
+        -BackendDir $Backend `
+        -FrontendDir $Frontend `
+        -InstallerDirectory $InstallerDir `
+        -OutputFile $ManifestFile
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not create release manifest."
+    }
+
+    Require-File $ManifestFile "Release manifest file"
+}
+
 function Test-IsoPayloadExcluded([string]$Path) {
     return Test-ExcludedPath `
         $Path `
@@ -2914,6 +2938,7 @@ try {
             $sw = [Diagnostics.Stopwatch]::StartNew()
             Build-Installer
             Create-Checksums
+            Create-ReleaseManifest
             $sw.Stop()
             Set-PreviousDuration "installer" $sw.Elapsed.TotalSeconds
             Set-State "installer" $installerFp
@@ -3194,6 +3219,7 @@ try {
         $sw = [Diagnostics.Stopwatch]::StartNew()
         Build-Installer
         Create-Checksums
+        Create-ReleaseManifest
         $sw.Stop()
         Set-PreviousDuration "installer" $sw.Elapsed.TotalSeconds
         Set-State "installer" $installerFp

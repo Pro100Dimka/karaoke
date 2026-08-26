@@ -84,40 +84,6 @@ def test_default_data_dir_falls_back_to_per_user_dir_when_install_root_is_unwrit
     assert config._default_models_dir() == fallback_root / "data" / "models"
 
 
-def test_default_data_dir_reclaims_data_rescued_from_an_in_place_upgrade(monkeypatch, tmp_path):
-    # front/build/installer.nsh moves "data" out to %LOCALAPPDATA%\A&D Voice
-    # before electron-builder's old-version uninstaller wipes $INSTDIR during
-    # an upgrade; the freshly (re)installed root must pick that data back up.
-    root = tmp_path / "installed"
-    local_appdata = tmp_path / "local-appdata"
-    rescued = local_appdata / "A&D Voice" / "data"
-    (rescued / "backend").mkdir(parents=True)
-    (rescued / "backend" / "app.db").write_text("real database")
-    monkeypatch.setattr(config, "IS_FROZEN", True)
-    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(root))
-    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
-
-    assert config._default_data_dir() == root / "data" / "backend"
-    assert (root / "data" / "backend" / "app.db").read_text() == "real database"
-    assert not rescued.exists()
-
-
-def test_default_data_dir_does_not_clobber_real_data_with_a_stale_rescue_copy(monkeypatch, tmp_path):
-    root = tmp_path / "installed"
-    local_appdata = tmp_path / "local-appdata"
-    rescued = local_appdata / "A&D Voice" / "data"
-    (rescued / "backend").mkdir(parents=True)
-    (rescued / "backend" / "app.db").write_text("stale rescue copy")
-    current = root / "data" / "backend"
-    current.mkdir(parents=True)
-    (current / "app.db").write_text("current database")
-    monkeypatch.setattr(config, "IS_FROZEN", True)
-    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(root))
-    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
-
-    assert config._default_data_dir() == root / "data" / "backend"
-    assert (root / "data" / "backend" / "app.db").read_text() == "current database"
-    assert rescued.exists()  # left alone rather than silently discarded
 
 
 def test_saved_storage_path_is_validated(monkeypatch, tmp_path):

@@ -9,10 +9,15 @@ import "./quantum-field.css";
 // Upstream: https://github.com/stridentsoundworks-spec/gftvisualizer
 // Commit: 7958ba432beef5f72d2adf46b4a4f800d13255d0
 function makeEmbeddedSource(source) {
-  return source.replace(
-    /<script type="module">[\s\S]*?<\/script>\s*<\/body>/,
-    `<script type="module" src="${qftRuntimeUrl}"></script></body>`
-  );
+  const cacheBustedRuntimeUrl = `${qftRuntimeUrl}${qftRuntimeUrl.includes("?") ? "&" : "?"}v=8`;
+
+  return source
+    .replace(/<script type="importmap">[\s\S]*?<\/script>/, "")
+    .replace(/<script>[\s\S]*?<\/script>/, "")
+    .replace(
+      /<script type="module">[\s\S]*?<\/script>\s*<\/body>/,
+      `<script type="module" src="${cacheBustedRuntimeUrl}"></script></body>`
+    );
 }
 
 export default function QuantumFieldBackdrop() {
@@ -25,7 +30,6 @@ export default function QuantumFieldBackdrop() {
         title="Quantum Fields visualizer"
         srcDoc={source}
         allow="autoplay; microphone; fullscreen"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
       />
     </div>
   );

@@ -82,7 +82,7 @@ def _per_user_fallback_root() -> Path:
     """Per-user directory that never requires admin rights to write to.
 
     Used only when the install root itself turns out to be read-only for the
-    current user (e.g. an administrator pointed the NSIS installer at
+    current user (e.g. an administrator pointed the installer at
     ``C:\\Program Files\\...``); this app's own generated data -- DB, song
     library, downloaded AI models -- must never require elevation just to run.
     """
@@ -91,31 +91,6 @@ def _per_user_fallback_root() -> Path:
     else:
         base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     return Path(base) / "A&D Voice"
-
-
-def _migrate_rescued_data(root: Path) -> None:
-    """Reclaim data rescued from a previous in-place upgrade, if any.
-
-    electron-builder's NSIS installer runs the *previous* version's
-    uninstaller before installing an upgrade, not just on a real uninstall --
-    and that uninstaller recursively deletes the whole install directory.
-    ``front/build/installer.nsh`` reacts by moving this app's ``data``
-    folder (DB, song library, downloaded models) out to
-    ``%LOCALAPPDATA%\\A&D Voice\\data`` first so an upgrade can't destroy it;
-    this moves it back under the freshly (re)installed root so the new
-    version finds its data where it expects it, instead of appearing to
-    have lost the user's library.
-    """
-    rescued = _per_user_fallback_root() / "data"
-    target = root / "data"
-    if rescued == target or not rescued.is_dir(): return
-    if target.exists() and any(target.iterdir()): return  # real data already in place; don't clobber it
-    try:
-        if target.exists(): target.rmdir()  # an empty stub from an earlier ensure_directories() call
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(rescued), str(target))
-    except OSError:
-        pass  # best-effort: leave the rescued copy where it is rather than crash startup
 
 
 def _writable_install_root() -> Path:
@@ -127,10 +102,9 @@ def _writable_install_root() -> Path:
         probe.parent.mkdir(parents=True, exist_ok=True)
         probe.touch()
         probe.unlink()
+        return root
     except OSError:
-        root = _per_user_fallback_root()
-    _migrate_rescued_data(root)
-    return root
+        return _per_user_fallback_root()
 
 
 def _default_data_dir() -> Path:
