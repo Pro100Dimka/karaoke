@@ -12,6 +12,20 @@
   .ui-modal-dialog.ui-card--neon {
     inline-size: min(var(--ui-modal-size), calc(100vw - var(--space-8)));
     overflow: visible;
+
+    /* Keep modal text and controls on a sharp, untransformed layer. Pointer
+       tilt still drives the animated lighting and decorative frame below. */
+    transform: none;
+    transform-style: flat;
+    will-change: auto;
+  }
+
+  .ui-modal-dialog.ui-card--neon > .ui-card__fx {
+    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+    transform-origin: center;
+    transform-style: preserve-3d;
+    will-change: transform;
+    transition: transform 0.15s ease-out;
   }
 
   .ui-modal-dialog>.ui-card__panel {
