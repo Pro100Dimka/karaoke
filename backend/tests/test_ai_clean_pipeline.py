@@ -72,6 +72,39 @@ def test_clean_pipeline_publishes_only_canonical_runtime_artifacts(tmp_path, mon
     assert sf.info(output / "vocals.flac").channels == 1
 
 
+def test_pipeline_releases_separator_before_loading_later_gpu_models(tmp_path, monkeypatch):
+    source, lyrics, output = tmp_path / "source.wav", tmp_path / "lyrics.txt", tmp_path / "out"
+    sf.write(source, np.zeros((44100 * 2, 2), dtype=np.float32), 44100)
+    lyrics.write_text("hello", encoding="utf-8")
+    monkeypatch.setattr("AI.pipeline.analyze_music", lambda _path: {"bpm": 120, "key": "A minor"})
+    events = []
+
+    class ReleasableSeparator(Separator):
+        @staticmethod
+        def separate(*args, **kwargs):
+            Separator.separate(*args, **kwargs)
+            events.append("separated")
+
+        @staticmethod
+        def close():
+            events.append("released")
+
+    class CheckedPitch(Pitch):
+        @staticmethod
+        def estimate(audio):
+            assert events == ["separated", "released"]
+            return Pitch.estimate(audio)
+
+    engines = SimpleNamespace(
+        separator=ReleasableSeparator(), pitch=CheckedPitch(),
+        transcriber=None, aligner=Aligner(),
+    )
+
+    KaraokePipeline(engines=engines).run(PipelineRequest(source, output, lyrics_path=lyrics))
+
+    assert events == ["separated", "released"]
+
+
 def test_stage_reports_carry_device_dtype_and_memory_telemetry(tmp_path, monkeypatch):
     from AI.runtime import BackendSpec, HardwareProfile, RuntimePlan
 

@@ -495,6 +495,9 @@ class Qwen3Transcriber(Transcriber):
                    else getattr(item, "text", item)).strip()
         return text, _words(item)
 
+    def close(self) -> None:
+        self._model = None
+
 
 class Qwen3ForcedAligner(Aligner):
     name = "qwen3-forced-aligner"
@@ -511,6 +514,12 @@ class Qwen3ForcedAligner(Aligner):
         if self._model is None:
             self._model = _load(Qwen3ForcedAligner, self.model_name, "aligner")
         return self._model
+
+    def close(self) -> None:
+        for aligner in self._ctc.values():
+            getattr(aligner, "close", lambda: None)()
+        self._ctc.clear()
+        self._model = None
 
     def _raw(self, audio, text, language) -> list[Word]:
         raw = self._load().align(audio=str(audio), text=text,

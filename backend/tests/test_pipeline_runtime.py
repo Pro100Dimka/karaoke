@@ -233,7 +233,9 @@ def test_job_entrypoint_releases_runtime_and_cuda_cache(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", torch)
     raises(RuntimeError, lambda: pipeline_service._job_entrypoint('song', target))
     assert ('song' not in pipeline_service._active_jobs) and ('song' not in pipeline_service._cancelled_jobs)
-    collect.assert_called_once()
-    torch.cuda.empty_cache.assert_called_once()
+    # Stage-specific model cleanup may release CUDA more than once before the
+    # final worker-boundary sweep; both operations must happen at least once.
+    assert collect.call_count >= 1
+    assert torch.cuda.empty_cache.call_count >= 1
     pipeline_service._release_active_job("other")
     assert "other" in pipeline_service._active_jobs

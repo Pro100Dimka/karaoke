@@ -10,6 +10,7 @@ from pathlib import Path
 from .artifacts import publish_files_atomically
 from .audio import audio_buffer_cache, decode_audio, duration
 from .config import CoreConfig
+from .engines.device import release_torch_memory
 from .engines.registry import EngineRegistry
 from .engines.text import UniformTextFallback, tokenize
 from .errors import EngineUnavailableError, ProcessingCancelledError
@@ -78,7 +79,23 @@ class KaraokePipeline:
         self.engines = engines or EngineRegistry.create_default(self.config)
 
     def close(self) -> None:
-        getattr(self.engines.separator, "close", lambda: None)()
+        self._release_engines(
+            self.engines.separator,
+            self.engines.pitch,
+            self.engines.transcriber,
+            self.engines.aligner,
+        )
+
+    @staticmethod
+    def _release_engines(*engines: object) -> None:
+        for engine in engines:
+            getattr(engine, "close", lambda: None)()
+        release_torch_memory()
+
+    def _release_analysis_engines(self) -> None:
+        self._release_engines(
+            self.engines.pitch, self.engines.transcriber, self.engines.aligner
+        )
 
     @staticmethod
     def _notify(request: PipelineRequest, stage: str, progress: float, detail: str) -> None:
@@ -111,9 +128,12 @@ class KaraokePipeline:
             return text, [], ()
         found = discovery.result() if discovery else discover_lyrics(request.title)
         if found:
-            print(f"[lyrics] FOUND via {found.source}", flush=True)
+            print(
+                f"[AI] lyrics source={found.source} timed_lines={len(found.lines)}",
+                flush=True,
+            )
             return found.text, [], found.lines
-        print("[lyrics] NOT FOUND online -> ASR fallback", flush=True)
+        print("[AI] lyrics source=ASR timed_lines=0", flush=True)
         text, words = self.engines.transcriber.transcribe(vocals, request.language)
         return text, words, ()
 
@@ -148,6 +168,9 @@ class KaraokePipeline:
         reports: list[StageReport] = []
         warnings: list[str] = []
         profile = resolve_processing_profile(request.processing_mode, get_runtime_plan())
+        # A previous job may have retained an analysis model. The separator
+        # needs the GPU first, so start every full run from a known VRAM state.
+        self._release_analysis_engines()
 
         with (
             tempfile.TemporaryDirectory(prefix=".ai-clean-", dir=output) as temporary,
@@ -169,10 +192,18 @@ class KaraokePipeline:
 
             self._notify(request, "separate", 10, "Разделение голоса и минуса")
             started = time.perf_counter()
-            self.engines.separator.separate(
-                mix, raw_vocals, instrumental,
-                profile=profile, cancelled=request.cancelled,
-            )
+            try:
+                self.engines.separator.separate(
+                    mix, raw_vocals, instrumental,
+                    profile=profile, cancelled=request.cancelled,
+                )
+            finally:
+                # MSST lives in a child process and keeps its CUDA model loaded
+                # after returning. On 8 GB GPUs that leaves too little VRAM for
+                # the forced aligner, causing minutes of paging at the lyrics
+                # stage. Jobs are serialized, so retaining this worker brings
+                # no useful throughput; release it before loading later models.
+                getattr(self.engines.separator, "close", lambda: None)()
             self._stage(reports, "separate", self.engines.separator.name, started, role="separation")
 
             music_started = time.perf_counter()
@@ -185,7 +216,10 @@ class KaraokePipeline:
 
             self._notify(request, "analysis", 48, "Анализ музыки и мелодии по vocals.flac")
             pitch_started = time.perf_counter()
-            pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            try:
+                pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            finally:
+                self._release_engines(self.engines.pitch)
             self._stage(reports, "pitch", self.engines.pitch.name, pitch_started, role="pitch")
             music = music_future.result()
             self._stage(reports, "music", "librosa", music_started)
@@ -195,7 +229,10 @@ class KaraokePipeline:
             text, direct, timed_lines = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
-            words = self._align(vocals, text, request.language, direct, timed_lines)
+            try:
+                words = self._align(vocals, text, request.language, direct, timed_lines)
+            finally:
+                self._release_engines(self.engines.transcriber, self.engines.aligner)
             # Timed-line alignment already uses short acoustic windows anchored
             # by the provider's LRC timestamps. Re-anchoring those words against
             # global VAD can merge repeated adjacent lines and collapse one of
@@ -261,12 +298,18 @@ class KaraokePipeline:
         with audio_buffer_cache():
             self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
             started = time.perf_counter()
-            pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            try:
+                pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            finally:
+                self._release_engines(self.engines.pitch)
             self._stage(reports, "pitch", self.engines.pitch.name, started, role="pitch")
 
             self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
             started = time.perf_counter()
-            words = self._align(vocals, text, request.language, [], timed_lines)
+            try:
+                words = self._align(vocals, text, request.language, [], timed_lines)
+            finally:
+                self._release_engines(self.engines.transcriber, self.engines.aligner)
             if not timed_lines:
                 words = anchor_words_to_voice(
                     words, voice_activity_intervals(vocals), duration(vocals)

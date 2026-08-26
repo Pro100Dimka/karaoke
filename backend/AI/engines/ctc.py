@@ -83,3 +83,6 @@ class CTCWordAligner:
             )
             for index, (token, (start, end)) in enumerate(zip(tokens, ranges, strict=True))
         ]
+
+    def close(self) -> None:
+        self._model = self._processor = self._device = None

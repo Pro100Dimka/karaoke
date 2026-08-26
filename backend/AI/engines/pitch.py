@@ -58,6 +58,9 @@ class FCPEPitchEstimator(PitchEstimator):
         step = len(signal) / self.sr / max(1, len(frequencies))
         return _frames_from_frequencies(frequencies, step, self.fmin, self.fmax)
 
+    def close(self) -> None:
+        self._model = self._device = None
+
 
 class PyinFallbackPitchEstimator(FCPEPitchEstimator):
     name = "pyin"
