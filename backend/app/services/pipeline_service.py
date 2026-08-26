@@ -646,7 +646,8 @@ def _invoke_ai_pipeline(
     cancelled = lambda: _is_cancelled(song_id)  # noqa: E731
     if reuse_vocals:
         return ai_bridge.reprocess_song(
-            out_dir, language=language, progress=progress, cancelled=cancelled
+            out_dir, title=searchable_title, language=language,
+            progress=progress, cancelled=cancelled,
         )
     return ai_bridge.process_song(
         source_path, out_dir, lyrics_path=lyrics_path,

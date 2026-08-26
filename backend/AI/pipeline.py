@@ -11,10 +11,10 @@ from .artifacts import publish_files_atomically
 from .audio import audio_buffer_cache, decode_audio, duration
 from .config import CoreConfig
 from .engines.registry import EngineRegistry
-from .engines.text import UniformTextFallback
+from .engines.text import UniformTextFallback, tokenize
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .lyrics_document import validate_lyrics_document, words_with_notes
-from .lyrics_sources import LyricsDiscovery, discover_lyrics
+from .lyrics_sources import LyricsDiscovery, TimedLine, discover_lyrics
 from .models import StageReport, Word
 from .music import analyze_music
 from .notes import build_vocal_notes
@@ -105,23 +105,35 @@ class KaraokePipeline:
         request: PipelineRequest,
         vocals: Path,
         discovery: Future[LyricsDiscovery | None] | None = None,
-    ) -> tuple[str, list[Word]]:
+    ) -> tuple[str, list[Word], tuple[TimedLine, ...]]:
         if request.lyrics_path and Path(request.lyrics_path).is_file():
             text = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
-            return text, []
+            return text, [], ()
         found = discovery.result() if discovery else discover_lyrics(request.title)
         if found:
             print(f"[lyrics] FOUND via {found.source}", flush=True)
-            return found.text, []
+            return found.text, [], found.lines
         print("[lyrics] NOT FOUND online -> ASR fallback", flush=True)
         text, words = self.engines.transcriber.transcribe(vocals, request.language)
-        return text, words
+        return text, words, ()
 
-    def _align(self, vocals: Path, text: str, language: str | None, direct: list[Word]) -> list[Word]:
+    def _align(
+        self,
+        vocals: Path,
+        text: str,
+        language: str | None,
+        direct: list[Word],
+        timed_lines: tuple[TimedLine, ...] = (),
+    ) -> list[Word]:
         if direct:
             return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(direct)]
         try:
-            words = self.engines.aligner.align_long_text(vocals, text, language)
+            if timed_lines and hasattr(self.engines.aligner, "align_timed_lines"):
+                words = self.engines.aligner.align_timed_lines(
+                    vocals, text, timed_lines, language
+                )
+            else:
+                words = self.engines.aligner.align_long_text(vocals, text, language)
         except Exception:
             if not self.config.allow_fallback:
                 raise
@@ -180,11 +192,19 @@ class KaraokePipeline:
 
             self._notify(request, "lyrics", 70, "Поиск и синхронизация текста")
             started = time.perf_counter()
-            text, direct = self._lyrics(request, vocals, discovery)
+            text, direct, timed_lines = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
-            words = self._align(vocals, text, request.language, direct)
-            words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
+            words = self._align(vocals, text, request.language, direct, timed_lines)
+            # Timed-line alignment already uses short acoustic windows anchored
+            # by the provider's LRC timestamps. Re-anchoring those words against
+            # global VAD can merge repeated adjacent lines and collapse one of
+            # them to a fraction of a second. The VAD repair remains valuable
+            # for un-timed whole-song/ASR alignment only.
+            if not timed_lines:
+                words = anchor_words_to_voice(
+                    words, voice_activity_intervals(vocals), duration(vocals)
+                )
             self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
 
             self._notify(request, "notes", 84, "Построение мелодии голоса")
@@ -229,6 +249,14 @@ class KaraokePipeline:
             raise EngineUnavailableError("lyricsSync.json has no text to align")
         request = PipelineRequest(vocals, output, **options)
         reports: list[StageReport] = []
+        timed_lines: tuple[TimedLine, ...] = ()
+        if request.title:
+            found = discover_lyrics(request.title)
+            if found and found.lines:
+                canonical = [token.casefold() for token in tokenize(text)]
+                discovered = [token.casefold() for token in tokenize(found.text)]
+                if canonical == discovered:
+                    timed_lines = found.lines
 
         with audio_buffer_cache():
             self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
@@ -238,8 +266,11 @@ class KaraokePipeline:
 
             self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
             started = time.perf_counter()
-            words = self._align(vocals, text, request.language, [])
-            words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
+            words = self._align(vocals, text, request.language, [], timed_lines)
+            if not timed_lines:
+                words = anchor_words_to_voice(
+                    words, voice_activity_intervals(vocals), duration(vocals)
+                )
             self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
 
         self._notify(request, "notes", 84, "Построение мелодии голоса")

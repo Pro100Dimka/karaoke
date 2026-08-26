@@ -140,7 +140,11 @@ def discover_lyrics(title: str | None, *_args, **_kwargs) -> LyricsDiscovery | N
         if artist and not _matches(artist, str(row.get("artistName") or "")):
             continue
         synced = row.get("syncedLyrics") or ""
-        text = row.get("plainLyrics") or _plain(synced)
+        # When synchronized lyrics exist they are the canonical text for
+        # alignment too. A provider's plainLyrics can differ by repeated
+        # choruses or punctuation, making its line timestamps impossible to
+        # map onto the otherwise similar plain transcript.
+        text = _plain(synced) or row.get("plainLyrics") or ""
         if str(text).strip():
             return LyricsDiscovery(str(text).strip(), "LRCLIB", query, lines=_timed(synced))
     if time.monotonic() >= deadline:

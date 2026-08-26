@@ -9,12 +9,15 @@ from AI.engines.separation import MSSTMelRoformerSeparator
 from AI.engines.text import (
     Qwen3ForcedAligner,
     _acoustic_runs,
+    _enforce_monotonic_starts,
+    _fill_unresolved_timed_lines,
     _invalid_runs,
+    _repair_collapsed_timed_lines,
     resolve_alignment_language,
     tokenize,
 )
 from AI.errors import ProcessingCancelledError
-from AI.lyrics_sources import TimedLine, _expand_notation, discover_lyrics
+from AI.lyrics_sources import LyricsDiscovery, TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
 
@@ -121,6 +124,51 @@ def test_reprocess_rebuilds_timing_from_existing_vocals_without_separation(tmp_p
     assert '"start": 1.0' in (output / "lyricsSync.json").read_text(encoding="utf-8")
 
 
+def test_reprocess_reuses_matching_online_timed_lines(tmp_path, monkeypatch):
+    output = tmp_path / "out"
+    output.mkdir()
+    sf.write(output / "vocals.flac", np.zeros(44100 * 4, dtype=np.float32), 44100)
+    (output / "lyricsSync.json").write_text(
+        '{"bpm":120,"key":"A minor","text":"right line\\nnext line","words":['
+        '{"start":0.1,"end":0.2,"text":"right","notes":[]},'
+        '{"start":0.2,"end":0.3,"text":"line","notes":[]},'
+        '{"start":0.3,"end":0.4,"text":"next","notes":[]},'
+        '{"start":0.4,"end":0.5,"text":"line","notes":[]}]}',
+        encoding="utf-8",
+    )
+    timed_lines = (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+    monkeypatch.setattr(
+        "AI.pipeline.discover_lyrics",
+        lambda _title: LyricsDiscovery(
+            "right line\nnext line", "LRCLIB", "Artist Song", lines=timed_lines
+        ),
+    )
+
+    class TimedAligner(Aligner):
+        @staticmethod
+        def align_timed_lines(_audio, _text, lines, _language):
+            assert lines == timed_lines
+            return [
+                Word(1.0, 1.4, "right", index=0),
+                Word(1.4, 1.8, "line", index=1),
+                Word(3.0, 3.4, "next", index=2),
+                Word(3.4, 3.8, "line", index=3),
+            ]
+
+        @staticmethod
+        def align_long_text(*_args):
+            raise AssertionError("full-song alignment must not run")
+
+    engines = SimpleNamespace(
+        separator=Separator(), pitch=Pitch(), transcriber=None, aligner=TimedAligner()
+    )
+
+    KaraokePipeline(engines=engines).reprocess(output, title="Artist - Song")
+
+    payload = __import__("json").loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+    assert [word["start"] for word in payload["words"]] == [1.0, 1.4, 3.0, 3.4]
+
+
 def test_atomic_publish_restores_every_previous_artifact(tmp_path, monkeypatch):
     sources = [tmp_path / f"new-{index}" for index in range(2)]
     targets = [tmp_path / f"target-{index}" for index in range(2)]
@@ -173,6 +221,66 @@ def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
     assert result is not None
     assert result.source == "pisni.org.ua"
     assert result.text.count("Рядок приспіву один") == 2
+
+
+def test_lrclib_synced_text_is_kept_with_its_line_timestamps(monkeypatch):
+    monkeypatch.setattr(
+        "AI.lyrics_sources._request",
+        lambda _url: """[{"trackName":"Song","artistName":"Artist","plainLyrics":"wrong text","syncedLyrics":"[00:01.00]right line\\n[00:03.00]next line"}]""",
+    )
+
+    result = discover_lyrics("Artist - Song")
+
+    assert result is not None
+    assert result.text == "right line\nnext line"
+    assert result.lines == (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+
+
+def test_pipeline_uses_discovered_timed_lines_instead_of_full_song_alignment(
+    tmp_path, monkeypatch
+):
+    source, output = tmp_path / "source.wav", tmp_path / "out"
+    sf.write(source, np.zeros((44100 * 4, 2), dtype=np.float32), 44100)
+    monkeypatch.setattr("AI.pipeline.analyze_music", lambda _path: {"bpm": 120, "key": "A minor"})
+    timed_lines = (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+    monkeypatch.setattr(
+        "AI.pipeline.discover_lyrics",
+        lambda _title: LyricsDiscovery(
+            "right line\nnext line", "LRCLIB", "Artist Song", lines=timed_lines
+        ),
+    )
+
+    class TimedAligner(Aligner):
+        @staticmethod
+        def align_timed_lines(_audio, text, lines, _language):
+            assert text == "right line\nnext line"
+            assert lines == timed_lines
+            return [
+                Word(1.0, 1.4, "right", index=0),
+                Word(1.4, 1.8, "line", index=1),
+                Word(3.0, 3.4, "next", index=2),
+                Word(3.4, 3.8, "line", index=3),
+            ]
+
+        @staticmethod
+        def align_long_text(*_args):
+            raise AssertionError("full-song alignment must not run")
+
+    engines = SimpleNamespace(
+        separator=Separator(), pitch=Pitch(), transcriber=None, aligner=TimedAligner()
+    )
+
+    KaraokePipeline(engines=engines).run(
+        PipelineRequest(source, output, title="Artist - Song")
+    )
+
+    payload = __import__("json").loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+    assert [(word["start"], word["end"]) for word in payload["words"]] == [
+        (1.0, 1.4),
+        (1.4, 1.8),
+        (3.0, 3.4),
+        (3.4, 3.8),
+    ]
 
 
 def test_lyrics_discovery_skips_pisni_once_the_lookup_budget_is_spent(monkeypatch):
@@ -304,6 +412,41 @@ def test_invalid_runs_do_not_merge_across_valid_acoustic_anchors():
     ]
 
     assert _invalid_runs(words, 5) == [(1, 2), (3, 4)]
+
+
+def test_timed_line_boundary_disagreement_is_clamped_monotonically():
+    words = [Word(1.8, 2.0, "first"), Word(1.7, 2.2, "second")]
+
+    _enforce_monotonic_starts(words, 3.0)
+
+    assert (words[1].start, words[1].end) == (1.8, 2.2)
+
+
+def test_collapsed_multiword_line_expands_inside_its_trusted_lrc_window():
+    words = [
+        Word(10.0, 10.1, "one", index=0),
+        Word(10.1, 10.2, "longer", index=1),
+        Word(10.2, 10.3, "three", index=2),
+        Word(15.0, 15.5, "next", index=3),
+    ]
+
+    _repair_collapsed_timed_lines(words, [(10.0, 0, 3), (15.0, 3, 4)], 20.0)
+
+    assert words[0].start == 10.0
+    assert words[2].end == 15.0
+    assert all(words[index].end <= words[index + 1].start for index in range(2))
+    assert words[3] == Word(15.0, 15.5, "next", index=3)
+
+
+def test_unresolved_timed_word_repairs_only_its_lrc_line():
+    words = [Word(1.1, 1.4, "first", index=0), None, Word(5.1, 5.5, "kept", index=2)]
+    entries = [(1.0, 0, 2), (5.0, 2, 3)]
+
+    _fill_unresolved_timed_lines(words, entries, ["first", "missing", "kept"], 8.0)
+
+    assert words[0] == Word(1.1, 1.4, "first", index=0)
+    assert words[1] == Word(1.4, 5.0, "missing", 0.0, 1)
+    assert words[2] == Word(5.1, 5.5, "kept", index=2)
 
 
 def test_acoustic_runs_find_words_crossing_silence_and_overlapping_neighbors():

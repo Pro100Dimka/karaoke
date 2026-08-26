@@ -384,6 +384,85 @@ def _enforce_monotonic_starts(words: list[Word], span: float) -> None:
                                 words[index].confidence, words[index].index)
 
 
+def _repair_collapsed_timed_lines(
+    words: list[Word], entries: list[tuple[float, int, int]], span: float
+) -> None:
+    """Expand an implausibly collapsed multi-word line inside its trusted LRC window."""
+    for line_index, (line_start, lower, upper) in enumerate(entries):
+        if upper - lower < 3:
+            continue
+        line_end = entries[line_index + 1][0] if line_index + 1 < len(entries) else span
+        window_start, window_end = max(0.0, line_start), min(span, line_end)
+        window_span = window_end - window_start
+        if window_span < 1.0:
+            continue
+        group = words[lower:upper]
+        measured_span = max(word.end for word in group) - min(word.start for word in group)
+        if measured_span >= min(1.0, window_span * 0.35):
+            continue
+        weights = [max(1, sum(char.isalnum() for char in word.text)) for word in group]
+        cursor = window_start
+        for index, (word, weight) in enumerate(zip(group, weights, strict=True), start=lower):
+            boundary = (
+                window_end
+                if index == upper - 1
+                else cursor + (window_end - cursor) * weight / sum(weights[index - lower:])
+            )
+            words[index] = Word(cursor, boundary, word.text, 0.0, word.index)
+            cursor = boundary
+
+
+def _fill_unresolved_timed_lines(
+    words: list[Word | None],
+    entries: list[tuple[float, int, int]],
+    tokens: list[str],
+    span: float,
+) -> None:
+    """Recover only failed LRC lines instead of rejecting the complete alignment."""
+    for line_index, (line_start, lower, upper) in enumerate(entries):
+        if all(word is not None for word in words[lower:upper]):
+            continue
+        line_end = entries[line_index + 1][0] if line_index + 1 < len(entries) else span
+        window_start, window_end = max(0.0, line_start), min(span, line_end)
+        if window_end <= window_start:
+            continue
+        index = lower
+        while index < upper:
+            if words[index] is not None:
+                index += 1
+                continue
+            run_start = index
+            while index < upper and words[index] is None:
+                index += 1
+            run_end = index
+            left_word = words[run_start - 1] if run_start > lower else None
+            right_word = words[run_end] if run_end < upper else None
+            start = max(window_start, left_word.end if left_word is not None else window_start)
+            end = min(window_end, right_word.start if right_word is not None else window_end)
+            if end <= start:
+                # The acoustic neighbours leave no legal gap. Rebuild this one
+                # line from its trusted timestamp instead of disturbing any
+                # other successfully aligned line.
+                run_start, run_end, start, end = lower, upper, window_start, window_end
+            weights = [
+                max(1, sum(char.isalnum() for char in token))
+                for token in tokens[run_start:run_end]
+            ]
+            remaining = sum(weights)
+            cursor = start
+            for word_index, weight in zip(range(run_start, run_end), weights, strict=True):
+                boundary = (
+                    end
+                    if word_index == run_end - 1
+                    else cursor + (end - cursor) * weight / remaining
+                )
+                words[word_index] = Word(
+                    cursor, boundary, tokens[word_index], 0.0, word_index
+                )
+                cursor = boundary
+                remaining -= weight
+
+
 def _load(model_class, name, role):
     import torch
 
@@ -697,6 +776,7 @@ class Qwen3ForcedAligner(Aligner):
                     end, following.end, tokens[index +
                                                1], following.confidence, index + 1
                 )
+        _fill_unresolved_timed_lines(words, entries, tokens, span)
         unresolved = [index for index,
                       word in enumerate(words) if word is None]
         if unresolved:
@@ -705,7 +785,15 @@ class Qwen3ForcedAligner(Aligner):
             raise InvalidArtifactError(
                 f"Timed acoustic alignment failed for {len(unresolved)} words ({details})"
             )
-        return self._validate([word for word in words if word is not None], tokens, span)
+        aligned_words = [word for word in words if word is not None]
+        _enforce_monotonic_starts(aligned_words, span)
+        _repair_collapsed_timed_lines(aligned_words, entries, span)
+        # Independently aligned neighbouring line windows can overlap by one
+        # timestamp quantum even when every individual result is valid. Keep
+        # that harmless boundary disagreement from rejecting the complete
+        # timed-lyrics result and falling back to a slow whole-song pass.
+        _enforce_monotonic_starts(aligned_words, span)
+        return self._validate(aligned_words, tokens, span)
 
     def _align_windows(self, samples, rate, tokens: list[str], span: float, language: str) -> list[Word]:
         window = 90.0
