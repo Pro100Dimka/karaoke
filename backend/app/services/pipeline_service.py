@@ -13,6 +13,7 @@ import traceback
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+import soundfile as sf
 from sqlalchemy.orm import Session
 
 import config
@@ -855,8 +856,29 @@ def _persist_confirmed_identity(song: models.Song, out_dir: Path) -> None:
     write_json(path, payload)
 
 
+_MIN_ARTIFACT_DURATION_SEC = 0.02
+
+
+def _validate_artifact_audio(path: Path) -> None:
+    """Reject a processed output that exists but is empty/corrupt/undecodable.
+
+    A crash mid-write, a full disk, or a broken AI/ffmpeg step can all leave
+    an instrumental.flac/vocals.flac that passes a bare is_file() check but
+    has no real audio in it -- catch that here, before the song is marked
+    DONE, rather than leaving the user to discover it on first playback.
+    """
+    try:
+        info = sf.info(str(path))
+    except Exception as exc:
+        raise ValueError(f"{path.name} is not a valid audio file") from exc
+    if info.frames <= 0 or info.duration <= _MIN_ARTIFACT_DURATION_SEC:
+        raise ValueError(f"{path.name} has no usable audio duration")
+
+
 def _finalize_success(song_id: str, out_dir: Path) -> None:
     retired_source: Path | None = None
+    for name in ("instrumental.flac", "vocals.flac"):
+        _validate_artifact_audio(out_dir / name)
     with _song_session(song_id) as (db, song):
         if song is None: return
         song.output_dir = str(out_dir)

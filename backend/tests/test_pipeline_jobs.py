@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import models
 from app.services import pipeline_service
 from app.utils.json_files import write_json
-from tests._shared import mock_song_lookup, patch_attrs, patch_many, raises
+from tests._shared import mock_song_lookup, patch_attrs, patch_many, raises, write_audio
 
 
 def _reset_processing_slots(monkeypatch, *, limit):
@@ -291,6 +291,8 @@ def test_optional_json_and_generated_metadata_preserve_user_edits(monkeypatch, t
 
 
 def test_finalize_success_commits_metadata_and_best_effort_optimization(monkeypatch, tmp_path):
+    write_audio(tmp_path / "instrumental.flac")
+    write_audio(tmp_path / "vocals.flac")
     current = SimpleNamespace()
     database, lookup = mock_song_lookup(monkeypatch, pipeline_service, current)
     metadata, generated, commit, optimize = Mock(), Mock(), Mock(), Mock(side_effect=RuntimeError('optional failure'))
@@ -395,11 +397,40 @@ def test_run_job_maps_finalization_failure(monkeypatch, tmp_path):
     assert pipeline_service._update_progress.call_args.kwargs["status"] == models.SongStatus.ERROR
 
 
+def test_validate_artifact_audio_accepts_real_audio_and_rejects_corrupt_or_empty(tmp_path):
+    real = tmp_path / "real.flac"
+    write_audio(real)
+    pipeline_service._validate_artifact_audio(real)  # does not raise
+
+    corrupt = tmp_path / "corrupt.flac"
+    corrupt.write_bytes(b"not actually audio")
+    raises(ValueError, lambda: pipeline_service._validate_artifact_audio(corrupt), match="not a valid audio file")
+
+    too_short = tmp_path / "too-short.flac"
+    write_audio(too_short, seconds=0.001)
+    raises(
+        ValueError,
+        lambda: pipeline_service._validate_artifact_audio(too_short),
+        match="no usable audio duration",
+    )
+
+
+def test_finalize_success_rejects_a_corrupt_instrumental_before_marking_the_song_done(monkeypatch, tmp_path):
+    current = SimpleNamespace()
+    mock_song_lookup(monkeypatch, pipeline_service, current)
+    (tmp_path / "instrumental.flac").write_bytes(b"not audio")
+    write_audio(tmp_path / "vocals.flac")
+
+    raises(ValueError, lambda: pipeline_service._finalize_success("song", tmp_path), match="not a valid audio file")
+    assert not hasattr(current, "status")  # never reached the point of setting a status at all
+
+
 def test_finalize_success_marks_new_generation_unoptimized_before_best_effort_optimization(monkeypatch, tmp_path):
     song, database = SimpleNamespace(id='song', title='Confirmed title', artist='Confirmed artist', output_dir=str(tmp_path), source_path=str(tmp_path / 'source.wav'), optimized=True, status=models.SongStatus.PROCESSING, progress_percent=50.0, progress_step='processing', error_message=None, key_override=None, tempo_override=None, note_range_min=None, note_range_max=None), Mock()
     (tmp_path / "source.wav").write_bytes(b"source")
     instrumental = tmp_path / "instrumental.flac"
-    instrumental.write_bytes(b"instrumental")
+    write_audio(instrumental)
+    write_audio(tmp_path / "vocals.flac")
     write_json(tmp_path / "lyricsSync.json", {"bpm": 120, "key": "C", "words": []})
     patch_many(monkeypatch, (pipeline_service, "SessionLocal", Mock(return_value=database)), (pipeline_service.repositories, "get_song", Mock(return_value=song)))
     monkeypatch.setattr(pipeline_service.song_service, "resolve_source_path", lambda current: Path(current.source_path))

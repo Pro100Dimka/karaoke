@@ -8,6 +8,13 @@ def patch_many(monkeypatch, *patches):
     for target, name, value in patches: monkeypatch.setattr(target, name, value)
 
 
+def write_audio(path, *, seconds=0.1, sample_rate=8_000, format="FLAC"):
+    import numpy as np
+    import soundfile as sf
+
+    sf.write(path, np.zeros(int(seconds * sample_rate), dtype=np.float32), sample_rate, format=format)
+
+
 def assert_http_status(status, invoke):
     import pytest
     from fastapi import HTTPException
