@@ -62,3 +62,29 @@ def test_is_valid_only_rehashes_the_checkpoint_after_it_actually_changes(tmp_pat
 
     assert install_models.is_valid(tmp_path, model) is False
     assert len(calls) == 2
+
+
+def test_is_valid_rejects_an_incomplete_snapshot_even_with_config(tmp_path):
+    root = tmp_path / "snapshot"
+    root.mkdir()
+    (root / "config.json").write_text("{}", encoding="utf-8")
+    (root / "weights.safetensors.incomplete").write_bytes(b"partial")
+    model = ModelSpec(
+        key="snapshot", name="Snapshot", repo_id="x", revision="x",
+        relative_path="snapshot", env_var="X", expected_bytes=8,
+    )
+
+    assert install_models.is_valid(tmp_path, model) is False
+
+
+def test_is_valid_accepts_a_complete_snapshot(tmp_path):
+    root = tmp_path / "snapshot"
+    root.mkdir()
+    (root / "config.json").write_text("{}", encoding="utf-8")
+    (root / "weights.safetensors").write_bytes(b"complete")
+    model = ModelSpec(
+        key="snapshot", name="Snapshot", repo_id="x", revision="x",
+        relative_path="snapshot", env_var="X", expected_bytes=8,
+    )
+
+    assert install_models.is_valid(tmp_path, model) is True

@@ -13,6 +13,13 @@ from .model_registry import MODELS, ModelSpec, model_path
 
 logger = logging.getLogger(__name__)
 
+# The installer already downloads the files of one Hugging Face snapshot in
+# parallel. Starting several hf-xet snapshots on top of that creates nested
+# connection pools which can get stuck in CLOSE_WAIT on Windows. Prefer the
+# regular resumable HTTP downloader here; it remains parallel per snapshot and
+# has reliable request timeouts/retries.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 
 def _hash(path: Path) -> str:
     digest = hashlib.sha256()
@@ -65,7 +72,13 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
             and path.stat().st_size >= max(1, model.expected_bytes // 2)
             and (not model.sha256 or _cached_hash(path) == model.sha256)
         )
-    return path.is_dir() and (path / "config.json").is_file()
+    if not path.is_dir() or not (path / "config.json").is_file():
+        return False
+    # snapshot_download writes config files before the multi-gigabyte weights.
+    # A cancelled install must not therefore make a partial snapshot look ready.
+    if any(path.rglob("*.incomplete")):
+        return False
+    return _size(path) >= max(1, model.expected_bytes // 2)
 
 
 class ProgressReporter:
@@ -258,6 +271,7 @@ def install_one(
                     local_dir=target,
                     cache_dir=cache_dir,
                     ignore_patterns=model.ignore_patterns,
+                    max_workers=8,
                 )
 
             if not is_valid(models_root, model):

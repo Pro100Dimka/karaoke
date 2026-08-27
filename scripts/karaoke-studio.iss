@@ -543,7 +543,7 @@ begin
     if not Exec(
       BackendExe,
       '--install-ai-models --models-root "' + ModelsDir +
-        '" --cache-dir "' + ModelCacheDir + '" --workers 2 --retries 3' +
+        '" --cache-dir "' + ModelCacheDir + '" --workers 1 --retries 3' +
         ' --log-file "' + ModelLogPath + '"' +
         ' --progress-file "' + ModelProgressPath + '"',
       ExpandConstant('{app}\resources\backend'),
