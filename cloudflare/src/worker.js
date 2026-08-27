@@ -25,6 +25,24 @@ const GUEST_RECONNECT_GRACE_MS = 45_000;
 // silently drop/misinterpret messages instead of failing the connection with
 // an explicit reason.
 export const ROOM_PROTOCOL_VERSION = 1;
+const EFFECT_LIMITS = Object.freeze({
+  volume: 2,
+  reverb: 1,
+  echo: 1,
+  delay: 1,
+  noise_suppression: 1,
+});
+
+export function normalizeParticipantEffects(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const effects = {};
+  for (const [name, maximum] of Object.entries(EFFECT_LIMITS)) {
+    if (!Object.hasOwn(value, name)) continue;
+    const number = Number(value[name]);
+    if (Number.isFinite(number)) effects[name] = Math.max(0, Math.min(maximum, number));
+  }
+  return Object.keys(effects).length ? effects : null;
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -96,11 +114,12 @@ export class KaraokeRoom {
       .getWebSockets()
       .map(participantFromSocket)
       .filter(Boolean)
-      .map(({ id, name, role, micMuted = false }) => ({
+      .map(({ id, name, role, micMuted = false, effectsLocked = false }) => ({
         id,
         name,
         role,
         micMuted,
+        effectsLocked,
       }));
   }
 
@@ -152,6 +171,7 @@ export class KaraokeRoom {
       name: normalizeName(url.searchParams.get("name")),
       role,
       micMuted: false,
+      effectsLocked: false,
     };
     // sessionToken is kept in the socket's own attachment for this server to
     // recognize a future reconnect -- it must never be broadcast to other
@@ -217,6 +237,36 @@ export class KaraokeRoom {
     if (message.type === "chat" && typeof message.text === "string") {
       const text = message.text.trim().slice(0, 500);
       if (text) this.broadcast("chat", { from: sender, text });
+      return;
+    }
+
+    if (message.type === "effect-permission" && typeof message.locked === "boolean") {
+      sender.effectsLocked = message.locked;
+      socket.serializeAttachment(sender);
+      this.broadcast("participant-updated", {
+        participant: {
+          id: sender.id,
+          name: sender.name,
+          role: sender.role,
+          micMuted: sender.micMuted,
+          effectsLocked: sender.effectsLocked,
+        },
+      });
+      return;
+    }
+
+    if (message.type === "effect-control" && typeof message.targetId === "string") {
+      const effects = normalizeParticipantEffects(message.effects);
+      const target = this.ctx
+        .getWebSockets()
+        .find((candidate) => participantFromSocket(candidate)?.id === message.targetId);
+      const targetParticipant = target && participantFromSocket(target);
+      if (!effects || !target || !targetParticipant || targetParticipant.id === sender.id) return;
+      if (targetParticipant.effectsLocked) {
+        this.send(socket, "effect-control-denied", { targetId: targetParticipant.id });
+        return;
+      }
+      this.send(target, "effect-control", { fromId: sender.id, effects });
       return;
     }
 
@@ -292,6 +342,7 @@ export class KaraokeRoom {
           name: sender.name,
           role: sender.role,
           micMuted: sender.micMuted,
+          effectsLocked: Boolean(sender.effectsLocked),
         },
       });
       return;

@@ -4,6 +4,12 @@ import { getBrowserStorage } from "./storage";
 const KEY = "karaoke-theme";
 const DEFAULT = "dark";
 const THEMES = new Set([DEFAULT, "light", "green", "violet"]);
+export const THEME_BACKGROUNDS = Object.freeze({
+  dark: "#050001",
+  light: "#fff8f5",
+  green: "#020904",
+  violet: "#07020f"
+});
 export const resolveTheme = (theme) => {
   const value = typeof theme === "string" ? theme.trim() : "";
   return THEMES.has(value) ? value : DEFAULT;
@@ -28,7 +34,12 @@ export const saveTheme = (theme) => writeStoredTheme(getBrowserStorage(), theme)
 export const getSavedTheme = () => readStoredTheme(getBrowserStorage());
 export function applyTheme(theme) {
   const value = saveTheme(theme);
-  if (globalThis.document?.documentElement) document.documentElement.dataset.theme = value;
+  if (globalThis.document?.documentElement) {
+    document.documentElement.dataset.theme = value;
+    const background = THEME_BACKGROUNDS[value] || THEME_BACKGROUNDS.dark;
+    if (document.documentElement.style) document.documentElement.style.backgroundColor = background;
+    if (document.body?.style) document.body.style.backgroundColor = background;
+  }
   platform.setIconTheme(value);
   return value;
 }

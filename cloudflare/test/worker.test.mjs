@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleLogUpload, KaraokeRoom, pruneRecentGuests, reclaimGuestId, ROOM_PROTOCOL_VERSION } from "../src/worker.js";
+import {
+  handleLogUpload,
+  KaraokeRoom,
+  normalizeParticipantEffects,
+  pruneRecentGuests,
+  reclaimGuestId,
+  ROOM_PROTOCOL_VERSION
+} from "../src/worker.js";
 
 const joinRequest = (params = {}) => {
   const url = new URL("https://worker.test/rooms/ABCD1234");
@@ -20,6 +27,10 @@ class FakeSocket {
 
   deserializeAttachment() {
     return this.participant;
+  }
+
+  serializeAttachment(participant) {
+    this.participant = participant;
   }
 
   send(message) {
@@ -83,6 +94,39 @@ test("answers a private clock probe without broadcasting it", async () => {
   assert.equal(sender.messages.at(-1).clientTime, 1234);
   assert.equal(Number.isFinite(sender.messages.at(-1).serverTime), true);
   assert.equal(target.messages.length, 0);
+});
+
+test("an owner can lock remote effect control and unlock it again", async () => {
+  const owner = new FakeSocket({ id: "owner", name: "Owner", role: "guest" });
+  const controller = new FakeSocket({ id: "controller", name: "Controller", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [owner, controller] });
+
+  await room.webSocketMessage(owner, JSON.stringify({ type: "effect-permission", locked: true }));
+  assert.equal(owner.participant.effectsLocked, true);
+  assert.equal(controller.messages.at(-1).participant.effectsLocked, true);
+
+  await room.webSocketMessage(
+    controller,
+    JSON.stringify({ type: "effect-control", targetId: "owner", effects: { volume: 9 } })
+  );
+  assert.equal(controller.messages.at(-1).type, "effect-control-denied");
+  assert.equal(owner.messages.some(({ type }) => type === "effect-control"), false);
+
+  await room.webSocketMessage(owner, JSON.stringify({ type: "effect-permission", locked: false }));
+  await room.webSocketMessage(
+    controller,
+    JSON.stringify({
+      type: "effect-control",
+      targetId: "owner",
+      effects: { volume: 9, reverb: 0.6, unsupported: 1 }
+    })
+  );
+  assert.deepEqual(owner.messages.at(-1), {
+    type: "effect-control",
+    fromId: "controller",
+    effects: { volume: 2, reverb: 0.6 }
+  });
+  assert.deepEqual(normalizeParticipantEffects({ echo: -1, delay: 2 }), { echo: 0, delay: 1 });
 });
 
 class FakeR2 {

@@ -36,6 +36,21 @@ const OnlineRoomContext = createContext(null);
 const OnlineRoomSpeakingContext = createContext({ localSpeakingLevel: 0, speakingLevels: {} });
 const OFF = false;
 const SONG_SYNC_REQUEST_TIMEOUT_MS = 15_000;
+const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
+  volume: 2,
+  reverb: 1,
+  echo: 1,
+  delay: 1,
+  noise_suppression: 1
+});
+export const normalizeParticipantEffects = (settings = {}) =>
+  Object.fromEntries(
+    Object.entries(PARTICIPANT_EFFECT_LIMITS).map(([name, maximum]) => {
+      const fallback = name === "volume" ? 1 : name === "noise_suppression" ? 0.35 : 0;
+      const value = Number(settings?.[name]);
+      return [name, Math.max(0, Math.min(maximum, Number.isFinite(value) ? value : fallback))];
+    })
+  );
 export function OnlineRoomProvider({ children }) {
   const clientRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -112,6 +127,17 @@ export function OnlineRoomProvider({ children }) {
     // Stryker disable next-line ArrayDeclaration: React setters and refs are stable.
     []
   );
+  const publishParticipantEffects = useCallback((settings) => {
+    if (!roomRef.current || !settings) return false;
+    return clientRef.current?.send("ui", {
+      state: { participantEffects: normalizeParticipantEffects(settings) }
+    });
+  }, []);
+  useEffect(() => {
+    const publish = (event) => publishParticipantEffects(event.detail);
+    globalThis.addEventListener?.("audio-settings-changed", publish);
+    return () => globalThis.removeEventListener?.("audio-settings-changed", publish);
+  }, [publishParticipantEffects]);
   const {
     applyParticipantEffects,
     applyRemoteAudioMute,
@@ -532,7 +558,29 @@ export function OnlineRoomProvider({ children }) {
           setRoomCommand,
           setVoiceError,
           setTransferStatus,
-          onParticipantJoined: playParticipantJoinedSound,
+          onParticipantJoined: (participant) => {
+            playParticipantJoinedSound(participant);
+            Promise.resolve(api.getAudioSettings?.())
+              .then((settings) => settings && publishParticipantEffects(settings))
+              .catch(() => {});
+          },
+          onEffectControl: (effects) => {
+            api
+              .updateAudioSettings(normalizeParticipantEffects(effects))
+              .then((updated) => {
+                globalThis.dispatchEvent?.(
+                  new CustomEvent("audio-settings-changed", { detail: updated })
+                );
+              })
+              .catch((error) => {
+                if (isCurrentConnection())
+                  setVoiceError(
+                    translateSaved("Не удалось применить настройки эффектов: {0}", {
+                      0: getErrorMessage(error)
+                    })
+                  );
+              });
+          },
           onConnectionClosed: (message = translateSaved("Соединение с комнатой потеряно.")) => {
             connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
@@ -565,6 +613,9 @@ export function OnlineRoomProvider({ children }) {
             pending: true
           }
         ]);
+        Promise.resolve(api.getAudioSettings?.())
+          .then((settings) => settings && publishParticipantEffects(settings))
+          .catch(() => {});
         voice
           .start()
           .then((stream) => {
@@ -600,6 +651,7 @@ export function OnlineRoomProvider({ children }) {
       cleanupConnection,
       removeRemoteAudio,
       prepareSpeakingMeter,
+      publishParticipantEffects,
       resetRoomState,
       restoreApplicationAudio,
       setParticipants,
@@ -650,6 +702,18 @@ export function OnlineRoomProvider({ children }) {
     [applyParticipantVolume]
   );
 
+  const setEffectsLocked = useCallback((locked) => {
+    clientRef.current?.send("effect-permission", { locked: Boolean(locked) });
+  }, []);
+
+  const requestParticipantEffects = useCallback((participantId, patch) => {
+    if (!participantId || participantId === roomRef.current?.selfId) return false;
+    return clientRef.current?.send("effect-control", {
+      targetId: participantId,
+      effects: normalizeParticipantEffects(patch)
+    });
+  }, []);
+
   const togglePersonEffects = useCallback(
     (id) => {
       setEffectPeople((items) => {
@@ -683,6 +747,7 @@ export function OnlineRoomProvider({ children }) {
   const value = useOnlineRoomValue({
     createRoom,
     effectPeople,
+    setEffectsLocked,
     joinRoom,
     leaveRoom,
     microphoneMuted,
@@ -692,6 +757,7 @@ export function OnlineRoomProvider({ children }) {
     participantVolumes,
     requestMicrophoneAccess,
     requestSongSync,
+    requestParticipantEffects,
     room,
     roomCommand,
     roomSoundMuted,

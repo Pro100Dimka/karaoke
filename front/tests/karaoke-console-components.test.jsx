@@ -58,7 +58,7 @@ vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({
 }));
 import RotaryKnob from "../src/theme/ui/RotaryKnob/index.jsx";
 import { getRotaryDragValue, getRotaryPointerValue, getRotaryWheelValue } from "../src/theme/ui/RotaryKnob/utils.js";
-import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
+import ConsoleCenter, { noteRangeLabel } from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";
 import ToolsPanel from "../src/pages/Karaoke/components/console/tools.jsx";
@@ -302,6 +302,12 @@ test("center uses fallback note range and pause state", () => {
   );
   fireEvent.click(result.getByLabelText("Зменшити тональність"));
   verify([result.getByLabelText("Пауза"), "toBeTruthy"], [result.container.textContent, "toContain", "C2 – C5"]);
+});
+test("formats numeric MIDI range as musical note names", () => {
+  expect(noteRangeLabel(46, "C2")).toBe("A♯2");
+  expect(noteRangeLabel(73, "C5")).toBe("C♯5");
+  expect(noteRangeLabel(60, "C2", 2)).toBe("D4");
+  expect(noteRangeLabel(null, "C2")).toBe("C2");
 });
 test("hidden console always leaves a visible restore action", () => {
   const { getByLabelText } = render(

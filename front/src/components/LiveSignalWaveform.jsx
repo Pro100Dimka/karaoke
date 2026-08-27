@@ -61,7 +61,10 @@ export default function LiveSignalWaveform({
       path.setAttribute("d", waveformPath(samples, true));
     };
     draw();
-    const interval = globalThis.setInterval(draw, 16);
+    // A sample used to cross the compact meter in about one second, which
+    // looked like a racing scan line. About 1.8 seconds keeps it responsive
+    // to speech while making the movement calmer and easier to read.
+    const interval = globalThis.setInterval(draw, 28);
     return () => globalThis.clearInterval(interval);
   }, [active]);
 
@@ -76,6 +79,7 @@ export default function LiveSignalWaveform({
       aria-label={ariaLabel}
       aria-valuemin="0"
       aria-valuemax="100"
+      sx={{ flex: 1 }}
       aria-valuenow={Math.round(normalizedLevel * 100)}
       title={title}
     >

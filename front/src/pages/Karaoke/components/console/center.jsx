@@ -13,6 +13,15 @@ import { translateSaved as t } from "../../../../i18n/runtime";
 import { Card, Grid, IconButton, Stack, Typography } from "../../../../theme/ui";
 import { clamp } from "./utils";
 
+const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+export const noteRangeLabel = (value, fallback, shift = 0) => {
+  if (value == null || value === "") return fallback;
+  const midi = Number(value);
+  if (!Number.isFinite(midi)) return String(value || fallback);
+  const transposed = clamp(Math.round(midi) + Number(shift || 0), 0, 127);
+  return `${NOTE_NAMES[transposed % 12]}${Math.floor(transposed / 12) - 1}`;
+};
+
 function Step({ icon, label, onClick }) {
   return onClick ? (
     <IconButton
@@ -111,7 +120,11 @@ export default function ConsoleCenter({
         />
         <Metric
           label={t("Диапазон")}
-          value={`${song.note_range_min || "C2"} – ${song.note_range_max || "C5"}`}
+          value={`${noteRangeLabel(song.note_range_min, "C2", keyShift)} – ${noteRangeLabel(
+            song.note_range_max,
+            "C5",
+            keyShift
+          )}`}
           tone="var(--color-warning)"
         />
       </Grid>

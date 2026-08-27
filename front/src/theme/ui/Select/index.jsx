@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
 import {
+  Fragment,
   forwardRef,
   useEffect,
   useId,
@@ -291,49 +292,57 @@ const Select = forwardRef(
                 }}
               >
                 <div className="ui-select-options">
-                  {normalizedOptions.map((item) => {
+                  {normalizedOptions.map((item, index) => {
                     const active =
                       String(item.value) === String(current);
+                    const showGroup =
+                      item.group && item.group !== normalizedOptions[index - 1]?.group;
 
                     return (
-                      <Button
-                        key={item.value}
-                        type="button"
-                        unstyled
-                        data-size={size}
-                        role="option"
-                        aria-selected={active}
-                        disabled={item.disabled}
-                        data-value={String(item.value)}
-                        data-selected={active || undefined}
-                        className="ui-select-option ui-control"
-                        onClick={(event) => selectOption(item, event)}
-                      >
-                        <span className="ui-select-option-mark">
-                          {active && <Check />}
-                        </span>
-
-                        {item.icon && (
-                          <span
-                            className="ui-select-option-icon"
-                            aria-hidden="true"
-                          >
-                            {item.icon}
-                          </span>
+                      <Fragment key={item.value}>
+                        {showGroup && (
+                          <div className="ui-select-group" role="presentation">
+                            {item.group}
+                          </div>
                         )}
-
-                        <span className="ui-select-option-content">
-                          <span className="ui-select-option-label">
-                            {item.label}
+                        <Button
+                          type="button"
+                          unstyled
+                          data-size={size}
+                          role="option"
+                          aria-selected={active}
+                          disabled={item.disabled}
+                          data-value={String(item.value)}
+                          data-selected={active || undefined}
+                          className="ui-select-option ui-control"
+                          onClick={(event) => selectOption(item, event)}
+                        >
+                          <span className="ui-select-option-mark">
+                            {active && <Check />}
                           </span>
 
-                          {item.description && (
-                            <span className="ui-select-option-description">
-                              {item.description}
+                          {item.icon && (
+                            <span
+                              className="ui-select-option-icon"
+                              aria-hidden="true"
+                            >
+                              {item.icon}
                             </span>
                           )}
-                        </span>
-                      </Button>
+
+                          <span className="ui-select-option-content">
+                            <span className="ui-select-option-label">
+                              {item.label}
+                            </span>
+
+                            {item.description && (
+                              <span className="ui-select-option-description">
+                                {item.description}
+                              </span>
+                            )}
+                          </span>
+                        </Button>
+                      </Fragment>
                     );
                   })}
                 </div>

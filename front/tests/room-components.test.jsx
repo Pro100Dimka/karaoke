@@ -79,6 +79,7 @@ afterEach(() => {
 });
 describe("online room participants", () => {
   test("renders self controls, voice level and leave action", () => {
+    const interval = vi.spyOn(globalThis, "setInterval");
     const props = {
       person: mocks.roomValue.participants[0],
       room: mocks.roomValue.room,
@@ -91,6 +92,7 @@ describe("online room participants", () => {
       onLeave: vi.fn(),
       onSetMicrophoneMuted: vi.fn(),
       onSetRoomSoundMuted: vi.fn(),
+      onSetEffectsLocked: vi.fn(),
       onTogglePersonMuted: vi.fn(),
       onTogglePersonEffects: vi.fn()
     };
@@ -99,17 +101,21 @@ describe("online room participants", () => {
     expect(meter.getAttribute("aria-valuenow")).toBe("70");
     expect(meter.querySelector("path")).not.toBeNull();
     expect(meter.querySelector("rect")).toBeNull();
+    expect(interval).toHaveBeenCalledWith(expect.any(Function), 28);
     fireEvent.click(screen.getByLabelText("room.microphone.disable"));
     fireEvent.click(screen.getByLabelText("room.sound.disable"));
+    fireEvent.click(screen.getByLabelText("Запретить управление эффектами"));
     fireEvent.click(screen.getByLabelText("room.leave"));
     calledWith([props.onSetMicrophoneMuted, [true]], [props.onSetRoomSoundMuted, [true]]);
     expect(props.onLeave).toHaveBeenCalledOnce();
+    expect(props.onSetEffectsLocked).toHaveBeenCalledWith(true);
     view.rerender(<OnlineRoomParticipant {...props} microphoneMuted roomSoundMuted />);
     verify([screen.getByLabelText("room.microphone.enable"), "not.toBeNull"], [screen.getByLabelText("room.sound.enable"), "not.toBeNull"]);
   });
   test("renders remote mute and effects controls", () => {
     const toggleMuted = vi.fn();
     const toggleEffects = vi.fn();
+    const setEffects = vi.fn();
     render(
       <OnlineRoomParticipant
         person={{ id: "guest", name: "Bob", role: "guest", micMuted: true }}
@@ -120,13 +126,20 @@ describe("online room participants", () => {
         roomSoundMuted={false}
         isLocallyMuted
         effectsEnabled
+        effectSettings={{ volume: 1.2, reverb: 0.2, echo: 0.3, delay: 0.4, noise_suppression: 0.5 }}
+        onSetParticipantEffects={setEffects}
         onTogglePersonMuted={toggleMuted}
         onTogglePersonEffects={toggleEffects}
       />
     );
     fireEvent.click(screen.getByLabelText(/room.person.effects.disable/));
+    fireEvent.mouseEnter(screen.getByLabelText(/room.person.effects.disable/).parentElement);
+    const reverb = screen.getByRole("slider", { name: "Реверб" });
+    fireEvent.change(reverb, { target: { value: "0.7" } });
+    fireEvent.pointerUp(reverb);
     fireEvent.click(screen.getByLabelText(/room.person.enable/));
     calledWith([toggleEffects, ["guest"]], [toggleMuted, ["guest"]]);
+    expect(setEffects).toHaveBeenCalledWith("guest", expect.objectContaining({ reverb: 0.7 }));
     expect(document.querySelector("[data-speaking]")).toBeNull();
   });
 });

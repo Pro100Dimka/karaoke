@@ -86,12 +86,16 @@ export function OnlineRoomDock() {
                   roomSoundMuted={online.roomSoundMuted}
                   isLocallyMuted={online.mutedPeople.has(person.id)}
                   effectsEnabled={online.effectPeople.has(person.id)}
+                  effectsLocked={Boolean(person.effectsLocked)}
+                  effectSettings={online.roomUi?.effectsByParticipant?.[person.id]}
                   participantVolume={online.participantVolumes?.[person.id] ?? 1}
                   transferStatus={online.transferStatuses?.get(person.id)}
                   onLeave={online.leaveRoom}
                   onSetMicrophoneMuted={online.setMicrophoneMuted}
                   onSetRoomSoundMuted={online.setRoomSoundMuted}
                   onSetParticipantVolume={online.setParticipantVolume}
+                  onSetParticipantEffects={online.requestParticipantEffects}
+                  onSetEffectsLocked={online.setEffectsLocked}
                   onTogglePersonMuted={online.togglePersonMuted}
                   onTogglePersonEffects={online.togglePersonEffects}
                 />

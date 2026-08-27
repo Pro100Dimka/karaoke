@@ -367,7 +367,8 @@ export function RecordingsModal({ song, recordings = [], error, onAnalyze, onClo
               padding: "var(--space-3)",
               background: "unset",
               border: "unset",
-              boxShadow: "unset"
+              boxShadow: "unset",
+              backdropFilter: "unset"
             }}
           >
             <Stack direction="row" align="center" gap={0.75}>

@@ -33,11 +33,15 @@ export default function useOnlineRoomAudio({
         0,
         Math.min(1, Number(participantVolumesRef.current?.[participantId] ?? 1))
       );
+      const ownerVolume = Math.max(
+        0,
+        Math.min(2, Number(roomUiRef.current.effectsByParticipant?.[participantId]?.volume ?? 1))
+      );
       audio.muted = muted || Boolean(effectGraph);
       audio.volume = effectGraph ? 1 : Math.min(1, volume);
-      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : volume;
+      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : volume * ownerVolume;
     }
-  }, [mutedPeopleRef, participantVolumesRef, roomSoundMutedRef]);
+  }, [mutedPeopleRef, participantVolumesRef, roomSoundMutedRef, roomUiRef]);
 
   const setParticipantVolume = useCallback(
     (participantId, value) => {

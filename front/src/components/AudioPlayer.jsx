@@ -128,7 +128,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
         <Typography
           variant="caption2"
           tone="muted"
-          sx={{ position: "absolute", bottom: "0", left: "var(--space-1)" }}
+          sx={{ position: "absolute", bottom: "-0.4rem", left: "var(--space-1)" }}
         >
           {formatAudioTime(state.position)} / {formatAudioTime(state.duration)}
         </Typography>

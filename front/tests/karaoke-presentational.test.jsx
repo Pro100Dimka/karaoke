@@ -151,7 +151,7 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
   fireEvent.load(container.querySelector("iframe"));
-  verify([send.mock.calls.map(([command]) => command), "toEqual", ["mute", "setPlaybackRate", "playVideo"]]);
+  verify([send.mock.calls.map(([command]) => command), "toEqual", ["addEventListener", "mute", "setPlaybackRate", "playVideo"]]);
   expect(sync).toHaveBeenCalled();
   rerender(
     <KaraokeMedia
@@ -189,6 +189,37 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
   verify([container.querySelector("video").getAttribute("src"), "toBe", "video.mp4"]);
   cleanup();
   expect(revokeObjectURL).toHaveBeenCalledTimes(2);
+});
+test("karaoke media falls back when the YouTube player rejects a clip", async () => {
+  const availability = vi.fn();
+  const { container } = render(
+    <KaraokeMedia
+      instrumentalRef={createRef()}
+      vocalsRef={createRef()}
+      videoRef={createRef()}
+      youTubeClipRef={createRef()}
+      isPlaying={false}
+      musicVolume={0.5}
+      vocalVolume={0.4}
+      speed={1}
+      song={{ id: "blocked-song", title: "Title", video_url: "https://youtube.com/watch?v=abcdefghijk" }}
+      youTubeVideoId="abcdefghijk"
+      sendYouTubeCommand={vi.fn()}
+      syncSecondaryMedia={vi.fn()}
+      onClipAvailabilityChange={availability}
+    />
+  );
+  const frame = container.querySelector("iframe");
+  fireEvent(
+    globalThis,
+    new MessageEvent("message", {
+      data: JSON.stringify({ event: "onError", info: 101 }),
+      origin: "https://www.youtube.com",
+      source: frame.contentWindow
+    })
+  );
+  await waitFor(() => expect(container.querySelector("iframe")).toBeNull());
+  expect(availability).toHaveBeenLastCalledWith(false);
 });
 test("waveform supports click, drag and range seeking", () => {
   const change = vi.fn();

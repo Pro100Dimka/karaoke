@@ -10,7 +10,6 @@ export default function ModalTitle({
   eyebrow,
   title,
   description,
-  actions
 }) {
   return (
     <Stack className="ui-modal-title" direction="row" align="center" gap="var(--space-4)">
@@ -24,7 +23,6 @@ export default function ModalTitle({
         <Typography variant="h3" noWrap>{title}</Typography>
         {description && <Typography variant="body2" tone="muted" noWrap>{description}</Typography>}
       </Stack>
-      {/* {actions && <Stack direction="row" align="center" wrap className="ui-modal-title-actions">{actions}</Stack>} */}
     </Stack>
   );
 }

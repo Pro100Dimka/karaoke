@@ -133,6 +133,7 @@ export default function AppLayout() {
           sx={{
             position: "fixed",
             inset: 0,
+            zIndex: 2000,
             pointerEvents: "none",
             opacity: blackout ? 1 : 0,
             background: "var(--color-bg-deep)",

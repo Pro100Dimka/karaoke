@@ -1,4 +1,4 @@
-import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Lock, LogOut, Mic, MicOff, Sparkles, Unlock, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { Box, IconButton, Popover, Slider, Stack, Typography } from "../theme/ui";
@@ -15,28 +15,62 @@ export default function OnlineRoomParticipant({
   roomSoundMuted = false,
   isLocallyMuted = false,
   effectsEnabled = false,
+  effectsLocked = false,
+  effectSettings,
   participantVolume = 1,
   transferStatus,
   onLeave,
   onSetMicrophoneMuted,
   onSetRoomSoundMuted,
   onSetParticipantVolume,
+  onSetParticipantEffects,
+  onSetEffectsLocked,
   onTogglePersonMuted,
   onTogglePersonEffects
 }) {
   const { t } = useI18n();
   const [volumeOpen, setVolumeOpen] = useState(false);
   const volumeAnchorRef = useRef(null);
+  const effectsAnchorRef = useRef(null);
   const closeTimerRef = useRef(null);
+  const effectsCloseTimerRef = useRef(null);
+  const [effectsOpen, setEffectsOpen] = useState(false);
+  const [effectDraft, setEffectDraft] = useState({
+    volume: 1,
+    reverb: 0,
+    echo: 0,
+    delay: 0,
+    noise_suppression: 0.35
+  });
   const openVolume = () => {
     clearTimeout(closeTimerRef.current);
+    setEffectsOpen(false);
     setVolumeOpen(true);
   };
   const closeVolumeSoon = () => {
     clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setVolumeOpen(false), 120);
   };
-  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
+  const openEffects = () => {
+    clearTimeout(effectsCloseTimerRef.current);
+    setVolumeOpen(false);
+    setEffectsOpen(true);
+  };
+  const closeEffectsSoon = () => {
+    clearTimeout(effectsCloseTimerRef.current);
+    effectsCloseTimerRef.current = setTimeout(() => setEffectsOpen(false), 120);
+  };
+  useEffect(
+    () => () => {
+      clearTimeout(closeTimerRef.current);
+      clearTimeout(effectsCloseTimerRef.current);
+    },
+    []
+  );
+  useEffect(() => {
+    if (!effectSettings) return;
+    setEffectDraft((current) => ({ ...current, ...effectSettings }));
+  }, [effectSettings]);
 
   const self = person.id === room.selfId;
 
@@ -58,8 +92,26 @@ export default function OnlineRoomParticipant({
       t(roomSoundMuted ? "room.sound.enable" : "room.sound.disable"),
       () => onSetRoomSoundMuted(!roomSoundMuted)
     ],
+    [
+      effectsLocked ? Lock : Unlock,
+      t(effectsLocked ? "Разрешить управление эффектами" : "Запретить управление эффектами"),
+      () => onSetEffectsLocked?.(!effectsLocked)
+    ],
     [LogOut, t("room.leave"), onLeave]
   ];
+
+  const effectFields = [
+    ["volume", t("Громкость микрофона"), 2],
+    ["reverb", t("Реверб"), 1],
+    ["echo", t("Эхо"), 1],
+    ["delay", t("Дилей"), 1],
+    ["noise_suppression", t("Шумоподавление"), 1]
+  ];
+  const commitEffect = (name, value) => {
+    const next = { ...effectDraft, [name]: value };
+    setEffectDraft(next);
+    onSetParticipantEffects?.(person.id, next);
+  };
 
   return (
     <Stack
@@ -71,8 +123,8 @@ export default function OnlineRoomParticipant({
       data-speaking={speaking || undefined}
       sx={{ overflow: "visible" }}
     >
-      <Stack direction="row" align="center" justify="space-between" gap="var(--space-2)">
-        <Typography as="strong" noWrap>
+      <Stack direction="row" align="center" gap="var(--space-2)" sx={{ flex: 1 }}>
+        <Typography as="strong" noWrap sx={{ flex: 1 }}>
           {person.name}
         </Typography>
         {transferStatus && transferStatus.stage !== "error" && (
@@ -96,7 +148,7 @@ export default function OnlineRoomParticipant({
         direction="row"
         align="center"
         gap="var(--space-2)"
-        sx={{ inlineSize: "auto", overflow: "visible" }}
+        sx={{ inlineSize: "auto", overflow: "visible", flex: 1 }}
       >
         {self ? (
           selfActions.map(([icon, label, onClick, disabled]) => (
@@ -104,10 +156,6 @@ export default function OnlineRoomParticipant({
               key={label}
               icon={icon}
               label={label}
-              iconSize={58}
-              sx={{
-                minBlockSize: 0
-              }}
               variant="contained"
               disabled={disabled}
               onClick={onClick}
@@ -129,10 +177,6 @@ export default function OnlineRoomParticipant({
               <IconButton
                 icon={isLocallyMuted ? VolumeX : Volume2}
                 variant={isLocallyMuted ? "contained" : "outlined"}
-                sx={{
-                  minBlockSize: 0
-                }}
-                iconSize={58}
                 label={t(key(isLocallyMuted, "enable", "disable"), {
                   name: person.name
                 })}
@@ -171,19 +215,61 @@ export default function OnlineRoomParticipant({
               </Popover>
             </Box>
 
-            <IconButton
-              icon={Sparkles}
-              variant={effectsEnabled ? "contained" : "outlined"}
-              aria-pressed={effectsEnabled}
-              label={t(key(effectsEnabled, "effects.disable", "effects.enable"), {
-                name: person.name
-              })}
-              iconSize={50}
-              sx={{
-                minBlockSize: 0
-              }}
-              onClick={() => onTogglePersonEffects(person.id)}
-            />
+            <Box
+              ref={effectsAnchorRef}
+              sx={{ display: "inline-flex", overflow: "visible" }}
+              onMouseEnter={openEffects}
+              onMouseLeave={closeEffectsSoon}
+            >
+              <IconButton
+                icon={Sparkles}
+                variant={effectsEnabled ? "contained" : "outlined"}
+                aria-pressed={effectsEnabled}
+                label={t(key(effectsEnabled, "effects.disable", "effects.enable"), {
+                  name: person.name
+                })}
+                onClick={() => onTogglePersonEffects(person.id)}
+              />
+              <Popover
+                open={effectsOpen}
+                anchorRef={effectsAnchorRef}
+                placement="right"
+                onClose={() => setEffectsOpen(false)}
+                onMouseEnter={openEffects}
+                onMouseLeave={closeEffectsSoon}
+                aria-label={t("Эффекты микрофона {0}", { 0: person.name })}
+                style={{
+                  width: "min(18rem, calc(100vw - 1rem))",
+                  padding: "var(--space-4)",
+                  boxShadow: "var(--shadow-lg)"
+                }}
+              >
+                <Stack gap="var(--space-3)">
+                  <Typography as="strong">{t("Эффекты микрофона")}</Typography>
+                  {effectsLocked && (
+                    <Typography variant="caption" tone="muted">
+                      {t("Пользователь запретил изменять свои эффекты")}
+                    </Typography>
+                  )}
+                  {effectFields.map(([name, label, maximum]) => (
+                    <Slider
+                      key={name}
+                      label={label}
+                      min={0}
+                      max={maximum}
+                      step={0.05}
+                      value={effectDraft[name] ?? 0}
+                      disabled={effectsLocked}
+                      formatValue={(value) => `${Math.round(value * 100)}%`}
+                      onChange={(value) =>
+                        setEffectDraft((current) => ({ ...current, [name]: value }))
+                      }
+                      onCommit={(value) => commitEffect(name, value)}
+                    />
+                  ))}
+                </Stack>
+              </Popover>
+            </Box>
           </>
         )}
       </Stack>

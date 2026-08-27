@@ -22,9 +22,10 @@ const BINDINGS = {
 const resolveOptions = (settings, definition) => {
   if (!definition.optionsKey) return definition.options;
   if (definition.source !== "radio") return settings.audio.options[definition.optionsKey];
-  return settings.radio.stations.map(({ id: value, name: label, description }) => ({
+  return settings.radio.stations.map(({ id: value, name: label, group, description }) => ({
     value,
     label,
+    ...(group ? { group } : {}),
     description
   }));
 };

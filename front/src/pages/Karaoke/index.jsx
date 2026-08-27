@@ -146,8 +146,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     microphoneSettings;
   useEffect(() => {
     if (!onlineRoomState) return;
-    syncRoomUi({ participantEffects: microphoneEffects });
-  }, [microphoneEffects, onlineParticipantCount, onlineRoomState, syncRoomUi]);
+    syncRoomUi({ participantEffects: { volume: microphoneVolume, ...microphoneEffects } });
+  }, [microphoneEffects, microphoneVolume, onlineParticipantCount, onlineRoomState, syncRoomUi]);
   const {
     audioDriver,
     directOutputDeviceId,
@@ -183,6 +183,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     currentTimeRef
   });
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
+  const [clipAvailable, setClipAvailable] = useState(Boolean(song?.video_url));
+  useEffect(() => setClipAvailable(Boolean(song?.video_url)), [song?.id, song?.video_url]);
 
   const lyricTime = currentTime;
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
@@ -362,7 +364,8 @@ export default function Karaoke({ onOpenAppSettings }) {
         vocalVolume,
         vocalsRef,
         youTubeClipRef,
-        youTubeVideoId
+        youTubeVideoId,
+        onClipAvailabilityChange: setClipAvailable
       }}
       recordingError={recordingError}
       analysisRecordingId={analysisRecordingId}
@@ -386,7 +389,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         lyricsSync,
         monitorInputDeviceId,
         monitoringEnabled,
-        hasSongClip: Boolean(song.video_url),
+        hasSongClip: clipAvailable,
         notes,
         sceneBlackout,
         sceneIntroVisible,

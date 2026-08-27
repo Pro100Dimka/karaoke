@@ -5,6 +5,8 @@ import { Box } from "../../../theme/ui";
 import * as platform from "../../../utils/platform";
 import { playbackGain, youTubeEmbedUrl } from "../utils/data";
 
+const noop = () => {};
+
 function useTrack(songId, track) {
   const direct = api.getAudioTrackUrl(songId, track);
   const desktop = platform.isElectron();
@@ -68,9 +70,36 @@ export default function KaraokeMedia({
   vocalVolume,
   vocalsRef,
   youTubeClipRef,
-  youTubeVideoId
+  youTubeVideoId,
+  onClipAvailabilityChange = noop
 }) {
+  const [clipFailed, setClipFailed] = useState(false);
+  useEffect(() => {
+    setClipFailed(false);
+    onClipAvailabilityChange(Boolean(youTubeVideoId || song.video_url));
+  }, [onClipAvailabilityChange, song.id, song.video_url, youTubeVideoId]);
+
+  useEffect(() => {
+    if (!youTubeVideoId || clipFailed) return undefined;
+    const receivePlayerEvent = (event) => {
+      if (!/^https:\/\/([\w-]+\.)?youtube(?:-nocookie)?\.com$/.test(event.origin)) return;
+      if (event.source !== youTubeClipRef.current?.contentWindow) return;
+      let message = event.data;
+      try {
+        if (typeof message === "string") message = JSON.parse(message);
+      } catch {
+        return;
+      }
+      if (message?.event !== "onError") return;
+      setClipFailed(true);
+      onClipAvailabilityChange(false);
+    };
+    globalThis.addEventListener?.("message", receivePlayerEvent);
+    return () => globalThis.removeEventListener?.("message", receivePlayerEvent);
+  }, [clipFailed, onClipAvailabilityChange, youTubeClipRef, youTubeVideoId]);
+
   const loadYouTube = () => {
+    sendYouTubeCommand("addEventListener", ["onError"]);
     sendYouTubeCommand("mute");
     sendYouTubeCommand("setPlaybackRate", [speed]);
     syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
@@ -92,7 +121,7 @@ export default function KaraokeMedia({
         track="vocals"
         volume={vocalVolume}
       />
-      {youTubeVideoId ? (
+      {youTubeVideoId && !clipFailed ? (
         <Box
           as="iframe"
           ref={youTubeClipRef}
@@ -111,7 +140,7 @@ export default function KaraokeMedia({
             pointerEvents: "none"
           }}
         />
-      ) : song.video_url ? (
+      ) : song.video_url && !clipFailed ? (
         <Box
           as="video"
           ref={videoRef}
@@ -119,6 +148,10 @@ export default function KaraokeMedia({
           preload="metadata"
           muted
           playsInline
+          onError={() => {
+            setClipFailed(true);
+            onClipAvailabilityChange(false);
+          }}
           sx={{
             position: "absolute",
             inset: 0,

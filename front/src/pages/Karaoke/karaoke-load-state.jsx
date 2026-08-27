@@ -43,7 +43,12 @@ export default function KaraokeLoadState(props) {
     <Stack
       align="center"
       justify="center"
-      sx={{ position: "fixed", inset: 0, padding: "var(--space-6)" }}
+      sx={{
+        position: "fixed",
+        inset: 0,
+        padding: "var(--space-6)",
+        background: "var(--bg-image) center / cover no-repeat fixed, var(--color-bg-deep)"
+      }}
     >
       <Card variant="laser" tilt={false} cardContent={{ style: { padding: "var(--space-8)" } }}>
         <Stack align="center" gap="var(--space-4)">

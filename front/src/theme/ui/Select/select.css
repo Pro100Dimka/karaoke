@@ -121,6 +121,19 @@
     gap: .125rem;
   }
 
+  .ui-select-group {
+    position: sticky;
+    inset-block-start: calc(var(--space-1) * -1);
+    z-index: 1;
+    padding: var(--space-3) var(--control-pad, var(--control-pad-md)) var(--space-1);
+    background: color-mix(in srgb, var(--overlay-bg) 96%, transparent);
+    color: var(--ui-primary);
+    font-size: var(--typography-caption-size);
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
   .ui-select-option {
     appearance: none;
     display: flex;

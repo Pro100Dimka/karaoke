@@ -77,26 +77,19 @@ afterEach(() => {
 });
 describe("radio context", () => {
   test("keeps the complete station catalog contract", () => {
-    verify([
-      RADIO_STATIONS,
-      "toEqual",
-      [
-        expect.objectContaining({
-          id: "poptron",
-          name: "SomaFM PopTron",
-          streams: ["https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3"]
-        }),
-        expect.objectContaining({
-          id: "indiepop",
-          name: "SomaFM Indie Pop Rocks",
-          streams: ["https://ice5.somafm.com/indiepop-128-mp3", "https://ice2.somafm.com/indiepop-128-mp3"]
-        }),
-        expect.objectContaining({ id: "beatblender", name: "SomaFM Beat Blender" }),
-        expect.objectContaining({ id: "groovesalad", name: "SomaFM Groove Salad" })
-      ]
-    ]);
-    RADIO_STATIONS.forEach(({ description, streams }) => {
-      verify([description, "not.toBe", ""], [streams, "toHaveLength", 2]);
+    expect(RADIO_STATIONS).toHaveLength(40);
+    const groups = Object.groupBy(RADIO_STATIONS, ({ group }) => group);
+    expect(Object.keys(groups)).toHaveLength(8);
+    Object.values(groups).forEach((stations) => expect(stations).toHaveLength(5));
+    expect(RADIO_STATIONS[0]).toEqual(
+      expect.objectContaining({
+        id: "poptron",
+        name: "SomaFM PopTron",
+        streams: ["https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3"]
+      })
+    );
+    RADIO_STATIONS.forEach(({ description, group, streams }) => {
+      verify([description, "not.toBe", ""], [group, "not.toBe", ""], [streams, "toHaveLength", 2]);
     });
   });
   test("normalizes settings and classifies autoplay failures", () => {

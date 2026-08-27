@@ -68,9 +68,16 @@ const Popover = forwardRef(({
     if (!open || !onClose) return;
 
     const closeOutside = (event) => {
+      const portalLayer = event.target?.closest?.(".ui-popover[id]");
+      const portalOwner = portalLayer?.id
+        ? [...(popoverRef.current?.querySelectorAll?.("[aria-controls]") || [])].some(
+            (control) => control.getAttribute("aria-controls") === portalLayer.id
+          )
+        : false;
       if (
         !popoverRef.current?.contains(event.target) &&
-        !anchorRef?.current?.contains(event.target)
+        !anchorRef?.current?.contains(event.target) &&
+        !portalOwner
       ) {
         onClose(event);
       }

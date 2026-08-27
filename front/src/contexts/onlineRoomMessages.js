@@ -37,6 +37,7 @@ export function createOnlineRoomMessageHandler(options) {
     setVoiceError,
     setTransferStatus,
     onParticipantJoined = () => {},
+    onEffectControl = () => {},
     onConnectionClosed
   } = options;
 
@@ -273,6 +274,7 @@ export function createOnlineRoomMessageHandler(options) {
     },
     "participant-updated": (message) =>
       setParticipants((items) => upsertParticipant(items, message.participant)),
+    "effect-control": (message) => onEffectControl(message.effects, message.fromId),
     "self-updated": (message) => {
       if (!message.self) return;
       setRoom({

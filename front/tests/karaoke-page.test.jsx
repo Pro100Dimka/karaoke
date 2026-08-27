@@ -305,7 +305,16 @@ describe("karaoke page", () => {
     mocks.room.room = { host: true };
     mocks.room.participants = [{ id: "guest" }];
     render(<Karaoke />);
-    verify([mocks.room.syncUi, "toHaveBeenCalledWith", { participantEffects: mocks.microphone.microphoneEffects }]);
+    verify([
+      mocks.room.syncUi,
+      "toHaveBeenCalledWith",
+      {
+        participantEffects: {
+          volume: mocks.microphone.microphoneVolume,
+          ...mocks.microphone.microphoneEffects
+        }
+      }
+    ]);
   });
   test("suspends radio only for an active recording during playback", async () => {
     render(<Karaoke />);

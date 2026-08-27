@@ -138,7 +138,7 @@ describe("online room provider", () => {
       voiceError: "",
       transferStatus: null
     });
-    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(14);
+    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(16);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
