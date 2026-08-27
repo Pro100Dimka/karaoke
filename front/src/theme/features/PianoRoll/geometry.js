@@ -49,6 +49,36 @@ export function pianoRollFrame(notes, currentTime, size, pitchRange) {
   const rowHeight = height / (max - min + 1);
   const x = (value) => keyboard + ((value - start) / PIANO_ROLL_VIEW.seconds) * lane;
   const y = (midi) => height - (midi - min + 1) * rowHeight;
+  const visibleNotes = notes
+    .filter((note) => note.end >= start && note.start <= end)
+    .map((note) => ({
+      ...note,
+      left: Math.max(keyboard, x(note.start)),
+      right: Math.min(width, x(note.end)),
+      state:
+        time >= note.start && time < note.end
+          ? "current"
+          : note.end <= time
+            ? "past"
+            : "future"
+    }));
+  const connections = visibleNotes.slice(1).flatMap((note, index) => {
+    const previous = visibleNotes[index];
+    const gap = note.start - previous.end;
+    if (gap > 0.04) return [];
+    const overlapWidth = Math.max(4, Math.min(18, previous.right - note.left));
+    const fromX = gap <= 0 ? note.left : previous.right;
+    const toX = gap <= 0 ? note.left + overlapWidth : note.left;
+    return [
+      {
+        fromX,
+        fromY: y(previous.note) + rowHeight / 2,
+        toX,
+        toY: y(note.note) + rowHeight / 2,
+        state: note.state
+      }
+    ];
+  });
   return {
     end,
 height,
@@ -61,15 +91,9 @@ rowHeight,
 start,
 time,
 width,
-x,
-y,
-    notes: notes
-      .filter((note) => note.end >= start && note.start <= end)
-      .map((note) => ({
-        ...note,
-        left: Math.max(keyboard, x(note.start)),
-        right: Math.min(width, x(note.end)),
-        state: time >= note.start && time < note.end ? "current" : note.end <= time ? "past" : "future"
-      }))
+    x,
+    y,
+    connections,
+    notes: visibleNotes
   };
 }

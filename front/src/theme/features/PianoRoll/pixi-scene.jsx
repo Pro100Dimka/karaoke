@@ -16,6 +16,15 @@ function RollGraphics({ currentTime, currentTimeRef, isPitchDetected, notes, pal
       if (!graphics) return;
       const frame = pianoRollFrame(notes, time, size, pitchRange);
       graphics.clear();
+      for (const connection of frame.connections ?? []) {
+        graphics.lineStyle(
+          clamp(frame.rowHeight * 0.24, 2, 5),
+          palette.hover,
+          connection.state === "past" ? 0.3 : 0.72
+        );
+        graphics.moveTo(connection.fromX, connection.fromY);
+        graphics.lineTo(connection.toX, connection.toY);
+      }
       for (const note of frame.notes) {
         const height = clamp(frame.rowHeight * 0.72, 5, 15);
         const y = frame.y(note.note) + (frame.rowHeight - height) / 2;

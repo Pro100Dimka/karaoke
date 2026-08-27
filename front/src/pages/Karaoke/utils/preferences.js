@@ -16,6 +16,15 @@ const boolean = (value, fallback) => {
   return fallback;
 };
 
+const timingOffsets = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .slice(0, 500)
+      .map(([songId, offset]) => [String(songId), clamp(offset, -10, 10, 0)])
+  );
+};
+
 export function normalizeKaraokePreferences(preferences) {
   const source =
     preferences && typeof preferences === "object" && !Array.isArray(preferences)
@@ -36,7 +45,8 @@ export function normalizeKaraokePreferences(preferences) {
     showLyrics: boolean(source.showLyrics, true),
     showNotes: boolean(source.showNotes, true),
     autoHideConsole: boolean(source.autoHideConsole, true),
-    effectPreset
+    effectPreset,
+    timingOffsets: timingOffsets(source.timingOffsets)
   };
 }
 

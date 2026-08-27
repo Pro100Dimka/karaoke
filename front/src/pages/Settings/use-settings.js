@@ -8,7 +8,7 @@ import { translateSaved as tr } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import { applyTheme } from "../../utils/theme";
-import { createIndexedDeviceOptions } from "../Karaoke/utils/devices";
+import { createIndexedDeviceOptions, createInputDeviceOptions } from "../Karaoke/utils/devices";
 
 export const signalLevel = (signal) => {
   const db = Number(signal?.rms_db ?? signal?.rms_dbfs);
@@ -164,7 +164,7 @@ function useAudio(open) {
   return {
     values,
     options: {
-      inputs: createIndexedDeviceOptions(inputs.data),
+      inputs: createInputDeviceOptions(inputs.data, values.input_device_id),
       outputs: createIndexedDeviceOptions(outputs.data, tr("Системное устройство"))
     },
     level: values.monitoring_enabled ? signalLevel(signal.data) : 0,

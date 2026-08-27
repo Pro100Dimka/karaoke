@@ -12,6 +12,17 @@ export function drawPianoRoll(context, frame, palette, pitch) {
   context.beginPath();
   context.rect(frame.keyboard, 0, frame.lane, frame.height);
   context.clip();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  for (const connection of frame.connections ?? []) {
+    context.globalAlpha = connection.state === "past" ? 0.3 : 0.72;
+    context.strokeStyle = palette.hover;
+    context.lineWidth = clamp(frame.rowHeight * 0.24, 2, 5);
+    context.beginPath();
+    context.moveTo(connection.fromX, connection.fromY);
+    context.lineTo(connection.toX, connection.toY);
+    context.stroke();
+  }
   for (const note of frame.notes) {
     const height = clamp(frame.rowHeight * 0.72, 5, 15);
     const y = frame.y(note.note) + (frame.rowHeight - height) / 2;

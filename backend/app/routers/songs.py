@@ -1,5 +1,6 @@
 """Управление песнями + запуск AI-обработки."""
 
+import asyncio
 import base64
 import difflib
 import tempfile
@@ -21,6 +22,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 import config
 import models
@@ -29,6 +31,7 @@ from app.api.dependencies import SongDependency
 from app.api.errors import http_error
 from app.services import (
     ai_bridge,
+    kar_dataset_service,
     metadata_enrichment_service,
     pipeline_service,
     recording_service,
@@ -192,6 +195,59 @@ async def inspect_song_identity(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+@router.post("/training/kar", response_model=schemas.KarDatasetBatchOut)
+async def prepare_kar_training_dataset(files: list[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="Выберите хотя бы один файл .kar")
+    if len(files) > 250:
+        raise HTTPException(status_code=400, detail="За один раз можно подготовить не более 250 файлов")
+    semaphore = asyncio.Semaphore(3)
+
+    async def prepare_one(upload: UploadFile):
+        filename = Path(upload.filename or "song.kar").name
+        if Path(filename).suffix.casefold() != ".kar":
+            await upload.close()
+            return {
+                "filename": filename,
+                "status": "error",
+                "error": "Поддерживаются только файлы .kar",
+            }
+        config.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            prefix=".kar-training-",
+            suffix=".kar",
+            dir=config.UPLOAD_TEMP_DIR,
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+        try:
+            async with semaphore:
+                await save_upload_limited(
+                    upload,
+                    temporary_path,
+                    limit=kar_dataset_service.MAX_KAR_BYTES,
+                    chunk_size=256 * 1024,
+                    too_large_message="Файл .kar превышает допустимый размер 8 МБ",
+                )
+                prepared = await run_in_threadpool(
+                    kar_dataset_service.prepare_kar_file,
+                    temporary_path,
+                    original_filename=filename,
+                )
+                return {"filename": filename, **prepared}
+        except Exception as exc:  # noqa: BLE001 - one bad file must not cancel the batch
+            return {"filename": filename, "status": "error", "error": str(exc)}
+        finally:
+            temporary_path.unlink(missing_ok=True)
+            await upload.close()
+
+    results = await asyncio.gather(*(prepare_one(upload) for upload in files))
+    return {
+        "output_root": str(kar_dataset_service.DATASET_DIR.resolve()),
+        "items": results,
+    }
 
 
 @router.get("", response_model=list[schemas.SongOut])

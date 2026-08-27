@@ -63,6 +63,25 @@ class SongIdentityOut(BaseModel):
     cover_data_url: str | None = None
 
 
+class KarDatasetItemOut(BaseModel):
+    filename: str
+    status: Literal["ready", "review", "error"]
+    dataset_dir: str | None = None
+    title: str | None = None
+    artist: str | None = None
+    word_count: int = 0
+    note_count: int = 0
+    preparation_mode: str | None = None
+    stems_status: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class KarDatasetBatchOut(BaseModel):
+    output_root: str
+    items: list[KarDatasetItemOut]
+
+
 class SongUpdate(BaseModel):
     """Все поля опциональны — PATCH-семантика, меняем только переданное."""
 

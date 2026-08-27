@@ -12,6 +12,7 @@ for (const pathname of [
   "/songs/song-1/audio/instrumental",
   "/songs/song-1/audio/vocals",
   "/songs/song-1/cover",
+  "/songs/song-1/video",
   "/recording/take-1/file",
   "/recording/take-1/performance"
 ]) {

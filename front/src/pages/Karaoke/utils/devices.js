@@ -23,6 +23,58 @@ export function createIndexedDeviceOptions(devices, defaultLabel = translateSave
     ...mapDeviceOptions(devices, (device) => device.index, translateSaved("Устройство"))
   ];
 }
+
+const INPUT_AUXILIARY_PATTERN =
+  /sound mapper|primary sound capture|первичн(?:ый|ий).*драйвер.*запис|loop[ -]?back|stereo mix|what u hear|s\/?pdif|adat/i;
+const HOST_SUFFIX_PATTERN = /\s+\[(?:MME|ASIO|Windows (?:WASAPI|DirectSound|WDM-KS))\]\s*$/i;
+
+function inputHostPriority(device) {
+  const host = String(device?.host_api || "").toLowerCase();
+  if (host.includes("wasapi")) return 0;
+  if (host.includes("asio")) return 1;
+  if (host.includes("mme")) return 2;
+  if (host.includes("directsound")) return 3;
+  if (host.includes("wdm-ks")) return 4;
+  return 5;
+}
+
+export function createInputDeviceOptions(
+  devices,
+  selectedDeviceId,
+  defaultLabel = translateSaved("По умолчанию")
+) {
+  const selected = Number(selectedDeviceId);
+  const hasSelected =
+    selectedDeviceId !== null && selectedDeviceId !== "" && Number.isInteger(selected);
+  const choices = new Map();
+
+  (Array.isArray(devices) ? devices : []).filter(Boolean).forEach((device) => {
+    const index = Number(device?.index);
+    if (!Number.isInteger(index)) return;
+    const fullName = String(device?.name || device?.label || "").trim();
+    const label = fullName.replace(HOST_SUFFIX_PATTERN, "").trim();
+    const isSelected = hasSelected && index === selected;
+    const isAuxiliary =
+      INPUT_AUXILIARY_PATTERN.test(label) ||
+      String(device?.host_api || "")
+        .toLowerCase()
+        .includes("wdm-ks");
+    if (isAuxiliary && !isSelected) return;
+
+    const key = label.toLocaleLowerCase() || `device-${index}`;
+    const current = choices.get(key);
+    const currentSelected = hasSelected && Number(current?.index) === selected;
+    if (
+      !current ||
+      isSelected ||
+      (!currentSelected && inputHostPriority(device) < inputHostPriority(current))
+    ) {
+      choices.set(key, { ...device, index, name: label || translateSaved("Устройство") });
+    }
+  });
+
+  return createIndexedDeviceOptions([...choices.values()], defaultLabel);
+}
 export function createBrowserDeviceOptions(
   devices,
   fallbackLabel,

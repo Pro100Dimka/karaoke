@@ -1,6 +1,7 @@
 const BACKEND_FILE_PATHS = [
   /^\/songs\/[^/]+\/audio\/(?:instrumental|vocals|song|diagnostic)$/,
   /^\/songs\/[^/]+\/cover$/,
+  /^\/songs\/[^/]+\/video$/,
   /^\/recording\/[^/]+\/(?:file|performance)$/
 ];
 

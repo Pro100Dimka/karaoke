@@ -1,4 +1,27 @@
 const finite = (value) => Number.isFinite(Number(value));
+const shiftedTime = (value, offset) =>
+  finite(value) ? Math.round((Number(value) + offset) * 1000) / 1000 : value;
+
+export function shiftLyricsSync(lyricsSync, offsetSeconds = 0) {
+  const offset = Number(offsetSeconds);
+  if (!lyricsSync || !Number.isFinite(offset) || offset === 0) return lyricsSync;
+  return {
+    ...lyricsSync,
+    words: (lyricsSync.words ?? []).map((word) => ({
+      ...word,
+      start: shiftedTime(word.start, offset),
+      end: shiftedTime(word.end, offset),
+      notes: Array.isArray(word.notes)
+        ? word.notes.map((note) => ({
+            ...note,
+            start: shiftedTime(note.start, offset),
+            end: shiftedTime(note.end, offset)
+          }))
+        : word.notes
+    }))
+  };
+}
+
 export function flattenLyricsNotes(lyricsSync) {
   const canonical = new Map();
   for (const [wordIndex, word] of (lyricsSync?.words ?? []).entries()) {

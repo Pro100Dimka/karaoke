@@ -8,6 +8,15 @@ export const songsApi = {
     form.append("file", file);
     return request("/songs/identity", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
   },
+  prepareKarDataset: (files) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file);
+    return request("/songs/training/kar", {
+      method: "POST",
+      body: form,
+      timeoutMs: 2 * 60 * 60_000
+    });
+  },
   getSong: (id) => request(`/songs/${encodePathSegment(id)}`).then(normalizeSong),
   getSongRevision: (id) => request(`/songs/${encodePathSegment(id)}/revision`),
   getSongRevisions: (ids) =>

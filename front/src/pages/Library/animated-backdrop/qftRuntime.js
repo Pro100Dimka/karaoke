@@ -1988,12 +1988,18 @@ void main() {
                 }`,
             fragmentShader: `uniform sampler2D tDiffuse;
                 varying vec2 vUv;
-                void main() {
-                    vec4 color = texture2D(tDiffuse, vUv);
-                    vec3 detailLift = pow(max(color.rgb, vec3(0.0)), vec3(0.82)) * 1.2;
-                    gl_FragColor = vec4(detailLift, 1.0);
-                }`
-        }));
+                 void main() {
+                     vec4 color = texture2D(tDiffuse, vUv);
+                     vec3 detailLift = pow(max(color.rgb, vec3(0.0)), vec3(0.82)) * 1.2;
+                     // The visualizer is an overlay on top of the theme artwork.
+                     // Never turn the transparent WebGL clear color into an opaque
+                     // black frame: Electron may composite the iframe in a separate
+                     // surface where CSS blend modes cannot reveal the layer below.
+                     float visibleLight = max(detailLift.r, max(detailLift.g, detailLift.b));
+                     float overlayAlpha = clamp(visibleLight * 1.35, 0.0, 1.0);
+                     gl_FragColor = vec4(detailLift, overlayAlpha);
+                 }`
+         }));
 
         // ═══════ GUI ═══════
         const gui = new GUI({ title: '✦ Quantum Fields', width: 320 });

@@ -50,6 +50,8 @@ test("library actions cover search, room, adding and file selection", async () =
   const setQuery = vi.fn();
   const onRoom = vi.fn();
   const onAdd = vi.fn();
+  const onKar = vi.fn();
+  const karInputRef = createRef();
   const onFile = vi.fn();
   const view = render(
     <LibraryActions
@@ -57,6 +59,12 @@ test("library actions cover search, room, adding and file selection", async () =
       fileInputRef={createRef()}
       onFileChosen={onFile}
       onAdd={onAdd}
+      karDataset={{
+        inputRef: karInputRef,
+        pending: false,
+        importFiles: vi.fn(),
+        openFilePicker: onKar
+      }}
       onOpenRoom={onRoom}
       roomActive={false}
       query="q"
@@ -66,11 +74,12 @@ test("library actions cover search, room, adding and file selection", async () =
   fireEvent.change(view.getByRole("textbox", { name: "Поиск" }), { target: { value: "song" } });
   fireEvent.click(view.getByRole("button", { name: /Петь вместе|Співати разом/ }));
   fireEvent.click(view.getByRole("button", { name: /Добавить песню|Додати пісню/ }));
-  fireEvent.change(view.container.querySelector("input[type=file]"), {
+  fireEvent.click(view.getByRole("button", { name: /Обучить на \.kar|Навчити на \.kar/ }));
+  fireEvent.change(view.container.querySelector('input[type=file][accept*=".mp3"]'), {
     target: { files: [new File(["audio"], "song.mp3", { type: "audio/mpeg" })] }
   });
   expect(setQuery).toHaveBeenCalledWith("song", expect.any(Object));
-  called(onRoom, onAdd);
+  called(onRoom, onAdd, onKar);
   await waitFor(() => called(onFile));
   view.rerender(<LibraryActions canManageLibrary importing onAdd={onAdd} onOpenRoom={onRoom} query="" setQuery={setQuery} />);
 });

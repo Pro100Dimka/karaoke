@@ -4,7 +4,22 @@ const WORD = /[\p{L}\p{N}_]+(?:[’'-][\p{L}\p{N}_]+)*/gu;
 const LINE_HOLD_SECONDS = 1.2;
 
 export function buildLyricLines({ text, words } = {}) {
-  if (typeof text !== "string" || !Array.isArray(words)) return [];
+  if (!Array.isArray(words)) return [];
+  const timedFallback = () => {
+    const lines = [];
+    let line = [];
+    words.forEach((word, index) => {
+      line.push(word);
+      const next = words[index + 1];
+      const gap = next ? Number(next.start) - Number(word.end) : Number.POSITIVE_INFINITY;
+      if (line.length >= 8 || gap >= 1 || !next) {
+        lines.push(line);
+        line = [];
+      }
+    });
+    return lines;
+  };
+  if (typeof text !== "string") return timedFallback();
   let offset = 0;
   const lines = text.split(/\r?\n/).flatMap((source) => {
     const count = [...source.matchAll(WORD)].length;
@@ -12,7 +27,7 @@ export function buildLyricLines({ text, words } = {}) {
     offset += line.length;
     return line.length ? [line] : [];
   });
-  return offset === words.length ? lines : [];
+  return offset === words.length ? lines : timedFallback();
 }
 
 export function lyricLineIndex(lines, currentTime) {

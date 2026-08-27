@@ -270,10 +270,11 @@ export default function useKaraokeTransport({
         videoRef.current && Promise.resolve(videoRef.current.play()),
         melodyStart
       ].filter(Boolean);
-      const [[masterResult]] = await Promise.all([
-        Promise.allSettled([master]),
-        Promise.allSettled(secondary)
-      ]);
+      // Electron can leave an optional video/audio play() promise pending
+      // after pause/stop. Only the instrumental is the master clock, so an
+      // optional follower must never keep the playback machine in `starting`.
+      secondary.forEach((start) => Promise.resolve(start).catch(() => {}));
+      const [masterResult] = await Promise.allSettled([master]);
       if (masterResult.status === "rejected") throw masterResult.reason;
       syncSecondaryMedia(instrumental.currentTime, true);
       // Recording startup may wait for an audio driver. Playback must remain
@@ -283,9 +284,7 @@ export default function useKaraokeTransport({
         if (!recordingId || operation !== operationRef.current) return;
         Promise.resolve(api.syncRecording(recordingId, instrumental.currentTime)).catch((error) => {
           if (operation === operationRef.current) {
-            setRecordingError(
-              formatError("Не удалось точно синхронизировать запись: {0}", error)
-            );
+            setRecordingError(formatError("Не удалось точно синхронизировать запись: {0}", error));
           }
         });
       });

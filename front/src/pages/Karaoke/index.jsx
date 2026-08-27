@@ -8,7 +8,7 @@ import { translateSaved } from "../../i18n/runtime";
 import { queryKeys } from "../../query-client";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
-import { flattenLyricsNotes } from "../../utils/lyrics-sync";
+import { flattenLyricsNotes, shiftLyricsSync } from "../../utils/lyrics-sync";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
@@ -80,7 +80,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     autoHideConsole,
     setAutoHideConsole,
     effectPreset,
-    setEffectPreset
+    setEffectPreset,
+    timingOffsets,
+    setTimingOffsets
   } = karaokePreferences;
   useKaraokeRoomPreferences({
     participantCount: onlineParticipantCount,
@@ -174,9 +176,29 @@ export default function Karaoke({ onOpenAppSettings }) {
   }, [resetPlayback, song?.id]);
 
   const lyricsSync = result?.lyrics_sync;
-  const notes = useMemo(() => flattenLyricsNotes(lyricsSync), [lyricsSync]);
+  const sourceNotes = useMemo(() => flattenLyricsNotes(lyricsSync), [lyricsSync]);
+  const timingPreferenceKey = [
+    song?.id ?? "",
+    lyricsSync?.bpm ?? "",
+    lyricsSync?.duration ?? "",
+    lyricsSync?.words?.[0]?.start ?? ""
+  ].join("|");
+  const embeddedLyricsOffset = Math.max(
+    -10,
+    Math.min(10, Number(lyricsSync?.alignment?.offset_seconds) || 0)
+  );
+  const savedLyricsOffset = Number(timingOffsets?.[timingPreferenceKey]);
+  const lyricsOffset = Number.isFinite(savedLyricsOffset)
+    ? savedLyricsOffset
+    : embeddedLyricsOffset;
+  const runtimeLyricsOffset = lyricsOffset - embeddedLyricsOffset;
+  const displayLyricsSync = useMemo(
+    () => shiftLyricsSync(lyricsSync, runtimeLyricsOffset),
+    [lyricsSync, runtimeLyricsOffset]
+  );
+  const displayNotes = useMemo(() => flattenLyricsNotes(displayLyricsSync), [displayLyricsSync]);
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } = useMelodyGuide({
-    notes,
+    notes: sourceNotes,
     volume: melodyVolume,
     keyShift,
     currentTimeRef
@@ -184,7 +206,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [clipAvailable, setClipAvailable] = useState(false);
   useEffect(() => setClipAvailable(false), [song?.id, song?.video_url]);
 
-  const lyricTime = currentTime;
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
     currentTimeRef,
     instrumentalRef,
@@ -298,6 +319,11 @@ export default function Karaoke({ onOpenAppSettings }) {
     const nextTempo = Math.max(1, currentTempo + delta);
     setSpeed(Math.max(0.5, Math.min(1.5, nextTempo / baseTempo)));
   };
+  const changeLyricsOffset = (value) => {
+    const next = Math.max(-10, Math.min(10, Math.round(Number(value) * 10) / 10));
+    if (!Number.isFinite(next) || !song?.id) return;
+    setTimingOffsets({ ...timingOffsets, [timingPreferenceKey]: next });
+  };
   const applyEffectPreset = (preset) => {
     setEffectPreset(preset.id);
     setMicrophoneEffects((effects) => ({
@@ -376,15 +402,15 @@ export default function Karaoke({ onOpenAppSettings }) {
         toggleRadio
       }}
       performanceProps={{
-        currentTime: lyricTime,
+        currentTime,
         currentTimeRef,
         isPlaying,
         keyShift,
-        lyricsSync,
+        lyricsSync: displayLyricsSync,
         monitorInputDeviceId,
         monitoringEnabled,
         hasSongClip: clipAvailable,
-        notes,
+        notes: displayNotes,
         sceneBlackout,
         sceneIntroVisible,
         sceneIntro: {
@@ -428,6 +454,8 @@ export default function Karaoke({ onOpenAppSettings }) {
         compactKey,
         keyShift,
         onKeyShiftChange: setKeyShift,
+        lyricsOffset,
+        onLyricsOffsetChange: changeLyricsOffset,
         showNotes,
         onToggleNotes: () => setShowNotes(!showNotes),
         showLyrics,

@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   deleteRecording: vi.fn(),
   cancelProcessing: vi.fn(),
   setProcessingLoadActive: vi.fn(),
+  karPending: false,
   review: null
 }));
 vi.mock("react-router-dom", () => ({
@@ -68,6 +69,14 @@ vi.mock("../src/pages/Library/hooks/useFileImport", () => ({
       review: mocks.review
     };
   }
+}));
+vi.mock("../src/pages/Library/hooks/useKarDatasetImport", () => ({
+  default: () => ({
+    inputRef: { current: null },
+    pending: mocks.karPending,
+    importFiles: vi.fn(),
+    openFilePicker: vi.fn()
+  })
 }));
 vi.mock("../src/pages/Library/hooks/useSongActions", () => ({
   default: (options) => {
@@ -175,6 +184,7 @@ beforeEach(() => {
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.cancelProcessing.mockReset().mockResolvedValue(undefined);
   mocks.setProcessingLoadActive.mockReset();
+  mocks.karPending = false;
   mocks.review = null;
   mocks.pollIndex = 0;
   mocks.pollOptions = [];
@@ -186,6 +196,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("library page", () => {
+  test("pauses the GPU backdrop while a KAR dataset is being prepared", () => {
+    mocks.karPending = true;
+
+    const result = render(<Library />);
+
+    expect(result.queryByTestId("backdrop")).toBeNull();
+  });
   test("renders songs and opens room only after validating the online name", async () => {
     const result = render(<Library />);
     expect(result.getByTestId("song-one")).not.toBeNull();

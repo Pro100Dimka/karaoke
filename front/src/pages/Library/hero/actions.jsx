@@ -1,5 +1,6 @@
 import {
   CircleCheck,
+  BrainCircuit,
   Headphones,
   Music2,
   Plus,
@@ -40,6 +41,7 @@ export default function LibraryActions({
   filterOptions = { genres: [], keys: [] },
   filters = defaultLibraryFilters,
   importing,
+  karDataset,
   onAdd,
   onFileChosen,
   onOpenRoom,
@@ -114,16 +116,41 @@ export default function LibraryActions({
             </Button>
           )}
           {canManageLibrary && (
-            <Button
-              size="lg"
-              variant="contained"
-              startIcon={<Plus />}
-              fullWidth
-              disabled={importing}
-              onClick={onAdd}
-            >
-              {tr("Добавить песню")}
-            </Button>
+            <>
+              <Button
+                size="lg"
+                variant="contained"
+                startIcon={<Plus />}
+                fullWidth
+                disabled={importing || karDataset?.pending}
+                onClick={onAdd}
+              >
+                {tr("Добавить песню")}
+              </Button>
+              {karDataset && (
+                <>
+                  <Button
+                    size="lg"
+                    variant="outlined"
+                    startIcon={<BrainCircuit />}
+                    fullWidth
+                    disabled={importing || karDataset.pending}
+                    title={tr("Обучить модель на файлах .kar")}
+                    onClick={karDataset.openFilePicker}
+                  >
+                    {tr(karDataset.pending ? "Подготовка .kar…" : "Обучить на .kar")}
+                  </Button>
+                  <input
+                    ref={karDataset.inputRef}
+                    type="file"
+                    accept=".kar"
+                    multiple
+                    hidden
+                    onChange={karDataset.importFiles}
+                  />
+                </>
+              )}
+            </>
           )}
           <input {...dropzone.getInputProps()} ref={fileInputRef} />
         </Stack>

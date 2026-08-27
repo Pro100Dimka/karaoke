@@ -196,6 +196,13 @@ describe("karaoke transport", () => {
     expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
     expect(props.setIsPlaying).toHaveBeenCalledWith(true);
   });
+  test("does not block resumed playback on a stalled optional video", async () => {
+    const props = createProps();
+    props.videoRef.current.play.mockReturnValue(new Promise(() => {}));
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
+    expect(props.setIsPlaying).toHaveBeenCalledWith(true);
+  });
   test("seeks, skips, stops and returns to the library", async () => {
     const props = createProps({ recordingSessionId: "existing" });
     const { result } = renderHook(() => useKaraokeTransport(props));

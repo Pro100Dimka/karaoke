@@ -19,6 +19,7 @@ vi.mock("../src/theme/ui", () => ({
       <input type="range" aria-label={label} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   ),
+  NumberField: ({ onChange, ...props }) => <input {...props} type="number" onChange={onChange} />,
   Slider: ({ label, value, onChange, onCommit, formatValue: _format, showValue: _show, sx, ...props }) => (
     <input
       {...props}
@@ -299,7 +300,8 @@ test("center controls transport, tempo and bounded key changes", () => {
     onTogglePlay: vi.fn(),
     onStop: vi.fn(),
     onTempoChange: vi.fn(),
-    onKeyShiftChange: vi.fn()
+    onKeyShiftChange: vi.fn(),
+    onLyricsOffsetChange: vi.fn()
   };
   const result = render(
     <ConsoleCenter
@@ -308,6 +310,7 @@ test("center controls transport, tempo and bounded key changes", () => {
       currentTempo={128}
       compactKey="Dm"
       keyShift={12}
+      lyricsOffset={-3}
       isPlaying={false}
     />
   );
@@ -319,10 +322,14 @@ test("center controls transport, tempo and bounded key changes", () => {
   fireEvent.click(result.getByLabelText("Збільшити темп на 1 BPM"));
   fireEvent.click(result.getByLabelText("Зменшити тональність"));
   fireEvent.click(result.getByLabelText("Підвищити тональність"));
+  fireEvent.change(result.getByLabelText("Зсув слів у секундах"), {
+    target: { value: "-2.9" }
+  });
   expect(handlers.onSkip.mock.calls).toEqual([[-5], [5]]);
   expect(handlers.onTogglePlay).toHaveBeenCalledOnce();
   expect(handlers.onStop).toHaveBeenCalledOnce();
   sameDeep([handlers.onTempoChange.mock.calls, [[-1], [1]]], [handlers.onKeyShiftChange.mock.calls, [[11], [12]]]);
+  expect(handlers.onLyricsOffsetChange).toHaveBeenCalledWith(-2.9);
   expect(result.container.textContent).toContain("A2 – E5");
 });
 test("center uses fallback note range and pause state", () => {

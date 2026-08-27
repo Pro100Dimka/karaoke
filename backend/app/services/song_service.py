@@ -309,12 +309,17 @@ def _windows_safe_component(value: str, fallback: str) -> str:
     return value or fallback
 
 
-def _folder_name(artist: str | None, title: str, fallback: str) -> str:
+def song_folder_name(artist: str | None, title: str, fallback: str) -> str:
     identity = " ".join(part for part in (artist, title)
                         if part and part.strip()).strip()
     value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity)
     value = " ".join(value.split()).rstrip(" .")
     return _windows_safe_component(value[:180], fallback)
+
+
+# Kept for callers and tests written before the folder naming rule became
+# shared with dataset preparation.
+_folder_name = song_folder_name
 
 
 def _unique_output_dir(base_name: str) -> Path:
@@ -390,7 +395,7 @@ def _persist_song(
         if _find_duplicate(db, artist, title) is not None:
             raise SongAlreadyExistsError("Такая песня уже существует")
         slug = make_unique_slug(db, base_slug)
-        folder_base = _folder_name(artist, title, slug) if artist else slug
+        folder_base = song_folder_name(artist, title, slug) if artist else slug
         output_dir = _unique_output_dir(folder_base)
         destination = output_dir / f"source{extension}"
         write_source(destination)

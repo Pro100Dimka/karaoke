@@ -10,7 +10,7 @@ import {
   Square
 } from "lucide-react";
 import { translateSaved as t } from "../../../../i18n/runtime";
-import { Card, Grid, IconButton, Stack, Typography } from "../../../../theme/ui";
+import { Card, Grid, IconButton, NumberField, Stack, Typography } from "../../../../theme/ui";
 import { clamp } from "./utils";
 
 const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -69,6 +69,8 @@ export default function ConsoleCenter({
   keyShift,
   onTempoChange,
   onKeyShiftChange,
+  lyricsOffset = 0,
+  onLyricsOffsetChange,
   isPlaying,
   onSkip,
   onTogglePlay,
@@ -97,7 +99,7 @@ export default function ConsoleCenter({
           onClick={() => onSkip(5)}
         />
       </Stack>
-      <Grid columns={3} gap="var(--space-2)">
+      <Grid columns={4} gap="var(--space-2)">
         <Metric
           label={t("Темп")}
           value={`${currentTempo} BPM`}
@@ -127,6 +129,28 @@ export default function ConsoleCenter({
           )}`}
           tone="var(--color-warning)"
         />
+        <Card tilt={false} style={{ "--card-border": "var(--color-info)" }}>
+          <Stack align="center" gap="var(--space-1)" sx={{ padding: "var(--space-2)" }}>
+            <Typography variant="caption" style={{ color: "var(--color-info)" }}>
+              {t("Сдвиг слов")}
+            </Typography>
+            <NumberField
+              aria-label={t("Сдвиг слов в секундах")}
+              min={-10}
+              max={10}
+              step={0.1}
+              size="sm"
+              value={Number(lyricsOffset).toFixed(1)}
+              onChange={(event) => {
+                const value = Number(event?.target?.value ?? event);
+                if (Number.isFinite(value)) onLyricsOffsetChange?.(value);
+              }}
+            />
+            <Typography variant="caption" tone="muted">
+              {t("− раньше · + позже")}
+            </Typography>
+          </Stack>
+        </Card>
       </Grid>
     </Stack>
   );

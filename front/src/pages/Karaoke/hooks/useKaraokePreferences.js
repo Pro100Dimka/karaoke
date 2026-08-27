@@ -14,7 +14,8 @@ const defaults = {
   showLyrics: true,
   showNotes: true,
   autoHideConsole: true,
-  effectPreset: "studio"
+  effectPreset: "studio",
+  timingOffsets: {}
 };
 const keys = Object.keys(defaults);
 const setterName = (key) => `set${key[0].toUpperCase()}${key.slice(1)}`;

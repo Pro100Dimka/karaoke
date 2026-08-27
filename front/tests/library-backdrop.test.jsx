@@ -1,4 +1,5 @@
 /* @vitest-environment jsdom */
+import fs from "node:fs";
 import { render } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { QuantumFieldBackdrop as LibraryBackdrop } from "../src/pages/Library/animated-backdrop/index.js";
@@ -18,6 +19,12 @@ test("library backdrop keeps its packaged runtime URL stable and query-free", ()
   expect(source).not.toMatch(/[?&]v=29/);
   rerender(<LibraryBackdrop />);
   expect(container.querySelector("iframe").srcdoc).toBe(source);
+});
+
+test("library backdrop keeps black WebGL pixels transparent over the theme artwork", () => {
+  const runtime = fs.readFileSync("src/pages/Library/animated-backdrop/qftRuntime.js", "utf8");
+  expect(runtime).toContain("float overlayAlpha = clamp(visibleLight * 1.35, 0.0, 1.0);");
+  expect(runtime).not.toContain("gl_FragColor = vec4(detailLift, 1.0);");
 });
 
 test("library backdrop watches the theme attribute instead of polling it every frame", () => {

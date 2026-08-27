@@ -3,7 +3,12 @@ import { describe, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
 import { getAnalysisFeedback, normalizeAnalysisResult, normalizeAnalysisSection } from "../src/pages/Karaoke/utils/analysis.js";
 import { createPanoramaPath, getYouTubeVideoId, playbackGain, transposeKey, youTubeEmbedUrl } from "../src/pages/Karaoke/utils/data.js";
-import { createBrowserDeviceOptions, createBufferSizeOptions, createIndexedDeviceOptions } from "../src/pages/Karaoke/utils/devices.js";
+import {
+  createBrowserDeviceOptions,
+  createBufferSizeOptions,
+  createIndexedDeviceOptions,
+  createInputDeviceOptions
+} from "../src/pages/Karaoke/utils/devices.js";
 import {
   detectMidiFromAnalyser,
   findBestPitchLag,
@@ -417,6 +422,35 @@ describe("device, settings and song-card factories", () => {
     equal(
       [createIndexedDeviceOptions(null)[0].label, translateSaved("По умолчанию")],
       [createBrowserDeviceOptions([], "Device")[0].label, translateSaved("Системное по умолчанию")]
+    );
+  });
+  test("shows only user-facing microphone inputs while preserving an advanced selection", () => {
+    const devices = [
+      { index: 0, name: "Microsoft Sound Mapper - Input [MME]", host_api: "MME" },
+      { index: 1, name: "Analogue 1/2 (Audient) [MME]", host_api: "MME" },
+      { index: 2, name: "ADAT 3/4 (Audient) [MME]", host_api: "MME" },
+      { index: 13, name: "Analogue 1/2 (Audient) [Windows DirectSound]", host_api: "Windows DirectSound" },
+      { index: 30, name: "Analogue 1/2 (Audient) [Windows WASAPI]", host_api: "Windows WASAPI" },
+      { index: 31, name: "Loop-back 1/2 (Audient) [Windows WASAPI]", host_api: "Windows WASAPI" },
+      { index: 40, name: "Internal kernel input [Windows WDM-KS]", host_api: "Windows WDM-KS" }
+    ];
+
+    deepEqual(
+      [
+        createInputDeviceOptions(devices, null, "Default"),
+        [
+          { value: "", label: "Default" },
+          { value: 30, label: "Analogue 1/2 (Audient)" }
+        ]
+      ],
+      [
+        createInputDeviceOptions(devices, 2, "Default"),
+        [
+          { value: "", label: "Default" },
+          { value: 30, label: "Analogue 1/2 (Audient)" },
+          { value: 2, label: "ADAT 3/4 (Audient)" }
+        ]
+      ]
     );
   });
   test("validates song settings and dispatches card actions", () => {

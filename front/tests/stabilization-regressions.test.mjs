@@ -2,6 +2,19 @@ import fs from "node:fs";
 import { expect, test } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 const read = (path) => fs.readFileSync(path, "utf8");
+test("startup fallback never masks the packaged theme backdrop", () => {
+  const html = read("index.html");
+  const renderer = read("src/main.jsx");
+  const electron = read("electron/main.cjs");
+  verify(
+    [html, "toContain", '<div id="root"></div>'],
+    [renderer, "not.toContain", "appRoot.style.background"],
+    [electron, "toContain", "backgroundColor: themeBackgrounds[initialTheme]"],
+    [electron, "toContain", 'light: "#fff8f5"'],
+    [electron, "toContain", 'green: "#020904"'],
+    [electron, "toContain", 'violet: "#07020f"']
+  );
+});
 test("backend child exit 23 cannot create an Electron restart storm", () => {
   const main = read("electron/main.cjs");
   verify(

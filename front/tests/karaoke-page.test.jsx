@@ -89,6 +89,7 @@ vi.mock("../src/pages/Karaoke/components/console", () => ({
         <button data-testid="effect" onClick={() => props.onEffectChange("echo", 0.6)} />
         <button data-testid="commit" onClick={() => props.onMicrophoneCommit(0.9)} />
         <button data-testid="tempo" onClick={() => props.onTempoChange(-200)} />
+        <button data-testid="lyrics-offset" onClick={() => props.onLyricsOffsetChange(-4)} />
         <button data-testid="notes" onClick={props.onToggleNotes} />
         <button data-testid="lyrics" onClick={props.onToggleLyrics} />
         <button data-testid="auto-hide" onClick={() => props.onAutoHideChange(true)} />
@@ -196,7 +197,9 @@ beforeEach(() => {
     autoHideConsole: false,
     setAutoHideConsole: vi.fn(),
     effectPreset: "studio",
-    setEffectPreset: vi.fn()
+    setEffectPreset: vi.fn(),
+    timingOffsets: {},
+    setTimingOffsets: vi.fn()
   };
   mocks.controls = {
     controlsVisible: true,
@@ -237,6 +240,7 @@ describe("karaoke page", () => {
     const page = render(<Karaoke onOpenAppSettings={appSettings} />);
     expect(page.getByTestId("stage")).not.toBeNull();
     same([mocks.stageProps.songId, "song"], [mocks.consoleProps.currentTempo, 120]);
+    same([mocks.consoleProps.lyricsOffset, 0], [mocks.stageProps.currentTime, 0]);
     fireEvent.mouseMove(page.container.querySelector('[data-role="karaoke"]'));
     fireEvent.click(page.getByTestId("preset"));
     verify([mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"], [mocks.microphone.updateMicrophone, "toHaveBeenCalled"]);
@@ -265,6 +269,31 @@ describe("karaoke page", () => {
       expect(view.container.querySelector(selector)).not.toBeNull();
       cleanup();
     }
+  });
+  test("applies and saves a per-song lyrics offset without moving media time", () => {
+    const timingKey = "song|120||0";
+    mocks.preferences.timingOffsets = { [timingKey]: -3 };
+    const page = render(<Karaoke />);
+    same([mocks.stageProps.currentTime, 0], [mocks.consoleProps.lyricsOffset, -3]);
+    same([mocks.stageProps.lyricsSync.words[0].start, -3], [mocks.stageProps.notes[0].start, -3]);
+    mocks.mediaSyncOptions.currentTimeRef.current = 5;
+    same([mocks.stageProps.currentTimeRef.current, 5], [mocks.mediaSyncOptions.currentTimeRef.current, 5]);
+    fireEvent.click(page.getByTestId("lyrics-offset"));
+    expect(mocks.preferences.setTimingOffsets).toHaveBeenCalledWith({ [timingKey]: -4 });
+  });
+  test("does not apply an embedded manual alignment twice", () => {
+    mocks.result.result = {
+      ...result,
+      lyrics_sync: {
+        ...result.lyrics_sync,
+        alignment: { offset_seconds: -3.029 }
+      }
+    };
+    render(<Karaoke />);
+    same([mocks.consoleProps.lyricsOffset, -3.029], [mocks.stageProps.currentTime, 0]);
+    same([mocks.stageProps.lyricsSync.words[0].start, 0], [mocks.stageProps.notes[0].start, 0]);
+    mocks.mediaSyncOptions.currentTimeRef.current = 5;
+    expect(mocks.stageProps.currentTimeRef.current).toBe(5);
   });
   test("selects the first ready song when route state has no song id", () => {
     mocks.location = { state: null };

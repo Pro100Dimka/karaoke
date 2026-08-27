@@ -13,6 +13,7 @@ import { getErrorMessage } from "../../utils/errors";
 import { setProcessingLoadActive } from "../../utils/performance-profile";
 import { setGlobalRouteBlackout } from "../../utils/route-blackout";
 import useLibraryFileImport from "./hooks/useFileImport";
+import useKarDatasetImport from "./hooks/useKarDatasetImport";
 import useLibraryRoomSync from "./hooks/useRoomSync";
 import useLibrarySongActions from "./hooks/useSongActions";
 import {
@@ -123,6 +124,7 @@ export default function useLibrary() {
       songsQuery.refresh();
     }
   });
+  const karDataset = useKarDatasetImport({ notify: dialog.alert });
   const songActions = useLibrarySongActions({
     confirmDialog: dialog.confirm,
     notify: dialog.alert,
@@ -322,6 +324,7 @@ export default function useLibrary() {
       track
     },
     query,
+    karDataset,
     recordings: {
       delete: deleteRecording,
       error: recordingsQuery.error,

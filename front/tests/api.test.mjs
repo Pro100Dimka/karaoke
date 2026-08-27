@@ -385,12 +385,7 @@ describe("API domains", () => {
       [() => songsApi.getStatus(id), "/songs/a%2Fb/status"],
       [() => songsApi.getLog(id), "/songs/a%2Fb/log"],
       [() => songsApi.getResult(id), "/songs/a%2Fb/result"],
-      [
-        () => songsApi.resolveSongRevision("sha256:abc"),
-        "/songs/revision/resolve",
-        "POST",
-        { revision: "sha256:abc" }
-      ],
+      [() => songsApi.resolveSongRevision("sha256:abc"), "/songs/revision/resolve", "POST", { revision: "sha256:abc" }],
       [() => songsApi.getSongEditor(id), "/songs/a%2Fb/editor"],
       [
         () => songsApi.saveSongEditor(id, [{ pitch: 60 }]),
@@ -426,6 +421,12 @@ describe("API domains", () => {
     await songsApi.addSong(song);
     [, options] = lastCall();
     deepEqual([[...options.body.keys()], ["file", "artist"]]);
+    await songsApi.prepareKarDataset([new Blob(["kar-one"]), new Blob(["kar-two"])]);
+    [url, options] = lastCall();
+    deepEqual([
+      [pathOf(url), options.method, await Promise.all(options.body.getAll("files").map((file) => file.text()))],
+      ["/songs/training/kar", "POST", ["kar-one", "kar-two"]]
+    ]);
     equal([pathOf(songsApi.getAudioTrackUrl("a/b", "lead vocal")), "/songs/a%2Fb/audio/lead%20vocal"]);
     const coverUrl = new URL(songsApi.getSongCoverUrl("a/b", "2026-08-21 15:00"));
     deepEqual([
