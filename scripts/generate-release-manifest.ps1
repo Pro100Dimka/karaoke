@@ -137,5 +137,9 @@ $manifest = [ordered]@{
 
 $json = $manifest | ConvertTo-Json -Depth 6
 $utf8WithoutBom = [Text.UTF8Encoding]::new($false)
+$outputDirectory = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($OutputFile))
+if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
+    [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
+}
 [IO.File]::WriteAllText($OutputFile, $json, $utf8WithoutBom)
 Write-Host "Created $OutputFile"

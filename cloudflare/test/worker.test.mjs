@@ -404,7 +404,11 @@ test("a guest cannot broadcast host-only state like library filters or karaoke p
     JSON.stringify({ type: "ui", state: { filters: { genre: "Rock" } } })
   );
 
-  assert.deepEqual(sender.closed, { code: 1008, reason: "Некорректное сообщение комнаты." });
+  assert.equal(sender.closed, null);
+  assert.deepEqual(sender.messages.at(-1), {
+    type: "error",
+    message: "Некорректное сообщение комнаты.",
+  });
   assert.equal(target.messages.length, 0);
 });
 
@@ -483,4 +487,19 @@ test("any participant can broadcast their own effects and shared library songs",
     fromId: "sender",
     state: { participantEffects, songs },
   });
+});
+
+test("invalid UI state is rejected without disconnecting the room", async () => {
+  const host = new FakeSocket({ id: "host", role: "host" });
+  const guest = new FakeSocket({ id: "guest", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [host, guest] });
+
+  await room.webSocketMessage(
+    host,
+    JSON.stringify({ type: "ui", state: { oversized: "x".repeat(129 * 1024) } })
+  );
+
+  assert.equal(host.closed, null);
+  assert.equal(guest.closed, null);
+  assert.match(host.messages.at(-1).message, /too large/i);
 });

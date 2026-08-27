@@ -245,6 +245,8 @@ function Set-InstallerOutputPath([string]$Path) {
     $script:InstallerDir = $resolved
     $script:InstallerExe = Join-Path $resolved ("A&D Voice Setup {0}.exe" -f $AppVersion)
     $script:ChecksumFile = Join-Path $resolved "SHA256SUMS.txt"
+    $script:ManifestFile = Join-Path $resolved "release-manifest.json"
+    $script:SizeReportFile = Join-Path $resolved "size-report.json"
 }
 
 function Save-InstallerOutputPath([string]$Path) {
@@ -750,7 +752,9 @@ function Get-InnoInputFingerprint {
             $ThemeIconsDir,
             $SetupIcon,
             $SignScript,
-            $ChecksumScript
+            $ChecksumScript,
+            $ManifestScript,
+            $SizeReportScript
         )),
         $AppName,
         $AppVersion,
@@ -2957,12 +2961,12 @@ try {
             "installer" `
             $installerFp `
             @($legacyInstallerFp) `
-            @($InstallerExe,$ChecksumFile))
+            @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile))
 
         $setupNeeded = Test-StepNeeded `
             "installer" `
             $installerFp `
-            @($InstallerExe,$ChecksumFile)
+            @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile)
 
         if ($setupNeeded) {
             Write-StepEstimate "installer"
@@ -3092,7 +3096,7 @@ try {
         "installer" `
         $installerFp `
         @($legacyInstallerFp) `
-        @($InstallerExe,$ChecksumFile))
+        @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile))
 
     $legacyIsoFp = Get-LegacyV23IsoFingerprint `
         $legacyInstallerFp `
@@ -3243,7 +3247,7 @@ try {
     $installerNeeded = Test-StepNeeded `
         "installer" `
         $installerFp `
-        @($InstallerExe,$ChecksumFile) `
+        @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile) `
         -Force:($Mode -eq "clean")
 
     if ($installerNeeded) {

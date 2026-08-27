@@ -101,6 +101,14 @@ export class KaraokeRoom {
     socket.close(1008, message.slice(0, 120));
   }
 
+  reportInvalid(socket, message = "Некорректное сообщение комнаты.") {
+    // A stale/oversized UI snapshot must not destroy a live karaoke session.
+    // In particular, closing the host here invokes webSocketClose(), which by
+    // design closes the entire room. The bad state is ignored and the sender
+    // receives a useful error while media/voice connections stay alive.
+    this.send(socket, "error", { message });
+  }
+
   withinRate(id) {
     const now = Date.now();
     const entry = this.rate.get(id) || { startedAt: now, count: 0 };
@@ -271,7 +279,7 @@ export class KaraokeRoom {
     }
 
     if (message.type === "ui" && message.state && typeof message.state === "object") {
-      if (new TextEncoder().encode(JSON.stringify(message.state)).byteLength > MAX_STATE_BYTES) { this.reject(socket); return; }
+      if (new TextEncoder().encode(JSON.stringify(message.state)).byteLength > MAX_STATE_BYTES) { this.reportInvalid(socket, "Room UI state is too large"); return; }
       if (sender.role === "host") {
         this.broadcast("ui", { fromId: sender.id, state: message.state }, sender.id);
         return;
@@ -288,7 +296,7 @@ export class KaraokeRoom {
         songs.length <= MAX_ROOM_SONGS &&
         songs.every((song) => song && typeof song === "object" && !Array.isArray(song))
       );
-      if (!hasEffects && !hasSongs) { this.reject(socket); return; }
+      if (!hasEffects && !hasSongs) { this.reportInvalid(socket); return; }
       const state = {
         ...(hasEffects ? { participantEffects } : {}),
         ...(hasSongs ? { songs } : {})
@@ -299,7 +307,7 @@ export class KaraokeRoom {
 
     if (message.type === "sync") {
       const state = message.state;
-      if (!state || typeof state !== "object" || Array.isArray(state) || new TextEncoder().encode(JSON.stringify(state)).byteLength > MAX_STATE_BYTES) { this.reject(socket); return; }
+      if (!state || typeof state !== "object" || Array.isArray(state) || new TextEncoder().encode(JSON.stringify(state)).byteLength > MAX_STATE_BYTES) { this.reportInvalid(socket, "Room sync state is invalid or too large"); return; }
       if (sender.role === "host") {
         // Remembered so a guest who (re)joins after this was sent -- not
         // live for it, e.g. a brief network drop -- can be caught up via

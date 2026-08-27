@@ -36,6 +36,8 @@ const OnlineRoomContext = createContext(null);
 const OnlineRoomSpeakingContext = createContext({ localSpeakingLevel: 0, speakingLevels: {} });
 const OFF = false;
 const SONG_SYNC_REQUEST_TIMEOUT_MS = 15_000;
+const ROOM_TRANSFER_BROADCAST_INTERVAL_MS = 500;
+const TERMINAL_TRANSFER_STAGES = new Set(["complete", "error", "cancelled"]);
 const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
   volume: 2,
   reverb: 1,
@@ -51,6 +53,15 @@ export const normalizeParticipantEffects = (settings = {}) =>
       return [name, Math.max(0, Math.min(maximum, Number.isFinite(value) ? value : fallback))];
     })
   );
+export const shouldBroadcastRoomTransferProgress = (
+  previous,
+  { commandId, stage, percent },
+  now = Date.now()
+) =>
+  !previous ||
+  previous.commandId !== commandId ||
+  TERMINAL_TRANSFER_STAGES.has(stage) ||
+  (previous.percent !== percent && now - previous.at >= ROOM_TRANSFER_BROADCAST_INTERVAL_MS);
 export function OnlineRoomProvider({ children }) {
   const clientRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -65,6 +76,12 @@ export function OnlineRoomProvider({ children }) {
   const pendingSongCommandRef = useRef(null);
   const hostSongCommandRef = useRef(null);
   const songExportsRef = useRef(new Map());
+  // File transfer progress can update once per 32 KiB chunk. Relaying every
+  // chunk through the signaling WebSocket exceeds the Worker's room rate
+  // limit on ordinary song archives and disconnects the host (which closes
+  // the whole room). Keep the detailed progress local and publish a bounded
+  // sample to the room.
+  const roomTransferBroadcastRef = useRef(null);
   // Ad-hoc "sync this song from a participant's library" request, separate
   // from pendingSongCommandRef (which only tracks the host-driven "start
   // karaoke" push). One sync in flight at a time, same as song processing.
@@ -328,6 +345,7 @@ export function OnlineRoomProvider({ children }) {
       pendingSongCommandRef.current = null;
       hostSongCommandRef.current = null;
       songExportsRef.current.clear();
+      roomTransferBroadcastRef.current = null;
       librarySyncRef.current?.reject?.(new Error(translateSaved("Комната закрыта")));
       librarySyncRef.current = null;
       setTransferStatus(null);
@@ -400,17 +418,33 @@ export function OnlineRoomProvider({ children }) {
           stage,
           percent: normalizedPercent
         });
-        if (roomRef.current?.host && metadata?.kind === "song-package")
-          clientRef.current?.send("sync", {
-            state: {
-              type: "song-transfer-status",
-              participantId: "room",
-              songId: metadata.songId,
-              commandId,
-              stage: "waiting",
-              percent: normalizedPercent
-            }
-          });
+        if (roomRef.current?.host && metadata?.kind === "song-package") {
+          const roomProgress = {
+            commandId,
+            stage,
+            percent: normalizedPercent,
+            at: Date.now()
+          };
+          if (
+            shouldBroadcastRoomTransferProgress(
+              roomTransferBroadcastRef.current,
+              roomProgress,
+              roomProgress.at
+            )
+          ) {
+            roomTransferBroadcastRef.current = roomProgress;
+            clientRef.current?.send("sync", {
+              state: {
+                type: "song-transfer-status",
+                participantId: "room",
+                songId: metadata.songId,
+                commandId,
+                stage: "waiting",
+                percent: normalizedPercent
+              }
+            });
+          }
+        }
       };
       const canAcceptSongPackage = (participantId, metadata) => {
         const pending = pendingSongCommandRef.current;

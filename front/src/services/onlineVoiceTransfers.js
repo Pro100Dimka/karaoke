@@ -852,6 +852,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     mesh.emitTransferProgress(participantId, TRANSFER_STAGES.SENDING, 0, metadata);
     const chunkSize = 32 * 1024;
     let lastProgressAt = Date.now();
+    let lastPercent = 0;
     for (let offset = 0; offset < blob.size; offset += chunkSize) {
       while (channel.bufferedAmount > 512 * 1024) {
         if (cancelled()) {
@@ -891,12 +892,14 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       if (cancelled()) throw new Error(translateSaved("Передача файла отменена"));
       channel.send(chunk);
       lastProgressAt = Date.now();
-      mesh.emitTransferProgress(
-        participantId,
-        TRANSFER_STAGES.SENDING,
-        Math.min(99, Math.floor((Math.min(offset + chunkSize, blob.size) / blob.size) * 100)),
-        metadata
+      const percent = Math.min(
+        99,
+        Math.floor((Math.min(offset + chunkSize, blob.size) / blob.size) * 100)
       );
+      if (percent !== lastPercent) {
+        lastPercent = percent;
+        mesh.emitTransferProgress(participantId, TRANSFER_STAGES.SENDING, percent, metadata);
+      }
     }
     if (cancelled()) {
       throw new Error(translateSaved("Передача файла отменена"));

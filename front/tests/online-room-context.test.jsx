@@ -87,6 +87,7 @@ vi.mock("../src/contexts/onlineRoomMessages", () => ({
 }));
 
 let OnlineRoomProvider;
+let shouldBroadcastRoomTransferProgress;
 let useOnlineRoom;
 let useOnlineRoomSpeaking;
 
@@ -96,7 +97,8 @@ const stream = () => ({ getTracks: () => [{ stop: vi.fn() }] });
 beforeEach(async () => {
   globalThis.localStorage?.setItem("advoice-language", "ru");
   vi.resetModules();
-  ({ OnlineRoomProvider, useOnlineRoom, useOnlineRoomSpeaking } = await import("../src/contexts/OnlineRoomContext"));
+  ({ OnlineRoomProvider, shouldBroadcastRoomTransferProgress, useOnlineRoom, useOnlineRoomSpeaking } =
+    await import("../src/contexts/OnlineRoomContext"));
   Object.values(mocks).forEach((mock) => mock?.mockReset?.());
   mocks.clients.length = 0;
   mocks.voices.length = 0;
@@ -119,6 +121,30 @@ afterEach(() => {
 });
 
 describe("online room provider", () => {
+  test("bounds room-wide transfer progress without dropping terminal updates", () => {
+    const previous = { commandId: "command", stage: "sending", percent: 10, at: 1_000 };
+
+    expect(shouldBroadcastRoomTransferProgress(previous, { commandId: "command", stage: "sending", percent: 11 }, 1_499)).toBe(false);
+    expect(shouldBroadcastRoomTransferProgress(previous, { commandId: "command", stage: "sending", percent: 11 }, 1_500)).toBe(true);
+    expect(shouldBroadcastRoomTransferProgress(previous, { commandId: "command", stage: "complete", percent: 100 }, 1_001)).toBe(true);
+
+    let published = null;
+    let count = 0;
+    for (let index = 1; index <= 1_000; index += 1) {
+      const update = {
+        commandId: "command",
+        stage: "sending",
+        percent: Math.min(99, Math.floor(index / 10)),
+        at: index * 10
+      };
+      if (shouldBroadcastRoomTransferProgress(published, update, update.at)) {
+        published = update;
+        count += 1;
+      }
+    }
+    expect(count).toBeLessThanOrEqual(20);
+  });
+
   test("returns no room outside the provider", () => {
     const { result } = renderHook(() => useOnlineRoom());
     expect(result.current).toBeNull();

@@ -124,6 +124,7 @@ class KarDocument:
     lyric_track: int
     melody_track: int | None
     raw_lyrics: list[dict[str, Any]]
+    text: str = ""
 
 
 def _clean_text(value: str) -> str:
@@ -239,8 +240,12 @@ def _lyrics_by_track(
     return index, events
 
 
-def _word_events(events: list[dict[str, Any]], duration: float) -> list[dict[str, Any]]:
+def _word_events(
+    events: list[dict[str, Any]], duration: float
+) -> tuple[list[dict[str, Any]], str]:
     words: list[dict[str, Any]] = []
+    lines: list[list[str]] = []
+    line_words: list[str] = []
     current_text = ""
     current_start = 0.0
     current_end = 0.0
@@ -258,7 +263,14 @@ def _word_events(events: list[dict[str, Any]], duration: float) -> list[dict[str
                     "notes": [],
                 }
             )
+            line_words.append(text)
         current_text = ""
+
+    def finish_line() -> None:
+        flush()
+        if line_words:
+            lines.append(list(line_words))
+            line_words.clear()
 
     for index, event in enumerate(events):
         start = float(event["time"])
@@ -267,25 +279,26 @@ def _word_events(events: list[dict[str, Any]], duration: float) -> list[dict[str
             if index + 1 < len(events)
             else min(max(duration, start + 0.35), start + 2.5)
         )
-        raw = str(event["text"]).replace("\r", "").replace("\n", " ")
-        line_break = raw.startswith(("\\", "/"))
-        raw = raw.lstrip("\\/")
-        if line_break:
-            flush()
-        parts = re.split(r"(\s+)", raw)
-        for part in parts:
-            if not part:
-                continue
-            if part.isspace():
+        raw_event = str(event["text"]).replace("\r\n", "\n").replace("\r", "\n")
+        for segment_index, segment in enumerate(raw_event.split("\n")):
+            line_break = segment_index > 0 or segment.startswith(("\\", "/"))
+            raw = segment.lstrip("\\/")
+            if line_break:
+                finish_line()
+            parts = re.split(r"(\s+)", raw)
+            for part in parts:
+                if not part:
+                    continue
+                if part.isspace():
+                    flush()
+                    continue
+                if not current_text:
+                    current_start = start
+                current_text += part
+                current_end = end
+            if raw.endswith((" ", "\t")):
                 flush()
-                continue
-            if not current_text:
-                current_start = start
-            current_text += part
-            current_end = end
-        if raw.endswith((" ", "\t")):
-            flush()
-    flush()
+    finish_line()
     if not words:
         raise ValueError("В .kar найден текст, но не удалось выделить слова")
     for index, word in enumerate(words[:-1]):
@@ -293,7 +306,7 @@ def _word_events(events: list[dict[str, Any]], duration: float) -> list[dict[str
             max(word["start"] + 0.04, min(word["end"], words[index + 1]["start"])),
             3,
         )
-    return words
+    return words, "\n".join(" ".join(line) for line in lines)
 
 
 def _notes_by_track(
@@ -488,7 +501,7 @@ def parse_kar(
     artist = artist or filename_artist or ""
     lyric_track, lyric_events = _lyrics_by_track(tracks, convert)
     track_duration = max((convert(track[-1][0]) for track in tracks if track), default=0.0)
-    words = _word_events(lyric_events, track_duration)
+    words, text = _word_events(lyric_events, track_duration)
     candidates = _notes_by_track(tracks, convert)
     melody_track, notes = _select_melody_track(
         candidates,
@@ -522,6 +535,7 @@ def parse_kar(
         lyric_track=lyric_track,
         melody_track=melody_track,
         raw_lyrics=lyric_events,
+        text=text,
     )
 
 
@@ -932,7 +946,8 @@ def _lyrics_payload(document: KarDocument, source_kind: str = "kar") -> dict[str
             "duration": document.duration,
             "key": document.key,
             "reference_audio": "original.flac",
-            "text": " ".join(word["text"] for word in document.words),
+            "text": document.text.strip()
+            or " ".join(word["text"] for word in document.words),
             "words": [
                 {**word, "notes": [dict(note) for note in word["notes"]]} for word in document.words
             ],

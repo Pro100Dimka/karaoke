@@ -36,7 +36,11 @@ WizardStyle=modern
 ; ever wrote its choice to the installed app's settings.json -- it never
 ; touched the installer's own UI language, so switching it there had no
 ; visible effect until after installation.
-ShowLanguageDialog=yes
+; On a fresh install the custom preferences page still lets the user choose
+; the application language.  On an update Inno reuses the previously selected
+; installer language and does not stop at a redundant language dialog.
+ShowLanguageDialog=auto
+UsePreviousLanguage=yes
 SetupIconFile={#SetupIcon}
 Compression=none
 SolidCompression=no
@@ -53,7 +57,7 @@ Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"
+Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"; Check: IsFreshInstall
 
 [Files]
 Source: "{#ThemeIconsDir}\dark.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
@@ -65,7 +69,7 @@ Source: "{src}\app-runtime.zip"; DestDir: "{app}\.install"; Flags: external igno
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"; Tasks: desktopicon; Check: IsFreshInstall
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: EnsureApplicationExecutable
@@ -107,6 +111,9 @@ var
   RemoveUserData: Boolean;
   ModelProgressTimerID: Integer;
   ModelProgressPath: String;
+  UpdateInstall: Boolean;
+  ExistingLanguage: String;
+  ExistingTheme: String;
 
 function GetDefaultDir(Param: String): String;
 var
@@ -153,6 +160,92 @@ begin
 end;
 
 function SelectedTheme: String; forward;
+
+function IsFreshInstall: Boolean;
+begin
+  Result := not UpdateInstall;
+end;
+
+function JsonStringValue(const Payload, Key: String): String;
+var
+  KeyPosition: Integer;
+  ValueStart: Integer;
+  ValueEnd: Integer;
+  Tail: String;
+begin
+  Result := '';
+  KeyPosition := Pos('"' + Key + '"', Payload);
+  if KeyPosition = 0 then
+    Exit;
+  Tail := Copy(Payload, KeyPosition + Length(Key) + 2, MaxInt);
+  ValueStart := Pos(':', Tail);
+  if ValueStart = 0 then
+    Exit;
+  Tail := Copy(Tail, ValueStart + 1, MaxInt);
+  ValueStart := Pos('"', Tail);
+  if ValueStart = 0 then
+    Exit;
+  Tail := Copy(Tail, ValueStart + 1, MaxInt);
+  ValueEnd := Pos('"', Tail);
+  if ValueEnd = 0 then
+    Exit;
+  Result := Copy(Tail, 1, ValueEnd - 1);
+end;
+
+procedure ReadExistingPreferences(const InstallDir: String);
+var
+  Payload: AnsiString;
+  ThemePath: String;
+  PreferencesPath: String;
+  SettingsPath: String;
+begin
+  ExistingTheme := '';
+  ExistingLanguage := '';
+  ThemePath := AddBackslash(InstallDir) +
+    'data\electron-profile\selected-theme.txt';
+  if LoadStringFromFile(ThemePath, Payload) then
+    ExistingTheme := Trim(String(Payload));
+
+  PreferencesPath := AddBackslash(InstallDir) +
+    'data\install-preferences.json';
+  if LoadStringFromFile(PreferencesPath, Payload) then
+  begin
+    if ExistingTheme = '' then
+      ExistingTheme := JsonStringValue(String(Payload), 'theme');
+    ExistingLanguage := JsonStringValue(String(Payload), 'language');
+  end;
+
+  SettingsPath := AddBackslash(InstallDir) +
+    'data\backend\settings.json';
+  if LoadStringFromFile(SettingsPath, Payload) then
+  begin
+    if ExistingTheme = '' then
+      ExistingTheme := JsonStringValue(String(Payload), 'theme');
+    // Backend settings reflect changes made inside the installed application,
+    // while install-preferences.json only contains the original setup choice.
+    if JsonStringValue(String(Payload), 'language') <> '' then
+      ExistingLanguage := JsonStringValue(String(Payload), 'language');
+  end;
+end;
+
+procedure ApplyExistingPreferences;
+begin
+  if ExistingLanguage = 'ru' then
+    LanguageCombo.ItemIndex := 1
+  else if ExistingLanguage = 'en' then
+    LanguageCombo.ItemIndex := 2
+  else if ExistingLanguage = 'uk' then
+    LanguageCombo.ItemIndex := 0;
+
+  if ExistingTheme = 'light' then
+    ThemeCombo.ItemIndex := 1
+  else if ExistingTheme = 'green' then
+    ThemeCombo.ItemIndex := 2
+  else if ExistingTheme = 'violet' then
+    ThemeCombo.ItemIndex := 3
+  else if ExistingTheme = 'dark' then
+    ThemeCombo.ItemIndex := 0;
+end;
 
 function ActiveLanguageComboIndex: Integer;
 begin
@@ -201,7 +294,19 @@ var
   LanguageLabel: TNewStaticText;
   ThemeLabel: TNewStaticText;
   ModelsHint: TNewStaticText;
+  InstallDir: String;
 begin
+  // {app} is not initialized while InitializeWizard is running. Inno has
+  // already resolved DefaultDirName/UsePreviousAppDir into WizardDirValue,
+  // so use that concrete path for the early update check and preference read.
+  InstallDir := WizardDirValue;
+  UpdateInstall :=
+    FileExists(AddBackslash(InstallDir) + 'unins000.exe') or
+    FileExists(AddBackslash(InstallDir) + '{#MyAppExeName}') or
+    DirExists(AddBackslash(InstallDir) + 'data');
+  if UpdateInstall then
+    ReadExistingPreferences(InstallDir);
+
   PreferencesPage := CreateCustomPage(
     wpSelectDir,
     'Язык и тема A&D Voice',
@@ -236,6 +341,9 @@ begin
   ThemeCombo.ItemIndex := 0;
   ThemeCombo.OnChange := @ThemeChanged;
 
+  if UpdateInstall then
+    ApplyExistingPreferences;
+
   ThemeCard := TNewStaticText.Create(PreferencesPage);
   ThemeCard.Parent := PreferencesPage.Surface;
   ThemeCard.AutoSize := False;
@@ -259,10 +367,27 @@ begin
     'Если отключить этот пункт, программа установится без моделей — ' +
     'их можно будет скачать позже в настройках A&D Voice.';
   ModelsHint.SetBounds(ScaleX(20), ScaleY(184), ScaleX(440), ScaleY(52));
+
+  if UpdateInstall then
+    InstallModelsCheck.Checked := False;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := UpdateInstall and
+    ((PageID = wpSelectDir) or
+     (PageID = wpSelectTasks) or
+     (PageID = wpReady) or
+     ((PreferencesPage <> nil) and (PageID = PreferencesPage.ID)));
 end;
 
 function SelectedTheme: String;
 begin
+  if UpdateInstall and (ExistingTheme <> '') then
+  begin
+    Result := ExistingTheme;
+    Exit;
+  end;
   if ThemeCombo = nil then
   begin
     Result := 'dark';
@@ -279,6 +404,11 @@ end;
 
 function SelectedLanguage: String;
 begin
+  if UpdateInstall and (ExistingLanguage <> '') then
+  begin
+    Result := ExistingLanguage;
+    Exit;
+  end;
   case LanguageCombo.ItemIndex of
     1: Result := 'ru';
     2: Result := 'en';
@@ -328,7 +458,7 @@ begin
   if not SaveStringToFile(ThemePath, SelectedTheme, False) then
     RaiseException('Не удалось сохранить иконку выбранной темы.');
   ThemeIconPath := ProfileDir + '\selected-theme.ico';
-  if not FileCopy(SelectedIconPath(''), ThemeIconPath, False) then
+  if not CopyFile(SelectedIconPath(''), ThemeIconPath, False) then
     RaiseException('Не удалось подготовить системную иконку выбранной темы.');
 end;
 
@@ -485,11 +615,16 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
-    WriteInitialPreferences;
+    if not UpdateInstall then
+      WriteInitialPreferences;
     TarExe := ExpandConstant('{sys}\tar.exe');
     ArchivePath := ExpandConstant('{app}\.install\app-runtime.zip');
 
-    if InstallModelsCheck.Checked then
+    if UpdateInstall then
+      ShowPendingInstallStep(
+        'Обновление A&D Voice: заменяем файлы программы, сохраняя настройки и данные...'
+      )
+    else if InstallModelsCheck.Checked then
       ShowPendingInstallStep(
         'Этап 2 из 3: распаковка программы. Установка ещё не завершена...'
       )
@@ -516,6 +651,14 @@ begin
 
     if not FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
       RaiseException('Runtime extraction completed, but the application executable is missing.');
+
+    if UpdateInstall then
+    begin
+      CompleteInstallProgress;
+      WizardForm.StatusLabel.Caption :=
+        'Обновление A&D Voice завершено. Настройки, модели и библиотека сохранены.';
+      Exit;
+    end;
 
     if not InstallModelsCheck.Checked then
     begin

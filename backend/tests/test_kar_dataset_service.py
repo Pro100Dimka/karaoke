@@ -155,6 +155,10 @@ def test_prepares_reviewable_dataset_without_network_or_ai(tmp_path):
 
 def test_prepares_karaoke_mid_into_the_same_dataset_contract(tmp_path):
     source = build_kar(tmp_path / "song.mid")
+    midi = mido.MidiFile(source, charset="cp1251")
+    midi.tracks[0].append(mido.MetaMessage("lyrics", text="/Second ", time=240))
+    midi.tracks[0].append(mido.MetaMessage("lyrics", text="line ", time=240))
+    midi.save(source)
 
     result = kar_dataset_service.prepare_kar_file(
         source,
@@ -170,6 +174,13 @@ def test_prepares_karaoke_mid_into_the_same_dataset_contract(tmp_path):
     assert metadata["note_count"] == 2
     assert "mid_sha256" in metadata
     assert lyrics["source"] == "mid"
+    assert lyrics["text"] == "Hello world\nSecond line"
+    assert [word["text"] for word in lyrics["words"]] == [
+        "Hello",
+        "world",
+        "Second",
+        "line",
+    ]
     assert (output / "source.mid").is_file()
 
 
