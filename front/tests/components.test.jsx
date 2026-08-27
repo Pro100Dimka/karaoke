@@ -215,7 +215,9 @@ describe("AudioPlayer and error boundary", () => {
     ).toBe(false);
   });
   test("handles playback, media events, seeking and volume", async () => {
-    render(<AudioPlayer src="one.wav" initialDuration={10} className="extra" />);
+    const { unmount } = render(
+      <AudioPlayer src="one.wav" initialDuration={10} className="extra" />
+    );
     const audio = document.querySelector("audio");
     const buttons = screen.getAllByRole("button");
     fireEvent.click(buttons[0]);
@@ -234,6 +236,9 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.ended(audio);
     expect(audio.currentTime).toBe(0);
     verify([document.querySelector(".performance-player").className, "toContain", "extra"]);
+    unmount();
+    expect(audio.getAttribute("src")).toBeNull();
+    expect(audio.load).toHaveBeenCalled();
   });
   test("ignores browser media property assignment failures", () => {
     render(<AudioPlayer src="one.wav" initialDuration={10} />);

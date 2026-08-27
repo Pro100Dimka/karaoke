@@ -3,8 +3,8 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
 import useLibraryFileImport from "../src/pages/Library/hooks/useFileImport.js";
-import useLibraryRoomSync from "../src/pages/Library/hooks/useRoomSync.js";
-import useLibrarySongActions from "../src/pages/Library/hooks/useSongActions.js";
+import useLibraryRoomSync, { capParticipantSongs } from "../src/pages/Library/hooks/useRoomSync.js";
+import useLibrarySongActions, { releaseSongMedia } from "../src/pages/Library/hooks/useSongActions.js";
 import { resolveVisibleSongs } from "../src/pages/Library/utils.js";
 
 const api = vi.hoisted(() => ({
@@ -168,13 +168,25 @@ describe("library file import", () => {
 });
 
 describe("library room synchronization", () => {
-  test("broadcasts local query and host song changes", () => {
+  test("caps Cyrillic room libraries by UTF-8 bytes", () => {
+    const songs = Array.from({ length: 500 }, (_, index) => ({
+      id: index,
+      title: "Очень длинное кириллическое название песни ".repeat(20)
+    }));
+    const capped = capParticipantSongs(songs);
+    const bytes = new TextEncoder().encode(JSON.stringify({ songs: capped })).byteLength;
+
+    expect(bytes).toBeLessThanOrEqual(120 * 1024);
+    expect(capped.length).toBeLessThan(songs.length);
+  });
+
+  test("broadcasts local query and host song changes", async () => {
     const syncUi = vi.fn();
     const setQuery = vi.fn();
     const props = {
       localSongs: [{ id: 1 }],
       query: "local",
-      room: { host: true },
+      room: { host: true, selfId: "self" },
       roomEventId: 1,
       roomQuery: undefined,
       participantCount: 1,
@@ -182,11 +194,13 @@ describe("library room synchronization", () => {
       syncUi
     };
     const hook = renderHook((value) => useLibraryRoomSync(value), { initialProps: props });
+    await act(async () => Promise.resolve());
     expect(syncUi).toHaveBeenCalledWith({ query: "local" });
-    expect(syncUi).toHaveBeenCalledWith({ songs: [{ id: 1 }] });
+    expect(syncUi).toHaveBeenCalledWith({ songs: [{ id: 1, __roomOwnerId: "self" }] });
     syncUi.mockClear();
     hook.rerender({ ...props, localSongs: [{ id: 2 }], participantCount: 2 });
-    expect(syncUi).toHaveBeenCalledWith({ songs: [{ id: 2 }] });
+    await act(async () => Promise.resolve());
+    expect(syncUi).toHaveBeenCalledWith({ songs: [{ id: 2, __roomOwnerId: "self" }] });
     expect(setQuery).not.toHaveBeenCalled();
   });
 
@@ -269,6 +283,26 @@ const actionProps = (overrides = {}) => ({
 });
 
 describe("library song actions", () => {
+  test("releases only the deleted song media before removing its files", async () => {
+    const target = document.createElement("audio");
+    const other = document.createElement("audio");
+    target.src = "http://127.0.0.1:18000/songs/song-to-delete/audio/instrumental";
+    other.src = "http://127.0.0.1:18000/songs/other-song/audio/instrumental";
+    target.pause = vi.fn();
+    target.load = vi.fn();
+    other.pause = vi.fn();
+    other.load = vi.fn();
+    document.body.append(target, other);
+
+    await releaseSongMedia("song-to-delete");
+
+    expect(target.pause).toHaveBeenCalledOnce();
+    expect(target.load).toHaveBeenCalledOnce();
+    expect(target.getAttribute("src")).toBeNull();
+    expect(other.pause).not.toHaveBeenCalled();
+    expect(other.getAttribute("src")).not.toBeNull();
+  });
+
   test("processes pending songs and confirms reprocessing", async () => {
     const props = actionProps();
     api.processSong.mockResolvedValue({});

@@ -12,6 +12,35 @@ const removeFromSet = (setter, id) =>
     return next;
   });
 
+const mediaUrl = (media) => String(media?.currentSrc || media?.src || "");
+
+export async function releaseSongMedia(songId, root = globalThis.document) {
+  if (!songId || !root?.querySelectorAll) return;
+  const marker = `/songs/${encodeURIComponent(String(songId))}/`;
+  const mediaElements = [...root.querySelectorAll("audio, video")].filter((media) => {
+    const urls = [
+      mediaUrl(media),
+      ...[...(media.querySelectorAll?.("source") || [])].map(mediaUrl)
+    ];
+    return urls.some((url) => url.includes(marker));
+  });
+  if (!mediaElements.length) return;
+  for (const media of mediaElements) {
+    try {
+      media.pause?.();
+      media.removeAttribute?.("src");
+      media.querySelectorAll?.("source").forEach((source) => source.removeAttribute("src"));
+      media.load?.();
+    } catch {
+      // A detached/partially initialized media element may reject load().
+      // Continue releasing every other reference to the same song.
+    }
+  }
+  // Chromium's network service releases the Windows file handle
+  // asynchronously after load() detaches the source.
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+}
+
 export default function useLibrarySongActions({
   confirmDialog,
   notify,
@@ -115,6 +144,7 @@ export default function useLibrarySongActions({
         if (recordingsSongId === song.id) setRecordingsSong(null);
         if (processingSongId === song.id) setProcessingSong(null);
         try {
+          await releaseSongMedia(song.id);
           await api.deleteSong(song.id);
         } catch (error) {
           if (!isAmbiguousTransportError(error)) {

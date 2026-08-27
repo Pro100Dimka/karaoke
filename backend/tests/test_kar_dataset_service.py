@@ -347,6 +347,65 @@ def test_audio_search_matches_transliterated_official_metadata():
     assert kar_dataset_service._audio_candidate_score(official, document) is not None
 
 
+def test_audio_search_uses_performer_embedded_in_midi_title_and_rejects_wrong_duration():
+    document = kar_dataset_service.KarDocument(
+        title='Король и шут: "Кукла колдуна"',
+        artist="Горшенёв М. Князев А.",
+        bpm=145,
+        key="C",
+        duration=204.4,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    original = {
+        "title": "Кукла Колдуна",
+        "uploader": "thekorolishut",
+        "duration": 204,
+    }
+    unrelated_early_recording = {
+        "title": "Андрей Князев Король и Шут Кукла Колдуна 1991 Рыба",
+        "uploader": "Oleksii Khoziaikin",
+        "duration": 165,
+    }
+
+    assert kar_dataset_service._audio_search_identity(document) == (
+        "Король и шут",
+        "Кукла колдуна",
+    )
+    assert kar_dataset_service._audio_candidate_score(original, document) is not None
+    assert kar_dataset_service._audio_candidate_score(unrelated_early_recording, document) is None
+
+
+def test_audio_search_prefers_artist_channel_over_third_party_official_label():
+    document = kar_dataset_service.KarDocument(
+        title='Король и шут: "Кукла колдуна"',
+        artist="Горшенёв М. Князев А.",
+        bpm=145,
+        key="C",
+        duration=204,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    artist_channel = {
+        "title": "Кукла Колдуна",
+        "uploader": "thekorolishut",
+        "duration": 204,
+    }
+    reupload = {
+        "title": "Король и Шут - Кукла Колдуна [Official Video] HD",
+        "uploader": "Random uploader",
+        "duration": 202,
+    }
+
+    assert kar_dataset_service._audio_candidate_score(
+        artist_channel, document
+    ) > kar_dataset_service._audio_candidate_score(reupload, document)
+
+
 def test_midi_audio_match_compares_note_classes_and_timing(monkeypatch, tmp_path):
     words = [
         {

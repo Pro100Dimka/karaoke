@@ -52,7 +52,17 @@ _REJECTED_AUDIO_HINTS = (
     "караоке",
     "текст песни",
     "кавер",
+    "demo",
+    "live",
+    "concert",
+    "minecraft",
+    "демо",
+    "концерт",
+    "майнкрафт",
 )
+_MAX_AUDIO_DURATION_DRIFT_SECONDS = 20.0
+_MAX_AUDIO_DURATION_DRIFT_RATIO = 0.12
+_MIN_MELODY_MATCH_SCORE = 0.45
 _CYRILLIC_TRANSLITERATION = str.maketrans(
     {
         "а": "a",
@@ -536,27 +546,61 @@ def _overlap_count(expected: set[str], candidate: set[str]) -> int:
     return sum(any(_similar_word(word, value) for value in candidate) for word in expected)
 
 
+def _audio_search_identity(document: KarDocument) -> tuple[str, str]:
+    """Return performer/title even when MIDI stores composers as the artist.
+
+    A common Russian karaoke tag is ``Performer: "Song"`` in the title while
+    the artist field contains the songwriters. Searching by that artist field
+    selected unrelated solo/demo recordings. In that layout the title itself
+    is the more reliable source of both values.
+    """
+    prefix, separator, suffix = document.title.partition(":")
+    cleaned_suffix = suffix.strip().strip("\"'«»“”„ ")
+    if separator and prefix.strip() and cleaned_suffix:
+        return prefix.strip(), cleaned_suffix
+    return document.artist.strip(), document.title.strip()
+
+
+def _duration_matches(document: KarDocument, duration: float) -> bool:
+    if not duration or not document.duration:
+        return True
+    maximum_drift = max(
+        _MAX_AUDIO_DURATION_DRIFT_SECONDS,
+        document.duration * _MAX_AUDIO_DURATION_DRIFT_RATIO,
+    )
+    return abs(duration - document.duration) <= maximum_drift
+
+
 def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> float | None:
     title = str(entry.get("title") or "")
     normalized = title.casefold()
     if any(hint in normalized for hint in _REJECTED_AUDIO_HINTS):
         return None
-    expected_title = set(_normalized_words(document.title))
+    expected_artist, expected_song = _audio_search_identity(document)
+    expected_title = set(_normalized_words(expected_song))
     candidate = set(_normalized_words(title))
     title_overlap = _overlap_count(expected_title, candidate)
     if expected_title and title_overlap < max(1, math.ceil(len(expected_title) / 2)):
         return None
-    artist_words = set(_normalized_words(document.artist))
-    searchable = candidate | set(_normalized_words(entry.get("uploader") or ""))
+    artist_words = {word for word in _normalized_words(expected_artist) if len(word) > 1}
+    uploader_words = set(_normalized_words(entry.get("uploader") or ""))
+    searchable = candidate | uploader_words
     artist_overlap = _overlap_count(artist_words, searchable)
     if artist_words and not artist_overlap:
         return None
     duration = float(entry.get("duration") or 0)
     duration_penalty = abs(duration - document.duration) if duration and document.duration else 0
-    if duration_penalty > max(45, document.duration * 0.22):
+    if not _duration_matches(document, duration):
         return None
-    official = 25 if any(hint in normalized for hint in ("official", "audio", "music video")) else 0
-    return title_overlap * 20 + artist_overlap * 12 + official - duration_penalty / 3
+    uploader_overlap = _overlap_count(artist_words, uploader_words)
+    official = 8 if any(hint in normalized for hint in ("official", "audio", "music video")) else 0
+    return (
+        title_overlap * 20
+        + artist_overlap * 12
+        + uploader_overlap * 14
+        + official
+        - duration_penalty / 3
+    )
 
 
 def _candidate_url(entry: dict[str, Any]) -> str | None:
@@ -694,7 +738,8 @@ def _download_preview(entry: dict[str, Any], directory: Path, index: int) -> tup
 def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     if YoutubeDL is None:
         raise RuntimeError("yt-dlp не установлен")
-    query = " ".join(filter(None, (document.artist, document.title, "official audio")))
+    expected_artist, expected_title = _audio_search_identity(document)
+    query = " ".join(filter(None, (expected_artist, expected_title, "official audio")))
     search_options = {
         "quiet": True,
         "no_warnings": True,
@@ -724,7 +769,7 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
         try:
             preview, preview_info = _download_preview(entry, temporary, index)
             match = _midi_audio_match(document, preview)
-            matches.append((match["score"], entry, preview_info, match))
+            matches.append((_metadata_score, entry, preview_info, match))
         except Exception:
             continue
         finally:
@@ -732,12 +777,22 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     if not matches:
         shutil.rmtree(temporary, ignore_errors=True)
         raise RuntimeError("Не удалось проверить найденные аудиозаписи по мелодии .kar")
-    _match_score, selected, preview_info, match = max(matches, key=lambda item: item[0])
-    if match["score"] < 0.45:
+    verified_matches = [item for item in matches if item[3]["score"] >= _MIN_MELODY_MATCH_SCORE]
+    if not verified_matches:
         shutil.rmtree(temporary, ignore_errors=True)
+        best_match = max(matches, key=lambda item: item[3]["score"])[3]
         raise RuntimeError(
-            f"Найденные записи не совпадают с мелодией .kar (лучшее совпадение {match['score']:.0%})"
+            "Найденные записи не совпадают с мелодией .kar "
+            f"(лучшее совпадение {best_match['score']:.0%})"
         )
+    # Once the MIDI melody has verified candidates, prefer the strongest
+    # performer/title/source metadata. Tiny chroma-score differences between
+    # copies of the same master must not make a random re-upload beat the
+    # performer's own channel.
+    _metadata_score, selected, preview_info, match = max(
+        verified_matches,
+        key=lambda item: (item[0], item[3]["score"]),
+    )
     webpage = _candidate_url(selected)
     options = {
         "format": "bestaudio/best",
@@ -786,6 +841,23 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     # The preview is only used to select a candidate. The authoritative BPM and
     # final mapping must come from the complete downloaded original recording.
     match = _midi_audio_match(document, target)
+    final_entry = {
+        "title": info.get("title") or selected.get("title"),
+        "uploader": info.get("uploader") or selected.get("uploader"),
+        "duration": info.get("duration") or selected.get("duration"),
+    }
+    if _audio_candidate_score(final_entry, document) is None:
+        target.unlink(missing_ok=True)
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise RuntimeError(
+            "Скачанная запись не совпадает с исполнителем, названием или длительностью .kar"
+        )
+    if match["score"] < _MIN_MELODY_MATCH_SCORE:
+        target.unlink(missing_ok=True)
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise RuntimeError(
+            f"Полная аудиозапись не совпадает с мелодией .kar ({match['score']:.0%})"
+        )
     shutil.rmtree(temporary, ignore_errors=True)
     return {
         "query": query,
@@ -881,6 +953,7 @@ def prepare_kar_file(
             }
     except Exception as exc:
         warnings.append(str(exc))
+        (target / "original.flac").unlink(missing_ok=True)
         shutil.rmtree(target / ".download", ignore_errors=True)
         shutil.rmtree(target / ".processing", ignore_errors=True)
         (target / "kar-lyrics.txt").unlink(missing_ok=True)

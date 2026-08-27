@@ -3,11 +3,23 @@ import { api } from "../../../api/client";
 
 const MAX_SONGS = 500;
 const MAX_BYTES = 120 * 1024;
+const encodedBytes = (value) => new TextEncoder().encode(value).byteLength;
 export const capParticipantSongs = (songs) => {
-  const result = songs.slice(0, MAX_SONGS);
-  while (result.length && JSON.stringify({ songs: result }).length > MAX_BYTES)
-    result.pop();
-  return result;
+  const candidates = songs.slice(0, MAX_SONGS);
+  // The Worker enforces UTF-8 bytes, not JavaScript character count. Cyrillic
+  // metadata is commonly two bytes per character, so the old length check
+  // could send >128 KiB and the Worker correctly closed the whole room.
+  // Binary search avoids repeatedly serializing almost the entire library
+  // hundreds of times when a large list needs trimming.
+  let lower = 0;
+  let upper = candidates.length;
+  while (lower < upper) {
+    const middle = Math.ceil((lower + upper) / 2);
+    if (encodedBytes(JSON.stringify({ songs: candidates.slice(0, middle) })) <= MAX_BYTES)
+      lower = middle;
+    else upper = middle - 1;
+  }
+  return candidates.slice(0, lower);
 };
 // The revisions endpoint caps a single request to the same count (see
 // schemas.SongRevisionsRequest), so a library larger than that still needs
@@ -95,9 +107,6 @@ export default function useLibraryRoomSync({
     if (room?.host && participantCount)
       syncUi({ query: currentQuery.current, filters: currentFilters.current });
   }, [participantCount, room?.host, syncUi]);
-  useEffect(() => {
-    if (room?.host) syncUi({ songs: localSongs });
-  }, [localSongs, room?.host, syncUi]);
   useEffect(() => {
     if (!room?.selfId) return undefined;
     let active = true;

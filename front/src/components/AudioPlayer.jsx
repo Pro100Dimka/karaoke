@@ -40,6 +40,20 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const update = (value) => setState((current) => ({ ...current, ...value }));
 
   useEffect(() => {
+    const audio = media.current;
+    return () => {
+      if (!audio) return;
+      audio.pause();
+      audio.removeAttribute("src");
+      try {
+        audio.load();
+      } catch {
+        // Detached embedded media implementations may not expose load().
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     media.current?.pause();
     if (media.current) {
       setMedia(media.current, "currentTime", 0);
