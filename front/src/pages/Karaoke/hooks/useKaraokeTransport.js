@@ -199,22 +199,23 @@ export default function useKaraokeTransport({
         id = await pendingStart.promise;
       }
       if (operation !== operationRef.current) {
-        if (pendingStart && pendingStart.latestOperation !== operation) return;
+        if (pendingStart && pendingStart.latestOperation !== operation) return null;
         if (pendingStart?.settle === "pause") {
           await api.pauseRecording(id).catch(() => {});
           sessionRef.current = id;
           setRecordingSessionId(id);
-          return;
+          return null;
         }
         await discardSession(id);
         if (pendingStart?.settle === "stop") setRecordingSessionId(null);
-        return;
+        return null;
       }
       sessionRef.current = id;
       setRecordingSessionId(id);
       setRecordingError(null);
+      return id;
     } catch (error) {
-      if (operation !== operationRef.current) return;
+      if (operation !== operationRef.current) return null;
       if (id) {
         const { error: finalizeError } = await finalizeRecording(id);
         if (!finalizeError) clearSession(id);
@@ -222,6 +223,7 @@ export default function useKaraokeTransport({
       setRecordingError(
         formatError("Запись недоступна, караоке продолжит работу без неё: {0}", error)
       );
+      return null;
     }
   };
 
@@ -260,7 +262,7 @@ export default function useKaraokeTransport({
     if (vocals) vocals.volume = playbackGain(vocalVolume);
     sendYouTubeCommand("playVideo");
 
-    runRecording(operation);
+    const recordingStart = runRecording(operation);
     try {
       const master = Promise.resolve(instrumental.play());
       const secondary = [
@@ -274,6 +276,19 @@ export default function useKaraokeTransport({
       ]);
       if (masterResult.status === "rejected") throw masterResult.reason;
       syncSecondaryMedia(instrumental.currentTime, true);
+      // Recording startup may wait for an audio driver. Playback must remain
+      // instant; anchor it as soon as the session is ready, using the media
+      // position and microphone frame observed at that exact later moment.
+      recordingStart.then((recordingId) => {
+        if (!recordingId || operation !== operationRef.current) return;
+        Promise.resolve(api.syncRecording(recordingId, instrumental.currentTime)).catch((error) => {
+          if (operation === operationRef.current) {
+            setRecordingError(
+              formatError("Не удалось точно синхронизировать запись: {0}", error)
+            );
+          }
+        });
+      });
     } catch {
       beginOperation();
       const pendingStart = pendingRecordingStartRef.current;
@@ -332,6 +347,9 @@ export default function useKaraokeTransport({
     instrumental.currentTime = position;
     syncSecondaryMedia(position, true);
     setCurrentTime(position);
+    if (isPlaying && sessionRef.current) {
+      Promise.resolve(api.syncRecording(sessionRef.current, position)).catch(() => {});
+    }
     if (shouldBroadcast) broadcast("seek", position);
   };
 

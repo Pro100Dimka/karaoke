@@ -123,11 +123,21 @@ test("mock API implements the complete development contract", async () => {
     [(await mockRequest(`/recording/by-song/${MOCK_SONG_ID}`)).at(-1).id, retainedRecording.id],
     [await mockRequest(`/recording/${recording.id}`, { method: "DELETE" }), null]
   );
-  deepEqual([await mockRequest("/recording/library"), [retainedRecording]], [await mockRequest("/analysis/id/run"), { queued: true }]);
-  equal([(await mockRequest("/analysis/id")).accuracy_percent, 82]);
-  deepEqual(
-    [await mockRequest("/analysis/id"), { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }]
-  );
+  deepEqual([await mockRequest("/recording/library"), [retainedRecording]]);
+  equal([(await mockRequest("/analysis/id/run")).overall_score_percent, 82.1]);
+  equal([(await mockRequest("/analysis/id")).pitch_accuracy_percent, 82]);
+  deepEqual([
+    await mockRequest("/analysis/id"),
+    {
+      pitch_accuracy_percent: 82,
+      rhythm_accuracy_percent: 76,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 82.1,
+      mean_deviation_semitones: 0.32,
+      sections: []
+    }
+  ]);
   deepEqual(
     [
       await mockRequest("/diagnostics/ai-models"),

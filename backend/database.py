@@ -57,6 +57,14 @@ _RECORDING_COLUMN_MIGRATIONS = {
     "playback_offset_sec": (
         "ALTER TABLE recordings ADD COLUMN playback_offset_sec FLOAT NOT NULL DEFAULT 0"
     ),
+    "playback_segments_json": "ALTER TABLE recordings ADD COLUMN playback_segments_json TEXT",
+}
+
+_ANALYSIS_COLUMN_MIGRATIONS = {
+    "rhythm_accuracy_percent": "ALTER TABLE analysis_results ADD COLUMN rhythm_accuracy_percent FLOAT",
+    "note_hold_percent": "ALTER TABLE analysis_results ADD COLUMN note_hold_percent FLOAT",
+    "note_coverage_percent": "ALTER TABLE analysis_results ADD COLUMN note_coverage_percent FLOAT",
+    "overall_score_percent": "ALTER TABLE analysis_results ADD COLUMN overall_score_percent FLOAT",
 }
 
 _AUDIO_COLUMN_MIGRATIONS = {
@@ -170,10 +178,12 @@ def init_db() -> None:
     inspector = inspect(engine)
     song_columns, audio_columns = {column['name'] for column in inspector.get_columns('songs')}, {column['name'] for column in inspector.get_columns('audio_settings')}
     recording_columns = {column['name'] for column in inspector.get_columns('recordings')}
+    analysis_columns = {column['name'] for column in inspector.get_columns('analysis_results')}
     with engine.begin() as connection:
         _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
         _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
         _apply_additive_migrations(connection, recording_columns, _RECORDING_COLUMN_MIGRATIONS)
+        _apply_additive_migrations(connection, analysis_columns, _ANALYSIS_COLUMN_MIGRATIONS)
         _repair_invalid_audio_settings_datetime(connection)
         _repair_corrupted_audio_settings(connection)
         _mark_interrupted_jobs(connection)

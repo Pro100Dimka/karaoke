@@ -16,7 +16,7 @@ function getAnalysisGrade(accuracy) {
   return getLabel();
 }
 
-function getAnalysisAdvice(accuracy, meanDeviation) {
+function getAnalysisAdvice(accuracy, meanDeviation, practiceMetric) {
   if (accuracy == null) {
     return translateSaved(
       "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
@@ -25,6 +25,21 @@ function getAnalysisAdvice(accuracy, meanDeviation) {
   if (meanDeviation > 1) {
     return translateSaved("Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты.");
   }
+  const advice = {
+    pitch: () =>
+      translateSaved("Потренируйте точное попадание в высоту нот, начиная с медленного темпа."),
+    rhythm: () =>
+      translateSaved(
+        "Потренируйте моменты вступления: слушайте сильную долю и начинайте фразу вместе с минусовкой."
+      ),
+    hold: () =>
+      translateSaved(
+        "Удерживайте ноту ровнее до её окончания и распределяйте дыхание на всю фразу."
+      ),
+    coverage: () =>
+      translateSaved("Пойте все отмеченные фразы ближе к микрофону, не пропуская окончания слов.")
+  };
+  if (practiceMetric?.key && advice[practiceMetric.key]) return advice[practiceMetric.key]();
   return accuracy >= 70
     ? translateSaved("Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию.")
     : translateSaved("Повторите сложные фразы медленнее, ориентируясь на ноты на экране.");
@@ -59,6 +74,10 @@ export function normalizeAnalysisResult(result) {
   return {
     ...source,
     pitch_accuracy_percent: clampPercent(source.pitch_accuracy_percent),
+    rhythm_accuracy_percent: clampPercent(source.rhythm_accuracy_percent),
+    note_hold_percent: clampPercent(source.note_hold_percent),
+    note_coverage_percent: clampPercent(source.note_coverage_percent),
+    overall_score_percent: clampPercent(source.overall_score_percent),
     mean_deviation_semitones: finiteOrNull(source.mean_deviation_semitones),
     sections: sections
       ? sections
@@ -69,7 +88,20 @@ export function normalizeAnalysisResult(result) {
 }
 export function getAnalysisFeedback(result) {
   const normalized = normalizeAnalysisResult(result);
-  const accuracy = normalized.pitch_accuracy_percent;
+  const accuracy = normalized.overall_score_percent ?? normalized.pitch_accuracy_percent;
+  const metrics = [
+    { key: "pitch", value: normalized.pitch_accuracy_percent },
+    { key: "rhythm", value: normalized.rhythm_accuracy_percent },
+    { key: "hold", value: normalized.note_hold_percent },
+    { key: "coverage", value: normalized.note_coverage_percent }
+  ].filter(({ value }) => value != null);
+  const practiceMetric =
+    metrics.length > 1
+      ? metrics.reduce(
+          (worst, metric) => (!worst || metric.value < worst.value ? metric : worst),
+          null
+        )
+      : null;
   const scoredSections = normalized.sections.filter((section) => section.accuracy_percent != null);
   const bestSection = scoredSections.reduce(
     (best, section) => (!best || section.accuracy_percent > best.accuracy_percent ? section : best),
@@ -81,10 +113,12 @@ export function getAnalysisFeedback(result) {
     null
   );
   const grade = getAnalysisGrade(accuracy);
-  const advice = getAnalysisAdvice(accuracy, normalized.mean_deviation_semitones);
+  const advice = getAnalysisAdvice(accuracy, normalized.mean_deviation_semitones, practiceMetric);
   return {
     ...normalized,
     accuracy,
+    metrics,
+    practiceMetric,
     scoredSections,
     bestSection,
     needsPractice,

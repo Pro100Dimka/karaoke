@@ -39,6 +39,19 @@ test("ready song opens from card click and keyboard but not nested actions", () 
   expect(actions.onOpenKaraoke).toHaveBeenCalledTimes(3);
   const nested = view.getByRole("button", { name: /Прослушать записи|Прослухати записи/ });
   fireEvent.click(nested);
+  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
+  const menuButton = view.getByRole("button", { name: /Другие действия|Інші дії/ });
+  fireEvent.click(menuButton);
+  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(true);
+  fireEvent.pointerDown(menuButton);
+  fireEvent.click(menuButton);
+  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
+  fireEvent.click(menuButton);
+  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(true);
+  const settings = view.getByRole("button", { name: /Настройки песни|Налаштування пісні/ });
+  fireEvent.click(settings);
+  expect(actions.onOpenSettings).toHaveBeenCalledWith("song");
+  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
   verify([actions.onOpenKaraoke, "toHaveBeenCalledTimes", 3], [view.container.textContent, "toContain", "120 BPM"]);
 });
 test("working song shows progress and opens its processing modal", () => {
@@ -56,42 +69,21 @@ test("an interrupted room transfer offers a clear retry instead of a stuck progr
   // still running. It must instead say so plainly and let a click retry.
   const actions = handlers();
   const song = { id: "song", title: "Title", status: "done" };
-  const cancelled = render(
-    <LibrarySongCard
-      cardIndex={0}
-      song={song}
-      transferStatus={{ stage: "cancelled", percent: 40 }}
-      {...actions}
-    />
-  );
+  const cancelled = render(<LibrarySongCard cardIndex={0} song={song} transferStatus={{ stage: "cancelled", percent: 40 }} {...actions} />);
   expect(cancelled.queryByRole("progressbar")).toBeNull();
   const retryButton = cancelled.getByText(/Передача прервана/).closest("button");
   fireEvent.click(retryButton);
   expect(actions.onOpenKaraoke).toHaveBeenCalledWith(song);
   cancelled.unmount();
 
-  const errored = render(
-    <LibrarySongCard
-      cardIndex={0}
-      song={song}
-      transferStatus={{ stage: "error", percent: 10 }}
-      {...handlers()}
-    />
-  );
+  const errored = render(<LibrarySongCard cardIndex={0} song={song} transferStatus={{ stage: "error", percent: 10 }} {...handlers()} />);
   expect(errored.queryByRole("progressbar")).toBeNull();
   expect(errored.getByText(/Передача прервана/)).toBeTruthy();
 });
 test("an in-progress room transfer still shows the normal progress bar", () => {
   const actions = handlers();
   const song = { id: "song", title: "Title", status: "done" };
-  const view = render(
-    <LibrarySongCard
-      cardIndex={0}
-      song={song}
-      transferStatus={{ stage: "receiving", percent: 55 }}
-      {...actions}
-    />
-  );
+  const view = render(<LibrarySongCard cardIndex={0} song={song} transferStatus={{ stage: "receiving", percent: 55 }} {...actions} />);
   expect(view.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("55");
   fireEvent.click(view.getByRole("progressbar").closest("button"));
   expect(actions.onOpenKaraoke).not.toHaveBeenCalled();

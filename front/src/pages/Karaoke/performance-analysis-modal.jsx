@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   Grid,
+  IconButton,
   Modal,
   ModalCarouselNavigation,
   Stack,
@@ -36,48 +37,72 @@ function Summary({ result }) {
   const feedback = getAnalysisFeedback(result);
   const metrics = [
     [
-      t("Среднее отклонение"),
-      feedback.mean_deviation_semitones != null
-        ? t("±{0} п/т", { 0: feedback.mean_deviation_semitones })
-        : "—"
-    ],
-    [t("Проверено фрагментов"), feedback.scoredSections.length],
-    [
-      t("Лучший фрагмент"),
-      feedback.bestSection ? `${feedback.bestSection.accuracy_percent}%` : "—"
+      "pitch",
+      t("Попадание в ноты"),
+      feedback.pitch_accuracy_percent,
+      t("Точные ноты в пределах половины полутона")
     ],
     [
-      t("Нуждается в работе"),
-      feedback.needsPractice ? `${feedback.needsPractice.accuracy_percent}%` : "—"
+      "rhythm",
+      t("Ритм и вступления"),
+      feedback.rhythm_accuracy_percent,
+      t("Точность начала нот относительно минусовки")
+    ],
+    [
+      "hold",
+      t("Удержание нот"),
+      feedback.note_hold_percent,
+      t("Стабильная высота во время звучания ноты")
+    ],
+    [
+      "coverage",
+      t("Полнота исполнения"),
+      feedback.note_coverage_percent,
+      t("Доля нот песни, в которых распознан голос")
     ]
   ];
   return (
     <Stack align="center" gap="var(--space-4)">
-      <Typography variant="h2">{feedback.grade}</Typography>
-      <Typography data-role="analysis-score" variant="h1">
-        {feedback.accuracy ?? "—"}%
-      </Typography>
-      <Typography tone="muted">{t("Попадание в ноты")}</Typography>
       <Grid columns={2} gap="var(--space-3)">
-        {metrics.map(([label, value]) => (
-          <Card key={label} cardContent={{ style: { padding: "var(--space-4)" } }}>
-            <Stack gap="var(--space-1)">
+        {metrics.map(([key, label, value, description]) => (
+          <Card key={key} data-practice={feedback.practiceMetric?.key === key || undefined}>
+            <Stack gap="var(--space-1)" sx={{ padding: "var(--space-3)" }}>
+              <Stack direction="row" align="baseline" justify="space-between" gap="var(--space-2)">
+                <Typography>
+                  <strong>{label}</strong>
+                </Typography>
+                <Typography variant="h4">{value == null ? "—" : `${value}%`}</Typography>
+              </Stack>
               <Typography variant="caption" tone="muted">
-                {label}
-              </Typography>
-              <Typography>
-                <strong>{value}</strong>
+                {description}
               </Typography>
             </Stack>
           </Card>
         ))}
       </Grid>
       <Card variant="laser" tilt={false} cardContent={{ style: { padding: "var(--space-4)" } }}>
+        <Stack align="center" gap="var(--space-1)">
+          <Typography variant="h4" textAlign="center">
+            {feedback.grade}
+          </Typography>
+          <Typography data-role="analysis-score" variant="h3">
+            {feedback.accuracy ?? "—"}%
+          </Typography>
+          <Typography tone="muted">{t("Общая оценка исполнения")}</Typography>
+          <Typography variant="caption" tone="muted" textAlign="center">
+            {t("Итог: ноты 50% · ритм 25% · удержание 15% · полнота 10%")}
+          </Typography>
+        </Stack>
         <Stack gap="var(--space-2)">
           <Typography>
             <strong>{t("Рекомендация")}</strong>
           </Typography>
           <Typography tone="muted">{feedback.advice}</Typography>
+          {feedback.needsPractice && (
+            <Typography variant="caption" tone="muted">
+              {t("Самый сложный фрагмент: {0}%", { 0: feedback.needsPractice.accuracy_percent })}
+            </Typography>
+          )}
         </Stack>
       </Card>
     </Stack>
@@ -176,7 +201,10 @@ export default function PerformanceAnalysisModal({
                 "Вы просматриваете другую запись. Текущий анализ продолжает выполняться без переключения."
               )}
             </Typography>
-            <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
+            <AudioPlayer
+              src={api.getPerformanceFileUrl(viewed.id)}
+              initialDuration={viewed.duration_sec}
+            />
           </>
         )}
         {active && !result && !error && (
@@ -192,17 +220,20 @@ export default function PerformanceAnalysisModal({
         {active && result && (
           <>
             <Summary result={result} />
-            <AudioPlayer src={api.getPerformanceFileUrl(viewed.id)} />
-            <Button
-              variant="contained"
-              data-role="delete-recording"
-              tone="danger"
-              startIcon={<Trash2 />}
-              disabled={deleting}
-              onClick={remove}
-            >
-              {deleting ? t("Удаляем…") : t("Удалить запись")}
-            </Button>
+            <Stack direction="row" align="center" gap="var(--space-2)">
+              <AudioPlayer
+                src={api.getPerformanceFileUrl(viewed.id)}
+                initialDuration={viewed.duration_sec}
+              />
+              <IconButton
+                icon={Trash2}
+                data-role="delete-recording"
+                tone="danger"
+                label={deleting ? t("Удаляем запись…") : t("Удалить запись")}
+                disabled={deleting}
+                onClick={remove}
+              />
+            </Stack>
           </>
         )}
       </Stack>

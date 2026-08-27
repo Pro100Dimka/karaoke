@@ -39,6 +39,16 @@ test("karaoke waveform loads the real instrumental through WaveSurfer", () => {
     [timeline, "toContain", 'api.getAudioTrackUrl(songId, "instrumental")'],
     [waveform, "toContain", 'import("wavesurfer.js")'],
     [waveform, "toContain", "fetchParams"],
+    [waveform, "not.toContain", "barWidth:"],
     [waveform, "not.toContain", "index / BAR_COUNT <= progress"]
+  );
+});
+test("recording and processing waveforms use their real audio files", () => {
+  const player = read("src/components/AudioPlayer.jsx");
+  const processing = read("src/pages/Library/modals.jsx");
+  verify(
+    [player, "toContain", "url={src}"],
+    [processing, "toContain", 'api.getAudioTrackUrl(song.id, "song")'],
+    [processing, "toContain", "fetchParams={waveformFetchParams}"]
   );
 });

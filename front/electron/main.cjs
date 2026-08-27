@@ -566,6 +566,12 @@ handleTrustedIpc("window:setIconTheme", (theme) => {
 });
 function createWindow() {
   const initialTheme = getStoredIconTheme();
+  const themeBackgrounds = {
+    dark: "#050001",
+    light: "#fff8f5",
+    green: "#020904",
+    violet: "#07020f"
+  };
   if (!isDev) storeIconTheme(initialTheme);
   mainWindow = new BrowserWindow({
     minWidth: 1100,
@@ -574,7 +580,10 @@ function createWindow() {
     fullscreen: true,
     icon: getThemeIcon(initialTheme),
 
-    backgroundColor: "#0d0a1a",
+    // Match the native window surface to the selected theme. The renderer is
+    // revealed only after its large backdrop image has decoded, so neither
+    // Electron nor the page can flash white during application startup.
+    backgroundColor: themeBackgrounds[initialTheme] || themeBackgrounds.dark,
     show: false,
 
     webPreferences: {
@@ -614,8 +623,20 @@ function createWindow() {
     if (!allowed) event.preventDefault();
   });
 
+  let revealFallbackTimer = null;
+  let windowRevealed = false;
+  const revealWindow = () => {
+    if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
+    revealFallbackTimer = null;
+    windowRevealed = true;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  };
+  mainWindow.__revealWhenVisualReady = revealWindow;
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (windowRevealed) return;
+    // Never leave the application invisible if a corrupt/missing image cannot
+    // decode. Normal startup is revealed earlier by the visual-ready signal.
+    revealFallbackTimer = setTimeout(revealWindow, 4000);
   });
 
   const loadPromise = isDev
@@ -627,6 +648,7 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
     mainWindow = null;
   });
   const notifyFullscreenChange = (isFullScreen) => {
@@ -736,10 +758,11 @@ handleTrustedIpc("clipboard:writeText", (value) => {
   return true;
 });
 
-const RENDERER_STARTUP_MILESTONES = new Set(["backend-healthy", "app-interactive"]);
+const RENDERER_STARTUP_MILESTONES = new Set(["visual-ready", "backend-healthy", "app-interactive"]);
 handleTrustedIpc("startup:milestone", (name) => {
   if (!RENDERER_STARTUP_MILESTONES.has(name)) return false;
   recordStartupMilestone(name);
+  if (name === "visual-ready") mainWindow?.__revealWhenVisualReady?.();
   return true;
 });
 

@@ -290,7 +290,7 @@ describe("library page", () => {
     verify([result.getByRole("alert").textContent, "toContain", "offline"]);
     expect(result.getByTestId("analysis")).not.toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(120));
-    verify([result.container.querySelector('[aria-hidden="true"]').style.opacity, "toBe", "0"]);
+    verify([result.container.querySelector('[data-role="library-transition-blackout"]').style.opacity, "toBe", "0"]);
     cleanup();
     vi.useRealTimers();
     mocks.location = { state: null };
@@ -343,7 +343,7 @@ describe("library page", () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("karaoke")[0]);
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
-    verify([result.container.querySelector('[aria-hidden="true"]').style.opacity, "toBe", "0"]);
+    verify([result.container.querySelector('[data-role="library-transition-blackout"]').style.opacity, "toBe", "0"]);
     fireEvent.click(result.getAllByTestId("recordings")[0]);
     fireEvent.click(result.getByTestId("analyze"));
     fireEvent.click(result.getByTestId("analysis-done"));

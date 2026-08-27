@@ -129,6 +129,7 @@ def test_init_db_orchestrates_schema_migrations_and_repairs(monkeypatch):
         [{"name": "title"}],
         [{"name": "volume"}],
         [{"name": "filename"}],
+        [{"name": "pitch_accuracy_percent"}],
     ]
     connection = engine.begin.return_value.__enter__.return_value
     patch_attrs(monkeypatch, database, engine=engine, inspect=Mock(return_value=inspector))
@@ -140,7 +141,7 @@ def test_init_db_orchestrates_schema_migrations_and_repairs(monkeypatch):
     database.init_db()
 
     create_all.assert_called_once_with(bind=engine)
-    assert additive.call_count == 3
+    assert additive.call_count == 4
     datetime_repair.assert_called_once_with(connection)
     settings_repair.assert_called_once_with(connection)
     interrupted.assert_called_once_with(connection)
@@ -188,14 +189,17 @@ def test_init_db_upgrades_a_real_pre_migration_database_in_place(monkeypatch):
         song_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(songs)"))}
         recording_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(recordings)"))}
         assert {"video_url", "artist", "genre", "key_user_edited", "tempo_user_edited"} <= song_columns
-        assert "playback_offset_sec" in recording_columns
+        assert {"playback_offset_sec", "playback_segments_json"} <= recording_columns
 
         song = connection.execute(text("SELECT title, video_url FROM songs WHERE id = 'old-song'")).one()
         assert song == ("Old Song", None)
         recording = connection.execute(
-            text("SELECT filename, playback_offset_sec FROM recordings WHERE id = 'old-rec'")
+            text(
+                "SELECT filename, playback_offset_sec, playback_segments_json "
+                "FROM recordings WHERE id = 'old-rec'"
+            )
         ).one()
-        assert recording == ("take.wav", 0)
+        assert recording == ("take.wav", 0, None)
     engine.dispose()
 
 

@@ -1,6 +1,7 @@
 import builtins
 import importlib
 import subprocess
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 import numpy as np
@@ -91,6 +92,42 @@ def test_queue_is_bounded_and_drops_frames_instead_of_blocking_the_audio_thread(
     input_data = np.zeros((2, 1), dtype=np.float32)
     session._callback(input_data, 2, None, None)  # must not raise/block even though the queue is full
     assert session._queue.qsize() == session._queue.maxsize
+
+
+def test_playback_segments_follow_captured_frames_and_pause_boundaries(monkeypatch):
+    session, _stream = make_session(monkeypatch, sample_rate=100)
+    session._callback(np.zeros((10, 1), dtype=np.float32), 10, None, None)
+    session.sync_playback(2.5)
+    session._callback(np.zeros((25, 1), dtype=np.float32), 25, None, None)
+    session.pause()
+
+    assert session.playback_segments == [{
+        "start_recording_sec": pytest.approx(0.1),
+        "start_playback_sec": 2.5,
+        "end_recording_sec": pytest.approx(0.35),
+    }]
+    raises(RuntimeError, lambda: session.sync_playback(3), match="paused")
+
+    session.resume()
+    session.sync_playback(8)
+    session._callback(np.zeros((20, 1), dtype=np.float32), 20, None, None)
+    session.pause()
+    assert session.playback_segments[1] == {
+        "start_recording_sec": pytest.approx(0.35),
+        "start_playback_sec": 8,
+        "end_recording_sec": pytest.approx(0.55),
+    }
+
+
+def test_playback_anchor_includes_audio_waiting_in_the_device_buffer(monkeypatch):
+    session, stream = make_session(monkeypatch, sample_rate=100)
+    stream.time = 10.15
+    timing = SimpleNamespace(inputBufferAdcTime=10.0)
+    session._callback(np.zeros((10, 1), dtype=np.float32), 10, timing, None)
+
+    session.sync_playback(4.0)
+
+    assert session.playback_segments[0]["start_recording_sec"] == pytest.approx(0.15)
 
 
 def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path, caplog):
@@ -279,11 +316,17 @@ def test_stop_and_save_requires_initialized_file(monkeypatch, tmp_path):
 
 
 def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, tmp_path):
+    segments = [{
+        "start_recording_sec": 0.25,
+        "start_playback_sec": 1.5,
+        "end_recording_sec": 3.0,
+    }]
     session = Mock(
         song_id="song",
         playback_offset_sec=1.5,
         music_gain=0.8,
         effects={"reverb": 0.2},
+        playback_segments=segments,
     )
     session.stop_and_save.return_value = (3.0, 48_000)
     monkeypatch.setattr(recording_service, "_sessions", {"session": session})
@@ -295,9 +338,12 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
 
     result = recording_service.stop_recording("session")
 
-    assert result.song_id == "song" and result.duration_sec == 3 and result.playback_offset_sec == 1.5
+    assert result.song_id == "song" and result.duration_sec == 3 and result.playback_offset_sec == 1.25
+    assert result.playback_segments_json == (
+        '[{"start_recording_sec":0.25,"start_playback_sec":1.5,"end_recording_sec":3.0}]'
+    )
     database.add.assert_called_once_with(result)
-    mix.assert_called_once_with(result, current_song, 1.5, 0.8, {"reverb": 0.2})
+    mix.assert_called_once_with(result, current_song, 1.25, 0.8, {"reverb": 0.2}, segments)
     session.close.assert_called_once_with()
     database.close.assert_called_once_with()
 

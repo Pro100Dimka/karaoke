@@ -396,7 +396,7 @@ export async function handleLogUpload(request, env) {
         ...(hardware ? { hardware } : {}),
       });
   const extension = legacyMessage ? "log" : "json";
-  const key = `logs/${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.${extension}`;
+  const key = `${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.${extension}`;
   await env.LOGS.put(key, batch, {
     httpMetadata: {
       contentType: legacyMessage ? "text/plain; charset=utf-8" : "application/json; charset=utf-8",

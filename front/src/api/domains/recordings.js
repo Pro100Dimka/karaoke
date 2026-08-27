@@ -32,6 +32,11 @@ export const recordingsApi = {
     request(`/recording/resume?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
       method: "POST"
     }),
+  syncRecording: (sessionId, positionSec) =>
+    request(
+      `/recording/sync?session_id=${encodeURIComponent(String(sessionId ?? ""))}&position_sec=${encodeURIComponent(String(positionSec ?? 0))}`,
+      { method: "POST" }
+    ),
   stopRecording: (sessionId) =>
     request(`/recording/stop?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
       method: "POST"

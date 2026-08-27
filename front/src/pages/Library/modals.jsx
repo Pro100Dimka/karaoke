@@ -11,7 +11,7 @@ import {
   Play,
   Trash2
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
 import { toggleAudioPlayback } from "../../components/audio-player-utils";
@@ -180,6 +180,11 @@ export function ProcessingModal({
   onOpenKaraoke,
   onSelectSong
 }) {
+  const token = platform.apiToken();
+  const waveformFetchParams = useMemo(
+    () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
+    [token]
+  );
   const current = !status?.song_id || status.song_id === song?.id ? status : null;
   const state = current?.status ?? song?.status;
   const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, state);
@@ -268,6 +273,8 @@ export function ProcessingModal({
         {!failed && !cancelled && (
           <ProcessingSignal
             progress={state === "done" ? 100 : Math.max(active ? 1 : 0, progress)}
+            url={api.getAudioTrackUrl(song.id, "song")}
+            fetchParams={waveformFetchParams}
           />
         )}
         {failure ? (

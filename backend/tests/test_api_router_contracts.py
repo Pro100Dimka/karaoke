@@ -54,6 +54,10 @@ def analysis_result(**changes):
         "recording_id": "recording",
         "pitch_accuracy_percent": 90,
         "mean_deviation_semitones": 0.2,
+        "rhythm_accuracy_percent": 80,
+        "note_hold_percent": 95,
+        "note_coverage_percent": 85,
+        "overall_score_percent": 88,
         "sections_json": '[{"label":"verse"}]',
         "created_at": datetime(2026, 1, 1, tzinfo=UTC),
     }
@@ -64,6 +68,7 @@ def analysis_result(**changes):
 def test_analysis_output_and_read_endpoints():
     result = analysis_result()
     output = analysis._to_out(result)
+    assert output.overall_score_percent == 88
     assert (output.sections == [{'label': 'verse'}]) and (analysis.get_analysis(result) == output) and (analysis.get_accuracy(result) == {'pitch_accuracy_percent': 90}) and (analysis.get_deviation(result) == {'mean_deviation_semitones': 0.2}) and (analysis.get_sections(result) == {'sections': [{'label': 'verse'}]})
 
 

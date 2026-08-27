@@ -1,4 +1,6 @@
-import { memo } from "react";
+import { Ellipsis } from "lucide-react";
+import { memo, useMemo, useState } from "react";
+import { api } from "../../../api/client";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
   Box,
@@ -6,10 +8,12 @@ import {
   Card,
   Chip,
   IconButton,
+  Popover,
   ProcessingSignal,
   Stack,
   Typography
 } from "../../../theme/ui";
+import * as platform from "../../../utils/platform";
 import { getSongActions, SongCoverArt } from "../components";
 import { formatSongKey, getSongCardState } from "../utils";
 
@@ -26,6 +30,12 @@ const statusText = {
 
 const LibrarySongCard = memo(
   ({ cardIndex = 0, song, transferStatus, onOpenKaraoke, onOpenProcessing, ...handlers }) => {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const token = platform.apiToken();
+    const waveformFetchParams = useMemo(
+      () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
+      [token]
+    );
     const { status, isReady, isWorking } = getSongCardState(song);
     const metadata = [
       formatSongKey(song.key_override),
@@ -41,6 +51,25 @@ const LibrarySongCard = memo(
     // progress bar the user might mistake for still-running.
     const transferInterrupted =
       transferStatus && ["error", "cancelled"].includes(transferStatus.stage);
+    const actions = getSongActions({ ...handlers, activate, isReady, isWorking, song });
+    const primaryCount = isReady || !handlers.canManageLibrary ? Math.min(2, actions.length) : 1;
+    const primaryActions = actions.slice(0, primaryCount);
+    const overflowActions = actions.slice(primaryCount);
+    const actionButton = ([Icon, label, variant, onClick, disabled], closeMenu = false) => (
+      <IconButton
+        key={label}
+        icon={Icon}
+        variant={variant}
+        label={label}
+        title={label}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (closeMenu) setMenuOpen(false);
+          onClick?.();
+        }}
+      />
+    );
     return (
       <Card
         variant="laser"
@@ -119,6 +148,8 @@ const LibrarySongCard = memo(
                     ) : (
                       <ProcessingSignal
                         progress={transferStatus?.percent ?? song.progress_percent}
+                        url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
+                        fetchParams={waveformFetchParams}
                         compact
                       />
                     )}
@@ -136,18 +167,38 @@ const LibrarySongCard = memo(
                 gap="var(--space-2)"
                 sx={{ width: "auto" }}
               >
-                {getSongActions({ ...handlers, activate, isReady, isWorking, song }).map(
-                  ([Icon, label, variant, onClick, disabled]) => (
+                {primaryActions.map((action) => actionButton(action))}
+                {overflowActions.length > 0 && (
+                  <Box sx={{ position: "relative" }}>
                     <IconButton
-                      key={label}
-                      icon={Icon}
-                      variant={variant}
-                      label={label}
-                      title={label}
-                      disabled={disabled}
-                      onClick={onClick}
+                      icon={Ellipsis}
+                      variant="contained"
+                      label={tr("Другие действия")}
+                      title={tr("Другие действия")}
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMenuOpen((open) => !open);
+                      }}
                     />
-                  )
+                    <Popover
+                      open={menuOpen}
+                      onClose={() => setMenuOpen(false)}
+                      aria-label={tr("Другие действия с песней {0}", { 0: song.title })}
+                      role="menu"
+                      style={{
+                        insetInlineEnd: 0,
+                        insetBlockStart: "calc(100% + var(--space-2))",
+                        minWidth: "auto"
+                      }}
+                    >
+                      <Stack direction="column" align="center" gap="var(--space-1)">
+                        {overflowActions.map((action) => actionButton(action, true))}
+                      </Stack>
+                    </Popover>
+                  </Box>
                 )}
               </Stack>
             </Stack>

@@ -4,6 +4,7 @@ import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
 import { OnlineRoomModal } from "../OnlineRoom";
 import { QuantumFieldBackdrop } from "./animated-backdrop";
 import LibraryHero from "./hero";
+import LibraryParallaxBackground from "./library-parallax-background";
 import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";
 import SongsGrid from "./songs-grid";
 import useLibrary from "./use-library";
@@ -15,6 +16,7 @@ export default function Library() {
   const { fileImport, online, processing, recordings } = state;
   return (
     <Stack align="center" sx={{ position: "relative" }}>
+      <LibraryParallaxBackground />
       {!state.processing.active && <QuantumFieldBackdrop />}
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
@@ -42,6 +44,7 @@ export default function Library() {
       </Stack>
       <Box
         aria-hidden="true"
+        data-role="library-transition-blackout"
         sx={{
           position: "fixed",
           inset: 0,

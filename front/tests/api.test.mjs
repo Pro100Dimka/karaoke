@@ -311,6 +311,7 @@ describe("API domains", () => {
       [() => recordingsApi.pauseRecording(null), "/recording/pause?session_id="],
       [() => recordingsApi.resumeRecording("a/b ?"), "/recording/resume?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.resumeRecording(null), "/recording/resume?session_id="],
+      [() => recordingsApi.syncRecording("a/b ?", 4.25), "/recording/sync?session_id=a%2Fb%20%3F&position_sec=4.25"],
       [() => recordingsApi.stopRecording("a/b ?"), "/recording/stop?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.stopRecording(null), "/recording/stop?session_id="]
     ])

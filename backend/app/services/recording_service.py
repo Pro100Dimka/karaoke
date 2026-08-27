@@ -1,5 +1,6 @@
 
 import contextlib
+import json
 import logging
 import os
 import queue
@@ -81,6 +82,11 @@ class RecordingSession:
         self._writer_error: BaseException | None = None
         self._temporary_path: Path | None = None
         self._frames_written = 0
+        self._timeline_frames = 0
+        self._timeline_lock = threading.Lock()
+        self._last_capture_end_clock: float | None = None
+        self._playback_segments: list[dict[str, float]] = []
+        self._active_playback_segment: dict[str, float] | None = None
         self._closed = False
         self._paused = False
         self._monitoring_enabled = monitoring_enabled
@@ -112,18 +118,40 @@ class RecordingSession:
                 callback=self._callback,
             )
 
-    def _enqueue(self, chunk) -> None:
-        if self._writer_error is not None: return  # writer already died; stop feeding a dead consumer
+    @staticmethod
+    def _capture_end_clock(time_info: object, duration: float) -> float | None:
+        try:
+            adc_time = float(time_info.inputBufferAdcTime)
+        except (AttributeError, TypeError, ValueError):
+            return None
+        return adc_time + duration
+
+    def _enqueue(self, chunk, time_info=None) -> bool:
+        if self._writer_error is not None: return False  # writer already died; stop feeding a dead consumer
         # Drop the frame rather than block the real-time audio thread.
-        with contextlib.suppress(queue.Full): self._queue.put_nowait(chunk)
+        try:
+            self._queue.put_nowait(chunk)
+        except queue.Full:
+            return False
+        capture_end = self._capture_end_clock(
+            time_info,
+            len(chunk) / float(self.sample_rate) if self.sample_rate else 0.0,
+        )
+        with self._timeline_lock:
+            self._timeline_frames += len(chunk)
+            self._last_capture_end_clock = capture_end
+        return True
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
         if not self._paused:
-            self._enqueue(self._quality.process(indata, self.gain, self.noise_suppression).copy())
+            self._enqueue(
+                self._quality.process(indata, self.gain, self.noise_suppression).copy(),
+                time_info,
+            )
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
         processed = self._quality.process(indata, self.gain, self.noise_suppression)
-        if not self._paused: self._enqueue(processed.copy())
+        if not self._paused: self._enqueue(processed.copy(), time_info)
         outdata.fill(0)
         if self._monitoring_enabled:
             for channel in range(outdata.shape[1]): outdata[:, channel] = processed[:, 0]
@@ -203,9 +231,49 @@ class RecordingSession:
 
     def pause(self) -> None:
         self._paused = True
+        self._close_playback_segment()
+        with self._timeline_lock: self._last_capture_end_clock = None
 
     def resume(self) -> None:
+        with self._timeline_lock: self._last_capture_end_clock = None
         self._paused = False
+
+    def _timeline_time(self) -> float:
+        with self._timeline_lock:
+            frames, capture_end = self._timeline_frames, self._last_capture_end_clock
+        timeline = frames / float(self.sample_rate) if self.sample_rate else 0.0
+        if capture_end is None: return timeline
+        try:
+            stream_time = float(self._stream.time)
+        except (AttributeError, TypeError, ValueError):
+            return timeline
+        # PortAudio's ADC clock describes when the most recent input buffer was
+        # physically captured. Add only the small not-yet-delivered interval so
+        # a playback anchor refers to "now", rather than one input buffer ago.
+        pending = max(0.0, min(0.25, stream_time - capture_end))
+        return timeline + pending
+
+    def _close_playback_segment(self) -> None:
+        segment = self._active_playback_segment
+        if segment is None: return
+        segment["end_recording_sec"] = self._timeline_time()
+        self._active_playback_segment = None
+
+    def sync_playback(self, position_sec: float) -> None:
+        """Anchor the instrumental timeline to the microphone frame heard now."""
+        if self._closed: raise RuntimeError("Recording session is already closed")
+        if self._paused: raise RuntimeError("Recording session is paused")
+        self._close_playback_segment()
+        segment = {
+            "start_recording_sec": self._timeline_time(),
+            "start_playback_sec": max(0.0, float(position_sec)),
+        }
+        self._playback_segments.append(segment)
+        self._active_playback_segment = segment
+
+    @property
+    def playback_segments(self) -> list[dict[str, float]]:
+        return [dict(segment) for segment in self._playback_segments]
 
     def close(self) -> None:
         if self._closed: return
@@ -216,6 +284,8 @@ class RecordingSession:
 
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
         if self._closed: raise RuntimeError("Recording session is already closed")
+        self._paused = True
+        self._close_playback_segment()
         self._closed = True
         stream_error: BaseException | None = None
         try:
@@ -401,6 +471,10 @@ def pause_recording(session_id: str) -> None: _require_session(session_id).pause
 def resume_recording(session_id: str) -> None: _require_session(session_id).resume()
 
 
+def sync_recording(session_id: str, position_sec: float) -> None:
+    _require_session(session_id).sync_playback(position_sec)
+
+
 def stop_recording(session_id: str) -> models.Recording:
     with _sessions_lock:
         session = _sessions.pop(session_id, None)
@@ -430,13 +504,24 @@ def stop_recording(session_id: str) -> models.Recording:
         out_path = out_dir / filename
         try:
             duration_sec, sample_rate = session.stop_and_save(out_path)
+            playback_segments = session.playback_segments
+            first_segment = playback_segments[0] if playback_segments else None
+            playback_offset = (
+                float(first_segment["start_playback_sec"])
+                - float(first_segment["start_recording_sec"])
+                if first_segment else session.playback_offset_sec
+            )
             recording = models.Recording(
                 song_id=song.id,
                 filename=filename,
                 path=str(out_path),
                 duration_sec=duration_sec,
                 sample_rate=sample_rate,
-                playback_offset_sec=session.playback_offset_sec,
+                playback_offset_sec=playback_offset,
+                playback_segments_json=(
+                    json.dumps(playback_segments, separators=(",", ":"))
+                    if playback_segments else None
+                ),
             )
             db.add(recording)
             commit_refresh(db, recording)
@@ -447,9 +532,10 @@ def stop_recording(session_id: str) -> models.Recording:
         _create_performance_mix_safely(
             recording,
             song,
-            session.playback_offset_sec,
+            playback_offset,
             session.music_gain,
             session.effects,
+            playback_segments,
         )
         if recording.id:
             with _sessions_lock:
@@ -513,8 +599,40 @@ def _performance_mix_command(
     offset_sec: float,
     music_gain: float,
     effects: dict[str, float] | None,
+    playback_segments: list[dict[str, float]] | None = None,
 ) -> list[str]:
-    inputs, filters, performer_label = ['-ss', f'{offset_sec:.3f}', '-i', str(instrumental), '-i', recording.path], [f'[0:a]volume={music_gain:.6f}[music]', '[1:a]volume=1.000000[performer0]'], 'performer0'
+    valid_segments = []
+    for segment in playback_segments or []:
+        start = max(0.0, float(segment.get("start_recording_sec", 0)))
+        end = min(float(recording.duration_sec or 0), float(segment.get("end_recording_sec", start)))
+        if end - start >= 0.001:
+            valid_segments.append((start, max(0.0, float(segment.get("start_playback_sec", 0))), end - start))
+
+    if valid_segments:
+        inputs = ['-i', str(instrumental), '-i', recording.path]
+        filters = []
+        music_labels = []
+        for index, (recording_start, playback_start, duration) in enumerate(valid_segments):
+            label = f"music{index}"
+            filters.append(
+                f"[0:a]atrim=start={playback_start:.6f}:duration={duration:.6f},"
+                f"asetpts=PTS-STARTPTS,adelay={round(recording_start * 1000)}:all=1,"
+                f"volume={music_gain:.6f}[{label}]"
+            )
+            music_labels.append(label)
+        music_label = music_labels[0]
+        if len(music_labels) > 1:
+            filters.append(
+                "".join(f"[{label}]" for label in music_labels)
+                + f"amix=inputs={len(music_labels)}:duration=longest:normalize=0[music]"
+            )
+            music_label = "music"
+        filters.append('[1:a]volume=1.000000[performer0]')
+    else:
+        inputs = ['-ss', f'{offset_sec:.3f}', '-i', str(instrumental), '-i', recording.path]
+        filters = [f'[0:a]volume={music_gain:.6f}[music]', '[1:a]volume=1.000000[performer0]']
+        music_label = "music"
+    performer_label = 'performer0'
     for index, (name, amount) in enumerate((effects or {}).items(), start=1):
         next_label = f"performer{index}"
         effect = _effect_filter(name, amount, performer_label, next_label)
@@ -522,7 +640,10 @@ def _performance_mix_command(
         filters.append(effect)
         performer_label = next_label
     filters.append(
-        f"[music][{performer_label}]amix=inputs=2:duration=first:normalize=0,"
+        f"[{performer_label}]volume=1.650000,alimiter=limit=0.95[performer-final]"
+    )
+    filters.append(
+        f"[{music_label}][performer-final]amix=inputs=2:duration=first:normalize=0,"
         "alimiter=limit=0.95[mix]"
     )
     codec = ["-c:a", "pcm_s24le"] if destination.suffix.casefold() == ".wav" else [
@@ -549,9 +670,10 @@ def _create_performance_mix_safely(
     offset_sec: float,
     music_gain: float,
     effects: dict[str, float] | None = None,
+    playback_segments: list[dict[str, float]] | None = None,
 ) -> None:
     try:
-        _create_performance_mix(recording, song, offset_sec, music_gain, effects)
+        _create_performance_mix(recording, song, offset_sec, music_gain, effects, playback_segments)
     except Exception:  # noqa: BLE001 - the raw take is already committed and must remain usable
         logger.exception("Could not create performance mix for recording %s", recording.id)
 
@@ -562,6 +684,7 @@ def _create_performance_mix(
     offset_sec: float,
     music_gain: float,
     effects: dict[str, float] | None = None,
+    playback_segments: list[dict[str, float]] | None = None,
 ) -> None:
     ffmpeg = str(config.FFMPEG_EXE)
     if not song.output_dir: return
@@ -581,6 +704,7 @@ def _create_performance_mix(
             offset_sec,
             music_gain,
             effects,
+            playback_segments,
         )
         try:
             subprocess.run(command, capture_output=True, check=True, timeout=90)

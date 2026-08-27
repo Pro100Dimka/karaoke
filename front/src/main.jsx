@@ -20,3 +20,33 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+const waitForBackdrop = () =>
+  new Promise((resolve) => {
+    const value = getComputedStyle(document.documentElement).getPropertyValue("--bg-image");
+    const source = value.match(/url\((['"]?)(.*?)\1\)/)?.[2];
+    if (!source) {
+      resolve();
+      return;
+    }
+
+    const image = new Image();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = setTimeout(finish, 3500);
+    image.onload = finish;
+    image.onerror = finish;
+    image.src = source;
+    image.decode?.().then(finish, () => {});
+  });
+
+// Electron keeps the native window hidden until the theme backdrop is decoded.
+// Two frames also let the browser commit the background before the first show.
+waitForBackdrop()
+  .then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  .then(() => platform.recordStartupMilestone("visual-ready"));

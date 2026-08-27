@@ -131,13 +131,26 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
     )
     assert (command[command.index('-ss') + 1] == '1.250') and (command[command.index('-t') + 1] == '12.500')
     filters = command[command.index("-filter_complex") + 1]
-    assert ('volume=0.800000' in filters) and ('aecho' in filters) and (command[-4:] == ['libmp3lame', '-b:a', '320k', str(tmp_path / 'mix.mp3')])
+    assert ('volume=0.800000' in filters) and ('volume=1.650000' in filters) and ('aecho' in filters) and (command[-4:] == ['libmp3lame', '-b:a', '320k', str(tmp_path / 'mix.mp3')])
 
     wav_command = recording_service._performance_mix_command(
         "ffmpeg", current, tmp_path / "instrumental.mp3", tmp_path / "mix.wav",
         0, 1, {},
     )
     assert wav_command[-3:] == ["-c:a", "pcm_s24le", str(tmp_path / "mix.wav")]
+
+    synchronized = recording_service._performance_mix_command(
+        "ffmpeg", current, tmp_path / "instrumental.mp3", tmp_path / "sync.wav",
+        0, 0.8, {}, [
+            {"start_recording_sec": 0.125, "start_playback_sec": 4.5, "end_recording_sec": 5.0},
+            {"start_recording_sec": 5.25, "start_playback_sec": 12.0, "end_recording_sec": 8.0},
+        ],
+    )
+    synchronized_filters = synchronized[synchronized.index("-filter_complex") + 1]
+    assert "-ss" not in synchronized
+    assert "atrim=start=4.500000:duration=4.875000" in synchronized_filters
+    assert "adelay=125:all=1" in synchronized_filters
+    assert "amix=inputs=2:duration=longest" in synchronized_filters
 
 
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):

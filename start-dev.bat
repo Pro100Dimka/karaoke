@@ -53,6 +53,11 @@ for %%F in ("%AI%" "%ASIO%") do if not exist "%%~F" (
     goto :err
 )
 
+if "%PREPARE_ONLY%"=="0" (
+    call :stop_dev_processes
+    if errorlevel 1 goto :err
+)
+
 mkdir "%JOBS%" >nul 2>&1 || goto :err
 
 call :start_job front "%FRONT%" "" "%FRONT_LOG%" "%FRONT_RC%"
@@ -119,19 +124,6 @@ echo.
 call :start_job ai "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%"
 
 rem ============================================================================
-rem PORTS
-rem ============================================================================
-
-if "%PREPARE_ONLY%"=="0" (
-    echo Stopping processes on development ports 18000 and 5173...
-
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$p=18000,5173;$seen=@{};foreach($x in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)){if($p -contains $x.LocalPort){$owner=[string]$x.OwningProcess;if(-not $seen.ContainsKey($owner)){$seen[$owner]=$true;taskkill.exe /PID $owner /T /F}}}"
-
-    if errorlevel 1 echo [WARN] Could not fully clean development ports.
-)
-
-rem ============================================================================
 rem WAIT
 rem ============================================================================
 
@@ -178,6 +170,25 @@ for /f %%V in ('node -p "process.versions.node"') do set "NODE_VER=%%V"
 node -e "const [a,b,c]=process.versions.node.split('.').map(Number);const ok=(a===22&&(b>18||b===18&&c>=0))||(a===24&&(b>11||b===11&&c>=0))||a>24;process.exit(ok?0:1)" || (echo [ERROR] Node.js 22.18+ ^(or 24.11+^) is required. Found !NODE_VER! & goto :err)
 call npm run dev:electron
 exit /b %errorlevel%
+
+rem ============================================================================
+rem STOP PREVIOUS DEVELOPMENT INSTANCE
+rem ============================================================================
+
+:stop_dev_processes
+echo Stopping previous A^&D Voice development processes...
+set "ADVOICE_DEV_ROOT=%ROOT%"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"$p=18000,5173;$root=[IO.Path]::GetFullPath($env:ADVOICE_DEV_ROOT).TrimEnd('\');$names=@('node.exe','electron.exe','python.exe','pythonw.exe');function Get-Targets{$ids=[Collections.Generic.HashSet[int]]::new();foreach($proc in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)){if($names -notcontains [string]$proc.Name){continue};$exe=[string]$proc.ExecutablePath;$cmd=[string]$proc.CommandLine;$owned=$exe.StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase)-or $cmd.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge 0;$editorTool=$cmd.IndexOf('\.vscode\extensions\',[StringComparison]::OrdinalIgnoreCase)-ge 0;if($owned -and -not $editorTool){[void]$ids.Add([int]$proc.ProcessId)}};foreach($x in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)){if($p -contains [int]$x.LocalPort){[void]$ids.Add([int]$x.OwningProcess)}};return @($ids)};for($pass=0;$pass -lt 3;$pass++){$targets=@(Get-Targets);if($targets.Count -eq 0){break};foreach($target in $targets){if($target -gt 4 -and $target -ne $PID -and (Get-Process -Id $target -ErrorAction SilentlyContinue)){Start-Process -FilePath taskkill.exe -ArgumentList '/PID',([string]$target),'/T','/F' -Wait -WindowStyle Hidden}};Start-Sleep -Milliseconds 350};$left=@(Get-Targets);if($left.Count -gt 0){Write-Host ('[ERROR] Could not stop process IDs: '+($left -join ', '));exit 1}"
+
+set "STOP_RC=%errorlevel%"
+set "ADVOICE_DEV_ROOT="
+if not "%STOP_RC%"=="0" exit /b %STOP_RC%
+
+echo Previous development processes stopped.
+echo.
+exit /b 0
 
 rem ============================================================================
 rem START JOB

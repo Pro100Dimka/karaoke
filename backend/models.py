@@ -81,6 +81,7 @@ class Recording(Base):
     duration_sec: Mapped[float | None] = mapped_column(Float)
     sample_rate: Mapped[int | None] = mapped_column(Integer)
     playback_offset_sec: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    playback_segments_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     song: Mapped[Song] = relationship(back_populates="recordings")
@@ -96,6 +97,10 @@ class AnalysisResult(Base):
     recording_id: Mapped[str] = mapped_column(ForeignKey("recordings.id"), unique=True)
     pitch_accuracy_percent: Mapped[float | None] = mapped_column(Float)
     mean_deviation_semitones: Mapped[float | None] = mapped_column(Float)
+    rhythm_accuracy_percent: Mapped[float | None] = mapped_column(Float)
+    note_hold_percent: Mapped[float | None] = mapped_column(Float)
+    note_coverage_percent: Mapped[float | None] = mapped_column(Float)
+    overall_score_percent: Mapped[float | None] = mapped_column(Float)
     sections_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 

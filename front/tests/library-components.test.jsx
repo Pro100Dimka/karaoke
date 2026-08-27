@@ -32,7 +32,8 @@ vi.mock("../src/components/AudioPlayer", () => ({
 vi.mock("../src/api/client", () => ({
   api: {
     getPerformanceFileUrl: (id) => `recording/${id}`,
-    getSongCoverUrl: (id) => `cover/${id}`
+    getSongCoverUrl: (id) => `cover/${id}`,
+    getAudioTrackUrl: (id, track) => `song/${id}/${track}`
   }
 }));
 import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";

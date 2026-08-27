@@ -1,6 +1,5 @@
 @layer ui.components {
   .ui-processing-signal {
-    --processing-progress: 0%;
     position: relative;
     display: grid;
     inline-size: 100%;
@@ -11,37 +10,8 @@
     border-radius: var(--shape-md);
   }
 
-  .ui-processing-signal svg {
-    display: block;
+  .ui-processing-signal .ui-waveform {
     inline-size: 100%;
-    block-size: var(--space-12);
-    overflow: visible;
-  }
-
-  .ui-processing-signal__muted {
-    fill: color-mix(in srgb, var(--color-primary) 22%, transparent);
-    filter: drop-shadow(
-      0 0 var(--space-1) color-mix(in srgb, var(--color-primary) 18%, transparent)
-    );
-  }
-
-  .ui-processing-signal__active {
-    clip-path: inset(0 calc(100% - var(--processing-progress)) 0 0);
-    filter: drop-shadow(
-      0 0 var(--space-2) color-mix(in srgb, var(--color-primary-hover) 58%, transparent)
-    );
-    transition: clip-path var(--motion-duration-slow) var(--motion-easing-standard);
-  }
-
-  .ui-processing-signal__cursor {
-    position: absolute;
-    inset-block: var(--space-2);
-    inset-inline-start: var(--processing-progress);
-    inline-size: var(--hairline);
-    transform: translateX(-50%);
-    background: color-mix(in srgb, var(--color-highlight) 82%, transparent);
-    box-shadow: 0 0 var(--space-2) var(--color-primary-hover);
-    transition: inset-inline-start var(--motion-duration-slow) var(--motion-easing-standard);
   }
 
   .ui-processing-signal strong {
@@ -57,11 +27,4 @@
     min-block-size: var(--space-8);
   }
 
-  .ui-processing-signal[data-compact] svg {
-    block-size: var(--space-8);
-  }
-
-  .ui-processing-signal[data-compact] .ui-processing-signal__cursor {
-    inset-block: var(--space-1);
-  }
 }

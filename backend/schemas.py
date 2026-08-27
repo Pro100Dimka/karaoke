@@ -243,6 +243,10 @@ class AnalysisOut(ORMModel):
     recording_id: str
     pitch_accuracy_percent: float | None = None
     mean_deviation_semitones: float | None = None
+    rhythm_accuracy_percent: float | None = None
+    note_hold_percent: float | None = None
+    note_coverage_percent: float | None = None
+    overall_score_percent: float | None = None
     sections: list[dict[str, Any]] | None = None
     created_at: datetime
 

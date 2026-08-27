@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({
   startRecording: vi.fn(),
   pauseRecording: vi.fn(),
   resumeRecording: vi.fn(),
+  syncRecording: vi.fn(),
   stopRecording: vi.fn()
 }));
 vi.mock("../src/api/client", () => ({ api }));
@@ -57,6 +58,7 @@ beforeEach(async () => {
   api.startRecording.mockResolvedValue({ recording_session_id: "session" });
   api.pauseRecording.mockResolvedValue({});
   api.resumeRecording.mockResolvedValue({});
+  api.syncRecording.mockResolvedValue({ status: "synchronized" });
   api.stopRecording.mockResolvedValue({ id: "recording" });
 });
 describe("karaoke transport", () => {
@@ -74,6 +76,7 @@ describe("karaoke transport", () => {
     expect(props.vocalsRef.current.play).toHaveBeenCalledOnce();
     expect(props.videoRef.current.play).toHaveBeenCalledOnce();
     expect(props.startMelodyGuide).toHaveBeenCalledOnce();
+    expect(api.syncRecording).toHaveBeenCalledWith("session", 4);
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(1, 4, true);
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(2, 4, true);
     verify([props.instrumentalRef.current.volume, "toBeCloseTo", 0.64], [props.vocalsRef.current.volume, "toBeCloseTo", 0.49]);

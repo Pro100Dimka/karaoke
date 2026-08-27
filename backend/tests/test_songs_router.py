@@ -257,6 +257,9 @@ def test_process_reprocess_status_and_cancel(monkeypatch):
 def test_logs_and_audio_track_resolution(monkeypatch, tmp_path):
     current = domain_song()
     monkeypatch.setattr(songs.song_service, "resolve_output_dir", Mock(return_value=tmp_path))
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"source audio")
+    monkeypatch.setattr(songs.song_service, "resolve_source_path", Mock(return_value=source))
     monkeypatch.setattr(songs.config, "APP_LOG_DIR", tmp_path)
     assert songs.get_processing_log(current) == {"lines": []}
     log = tmp_path / "application.log"
@@ -267,6 +270,7 @@ def test_logs_and_audio_track_resolution(monkeypatch, tmp_path):
     vocals = tmp_path / "vocals.flac"
     vocals.write_bytes(b"audio")
     assert songs.get_audio_track("vocals", current).media_type == "audio/flac"
+    assert songs.get_audio_track("song", current).media_type == "audio/mpeg"
     diagnostic = tmp_path / "diagnostic.mp3"
     diagnostic.write_bytes(b"audio")
     raises(HTTPException, lambda: songs.get_audio_track("diagnostic", current))

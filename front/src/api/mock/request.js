@@ -163,6 +163,7 @@ export async function mockRequest(path, options = {}) {
   if (pathname.startsWith("/audio/direct-monitor/")) return { ok: true };
 
   if (pathname === "/recording/start") return { recording_session_id: "mock-session-1" };
+  if (pathname === "/recording/sync") return { status: "synchronized" };
   if (pathname === "/recording/stop") {
     const recording = {
       id: `mock-recording-${store.recordings.length + 1}`,
@@ -183,9 +184,27 @@ export async function mockRequest(path, options = {}) {
     return null;
   }
 
-  if (/^\/analysis\/[^/]+\/run$/.test(pathname)) return { queued: true };
+  if (/^\/analysis\/[^/]+\/run$/.test(pathname)) {
+    return {
+      pitch_accuracy_percent: 82,
+      rhythm_accuracy_percent: 76,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 82.1,
+      mean_deviation_semitones: 0.32,
+      sections: []
+    };
+  }
   if (/^\/analysis\/[^/]+$/.test(pathname)) {
-    return { accuracy_percent: 82, average_deviation_cents: 18, sections: [] };
+    return {
+      pitch_accuracy_percent: 82,
+      rhythm_accuracy_percent: 76,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 82.1,
+      mean_deviation_semitones: 0.32,
+      sections: []
+    };
   }
 
   if (pathname.startsWith("/cache/")) return { ok: true };

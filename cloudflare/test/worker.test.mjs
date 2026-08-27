@@ -128,7 +128,7 @@ test("stores a plain-text log message under a sanitized per-user key", async () 
   );
   assert.equal(response.status, 200);
   const [key] = [...bucket.objects.keys()];
-  assert.match(key, /^logs\/Studio PC\/.+\.log$/);
+  assert.match(key, /^Studio PC\/.+\.log$/);
   assert.equal(bucket.objects.get(key), "something went wrong");
 });
 
@@ -144,7 +144,7 @@ test("stores installed-backend warning batches using the device id", async () =>
   );
   assert.equal(response.status, 200);
   const [key] = [...bucket.objects.keys()];
-  assert.match(key, /^logs\/pc-abcdef123456\/.+\.json$/);
+  assert.match(key, /^pc-abcdef123456\/.+\.json$/);
   assert.deepEqual(JSON.parse(bucket.objects.get(key)).events, [
     { timestamp: "2026-08-27T00:00:00Z", level: "WARNING", message: "warning" },
   ]);

@@ -38,7 +38,21 @@ def test_development_launch_uses_browser_compatible_isolated_ports():
         'set "SONGAPP_API_TOKEN=advoice-local-development"',
         'set "VITE_API_TOKEN=advoice-local-development"',
         '"$p=18000,5173;',
+        "Get-CimInstance Win32_Process",
+        "'node.exe','electron.exe','python.exe','pythonw.exe'",
+        "Start-Process -FilePath taskkill.exe",
+        "-ArgumentList '/PID',([string]$target),'/T','/F'",
     )
+    assert script.index("call :stop_dev_processes") < script.index("call :start_job front")
+
+
+def test_prepare_only_does_not_stop_running_development_instance():
+    script = project_text("start-dev.bat", encoding="utf-8-sig")
+    cleanup_guard = script.index('if "%PREPARE_ONLY%"=="0" (')
+    cleanup_call = script.index("call :stop_dev_processes")
+    assert cleanup_guard < cleanup_call
+    assert "*> $null" not in script
+    assert "\\.vscode\\extensions\\" in script
 
 
 def test_build_installer_prepares_gitignored_downloads_before_build():

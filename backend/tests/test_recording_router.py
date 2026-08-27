@@ -105,8 +105,10 @@ def test_start_recording_translates_missing_song_and_audio_failure(monkeypatch):
 
 
 def test_recording_actions_and_stop_error_mapping(monkeypatch):
-    patch_attrs(monkeypatch, recording.recording_service, pause_recording=Mock(), resume_recording=Mock())
+    patch_attrs(monkeypatch, recording.recording_service, pause_recording=Mock(), resume_recording=Mock(), sync_recording=Mock())
     assert (recording.pause_recording('session') == {'status': 'paused'}) and (recording.resume_recording('session') == {'status': 'recording'})
+    assert recording.sync_recording("session", 3.25) == {"status": "synchronized"}
+    recording.recording_service.sync_recording.assert_called_once_with("session", 3.25)
 
     database, saved = Mock(), object()
     stop = Mock(return_value=saved)

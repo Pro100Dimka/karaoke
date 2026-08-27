@@ -90,15 +90,34 @@ describe("analysis normalization and feedback", () => {
   });
   test("normalizes result shape and removes malformed sections", () => {
     for (const result of [null, false, "bad"])
-      deepEqual([normalizeAnalysisResult(result), { pitch_accuracy_percent: null, mean_deviation_semitones: null, sections: [] }]);
+      deepEqual([
+        normalizeAnalysisResult(result),
+        {
+          pitch_accuracy_percent: null,
+          rhythm_accuracy_percent: null,
+          note_hold_percent: null,
+          note_coverage_percent: null,
+          overall_score_percent: null,
+          mean_deviation_semitones: null,
+          sections: []
+        }
+      ]);
     deepEqual([normalizeAnalysisResult({ sections: "bad" }).sections, []]);
     const normalized = normalizeAnalysisResult({
       pitch_accuracy_percent: 120,
+      rhythm_accuracy_percent: 72,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 84,
       mean_deviation_semitones: "2",
       sections: [null, "bad", { label: " best ", start: 1, end: 2, accuracy_percent: 90 }, { start: 3, end: 2, accuracy_percent: -2 }]
     });
     equal(
       [normalized.pitch_accuracy_percent, 100],
+      [normalized.rhythm_accuracy_percent, 72],
+      [normalized.note_hold_percent, 88],
+      [normalized.note_coverage_percent, 91],
+      [normalized.overall_score_percent, 84],
       [normalized.mean_deviation_semitones, 2],
       [normalized.sections.length, 2],
       [normalized.sections[0].label, "best"],

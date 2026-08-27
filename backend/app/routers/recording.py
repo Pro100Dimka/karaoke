@@ -113,6 +113,13 @@ def resume_recording(session_id: str):
     return _change_session_state(session_id, recording_service.resume_recording, "recording")
 
 
+@router.post("/sync")
+def sync_recording(session_id: str, position_sec: float):
+    with http_error(KeyError, 404), http_error(RuntimeError, 409):
+        recording_service.sync_recording(session_id, position_sec)
+    return {"status": "synchronized"}
+
+
 @router.post("/stop", response_model=schemas.RecordingOut)
 def stop_recording(session_id: str, db: Session = Depends(get_db)):
     # Monitoring must be restored no matter how this ends — success, a mapped
