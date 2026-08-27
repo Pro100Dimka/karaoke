@@ -7,7 +7,7 @@ import {
   SlidersHorizontal,
   UsersRound
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
@@ -49,6 +49,7 @@ export default function LibraryActions({
   setQuery
 }) {
   const [open, setOpen] = useState(false);
+  const filterButtonRef = useRef(null);
   const [draft, setDraft] = useState(filters);
   useEffect(() => setDraft(filters), [filters]);
 
@@ -86,6 +87,7 @@ export default function LibraryActions({
           startAdornment={<Search aria-hidden="true" />}
           endAdornment={
             <IconButton
+              ref={filterButtonRef}
               icon={SlidersHorizontal}
               variant={open ? "contained" : "outline"}
               label={tr("Фильтры и сортировка")}
@@ -129,11 +131,12 @@ export default function LibraryActions({
 
       <Popover
         open={open}
+        anchorRef={filterButtonRef}
+        placement="bottom-end"
         onClose={() => setOpen(false)}
         role="dialog"
         aria-label={tr("Фильтры и сортировка")}
         style={{
-          insetBlockStart: "calc(100% + var(--space-3))",
           padding: "var(--space-6)",
           boxShadow: "var(--shadow-lg)"
         }}

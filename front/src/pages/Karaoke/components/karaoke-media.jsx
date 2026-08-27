@@ -106,7 +106,8 @@ export default function KaraokeMedia({
             inlineSize: "100%",
             blockSize: "100%",
             border: 0,
-            opacity: 0,
+            zIndex: 0,
+            opacity: 1,
             pointerEvents: "none"
           }}
         />
@@ -124,7 +125,8 @@ export default function KaraokeMedia({
             inlineSize: "100%",
             blockSize: "100%",
             objectFit: "cover",
-            opacity: 0,
+            zIndex: 0,
+            opacity: 1,
             pointerEvents: "none"
           }}
         />

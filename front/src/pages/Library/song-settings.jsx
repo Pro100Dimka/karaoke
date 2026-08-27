@@ -2,6 +2,7 @@ import { Music2, Piano, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
+import { genreOptions } from "../../constants/music-genres";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../hooks/usePolling";
@@ -40,7 +41,7 @@ export const SONG_FIELDS = [
   }),
   field("tempo_override", "number", tr("Темп"), THIRD, { min: 1, parse: "nullable-number" }),
   field("key_override", "text", tr("Тональность"), THIRD, { placeholder: tr("напр. C#m") }),
-  field("genre", "text", tr("Жанр"), THIRD, { placeholder: "Alternative rock" }),
+  field("genre", "select", tr("Жанр"), THIRD, { options: genreOptions() }),
   field("difficulty_override", "select", tr("Сложность"), HALF, { options: DIFFICULTY_OPTIONS }),
   {
     name: "note_range",
@@ -153,7 +154,15 @@ export default function SongSettings({ songId, onClose }) {
     <Typography tone="muted">{tr("Подготавливаем настройки…")}</Typography>
   ) : (
     <Stack gap={1}>
-      <ConfigForm fields={SONG_FIELDS} context={{ form, onChange: update }} columns={12} />
+      <ConfigForm
+        fields={SONG_FIELDS.map((definition) =>
+          definition.name === "genre"
+            ? { ...definition, options: genreOptions(form.genre) }
+            : definition
+        )}
+        context={{ form, onChange: update }}
+        columns={12}
+      />
       {song.status === "done" && (
         <CardEditor
           onClick={() => {

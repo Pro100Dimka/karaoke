@@ -87,6 +87,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
             gain=body.microphone_volume,
             monitoring_enabled=settings.monitoring_enabled and not keep_native_monitor,
             playback_offset_sec=body.position_sec,
+            playback_latency_sec=max(0, getattr(settings, "latency_ms", 50)) / 1000.0,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
             effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},

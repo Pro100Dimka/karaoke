@@ -1,5 +1,5 @@
 import { Ellipsis } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
@@ -31,6 +31,7 @@ const statusText = {
 const LibrarySongCard = memo(
   ({ cardIndex = 0, song, transferStatus, onOpenKaraoke, onOpenProcessing, ...handlers }) => {
     const [menuOpen, setMenuOpen] = useState(false);
+    const menuButtonRef = useRef(null);
     const token = platform.apiToken();
     const waveformFetchParams = useMemo(
       () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
@@ -171,6 +172,7 @@ const LibrarySongCard = memo(
                 {overflowActions.length > 0 && (
                   <Box sx={{ position: "relative" }}>
                     <IconButton
+                      ref={menuButtonRef}
                       icon={Ellipsis}
                       variant="contained"
                       label={tr("Другие действия")}
@@ -185,12 +187,12 @@ const LibrarySongCard = memo(
                     />
                     <Popover
                       open={menuOpen}
+                      anchorRef={menuButtonRef}
+                      placement="bottom-end"
                       onClose={() => setMenuOpen(false)}
                       aria-label={tr("Другие действия с песней {0}", { 0: song.title })}
                       role="menu"
                       style={{
-                        insetInlineEnd: 0,
-                        insetBlockStart: "calc(100% + var(--space-2))",
                         minWidth: "auto"
                       }}
                     >

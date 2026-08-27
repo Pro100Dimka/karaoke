@@ -87,6 +87,7 @@ describe("application shell", () => {
     expect(mocks.radio.toggle).toHaveBeenCalled();
     mocks.radio.isPlaying = true;
     rerender(<AppLayout />);
+    fireEvent.pointerEnter(getByLabelText("radio.disable:Radio"));
     fireEvent.change(getByRole("slider"), {
       target: { value: "0.7" }
     });
@@ -166,10 +167,7 @@ describe("application shell", () => {
     mocks.getHealth.mockResolvedValue({ ok: true });
     fireEvent.click(view.getByText("backend.retry"));
     await act(async () => Promise.resolve());
-    verify(
-      [mocks.getHealth, "toHaveBeenCalledTimes", 161],
-      [view.getByText("ready-after-manual-retry"), "not.toBeNull"]
-    );
+    verify([mocks.getHealth, "toHaveBeenCalledTimes", 161], [view.getByText("ready-after-manual-retry"), "not.toBeNull"]);
   });
   test("backend loader explains a slow first launch before giving up", async () => {
     vi.useFakeTimers();

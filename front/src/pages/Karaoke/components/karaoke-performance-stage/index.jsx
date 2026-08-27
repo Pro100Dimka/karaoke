@@ -21,6 +21,7 @@ export default function KaraokePerformanceStage({
   keyShift,
   monitorInputDeviceId,
   monitoringEnabled,
+  hasSongClip = false,
   showLyrics,
   showNotes,
   notes = []
@@ -72,10 +73,10 @@ export default function KaraokePerformanceStage({
         position: "absolute",
         inset: 0,
         overflow: "hidden",
-        background: "var(--color-bg-deep)"
+        background: hasSongClip ? "transparent" : "var(--color-bg-deep)"
       }}
     >
-      {sceneVideo ? (
+      {!hasSongClip && sceneVideo ? (
         <Box
           as="video"
           ref={videoRef}
@@ -97,7 +98,7 @@ export default function KaraokePerformanceStage({
             transition: "opacity var(--motion-duration-normal) var(--motion-easing-standard)"
           }}
         />
-      ) : (
+      ) : !hasSongClip ? (
         <>
           <Box
             ref={panoramaRef}
@@ -113,7 +114,7 @@ export default function KaraokePerformanceStage({
           />
           <AuroraWorld seed={seed} />
         </>
-      )}
+      ) : null}
       {showNotes && notes.length > 0 && (
         <MelodyRoll
           notes={notes}

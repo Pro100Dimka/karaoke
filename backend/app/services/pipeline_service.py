@@ -29,6 +29,7 @@ from app.services import (
     ai_bridge,
     app_settings_service,
     cache_service,
+    metadata_enrichment_service,
     model_install_service,
     revision_cache,
     song_service,
@@ -655,6 +656,7 @@ def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
     try:
         if not _is_cancelled(song_id):
             with song_service.library_write_lock(): _finalize_success(song_id, out_dir)
+            metadata_enrichment_service.enqueue(song_id)
     except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
         _update_progress(
             song_id,

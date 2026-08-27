@@ -152,6 +152,18 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
     assert "adelay=125:all=1" in synchronized_filters
     assert "amix=inputs=2:duration=longest" in synchronized_filters
 
+    compensated = recording_service._performance_mix_command(
+        "ffmpeg", current, tmp_path / "instrumental.mp3", tmp_path / "latency.wav",
+        0, 1, {}, [{
+            "start_recording_sec": 0.01,
+            "start_playback_sec": -0.04,
+            "end_recording_sec": 2.0,
+        }],
+    )
+    compensated_filters = compensated[compensated.index("-filter_complex") + 1]
+    assert "atrim=start=0.000000" in compensated_filters
+    assert "adelay=50:all=1" in compensated_filters
+
 
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):
     assert recording_service._find_instrumental(tmp_path) is None

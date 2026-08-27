@@ -36,7 +36,7 @@ def _playback_segments(recording: models.Recording) -> list[dict[str, float]]:
             playback = float(value["start_playback_sec"])
         except (KeyError, TypeError, ValueError):
             continue
-        if start >= 0 and end > start and playback >= 0:
+        if start >= 0 and end > start:
             segments.append({
                 "start_recording_sec": start,
                 "end_recording_sec": end,

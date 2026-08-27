@@ -10,8 +10,6 @@
   .ui-waveform__fallback {
     position: absolute;
     inset: 0;
-    inline-size: 100%;
-    block-size: 100%;
     filter: drop-shadow(0 0 0.22rem color-mix(in srgb, var(--color-primary) 78%, transparent));
   }
 

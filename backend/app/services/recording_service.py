@@ -53,6 +53,7 @@ class RecordingSession:
         gain: float,
         monitoring_enabled: bool,
         playback_offset_sec: float = 0,
+        playback_latency_sec: float = 0,
         blocksize: int = 64,
         music_gain: float = 1.0,
         effects: dict[str, float] | None = None,
@@ -69,7 +70,8 @@ class RecordingSession:
             name: clamp01(float((effects or {}).get(name, 0.0)))
             for name in ("reverb", "echo", "delay")
         }
-        self.playback_offset_sec = max(0.0, playback_offset_sec)
+        self.playback_latency_sec = max(0.0, min(1.0, float(playback_latency_sec)))
+        self.playback_offset_sec = max(0.0, float(playback_offset_sec)) - self.playback_latency_sec
         self._max_frames = int(round(sample_rate * config.MAX_RECORDING_DURATION_SECONDS))
         self.limit_reached = threading.Event()
         # Bounded so a stalled/dead writer can't make the audio callback pile up
@@ -266,7 +268,11 @@ class RecordingSession:
         self._close_playback_segment()
         segment = {
             "start_recording_sec": self._timeline_time(),
-            "start_playback_sec": max(0.0, float(position_sec)),
+            # HTMLMediaElement.currentTime is ahead of what reaches the user's
+            # ears by the configured Windows/output-buffer latency. Anchor the
+            # take to the audible position, including a negative value at the
+            # very start so the final mix can delay the instrumental instead.
+            "start_playback_sec": float(position_sec) - self.playback_latency_sec,
         }
         self._playback_segments.append(segment)
         self._active_playback_segment = segment
@@ -366,6 +372,7 @@ def start_recording(
     gain: float = 1.0,
     monitoring_enabled: bool = False,
     playback_offset_sec: float = 0,
+    playback_latency_sec: float = 0,
     blocksize: int = 64,
     music_gain: float = 1.0,
     effects: dict[str, float] | None = None,
@@ -390,6 +397,7 @@ def start_recording(
                 gain,
                 monitor,
                 playback_offset_sec,
+                playback_latency_sec,
                 frames,
                 music_gain,
                 effects,
@@ -606,7 +614,7 @@ def _performance_mix_command(
         start = max(0.0, float(segment.get("start_recording_sec", 0)))
         end = min(float(recording.duration_sec or 0), float(segment.get("end_recording_sec", start)))
         if end - start >= 0.001:
-            valid_segments.append((start, max(0.0, float(segment.get("start_playback_sec", 0))), end - start))
+            valid_segments.append((start, float(segment.get("start_playback_sec", 0)), end - start))
 
     if valid_segments:
         inputs = ['-i', str(instrumental), '-i', recording.path]
@@ -614,9 +622,11 @@ def _performance_mix_command(
         music_labels = []
         for index, (recording_start, playback_start, duration) in enumerate(valid_segments):
             label = f"music{index}"
+            audible_start = max(0.0, playback_start)
+            delay_ms = round((recording_start + max(0.0, -playback_start)) * 1000)
             filters.append(
-                f"[0:a]atrim=start={playback_start:.6f}:duration={duration:.6f},"
-                f"asetpts=PTS-STARTPTS,adelay={round(recording_start * 1000)}:all=1,"
+                f"[0:a]atrim=start={audible_start:.6f}:duration={duration:.6f},"
+                f"asetpts=PTS-STARTPTS,adelay={delay_ms}:all=1,"
                 f"volume={music_gain:.6f}[{label}]"
             )
             music_labels.append(label)

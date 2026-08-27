@@ -1,5 +1,5 @@
 import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { Box, IconButton, Popover, Slider, Stack, Typography } from "../theme/ui";
 import LiveSignalWaveform from "./LiveSignalWaveform";
@@ -26,6 +26,17 @@ export default function OnlineRoomParticipant({
 }) {
   const { t } = useI18n();
   const [volumeOpen, setVolumeOpen] = useState(false);
+  const volumeAnchorRef = useRef(null);
+  const closeTimerRef = useRef(null);
+  const openVolume = () => {
+    clearTimeout(closeTimerRef.current);
+    setVolumeOpen(true);
+  };
+  const closeVolumeSoon = () => {
+    clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setVolumeOpen(false), 120);
+  };
+  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
 
   const self = person.id === room.selfId;
 
@@ -105,14 +116,15 @@ export default function OnlineRoomParticipant({
         ) : (
           <>
             <Box
+              ref={volumeAnchorRef}
               sx={{
                 position: "relative",
                 display: "inline-flex",
                 alignItems: "center",
                 overflow: "visible"
               }}
-              onMouseEnter={() => setVolumeOpen(true)}
-              onMouseLeave={() => setVolumeOpen(false)}
+              onMouseEnter={openVolume}
+              onMouseLeave={closeVolumeSoon}
             >
               <IconButton
                 icon={isLocallyMuted ? VolumeX : Volume2}
@@ -129,20 +141,13 @@ export default function OnlineRoomParticipant({
 
               <Popover
                 open={volumeOpen}
+                anchorRef={volumeAnchorRef}
+                placement="right"
                 onClose={() => setVolumeOpen(false)}
+                onMouseEnter={openVolume}
+                onMouseLeave={closeVolumeSoon}
                 style={{
-                  position: "absolute",
-
-                  top: "50%",
-                  left: "calc(100% + var(--space-2))",
-
-                  right: "auto",
-                  bottom: "auto",
-
-                  transform: "translateY(-50%)",
-
                   padding: "var(--space-4)",
-
                   boxShadow: "var(--shadow-lg)"
                 }}
               >

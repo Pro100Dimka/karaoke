@@ -361,7 +361,15 @@ export function RecordingsModal({ song, recordings = [], error, onAnalyze, onClo
     >
       <Stack gap={0.75} sx={{ padding: "var(--space-5)" }}>
         {recordings.map((recording) => (
-          <Card key={recording.id} sx={{ padding: "var(--space-3)" }}>
+          <Card
+            key={recording.id}
+            sx={{
+              padding: "var(--space-3)",
+              background: "unset",
+              border: "unset",
+              boxShadow: "unset"
+            }}
+          >
             <Stack direction="row" align="center" gap={0.75}>
               <Box sx={{ flex: 1 }}>
                 <AudioPlayer

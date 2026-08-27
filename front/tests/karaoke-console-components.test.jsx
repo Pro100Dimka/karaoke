@@ -30,6 +30,18 @@ vi.mock("../src/theme/ui", () => ({
       onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
     />
   ),
+  Switch: ({ label, checked, onChange, ...props }) => (
+    <label>
+      {label}
+      <input
+        {...props}
+        type="checkbox"
+        aria-label={label}
+        checked={Boolean(checked)}
+        onChange={(event) => onChange?.(event.target.checked)}
+      />
+    </label>
+  ),
   Stack: passthrough("div"),
   Grid: passthrough("div"),
   Typography: passthrough("span"),
@@ -183,6 +195,7 @@ test("mixer changes and commits volumes and effects", () => {
   const microphone = vi.fn();
   const commit = vi.fn();
   const effect = vi.fn();
+  const monitoring = vi.fn();
   const view = render(
     <MixerPanel
       microphoneLevel={2}
@@ -191,6 +204,8 @@ test("mixer changes and commits volumes and effects", () => {
       onMicrophoneCommit={commit}
       microphoneEffects={{ echo: 0.1, reverb: 0.2, delay: 0.3 }}
       onEffectChange={effect}
+      monitoringEnabled
+      onMonitoringChange={monitoring}
     />
   );
   const { container } = view;
@@ -205,8 +220,10 @@ test("mixer changes and commits volumes and effects", () => {
   fireEvent.change(container.querySelector(".karaoke-effect-dial input"), {
     target: { value: "0.6" }
   });
+  fireEvent.click(view.getByLabelText(/Чую себе|Слышу себя/));
   expect(microphone).toHaveBeenCalledWith(0.8);
   called(commit, effect);
+  expect(monitoring).toHaveBeenCalledWith(false);
   view.rerender(
     <MixerPanel
       microphoneLevel={0}
@@ -217,11 +234,10 @@ test("mixer changes and commits volumes and effects", () => {
     />
   );
 });
-test("tools toggle visibility, monitoring, auto-hide, settings and presets", () => {
+test("tools toggle visibility, auto-hide, settings and presets", () => {
   const handlers = {
     onToggleNotes: vi.fn(),
     onToggleLyrics: vi.fn(),
-    onMonitoringChange: vi.fn(),
     onAutoHideChange: vi.fn(),
     onOpenAppSettings: vi.fn(),
     onApplyEffectPreset: vi.fn()
@@ -234,7 +250,7 @@ test("tools toggle visibility, monitoring, auto-hide, settings and presets", () 
   const preset = [...container.querySelectorAll("button")].find((button) => button.title?.includes("%"));
   fireEvent.click(preset);
   called(handlers.onToggleNotes, handlers.onToggleLyrics);
-  calledWith([handlers.onMonitoringChange, [false]], [handlers.onAutoHideChange, [true]]);
+  calledWith([handlers.onAutoHideChange, [true]]);
   called(handlers.onOpenAppSettings, handlers.onApplyEffectPreset);
 });
 test("center controls transport, tempo and bounded key changes", () => {

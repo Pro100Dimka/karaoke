@@ -125,7 +125,11 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
           fetchParams={waveformFetchParams}
           onChange={seek}
         />
-        <Typography variant="caption2" tone="muted">
+        <Typography
+          variant="caption2"
+          tone="muted"
+          sx={{ position: "absolute", bottom: "0", left: "var(--space-1)" }}
+        >
           {formatAudioTime(state.position)} / {formatAudioTime(state.duration)}
         </Typography>
       </Stack>

@@ -23,6 +23,7 @@ from app.routers import analysis, application, audio, cache, diagnostics, player
 from app.services import (
     audio_service,
     cache_service,
+    metadata_enrichment_service,
     pipeline_service,
     recording_service,
     song_package_service,
@@ -60,6 +61,7 @@ async def lifespan(_app: FastAPI):
     storage_migration.migrate_legacy_song_storage()
     song_package_service.recover_import_transactions()
     cache_service.recover_optimization_transactions()
+    metadata_enrichment_service.enqueue_missing()
     runtime_plan = pipeline_service._configure_ai_runtime()
     runtime_lines = pipeline_service.format_runtime_plan(runtime_plan)
     for line in runtime_lines: print(f"[backend] AI runtime: {line}", flush=True)

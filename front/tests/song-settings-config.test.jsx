@@ -52,7 +52,13 @@ test("song settings schema describes every persisted field exactly", () => {
       parse: "nullable-number"
     },
     { name: "key_override", span: 4, type: "text", label: "Тональность", placeholder: "напр. C#m" },
-    { name: "genre", span: 4, type: "text", label: "Жанр", placeholder: "Alternative rock" },
+    {
+      name: "genre",
+      span: 4,
+      type: "select",
+      label: "Жанр",
+      options: SONG_FIELDS.find(({ name }) => name === "genre").options
+    },
     {
       name: "difficulty_override",
       span: 6,

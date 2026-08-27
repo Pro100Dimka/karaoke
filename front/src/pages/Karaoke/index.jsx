@@ -386,6 +386,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         lyricsSync,
         monitorInputDeviceId,
         monitoringEnabled,
+        hasSongClip: Boolean(song.video_url),
         notes,
         sceneBlackout,
         sceneIntroVisible,

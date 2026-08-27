@@ -244,6 +244,7 @@ const Select = forwardRef(
               <Popover
                 ref={popoverRef}
                 open
+                portal={false}
                 id={listboxId}
                 role="listbox"
                 className="ui-select-popover ui-control"

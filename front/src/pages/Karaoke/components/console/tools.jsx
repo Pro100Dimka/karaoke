@@ -1,4 +1,4 @@
-import { AudioLines, Cog, Ear, MousePointer2, Type } from "lucide-react";
+import { AudioLines, Cog, MousePointer2, Type } from "lucide-react";
 import { translateSaved as t } from "../../../../i18n/runtime";
 import { Button, Grid, Stack } from "../../../../theme/ui";
 import { EFFECT_PRESETS } from "../../constants";
@@ -10,8 +10,6 @@ export default function ToolsPanel({
   onToggleNotes,
   onToggleLyrics,
   onOpenAppSettings,
-  monitoringEnabled,
-  onMonitoringChange,
   autoHideEnabled,
   onAutoHideChange,
   effectPreset,
@@ -20,7 +18,6 @@ export default function ToolsPanel({
   const tools = [
     [AudioLines, t("Ноты"), showNotes, onToggleNotes],
     [Type, t("Текст"), showLyrics, onToggleLyrics],
-    [Ear, t("Слышу себя"), monitoringEnabled, () => onMonitoringChange?.(!monitoringEnabled)],
     [MousePointer2, t("Автоскрытие"), autoHideEnabled, () => onAutoHideChange?.(!autoHideEnabled)],
     [Cog, t("Настройки"), null, onOpenAppSettings]
   ].filter(([, , , action]) => action);

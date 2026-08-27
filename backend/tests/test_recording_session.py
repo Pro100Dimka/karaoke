@@ -130,6 +130,20 @@ def test_playback_anchor_includes_audio_waiting_in_the_device_buffer(monkeypatch
     assert session.playback_segments[0]["start_recording_sec"] == pytest.approx(0.15)
 
 
+def test_playback_anchor_compensates_the_audible_output_latency(monkeypatch):
+    session, _stream = make_session(
+        monkeypatch,
+        sample_rate=100,
+        playback_offset_sec=0,
+        playback_latency_sec=0.05,
+    )
+    session._callback(np.zeros((10, 1), dtype=np.float32), 10, None, None)
+
+    session.sync_playback(0.02)
+
+    assert session.playback_segments[0]["start_playback_sec"] == pytest.approx(-0.03)
+
+
 def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path, caplog):
     session, _stream = make_session(monkeypatch)
     session._temporary_path = tmp_path / "take.wav"

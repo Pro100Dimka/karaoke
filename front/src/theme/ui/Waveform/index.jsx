@@ -111,7 +111,7 @@ export default function Waveform({
         (event.buttons === 1 || event.currentTarget.hasPointerCapture?.(event.pointerId)) &&
         seek(event)
       }
-      sx={{ flex: "1 1 0", minInlineSize: 0, minBlockSize: 0, color: "var(--color-primary)" }}
+      sx={{ flex: "1 1 0", display: "flex", color: "var(--color-primary)" }}
     >
       <Box
         ref={host}
@@ -126,10 +126,10 @@ export default function Waveform({
         preserveAspectRatio="none"
         aria-hidden="true"
         sx={{
+          width: "stretch",
           display: real ? "none" : "block",
           position: "absolute",
           inset: 0,
-          inlineSize: "100%"
         }}
       >
         <defs  >

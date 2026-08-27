@@ -1,6 +1,6 @@
 import { Mic } from "lucide-react";
 import { translateSaved as t } from "../../../../i18n/runtime";
-import { Grid, RotaryKnob, Slider, Stack, Typography } from "../../../../theme/ui";
+import { Grid, RotaryKnob, Slider, Stack, Switch, Typography } from "../../../../theme/ui";
 import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
 
 export default function MixerPanel({
@@ -9,7 +9,9 @@ export default function MixerPanel({
   onVolumeChange,
   onMicrophoneCommit,
   microphoneEffects,
-  onEffectChange
+  onEffectChange,
+  monitoringEnabled,
+  onMonitoringChange
 }) {
   return (
     <Stack gap="var(--space-2)">
@@ -21,6 +23,13 @@ export default function MixerPanel({
         <Typography variant="caption" tone="muted">
           {Math.round(Math.max(0, Math.min(1, microphoneLevel)) * 100)}%
         </Typography>
+        <Switch
+          size="sm"
+          variant="plain"
+          label={t("Слышу себя")}
+          checked={monitoringEnabled}
+          onChange={onMonitoringChange}
+        />
       </Stack>
       <Grid columns={4} gap="var(--space-2)" align="end">
         {MIXER_FIELDS.map(([key, label, accent], index) => {

@@ -39,19 +39,19 @@ test("ready song opens from card click and keyboard but not nested actions", () 
   expect(actions.onOpenKaraoke).toHaveBeenCalledTimes(3);
   const nested = view.getByRole("button", { name: /Прослушать записи|Прослухати записи/ });
   fireEvent.click(nested);
-  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
+  expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
   const menuButton = view.getByRole("button", { name: /Другие действия|Інші дії/ });
   fireEvent.click(menuButton);
-  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(true);
+  expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(true);
   fireEvent.pointerDown(menuButton);
   fireEvent.click(menuButton);
-  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
+  expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
   fireEvent.click(menuButton);
-  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(true);
+  expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(true);
   const settings = view.getByRole("button", { name: /Настройки песни|Налаштування пісні/ });
   fireEvent.click(settings);
   expect(actions.onOpenSettings).toHaveBeenCalledWith("song");
-  expect(view.container.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
+  expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
   verify([actions.onOpenKaraoke, "toHaveBeenCalledTimes", 3], [view.container.textContent, "toContain", "120 BPM"]);
 });
 test("working song shows progress and opens its processing modal", () => {
