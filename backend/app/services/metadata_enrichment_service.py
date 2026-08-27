@@ -230,8 +230,7 @@ def _ffmpeg_output(arguments: list[str], *, timeout: float) -> subprocess.Comple
     executable = str(config.FFMPEG_EXE)
     return subprocess.run(
         [executable, "-hide_banner", "-nostdin", *arguments],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
         timeout=timeout,
     )

@@ -1809,6 +1809,7 @@ function Build-Backend {
             "--collect-all","nagisa",
             "--collect-all","parselmouth",
             "--collect-all","yt_dlp",
+            "--collect-all","yt_dlp_ejs",
             "--collect-data","torchfcpe",
             "--exclude-module","tkinter",
             "--exclude-module","_tkinter",

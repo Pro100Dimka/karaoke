@@ -74,7 +74,7 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   fireEvent.click(view.getByText(/Авто ·/));
   fireEvent.click(await view.findByRole("option", { name: /Быстрый|Швидкий/ }));
   expect(onUpdate).toHaveBeenCalledWith({ processingMode: "fast" });
-  fireEvent.submit(view.container.querySelector("form"));
+  fireEvent.click(view.getByRole("button", { name: /Подтвердить|Підтвердити/ }));
   expect(onConfirm).toHaveBeenCalledOnce();
   fireEvent.click(view.getByText("Пропустить"));
   expect(onCancel).toHaveBeenCalledOnce();
