@@ -446,6 +446,103 @@ def test_midi_audio_match_compares_note_classes_and_timing(monkeypatch, tmp_path
     assert result["time_scale"] == 1
 
 
+def test_midi_audio_match_finds_tempo_in_audio_instead_of_trusting_tempo_hint(
+    monkeypatch, tmp_path
+):
+    numpy = __import__("numpy")
+    rate, hop = 11_025, 1024
+    target_bpm, target_offset = 132.0, 0.4
+    words = []
+    chroma = numpy.zeros((12, 500))
+    pitches = numpy.random.default_rng(42).integers(48, 72, size=30)
+    for index, pitch_value in enumerate(pitches, start=1):
+        pitch = int(pitch_value)
+        start, end = float(index), float(index + 0.7)
+        words.append(
+            {
+                "text": str(index),
+                "start": start,
+                "end": end,
+                "notes": [{"note": pitch, "start": start, "end": end}],
+            }
+        )
+        midpoint = (start + end) / 2
+        frame = int((midpoint * 120 / target_bpm + target_offset) * rate / hop)
+        chroma[pitch % 12, frame] = 1
+    document = kar_dataset_service.KarDocument(
+        title="Song",
+        artist="Artist",
+        bpm=120,
+        key="C",
+        duration=35,
+        words=words,
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    fake_librosa = SimpleNamespace(
+        load=lambda *_args, **_kwargs: (numpy.ones(rate * 40), rate),
+        feature=SimpleNamespace(
+            chroma_cqt=lambda **_kwargs: chroma,
+            # Deliberately wrong: the melody/audio match must correct it.
+            tempo=lambda **_kwargs: numpy.array([120.0]),
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+
+    result = kar_dataset_service._midi_audio_match(document, tmp_path / "preview.wav")
+
+    assert result["audio_bpm"] == pytest.approx(target_bpm, abs=0.1)
+    assert result["offset_seconds"] == pytest.approx(target_offset, abs=0.1)
+    assert result["time_scale"] == pytest.approx(120 / target_bpm, abs=0.001)
+
+
+def test_midi_audio_match_never_automatically_moves_lyrics_by_multiple_bars(
+    monkeypatch, tmp_path
+):
+    numpy = __import__("numpy")
+    words = [
+        {
+            "text": str(index),
+            "start": float(index),
+            "end": float(index + 0.8),
+            "notes": [{"note": 60, "start": float(index), "end": float(index + 0.8)}],
+        }
+        for index in range(1, 26)
+    ]
+    document = kar_dataset_service.KarDocument(
+        title="Song",
+        artist="Artist",
+        bpm=120,
+        key="C",
+        duration=30,
+        words=words,
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    chroma = numpy.zeros((12, 400))
+    # Make the strongest apparent harmony occur far outside the safe lead-in
+    # window. The matcher must not shift the authoritative lyric labels there.
+    for word in words:
+        midpoint = (word["start"] + word["end"]) / 2
+        far_frame = int((midpoint - 4) * 11_025 / 1024)
+        if 0 <= far_frame < chroma.shape[1]:
+            chroma[0, far_frame] = 1
+    fake_librosa = SimpleNamespace(
+        load=lambda *_args, **_kwargs: (numpy.ones(330_750), 11_025),
+        feature=SimpleNamespace(
+            chroma_cqt=lambda **_kwargs: chroma,
+            tempo=lambda **_kwargs: numpy.array([120.0]),
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+
+    result = kar_dataset_service._midi_audio_match(document, tmp_path / "preview.wav")
+
+    assert abs(result["offset_seconds"]) <= 1
+
+
 def test_audio_bpm_resolves_half_tempo_before_scaling():
     assert kar_dataset_service._closest_tempo_octave(64.5, 132) == pytest.approx(129)
 

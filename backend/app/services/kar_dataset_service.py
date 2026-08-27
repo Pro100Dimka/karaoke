@@ -63,6 +63,13 @@ _REJECTED_AUDIO_HINTS = (
 _MAX_AUDIO_DURATION_DRIFT_SECONDS = 20.0
 _MAX_AUDIO_DURATION_DRIFT_RATIO = 0.12
 _MIN_MELODY_MATCH_SCORE = 0.45
+# A MIDI melody is periodic enough that an unrestricted chroma search can
+# confidently lock to the same chord one or two bars away.  That moved the
+# lyrics several seconds ahead of the vocal in otherwise matching masters.
+# Original KAR/MID files normally need only a small lead-in correction; larger
+# differences are exposed to the user as a manual offset instead of silently
+# corrupting the reference labels.
+_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS = 1.0
 _CYRILLIC_TRANSLITERATION = str.maketrans(
     {
         "а": "a",
@@ -622,6 +629,9 @@ def _midi_audio_match(document: KarDocument, audio_path: Path) -> dict[str, Any]
     hop = 1024
     chroma = librosa.feature.chroma_cqt(y=audio, sr=rate, hop_length=hop)
     chroma /= np.maximum(chroma.max(axis=0, keepdims=True), 1e-6)
+    top_three_mask = np.zeros_like(chroma, dtype=bool)
+    top_three = np.argsort(chroma, axis=0)[-3:]
+    top_three_mask[top_three, np.arange(chroma.shape[1])] = True
     notes = [
         note
         for word in document.words
@@ -632,33 +642,77 @@ def _midi_audio_match(document: KarDocument, audio_path: Path) -> dict[str, Any]
         raise RuntimeError("В .kar недостаточно нот для проверки найденной аудиозаписи")
     step = max(1, len(notes) // 600)
     sampled = notes[::step]
+    midpoints = np.asarray(
+        [(float(note["start"]) + float(note["end"])) / 2 for note in sampled],
+        dtype=np.float64,
+    )
+    pitch_classes = np.asarray([int(note["note"]) % 12 for note in sampled], dtype=np.int16)
     audio_duration = float(audio.size / rate)
     detected_bpm = float(np.asarray(librosa.feature.tempo(y=audio, sr=rate)).reshape(-1)[0])
-    audio_bpm = _closest_tempo_octave(detected_bpm, document.bpm)
-    # KAR timestamps were calculated using its own tempo map. Scaling the whole
-    # map by the ratio of its primary BPM to the original recording's BPM keeps
-    # every local tempo change while making the timeline follow the recording.
-    time_scale = document.bpm / max(audio_bpm, 0.001)
-    best_score, best_offset, best_count, best_shift = 0.0, 0.0, 0, 0
-    for pitch_shift in range(-6, 6):
-        for offset in np.arange(-12.0, 12.01, 0.25):
-            strengths, top_three = [], []
-            for note in sampled:
-                midpoint = (float(note["start"]) + float(note["end"])) / 2
-                frame = int((midpoint * time_scale + offset) * rate / hop)
-                if not 0 <= frame < chroma.shape[1]:
+    detected_near_kar = _closest_tempo_octave(detected_bpm, document.bpm)
+
+    # ``librosa.feature.tempo`` is intentionally only a hint.  On real rock
+    # recordings it reported 143.555 for a ~148.7 BPM master; blindly applying
+    # that value accumulated seconds of drift.  Search tempo and lead-in
+    # jointly against the MIDI melody, then refine around the coarse optimum.
+    # The vectorized scorer keeps this cheaper than the previous nested
+    # per-note implementation even though it now determines the actual tempo.
+    best_score, best_rank, best_bpm, best_offset, best_count, best_shift = (
+        0.0,
+        -math.inf,
+        detected_near_kar,
+        0.0,
+        0,
+        0,
+    )
+
+    def search(bpms: np.ndarray, offsets: np.ndarray) -> None:
+        nonlocal best_score, best_rank, best_bpm, best_offset, best_count, best_shift
+        for bpm in bpms:
+            time_scale = document.bpm / max(float(bpm), 0.001)
+            scaled_midpoints = midpoints * time_scale
+            for offset in offsets:
+                frames = ((scaled_midpoints + float(offset)) * rate / hop).astype(np.int64)
+                valid = (frames >= 0) & (frames < chroma.shape[1])
+                count = int(np.count_nonzero(valid))
+                if count < 24:
                     continue
-                pitch_class = (int(note["note"]) + pitch_shift) % 12
-                strengths.append(float(chroma[pitch_class, frame]))
-                top_three.append(float(pitch_class in np.argsort(chroma[:, frame])[-3:]))
-            if len(strengths) < 24:
-                continue
-            score = 0.65 * float(np.mean(strengths)) + 0.35 * float(np.mean(top_three))
-            if score > best_score:
-                best_score = score
-                best_offset = float(offset)
-                best_count = len(strengths)
-                best_shift = pitch_shift
+                valid_frames = frames[valid]
+                valid_pitches = pitch_classes[valid]
+                for pitch_shift in range(-6, 6):
+                    shifted = (valid_pitches + pitch_shift) % 12
+                    score = 0.65 * float(np.mean(chroma[shifted, valid_frames])) + 0.35 * float(
+                        np.mean(top_three_mask[shifted, valid_frames])
+                    )
+                    # Stable tie-breaking: prefer the tempo detector's octave
+                    # and the smallest lead-in correction when chroma scores
+                    # are indistinguishable (e.g. synthetic/constant spectra).
+                    rank = score - 1e-7 * abs(float(bpm) - detected_near_kar) - 1e-7 * abs(
+                        float(offset)
+                    )
+                    if rank > best_rank:
+                        best_score, best_rank = score, rank
+                        best_bpm, best_offset = float(bpm), float(offset)
+                        best_count, best_shift = count, pitch_shift
+
+    coarse_bpms = np.arange(document.bpm * 0.88, document.bpm * 1.12 + 0.001, 0.5)
+    coarse_offsets = np.arange(
+        -_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS,
+        _MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS + 0.001,
+        0.25,
+    )
+    search(coarse_bpms, coarse_offsets)
+
+    coarse_bpm, coarse_offset = best_bpm, best_offset
+    fine_bpms = np.arange(coarse_bpm - 0.5, coarse_bpm + 0.501, 0.05)
+    fine_offsets = np.arange(
+        max(-_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS, coarse_offset - 0.25),
+        min(_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS, coarse_offset + 0.25) + 0.001,
+        0.05,
+    )
+    search(fine_bpms, fine_offsets)
+    audio_bpm = best_bpm
+    time_scale = document.bpm / max(audio_bpm, 0.001)
     return {
         "score": round(best_score, 4),
         "offset_seconds": round(best_offset, 3),
