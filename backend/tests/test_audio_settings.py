@@ -211,7 +211,12 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         1: {"hostapi": 0, "default_samplerate": 48_000, "max_input_channels": 1},
         2: {"hostapi": 0, "default_samplerate": 48_000, "max_output_channels": 2},
     }
-    patch_many(monkeypatch, (audio_service.sd, "query_devices", lambda index: devices[index]))
+    patch_many(
+        monkeypatch,
+        (audio_service.sd, "query_devices", lambda index: devices[index]),
+        (audio_service.sd, "check_input_settings", lambda **_kwargs: None),
+        (audio_service.sd, "check_output_settings", lambda **_kwargs: None),
+    )
     worker.reset_mock()
     audio_service.configure_monitoring(settings(monitoring_enabled=True, volume=8, buffer_size=128))
     assert worker.call_args.args[0] == {

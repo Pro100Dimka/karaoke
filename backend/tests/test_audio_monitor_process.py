@@ -78,6 +78,11 @@ def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch,
 
     audio_service._launch_monitor_process(["worker"], cwd=tmp_path)
 
+    creationflags = audio_service.subprocess.Popen.call_args.kwargs["creationflags"]
+    assert creationflags & getattr(subprocess, "HIGH_PRIORITY_CLASS", 0) == getattr(
+        subprocess, "HIGH_PRIORITY_CLASS", 0
+    )
+
     assert audio_service._monitor_signal == {
         "rms_db": -8,
         "clipping": True,

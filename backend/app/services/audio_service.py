@@ -280,6 +280,27 @@ def preferred_sample_rate(input_device_id: int | None = None, driver: str = "aut
     return config.RECORDING_SAMPLE_RATE
 
 
+def _monitor_sample_rate(input_device_id: int, output_device_id: int) -> float:
+    input_info = sd.query_devices(input_device_id)
+    output_info = sd.query_devices(output_device_id)
+    input_default = int(round(float(input_info.get("default_samplerate", 0) or 0)))
+    output_default = int(round(float(output_info.get("default_samplerate", 0) or 0)))
+    candidates = dict.fromkeys((48_000, input_default, output_default, 44_100))
+    check_input = getattr(sd, "check_input_settings", None)
+    check_output = getattr(sd, "check_output_settings", None)
+    if callable(check_input) and callable(check_output):
+        for sample_rate in candidates:
+            if sample_rate <= 0:
+                continue
+            try:
+                check_input(device=input_device_id, channels=1, samplerate=sample_rate)
+                check_output(device=output_device_id, channels=1, samplerate=sample_rate)
+                return float(sample_rate)
+            except Exception:  # PortAudio exposes backend-specific format errors.
+                continue
+    return float(input_default or output_default or config.RECORDING_SAMPLE_RATE)
+
+
 def _list_devices(kind: str) -> list[dict]:
     if not _AUDIO_BACKEND_AVAILABLE:
         return []
@@ -544,7 +565,7 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
     worker_options = {
         "input_device_id": resolved_input_id,
         "output_device_id": resolved_output_id,
-        "sample_rate": float(input_info["default_samplerate"]),
+        "sample_rate": _monitor_sample_rate(resolved_input_id, resolved_output_id),
         "output_channels": output_channels,
         "blocksize": settings.buffer_size,
         "gain": gain,
@@ -609,7 +630,9 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
     global _monitor_process, _monitor_reader
     ready = threading.Event()
     state: dict[str, str | None] = {"error": None}
-    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
+        subprocess, "HIGH_PRIORITY_CLASS", 0
+    )
     process = subprocess.Popen(
         command,
         cwd=cwd,
@@ -631,7 +654,20 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
                 continue
             event = message.get("event")
             if event == "started":
+                logger.info(
+                    "Audio monitor started: blocksize=%s latency=%s exclusive=%s",
+                    message.get("blocksize"),
+                    message.get("latency"),
+                    message.get("exclusive"),
+                )
                 ready.set()
+            elif event == "fallback":
+                logger.warning(
+                    "Audio monitor selected a safer fallback: %s (blocksize=%s latency=%s)",
+                    message.get("message"),
+                    message.get("blocksize"),
+                    message.get("latency"),
+                )
             elif event == "level":
                 with _monitor_lock:
                     if _monitor_process is process:

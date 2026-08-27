@@ -69,7 +69,14 @@ def test_wasapi_candidates_end_with_host_neutral_fallback():
         }
     )
 
-    assert (candidates[0]['blocksize'] == 64) and ('extra_settings' in candidates[0]) and ('extra_settings' not in candidates[-1]) and (Path(config.FFMPEG_EXE).name.casefold() in {'ffmpeg', 'ffmpeg.exe'})
+    assert (
+        candidates[0]["blocksize"] == 64
+        and candidates[0]["latency"] == 0.002
+        and "extra_settings" in candidates[0]
+        and candidates[-1]["latency"] == "low"
+        and "extra_settings" not in candidates[-1]
+        and Path(config.FFMPEG_EXE).name.casefold() in {"ffmpeg", "ffmpeg.exe"}
+    )
 
 
 def test_recording_falls_back_from_duplex_to_plain_microphone(monkeypatch):

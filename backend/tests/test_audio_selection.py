@@ -180,6 +180,35 @@ def test_asio_matching_rejects_empty_or_unrelated_names(monkeypatch):
     audio_service._matching_output_for_input.assert_called_once_with(3, 2)
 
 
+def test_monitor_sample_rate_prefers_common_48khz_and_falls_back_to_input(monkeypatch):
+    devices = {
+        1: device("USB microphone", 0, inputs=1, rate=44_100),
+        2: device("Speakers", 0, outputs=2, rate=48_000),
+    }
+    checked = []
+    patch_attrs(
+        monkeypatch,
+        audio_service.sd,
+        query_devices=lambda index: devices[index],
+        check_input_settings=lambda **kwargs: checked.append(("input", kwargs["samplerate"])),
+        check_output_settings=lambda **kwargs: checked.append(("output", kwargs["samplerate"])),
+    )
+
+    assert audio_service._monitor_sample_rate(1, 2) == 48_000.0
+    assert checked == [("input", 48_000), ("output", 48_000)]
+
+    def reject(**_kwargs):
+        raise RuntimeError("unsupported")
+
+    patch_attrs(
+        monkeypatch,
+        audio_service.sd,
+        check_input_settings=reject,
+        check_output_settings=reject,
+    )
+    assert audio_service._monitor_sample_rate(1, 2) == 44_100.0
+
+
 def test_device_lists_expose_capabilities_and_host_api(monkeypatch):
     devices = [
         device("Microphone", 0, inputs=1),

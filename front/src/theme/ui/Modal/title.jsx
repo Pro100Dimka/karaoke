@@ -21,7 +21,7 @@ export default function ModalTitle({
       <Stack gap="var(--space-1)" className="ui-modal-title-copy">
         {eyebrow && <Typography variant="caption" className="ui-modal-title-eyebrow">{eyebrow}</Typography>}
         <Typography variant="h3" noWrap>{title}</Typography>
-        {description && <Typography variant="body2" tone="muted" noWrap>{description}</Typography>}
+        {description && <Typography variant="body2" tone="muted" >{description}</Typography>}
       </Stack>
     </Stack>
   );

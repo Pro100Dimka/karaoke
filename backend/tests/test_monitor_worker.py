@@ -26,6 +26,16 @@ def test_emit_and_stop_update_process_contract(monkeypatch, capsys):
     assert monitor_worker._running is False
 
 
+def test_shared_wasapi_tries_aggressive_latency_before_safe_fallback():
+    candidates = monitor_worker._stream_candidates(options())
+
+    assert candidates[0]["blocksize"] == 64
+    assert candidates[0]["latency"] == 0.002
+    assert candidates[1]["blocksize"] == 64
+    assert candidates[1]["latency"] == "low"
+    assert all("extra_settings" not in candidate for candidate in candidates)
+
+
 def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch):
     monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.0, "echo": 0.0, "delay": 0.0})
     lines = iter(["not-json\n", "\n", '{"reverb": 0.4}\n', '{"echo": 0.2, "delay": 0.1}\n'])

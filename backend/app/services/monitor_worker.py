@@ -25,21 +25,43 @@ _live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0
 
 
 def _stream_candidates(options: dict) -> list[dict]:
-    base, blocks, candidates, modes = {'samplerate': float(options['sample_rate']), 'channels': (1, int(options['output_channels'])), 'device': (int(options['input_device_id']), int(options['output_device_id'])), 'latency': 'low'}, dict.fromkeys((int(options['blocksize']), 128, 256, 0)), [], ('exclusive', 'shared', 'plain') if options.get('wasapi_exclusive') else ('plain',)
+    sample_rate = float(options["sample_rate"])
+    base = {
+        "samplerate": sample_rate,
+        "channels": (1, int(options["output_channels"])),
+        "device": (int(options["input_device_id"]), int(options["output_device_id"])),
+    }
+    blocks = dict.fromkeys((int(options["blocksize"]), 128, 256, 0))
+    candidates = []
+    modes = (
+        ("exclusive", "shared", "plain")
+        if options.get("wasapi_exclusive")
+        else ("plain",)
+    )
     for mode in modes:
         for blocksize in blocks:
-            candidate = {**base, "blocksize": blocksize}
-            if mode == "exclusive":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(exclusive=True),
-                    sd.WasapiSettings(exclusive=True),
-                )
-            elif mode == "shared":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(auto_convert=True),
-                    sd.WasapiSettings(auto_convert=True),
-                )
-            if candidate not in candidates: candidates.append(candidate)
+            # Try the smallest practical latency first. Shared WASAPI may
+            # clamp this to the Windows engine period; incompatible devices
+            # immediately fall back to PortAudio's conservative low preset.
+            latencies = (
+                (max(0.002, blocksize / sample_rate), "low")
+                if blocksize > 0
+                else ("low",)
+            )
+            for latency in latencies:
+                candidate = {**base, "blocksize": blocksize, "latency": latency}
+                if mode == "exclusive":
+                    candidate["extra_settings"] = (
+                        sd.WasapiSettings(exclusive=True),
+                        sd.WasapiSettings(exclusive=True),
+                    )
+                elif mode == "shared":
+                    candidate["extra_settings"] = (
+                        sd.WasapiSettings(auto_convert=True),
+                        sd.WasapiSettings(auto_convert=True),
+                    )
+                if candidate not in candidates:
+                    candidates.append(candidate)
     return candidates
 
 
@@ -126,6 +148,7 @@ def main() -> int:
                             "event": "fallback",
                             "message": failures[-1] if failures else "Audio glitches detected",
                             "blocksize": candidate["blocksize"],
+                            "latency": candidate.get("latency", "low"),
                             "exclusive": "extra_settings" in candidate,
                         }
                     )
@@ -133,6 +156,7 @@ def main() -> int:
                     {
                         "event": "started",
                         "blocksize": candidate["blocksize"],
+                        "latency": candidate.get("latency", "low"),
                         "exclusive": "extra_settings" in candidate,
                     }
                 )
