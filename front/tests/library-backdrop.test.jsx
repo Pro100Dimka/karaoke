@@ -25,9 +25,16 @@ test("library backdrop keeps its packaged runtime URL stable and query-free", ()
 
 test("library backdrop keeps black WebGL pixels transparent over the theme artwork", () => {
   const runtime = fs.readFileSync("src/pages/Library/animated-backdrop/qftRuntime.js", "utf8");
+  const component = fs.readFileSync("src/pages/Library/animated-backdrop/QuantumFieldBackdrop.jsx", "utf8");
   expect(runtime).toContain("float overlayAlpha = clamp(visibleLight * 1.35, 0.0, 1.0);");
   expect(runtime).not.toContain("gl_FragColor = vec4(detailLift, 1.0);");
-  expect(runtime).toContain("element.style.backgroundImage = backgroundImage;");
+  expect(runtime).toContain("themeBackdrop.style.backgroundImage = backgroundImage;");
+  expect(runtime).toContain("element.style.backgroundColor = backgroundColor;");
+  expect(runtime).toContain("event.data?.type === 'QFT_POINTER'");
+  expect(runtime).toContain("backdropTargetX");
+  expect(component).toContain("dark.webp?inline");
+  expect(component).toContain('backgroundImage: `url("${THEME_BACKDROPS[theme]');
+  expect(component).not.toContain("getComputedStyle(themeBackground).backgroundImage");
 });
 
 test("library backdrop watches the theme attribute instead of polling it every frame", () => {

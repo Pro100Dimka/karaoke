@@ -454,7 +454,28 @@ import * as THREE from 'three';
         renderer.setPixelRatio(STATE.pixelRatio);
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 2.1;
+        const themeBackdrop = document.createElement('div');
+        Object.assign(themeBackdrop.style, {
+            position: 'fixed',
+            inset: '-4vh -4vw',
+            zIndex: '0',
+            pointerEvents: 'none',
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+            backgroundRepeat: 'no-repeat',
+            transform: 'translate3d(0, 0, 0) scale(1.055)',
+            transformOrigin: 'center',
+            willChange: 'transform'
+        });
+        document.body.prepend(themeBackdrop);
+        renderer.domElement.style.position = 'relative';
+        renderer.domElement.style.zIndex = '1';
         document.body.appendChild(renderer.domElement);
+
+        let backdropX = 0;
+        let backdropY = 0;
+        let backdropTargetX = 0;
+        let backdropTargetY = 0;
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -2101,6 +2122,11 @@ void main() {
                 AUDIO.applyExternalSpectrum(event.data.bands, event.data.bass, event.data.active);
                 return;
             }
+            if (event.data?.type === 'QFT_POINTER') {
+                backdropTargetX = -THREE.MathUtils.clamp(Number(event.data.x) || 0, -1, 1) * 18;
+                backdropTargetY = -THREE.MathUtils.clamp(Number(event.data.y) || 0, -1, 1) * 12;
+                return;
+            }
             if (event.data?.type !== 'QFT_THEME') return;
             const palette = event.data.palette;
             if (!palette || !['primary', 'primaryHover', 'secondary', 'accent', 'highlight'].every(key => typeof palette[key] === 'string')) return;
@@ -2108,14 +2134,14 @@ void main() {
             const backgroundImage = typeof event.data.backgroundImage === 'string'
                 ? event.data.backgroundImage
                 : 'none';
+            const backgroundColor = typeof event.data.backgroundColor === 'string'
+                ? event.data.backgroundColor
+                : '#000000';
             for (const element of [document.documentElement, document.body]) {
-                element.style.backgroundColor = 'transparent';
-                element.style.backgroundImage = backgroundImage;
-                element.style.backgroundPosition = 'center';
-                element.style.backgroundSize = 'cover';
-                element.style.backgroundRepeat = 'no-repeat';
-                element.style.backgroundAttachment = 'fixed';
+                element.style.backgroundColor = backgroundColor;
             }
+            themeBackdrop.style.backgroundColor = backgroundColor;
+            themeBackdrop.style.backgroundImage = backgroundImage;
 
             const lightTheme = event.data.theme === 'light';
             const renderColor = value => {
@@ -2335,6 +2361,10 @@ void main() {
             requestAnimationFrame(animate);
             clock.update(timestamp);
             const dt = clock.getDelta(), elapsed = clock.getElapsed();
+
+            backdropX += (backdropTargetX - backdropX) * 0.085;
+            backdropY += (backdropTargetY - backdropY) * 0.085;
+            themeBackdrop.style.transform = `translate3d(${backdropX.toFixed(2)}px, ${backdropY.toFixed(2)}px, 0) scale(1.055)`;
 
             material.uniforms.uTime.value += dt * STATE.timeScale;
             grainPass.uniforms.uTime.value = elapsed;
