@@ -63,7 +63,11 @@ export default function LibraryParallaxBackground() {
         inset: "-4vh -4vw",
         zIndex: 0,
         pointerEvents: "none",
-        background: "var(--bg-image) center / cover no-repeat",
+        backgroundColor: "var(--color-bg-deep)",
+        backgroundImage: "var(--bg-image)",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
         transform: "translate3d(0, 0, 0) scale(1.055)",
         transformOrigin: "center",
         willChange: "transform"

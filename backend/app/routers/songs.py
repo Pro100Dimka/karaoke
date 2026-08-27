@@ -29,6 +29,7 @@ from app.api.dependencies import SongDependency
 from app.api.errors import http_error
 from app.services import (
     ai_bridge,
+    metadata_enrichment_service,
     pipeline_service,
     recording_service,
     song_artifacts,
@@ -409,6 +410,19 @@ def get_audio_track(track: str, song: SongDependency):
             content_disposition_type="inline",
         )
     raise HTTPException(status_code=404, detail="Audio track is not available")
+
+
+@router.get("/{song_id}/video")
+def get_song_video(song: SongDependency):
+    candidate = metadata_enrichment_service.resolve_local_video(song)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Song video is not available")
+    return FileResponse(
+        candidate,
+        media_type="video/mp4",
+        filename=candidate.name,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/{song_id}/editor", response_model=schemas.SongEditorOut)

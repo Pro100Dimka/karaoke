@@ -1808,6 +1808,7 @@ function Build-Backend {
             "--collect-all","qwen_asr",
             "--collect-all","nagisa",
             "--collect-all","parselmouth",
+            "--collect-all","yt_dlp",
             "--collect-data","torchfcpe",
             "--exclude-module","tkinter",
             "--exclude-module","_tkinter",

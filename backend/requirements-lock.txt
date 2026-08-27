@@ -193,6 +193,7 @@ typing_extensions==4.16.0
 tzdata==2026.3
 urllib3==2.7.0
 uvicorn==0.52.3
+yt-dlp==2026.8.19
 watchfiles==1.2.0
 websockets==17.0.1
 Werkzeug==3.1.8

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
-import { translateSaved as t } from "../../../i18n/runtime";
 import { Box } from "../../../theme/ui";
 import * as platform from "../../../utils/platform";
-import { playbackGain, youTubeEmbedUrl } from "../utils/data";
+import { playbackGain } from "../utils/data";
 
 const noop = () => {};
 
@@ -62,48 +61,25 @@ export default function KaraokeMedia({
   instrumentalRef,
   isPlaying,
   musicVolume,
-  sendYouTubeCommand,
   song,
   speed,
   syncSecondaryMedia,
   videoRef,
   vocalVolume,
   vocalsRef,
-  youTubeClipRef,
-  youTubeVideoId,
   onClipAvailabilityChange = noop
 }) {
   const [clipFailed, setClipFailed] = useState(false);
+  const clipSource = song.video_url === "local:clip" ? api.getSongVideoUrl(song.id) : "";
   useEffect(() => {
     setClipFailed(false);
-    onClipAvailabilityChange(Boolean(youTubeVideoId || song.video_url));
-  }, [onClipAvailabilityChange, song.id, song.video_url, youTubeVideoId]);
-
-  useEffect(() => {
-    if (!youTubeVideoId || clipFailed) return undefined;
-    const receivePlayerEvent = (event) => {
-      if (!/^https:\/\/([\w-]+\.)?youtube(?:-nocookie)?\.com$/.test(event.origin)) return;
-      if (event.source !== youTubeClipRef.current?.contentWindow) return;
-      let message = event.data;
-      try {
-        if (typeof message === "string") message = JSON.parse(message);
-      } catch {
-        return;
-      }
-      if (message?.event !== "onError") return;
-      setClipFailed(true);
-      onClipAvailabilityChange(false);
-    };
-    globalThis.addEventListener?.("message", receivePlayerEvent);
-    return () => globalThis.removeEventListener?.("message", receivePlayerEvent);
-  }, [clipFailed, onClipAvailabilityChange, youTubeClipRef, youTubeVideoId]);
-
-  const loadYouTube = () => {
-    sendYouTubeCommand("addEventListener", ["onError"]);
-    sendYouTubeCommand("mute");
-    sendYouTubeCommand("setPlaybackRate", [speed]);
+    onClipAvailabilityChange(false);
+  }, [clipSource, onClipAvailabilityChange, song.id]);
+  const activateClip = (event) => {
+    event.currentTarget.playbackRate = speed;
     syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
-    if (isPlaying) sendYouTubeCommand("playVideo");
+    onClipAvailabilityChange(true);
+    if (isPlaying) Promise.resolve(event.currentTarget.play()).catch(() => {});
   };
   return (
     <>
@@ -121,33 +97,15 @@ export default function KaraokeMedia({
         track="vocals"
         volume={vocalVolume}
       />
-      {youTubeVideoId && !clipFailed ? (
-        <Box
-          as="iframe"
-          ref={youTubeClipRef}
-          src={youTubeEmbedUrl(youTubeVideoId)}
-          title={t("Клип: {0}", { 0: song.title })}
-          allow="autoplay; encrypted-media; picture-in-picture"
-          onLoad={loadYouTube}
-          sx={{
-            position: "absolute",
-            inset: 0,
-            inlineSize: "100%",
-            blockSize: "100%",
-            border: 0,
-            zIndex: 0,
-            opacity: 1,
-            pointerEvents: "none"
-          }}
-        />
-      ) : song.video_url && !clipFailed ? (
+      {clipSource && !clipFailed ? (
         <Box
           as="video"
           ref={videoRef}
-          src={song.video_url}
-          preload="metadata"
+          src={clipSource}
+          preload="auto"
           muted
           playsInline
+          onLoadedData={activateClip}
           onError={() => {
             setClipFailed(true);
             onClipAvailabilityChange(false);

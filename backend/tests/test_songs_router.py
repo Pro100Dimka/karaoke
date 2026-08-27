@@ -274,6 +274,12 @@ def test_logs_and_audio_track_resolution(monkeypatch, tmp_path):
     diagnostic = tmp_path / "diagnostic.mp3"
     diagnostic.write_bytes(b"audio")
     raises(HTTPException, lambda: songs.get_audio_track("diagnostic", current))
+    monkeypatch.setattr(songs.metadata_enrichment_service, "resolve_local_video", Mock(return_value=None))
+    raises(HTTPException, lambda: songs.get_song_video(current))
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"video")
+    songs.metadata_enrichment_service.resolve_local_video.return_value = clip
+    assert songs.get_song_video(current).media_type == "video/mp4"
 
 
 def test_editor_endpoints_validate_state_save_and_reset(monkeypatch):

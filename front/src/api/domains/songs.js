@@ -62,6 +62,7 @@ export const songsApi = {
     createFileUrl(`/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`),
   getAudioTrackBlob: (id, track) =>
     requestBlob(`/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`),
+  getSongVideoUrl: (id) => createFileUrl(`/songs/${encodePathSegment(id)}/video`),
   exportSongPackage: (rawId, expectedRevision) => {
     const id = encodePathSegment(rawId);
     const query = expectedRevision

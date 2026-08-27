@@ -119,11 +119,28 @@ export default function AppLayout() {
   return (
     <Box
       className={`app-shell${karaoke ? " karaoke-app-shell" : ""}${editor ? " melody-editor-app-shell" : ""}`}
-      sx={{ display: "flex", flexDirection: "column", minBlockSize: "100vh" }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        minBlockSize: "100vh",
+        backgroundColor: "var(--color-bg-deep)",
+        backgroundImage: "var(--bg-image)",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed"
+      }}
     >
       <TitleBar hideActions={editor} />
-      <Box className="app-body" sx={{ position: "relative", flex: 1, minBlockSize: 0 }}>
-        <Box as="main" className="app-main" sx={{ blockSize: "100%" }}>
+      <Box
+        className="app-body"
+        sx={{ position: "relative", flex: 1, minBlockSize: 0, backgroundColor: "transparent" }}
+      >
+        <Box
+          as="main"
+          className="app-main"
+          sx={{ blockSize: "100%", backgroundColor: "transparent" }}
+        >
           <AppRoutes onOpenAppSettings={() => setSettings(true)} />
         </Box>
         {!karaoke && !editor && <FloatingControls openSettings={() => setSettings(true)} />}

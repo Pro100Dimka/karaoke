@@ -11,3 +11,4 @@ numpy>=1.26,<3
 scipy>=1.11,<1.15
 mutagen>=1.47,<2
 huggingface-hub>=0.34,<2
+yt-dlp>=2026.8.19,<2027

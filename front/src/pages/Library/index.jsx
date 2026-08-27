@@ -15,7 +15,14 @@ export default function Library() {
   const state = useLibrary();
   const { fileImport, online, processing, recordings } = state;
   return (
-    <Stack align="center" sx={{ position: "relative" }}>
+    <Stack
+      align="center"
+      sx={{
+        position: "relative",
+        minBlockSize: "100vh",
+        backgroundColor: "var(--color-bg-deep)"
+      }}
+    >
       <LibraryParallaxBackground />
       {!state.processing.active && <QuantumFieldBackdrop />}
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>

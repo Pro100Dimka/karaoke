@@ -43,9 +43,11 @@ export default function useKaraokeMediaSync({
   const lastSecondarySyncRef = useRef(0);
   const lastReactSyncRef = useRef(0);
 
+  // Retained as a compatibility no-op for transport/tests. The application
+  // no longer renders a YouTube iframe, so there is no frame in production.
   const sendYouTubeCommand = useCallback(
     (func, args = []) => {
-      const frame = youTubeClipRef.current;
+      const frame = youTubeClipRef?.current;
       const target = frame?.contentWindow;
       if (!target || typeof func !== "string" || !func.trim()) return false;
       let targetOrigin = "https://www.youtube.com";
@@ -53,7 +55,7 @@ export default function useKaraokeMediaSync({
         const { origin } = new URL(frame.src, globalThis.location.href);
         if (origin === YOUTUBE_NO_COOKIE_ORIGIN) targetOrigin = origin;
       } catch {
-        // Keep the trusted default origin for malformed or not-yet-set src.
+        // Keep the trusted default origin for malformed test fixtures.
       }
       target.postMessage(
         JSON.stringify({ event: "command", func: func.trim(), args }),

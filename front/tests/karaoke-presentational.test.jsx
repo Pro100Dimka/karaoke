@@ -7,7 +7,8 @@ const apiMocks = vi.hoisted(() => ({ getAudioTrackBlob: vi.fn() }));
 vi.mock("../src/api/client", () => ({
   api: {
     getAudioTrackUrl: (id, track) => `${id}/${track}`,
-    getAudioTrackBlob: apiMocks.getAudioTrackBlob
+    getAudioTrackBlob: apiMocks.getAudioTrackBlob,
+    getSongVideoUrl: (id) => `/songs/${id}/video`
   }
 }));
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
@@ -120,11 +121,12 @@ test("karaoke media leaves failed browser tracks unloaded", async () => {
   await waitFor(() => expect(apiMocks.getAudioTrackBlob).toHaveBeenCalledTimes(2));
   expect([...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))).toBe(true);
 });
-test("karaoke media loads authenticated audio blobs and initializes YouTube playback", async () => {
+test("karaoke media loads authenticated audio blobs and activates a verified local clip", async () => {
   const createObjectURL = vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => `blob:${blob.size}`);
   const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-  const send = vi.fn();
   const sync = vi.fn();
+  const availability = vi.fn();
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   const instrumentalRef = createRef();
   const { container, rerender } = render(
     <KaraokeMedia
@@ -136,89 +138,60 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1.25}
-      song={{ id: "song", title: "Title", video_url: "video.mp4" }}
-      youTubeVideoId="video-id"
-      sendYouTubeCommand={send}
+      song={{ id: "song", title: "Title", video_url: "local:clip" }}
       syncSecondaryMedia={sync}
+      onClipAvailabilityChange={availability}
     />
   );
   expect([...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))).toBe(true);
   await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(2));
-  send.mockClear();
   const audio = container.querySelector("audio");
   expect(audio.getAttribute("src")).toBe("blob:12");
   Object.defineProperty(audio, "volume", { configurable: true, writable: true, value: 0 });
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
-  fireEvent.load(container.querySelector("iframe"));
-  verify([send.mock.calls.map(([command]) => command), "toEqual", ["addEventListener", "mute", "setPlaybackRate", "playVideo"]]);
+  const video = container.querySelector("video");
+  verify([video.getAttribute("src"), "toBe", "/songs/song/video"]);
+  expect(container.querySelector("iframe")).toBeNull();
+  fireEvent.loadedData(video);
   expect(sync).toHaveBeenCalled();
+  expect(availability).toHaveBeenLastCalledWith(true);
+  expect(video.play).toHaveBeenCalled();
   rerender(
     <KaraokeMedia
       instrumentalRef={instrumentalRef}
       vocalsRef={createRef()}
       videoRef={createRef()}
-      youTubeClipRef={createRef()}
       isPlaying={false}
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1}
       song={{ id: "song", title: "Title" }}
-      youTubeVideoId="video-id"
-      sendYouTubeCommand={send}
       syncSecondaryMedia={sync}
     />
   );
-  fireEvent.load(container.querySelector("iframe"));
-  rerender(
-    <KaraokeMedia
-      instrumentalRef={instrumentalRef}
-      vocalsRef={createRef()}
-      videoRef={createRef()}
-      youTubeClipRef={createRef()}
-      isPlaying={false}
-      musicVolume={0.5}
-      vocalVolume={0.4}
-      speed={1}
-      song={{ id: "song", title: "Title", video_url: "video.mp4" }}
-      youTubeVideoId=""
-      sendYouTubeCommand={send}
-      syncSecondaryMedia={sync}
-    />
-  );
-  verify([container.querySelector("video").getAttribute("src"), "toBe", "video.mp4"]);
+  expect(container.querySelector("video")).toBeNull();
   cleanup();
   expect(revokeObjectURL).toHaveBeenCalledTimes(2);
 });
-test("karaoke media falls back when the YouTube player rejects a clip", async () => {
+test("karaoke media ignores legacy YouTube URLs and keeps the default video fallback", async () => {
   const availability = vi.fn();
   const { container } = render(
     <KaraokeMedia
       instrumentalRef={createRef()}
       vocalsRef={createRef()}
       videoRef={createRef()}
-      youTubeClipRef={createRef()}
       isPlaying={false}
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1}
       song={{ id: "blocked-song", title: "Title", video_url: "https://youtube.com/watch?v=abcdefghijk" }}
-      youTubeVideoId="abcdefghijk"
-      sendYouTubeCommand={vi.fn()}
       syncSecondaryMedia={vi.fn()}
       onClipAvailabilityChange={availability}
     />
   );
-  const frame = container.querySelector("iframe");
-  fireEvent(
-    globalThis,
-    new MessageEvent("message", {
-      data: JSON.stringify({ event: "onError", info: 101 }),
-      origin: "https://www.youtube.com",
-      source: frame.contentWindow
-    })
-  );
-  await waitFor(() => expect(container.querySelector("iframe")).toBeNull());
+  expect(container.querySelector("iframe")).toBeNull();
+  expect(container.querySelector("video")).toBeNull();
   expect(availability).toHaveBeenLastCalledWith(false);
 });
 test("waveform supports click, drag and range seeking", () => {

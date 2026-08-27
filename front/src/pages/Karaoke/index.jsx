@@ -24,7 +24,7 @@ import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePlaybackMachine from "./hooks/usePlaybackMachine";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
-import { getYouTubeVideoId, transposeKey } from "./utils/data";
+import { transposeKey } from "./utils/data";
 import { formatCompactKey } from "./utils/display";
 import { getMicrophoneLevel } from "./utils/transport";
 
@@ -55,7 +55,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
-  const youTubeClipRef = useRef(null);
   const containerRef = useRef(null);
   const playback = usePlaybackMachine();
   const { isPlaying } = playback;
@@ -182,9 +181,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     keyShift,
     currentTimeRef
   });
-  const youTubeVideoId = getYouTubeVideoId(song?.video_url);
-  const [clipAvailable, setClipAvailable] = useState(Boolean(song?.video_url));
-  useEffect(() => setClipAvailable(Boolean(song?.video_url)), [song?.id, song?.video_url]);
+  const [clipAvailable, setClipAvailable] = useState(false);
+  useEffect(() => setClipAvailable(false), [song?.id, song?.video_url]);
 
   const lyricTime = currentTime;
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
@@ -205,8 +203,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     updateMelodyGuide,
     videoRef,
     vocalVolume,
-    vocalsRef,
-    youTubeClipRef
+    vocalsRef
   });
   const { returnToLibrary, seekTo, skip, stop, togglePlay } = useKaraokeTransport({
     currentTime,
@@ -356,15 +353,12 @@ export default function Karaoke({ onOpenAppSettings }) {
         instrumentalRef,
         isPlaying,
         musicVolume,
-        sendYouTubeCommand,
         song,
         speed,
         syncSecondaryMedia,
         videoRef,
         vocalVolume,
         vocalsRef,
-        youTubeClipRef,
-        youTubeVideoId,
         onClipAvailabilityChange: setClipAvailable
       }}
       recordingError={recordingError}

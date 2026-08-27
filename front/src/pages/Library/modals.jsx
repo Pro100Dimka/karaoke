@@ -94,7 +94,12 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
             <Button variant="outlined" type="button" onClick={onCancel}>
               {tr("Пропустить")}
             </Button>
-            <Button variant="contained" type="submit" disabled={!item.title.trim()}>
+            <Button
+              variant="contained"
+              type="button"
+              disabled={!item.title.trim()}
+              onClick={onConfirm}
+            >
               {tr("Подтвердить")}
             </Button>
           </>

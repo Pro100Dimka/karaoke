@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -55,8 +56,10 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
         SessionLocal=Mock(return_value=database),
         _itunes_genre=Mock(return_value="Rock"),
         _youtube_video_id=Mock(return_value="DAaLa3vF8sU"),
+        _download_youtube_video=Mock(return_value=True),
         commit=Mock(),
     )
+    monkeypatch.setattr(metadata.song_service, "resolve_output_dir", Mock(return_value=Path("output")))
     monkeypatch.setattr(metadata.repositories, "get_song", Mock(return_value=song))
     invalidate = Mock()
     monkeypatch.setattr(metadata.revision_cache, "invalidate", invalidate)
@@ -65,7 +68,7 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
     metadata.enrich_song("song")
 
     assert song.genre == "Rock"
-    assert song.video_url == "https://www.youtube.com/watch?v=DAaLa3vF8sU"
+    assert song.video_url == metadata.LOCAL_VIDEO_URL
     metadata.commit.assert_called_once_with(database)
     invalidate.assert_called_once_with(song)
     database.close.assert_called_once_with()

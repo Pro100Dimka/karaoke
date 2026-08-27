@@ -8,20 +8,29 @@ import json
 import logging
 import os
 import re
+import subprocess
 import threading
 import urllib.parse
 import urllib.request
+from collections import Counter
+from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select
 
+import config
 import models
 from app import repositories
-from app.services import revision_cache
+from app.services import revision_cache, song_service
 from app.services.db_utils import commit
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
+
+try:
+    from yt_dlp import YoutubeDL
+except ImportError:  # Optional in lightweight developer environments.
+    YoutubeDL = None
 
 _YOUTUBE_ID_RE = re.compile(r'"videoId":"([\w-]{11})"')
 _PLAIN_YOUTUBE_ID_RE = re.compile(r"[\w-]{11}")
@@ -36,6 +45,8 @@ _LOW_QUALITY_VIDEO_HINTS = (
     "текст песни", "слова песни", "караоке", "аудио", "обложка",
 )
 _GOOD_VIDEO_HINTS = ("official music video", "official video", "music video", "премьера клипа", "клип")
+LOCAL_VIDEO_URL = "local:clip"
+LOCAL_VIDEO_NAME = "clip.mp4"
 _active: set[str] = set()
 _validated_video_urls: set[str] = set()
 _lock = threading.Lock()
@@ -208,6 +219,172 @@ def _youtube_video_id(title: str, artist: str | None) -> str | None:
     return None
 
 
+def resolve_local_video(song: models.Song) -> Path | None:
+    if song.video_url != LOCAL_VIDEO_URL:
+        return None
+    candidate = song_service.resolve_output_dir(song) / LOCAL_VIDEO_NAME
+    return candidate if candidate.is_file() else None
+
+
+def _ffmpeg_output(arguments: list[str], *, timeout: float) -> subprocess.CompletedProcess[bytes]:
+    executable = str(config.FFMPEG_EXE)
+    return subprocess.run(
+        [executable, "-hide_banner", "-nostdin", *arguments],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        timeout=timeout,
+    )
+
+
+def _video_info(path: Path) -> tuple[int, int, float] | None:
+    try:
+        # With no output target ffmpeg prints container metadata and exits
+        # immediately; decoding the whole clip here would make enrichment
+        # unnecessarily slow.
+        result = _ffmpeg_output(["-i", str(path)], timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    details = result.stderr.decode("utf-8", errors="ignore")
+    dimensions = re.search(r"Video:.*?\b(\d{3,5})x(\d{3,5})\b", details)
+    duration = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", details)
+    if not dimensions or not duration:
+        return None
+    hours, minutes, seconds = duration.groups()
+    return (
+        int(dimensions.group(1)),
+        int(dimensions.group(2)),
+        int(hours) * 3600 + int(minutes) * 60 + float(seconds),
+    )
+
+
+def _video_has_motion(path: Path, duration: float) -> bool:
+    frame_size = 32 * 18
+    sample_rate = max(0.05, min(1.0, 24 / max(1.0, duration)))
+    try:
+        result = _ffmpeg_output(
+            [
+                "-i", str(path), "-vf", f"fps={sample_rate:.6f},scale=32:18,format=gray",
+                "-frames:v", "24", "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1",
+            ],
+            timeout=45,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    frames = [
+        result.stdout[offset:offset + frame_size]
+        for offset in range(0, len(result.stdout) - frame_size + 1, frame_size)
+    ]
+    if len(frames) < 4:
+        return False
+    changes = [
+        sum(abs(left - right) for left, right in zip(previous, current, strict=True)) / frame_size
+        for previous, current in zip(frames, frames[1:], strict=False)
+    ]
+    return sum(change >= 3.5 for change in changes) >= 3
+
+
+def _detected_crop(path: Path, width: int, height: int, duration: float) -> str:
+    seek = max(0.0, min(duration * 0.35, max(0.0, duration - 8)))
+    try:
+        result = _ffmpeg_output(
+            [
+                "-ss", f"{seek:.3f}", "-i", str(path), "-t", "8",
+                "-vf", "cropdetect=limit=24:round=2:reset=0", "-an", "-f", "null", "-",
+            ],
+            timeout=35,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return f"crop={width}:{height}:0:0"
+    crops = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", result.stderr.decode("utf-8", errors="ignore"))
+    if not crops:
+        return f"crop={width}:{height}:0:0"
+    crop_width, crop_height, x, y = Counter(crops).most_common(1)[0][0]
+    if int(crop_width) < width * 0.55 or int(crop_height) < height * 0.55:
+        return f"crop={width}:{height}:0:0"
+    return f"crop={crop_width}:{crop_height}:{x}:{y}"
+
+
+def _normalize_video(source: Path, destination: Path) -> bool:
+    info = _video_info(source)
+    if not info:
+        return False
+    width, height, duration = info
+    if width < 1280 or height < 720 or duration < 30 or not _video_has_motion(source, duration):
+        return False
+    crop = _detected_crop(source, width, height, duration)
+    target_width, target_height = (1920, 1080) if height >= 1080 else (1280, 720)
+    temporary = destination.with_name(f".{destination.stem}-normalizing{destination.suffix}")
+    temporary.unlink(missing_ok=True)
+    filter_chain = (
+        f"{crop},scale={target_width}:{target_height}:force_original_aspect_ratio=increase,"
+        f"crop={target_width}:{target_height}"
+    )
+    try:
+        result = _ffmpeg_output(
+            [
+                "-y", "-i", str(source), "-map", "0:v:0", "-an", "-sn", "-dn",
+                "-vf", filter_chain, "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary),
+            ],
+            timeout=max(180, min(1800, int(duration * 4))),
+        )
+        if result.returncode != 0 or not temporary.is_file() or temporary.stat().st_size < 1_000_000:
+            return False
+        os.replace(temporary, destination)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _download_youtube_video(video_id: str, output_dir: Path) -> bool:
+    if YoutubeDL is None:
+        logger.info("Music video download skipped: yt-dlp is not installed")
+        return False
+    output_dir.mkdir(parents=True, exist_ok=True)
+    destination = output_dir / LOCAL_VIDEO_NAME
+    for stale in output_dir.glob(".clip-download.*"):
+        stale.unlink(missing_ok=True)
+    options = {
+        "format": (
+            "bestvideo[vcodec^=avc1][ext=mp4][height>=720]/"
+            "best[vcodec^=avc1][ext=mp4][height>=720]/"
+            "bestvideo[ext=mp4][height>=720]/best[ext=mp4][height>=720]"
+        ),
+        "outtmpl": str(output_dir / ".clip-download.%(ext)s"),
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "overwrites": True,
+        "continuedl": True,
+        "socket_timeout": 20,
+        "retries": 2,
+        "fragment_retries": 2,
+        "max_filesize": 400 * 1024 * 1024,
+    }
+    try:
+        with YoutubeDL(options) as downloader:
+            result = downloader.download([f"https://www.youtube.com/watch?v={video_id}"])
+        candidates = [
+            path for path in output_dir.glob(".clip-download.*")
+            if path.is_file() and path.suffix not in {".part", ".ytdl"}
+        ]
+        source = max(candidates, key=lambda path: path.stat().st_size) if candidates else None
+        if result != 0 or source is None or not _normalize_video(source, destination):
+            destination.unlink(missing_ok=True)
+            return False
+        return True
+    except Exception as exc:  # Network extraction is optional and must never break processing.
+        logger.info("Music video download failed for %s: %s", video_id, exc)
+        destination.unlink(missing_ok=True)
+        return False
+    finally:
+        for stale in output_dir.glob(".clip-download.*"):
+            stale.unlink(missing_ok=True)
+
+
 def enrich_song(song_id: str) -> None:
     db = SessionLocal()
     try:
@@ -221,6 +398,10 @@ def enrich_song(song_id: str) -> None:
         except Exception as exc:  # Network metadata is optional.
             logger.info("Genre lookup skipped for %s: %s", song_id, exc)
         try:
+            output_dir = song_service.resolve_output_dir(song)
+            if song.video_url == LOCAL_VIDEO_URL and not resolve_local_video(song):
+                song.video_url = None
+                video_changed = True
             existing_id = _youtube_id_from_url(song.video_url)
             if existing_id and song.video_url not in _validated_video_urls:
                 quality = _youtube_video_is_acceptable(existing_id, song.title, song.artist)
@@ -229,14 +410,19 @@ def enrich_song(song_id: str) -> None:
                 elif quality is False:
                     song.video_url = None
                     video_changed = True
-            if not song.video_url: video_id = _youtube_video_id(song.title, song.artist)
+            if existing_id and song.video_url:
+                video_id = existing_id
+            elif not song.video_url:
+                video_id = _youtube_video_id(song.title, song.artist)
         except Exception as exc:  # Network metadata is optional.
             logger.info("Music video lookup skipped for %s: %s", song_id, exc)
         if genre and not song.genre: song.genre = genre
-        if video_id and not song.video_url:
-            song.video_url = f"https://www.youtube.com/watch?v={video_id}"
-            _validated_video_urls.add(song.video_url)
-            video_changed = True
+        if video_id:
+            downloaded = _download_youtube_video(video_id, output_dir)
+            next_video_url = LOCAL_VIDEO_URL if downloaded else None
+            if song.video_url != next_video_url:
+                song.video_url = next_video_url
+                video_changed = True
         if genre or video_changed:
             commit(db)
             revision_cache.invalidate(song)
@@ -274,9 +460,9 @@ def enqueue_missing(limit: int = 8) -> int:
         if (
             not song.genre
             or not song.video_url
+            or (song.video_url == LOCAL_VIDEO_URL and resolve_local_video(song) is None)
             or (
                 _youtube_id_from_url(song.video_url)
-                and song.video_url not in _validated_video_urls
             )
         )
     ][:max(0, limit)]
