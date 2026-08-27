@@ -37,6 +37,7 @@ export function createOnlineRoomMessageHandler(options) {
     setVoiceError,
     setTransferStatus,
     onParticipantJoined = () => {},
+    onParticipantLeft = () => {},
     onEffectControl = () => {},
     onConnectionClosed
   } = options;
@@ -269,7 +270,8 @@ export function createOnlineRoomMessageHandler(options) {
     "participant-joined": (message) => {
       const { participant } = message;
       setParticipants((items) => upsertParticipant(items, participant));
-      if (participant?.id !== activeRoomRef.current?.selfId) onParticipantJoined(participant);
+      if (participant?.id && participant.id !== activeRoomRef.current?.selfId)
+        onParticipantJoined(participant);
       if (participant?.id) voice.invite(participant.id).catch(() => {});
     },
     "participant-updated": (message) =>
@@ -286,6 +288,8 @@ export function createOnlineRoomMessageHandler(options) {
     },
     "participant-left": (message) => {
       setParticipants((items) => items.filter((item) => item.id !== message.participantId));
+      if (message.participantId && message.participantId !== activeRoomRef.current?.selfId)
+        onParticipantLeft(message.participantId);
       const offered = hostSongCommandRef.current;
       if (activeRoomRef.current?.host && offered?.expectedIds?.has(message.participantId)) {
         offered.expectedIds.delete(message.participantId);

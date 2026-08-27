@@ -1,7 +1,7 @@
 import { Lock, LogOut, Mic, MicOff, Sparkles, Unlock, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { Box, IconButton, Popover, Slider, Stack, Typography } from "../theme/ui";
+import { Box, IconButton, Popover, RotaryKnob, Slider, Stack, Typography } from "../theme/ui";
 import LiveSignalWaveform from "./LiveSignalWaveform";
 
 const key = (enabled, on, off) => `room.person.${enabled ? on : off}`;
@@ -101,11 +101,11 @@ export default function OnlineRoomParticipant({
   ];
 
   const effectFields = [
-    ["volume", t("Громкость микрофона"), 2],
-    ["reverb", t("Реверб"), 1],
-    ["echo", t("Эхо"), 1],
-    ["delay", t("Дилей"), 1],
-    ["noise_suppression", t("Шумоподавление"), 1]
+    ["volume", t("Громкость микрофона"), 2, 1, "primary"],
+    ["reverb", t("Реверб"), 1, 0, "secondary"],
+    ["echo", t("Эхо"), 1, 0, "primary"],
+    ["delay", t("Дилей"), 1, 0, "secondary"],
+    ["noise_suppression", t("Шумоподавление"), 1, 0.35, "primary"]
   ];
   const commitEffect = (name, value) => {
     const next = { ...effectDraft, [name]: value };
@@ -251,22 +251,27 @@ export default function OnlineRoomParticipant({
                       {t("Пользователь запретил изменять свои эффекты")}
                     </Typography>
                   )}
-                  {effectFields.map(([name, label, maximum]) => (
-                    <Slider
-                      key={name}
-                      label={label}
-                      min={0}
-                      max={maximum}
-                      step={0.05}
-                      value={effectDraft[name] ?? 0}
-                      disabled={effectsLocked}
-                      formatValue={(value) => `${Math.round(value * 100)}%`}
-                      onChange={(value) =>
-                        setEffectDraft((current) => ({ ...current, [name]: value }))
-                      }
-                      onCommit={(value) => commitEffect(name, value)}
-                    />
-                  ))}
+                  <Stack direction="row" justify="center" gap="var(--space-3)" wrap>
+                    {effectFields.map(([name, label, maximum, defaultValue, accent]) => (
+                      <RotaryKnob
+                        key={name}
+                        label={label}
+                        min={0}
+                        max={maximum}
+                        step={0.05}
+                        defaultValue={defaultValue}
+                        value={effectDraft[name] ?? defaultValue}
+                        displayFactor={100}
+                        accent={accent}
+                        size="md"
+                        disabled={effectsLocked}
+                        onChange={(value) =>
+                          setEffectDraft((current) => ({ ...current, [name]: value }))
+                        }
+                        onCommit={(value) => commitEffect(name, value)}
+                      />
+                    ))}
+                  </Stack>
                 </Stack>
               </Popover>
             </Box>

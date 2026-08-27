@@ -116,6 +116,8 @@ test("room messages update participants, UI, voice and connection state", async 
     setTransferStatus: vi.fn()
   };
   let current = true;
+  const onParticipantJoined = vi.fn();
+  const onParticipantLeft = vi.fn();
   const handler = createOnlineRoomMessageHandler({
     id: " ab-cd ",
     client,
@@ -126,6 +128,8 @@ test("room messages update participants, UI, voice and connection state", async 
     participantsRef,
     intentionalDisconnectRef,
     pendingSongCommandRef,
+    onParticipantJoined,
+    onParticipantLeft,
     ...setters
   });
   current = false;
@@ -149,6 +153,7 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.equal(setters.setRoomCommand.mock.calls.length, 0);
   handler({ type: "participant-joined", participant: { id: "b" } });
   handler({ type: "participant-joined", participant: null });
+  assert.deepEqual(onParticipantJoined.mock.calls, [[{ id: "b" }]]);
   handler({ type: "participant-updated", participant: { id: "b", speaking: true } });
   assert.equal(participants.find((item) => item.id === "b").speaking, true);
   roomRef.current = { selfId: "self", host: true, role: "host", retained: "value" };
@@ -165,6 +170,7 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.deepEqual(room, { selfId: "self4", host: true, role: "host" });
   handler({ type: "room-state", participants: [{ id: "b" }, { id: "c" }] });
   handler({ type: "participant-left", participantId: "b" });
+  assert.deepEqual(onParticipantLeft.mock.calls, [["b"]]);
   assert.deepEqual(participants, [{ id: "c" }]);
   assert.deepEqual(voice.removePeer.mock.calls.at(-1), ["b"]);
   handler({ type: "signal", fromId: "a", signal: {} });

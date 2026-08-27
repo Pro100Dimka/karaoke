@@ -1,5 +1,8 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { playParticipantJoinedSound } from "../src/contexts/onlineRoomAudio.js";
+import {
+  playParticipantJoinedSound,
+  playParticipantLeftSound
+} from "../src/contexts/onlineRoomAudio.js";
 import { notCalled, verify } from "./helpers/assertions.mjs";
 afterEach(() => {
   vi.restoreAllMocks();
@@ -42,13 +45,16 @@ test("closes the participant notification AudioContext when playback actually en
   oscillators[1].onended();
   await Promise.resolve();
   verify([close, "toHaveBeenCalledTimes", 1], [oscillators[1].onended, "toBeNull"]);
+  expect(playParticipantLeftSound()).toBe(true);
+  expect(oscillators).toHaveLength(4);
+  expect(oscillators[2].frequency.value).toBe(659.25);
 });
 test("notification sound stays optional when Web Audio is unavailable or fails", () => {
-  expect(() => playParticipantJoinedSound()).not.toThrow();
+  expect(playParticipantJoinedSound()).toBe(false);
   globalThis.AudioContext = class {
     constructor() {
       throw new Error("audio unavailable");
     }
   };
-  expect(() => playParticipantJoinedSound()).not.toThrow();
+  expect(playParticipantJoinedSound()).toBe(false);
 });

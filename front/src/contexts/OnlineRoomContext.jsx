@@ -22,7 +22,7 @@ import useOnlineRoomCommands from "./hooks/useOnlineRoomCommands";
 import useOnlineRoomValue from "./hooks/useOnlineRoomValue";
 import useSpeakingLevels from "./hooks/useSpeakingLevels";
 import { createCommandId } from "./onlineRoomActions";
-import { playParticipantJoinedSound } from "./onlineRoomAudio";
+import { playParticipantJoinedSound, playParticipantLeftSound } from "./onlineRoomAudio";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 
 const OnlineRoomContext = createContext(null);
@@ -308,6 +308,8 @@ export function OnlineRoomProvider({ children }) {
   );
   const leaveRoom = useCallback(
     () => {
+      const hadRoom = Boolean(roomRef.current);
+      if (hadRoom && !roomSoundMutedRef.current) playParticipantLeftSound();
       connectionTokenRef.current = Symbol("left-room");
       intentionalDisconnectRef.current = true;
       restoreApplicationAudio();
@@ -559,10 +561,13 @@ export function OnlineRoomProvider({ children }) {
           setVoiceError,
           setTransferStatus,
           onParticipantJoined: (participant) => {
-            playParticipantJoinedSound(participant);
+            if (!roomSoundMutedRef.current) playParticipantJoinedSound(participant);
             Promise.resolve(api.getAudioSettings?.())
               .then((settings) => settings && publishParticipantEffects(settings))
               .catch(() => {});
+          },
+          onParticipantLeft: () => {
+            if (!roomSoundMutedRef.current) playParticipantLeftSound();
           },
           onEffectControl: (effects) => {
             api
@@ -582,6 +587,7 @@ export function OnlineRoomProvider({ children }) {
               });
           },
           onConnectionClosed: (message = translateSaved("Соединение с комнатой потеряно.")) => {
+            if (roomRef.current && !roomSoundMutedRef.current) playParticipantLeftSound();
             connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
             cleanupConnection();
@@ -595,6 +601,7 @@ export function OnlineRoomProvider({ children }) {
         const normalizedId = await client.connect({ id, name, host, hostToken });
         if (!isCurrentConnection())
           throw new Error(translateSaved("Подключение отменено новым запросом"));
+        if (!roomSoundMutedRef.current) playParticipantJoinedSound();
 
         // Show the room UI as soon as the WebSocket is connected. The server
         // room-state packet will replace the temporary self id a moment later.

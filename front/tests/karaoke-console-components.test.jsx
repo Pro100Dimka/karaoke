@@ -183,6 +183,46 @@ test("rotary knob jumps to the clicked arc and accepts an exact percentage", () 
   expect(change).toHaveBeenLastCalledWith(0.75);
   expect(commit).toHaveBeenLastCalledWith(0.75);
 });
+test("rotary knob displays amplified volume and remains inert while disabled", () => {
+  const change = vi.fn();
+  const commit = vi.fn();
+  const view = render(
+    <RotaryKnob
+      label="Microphone"
+      value={1.2}
+      max={2}
+      displayFactor={100}
+      onChange={change}
+      onCommit={commit}
+    />
+  );
+  expect(view.container.querySelector("strong").textContent).toBe("120%");
+  fireEvent.doubleClick(view.container.querySelector("strong"));
+  const editor = view.getByRole("spinbutton", { name: "Microphone, 120%" });
+  fireEvent.change(editor, { target: { value: "150" } });
+  fireEvent.keyDown(editor, { key: "Enter" });
+  expect(change).toHaveBeenLastCalledWith(1.5);
+  expect(commit).toHaveBeenLastCalledWith(1.5);
+
+  view.rerender(
+    <RotaryKnob
+      label="Microphone"
+      value={1.2}
+      max={2}
+      displayFactor={100}
+      disabled
+      onChange={change}
+      onCommit={commit}
+    />
+  );
+  change.mockClear();
+  commit.mockClear();
+  fireEvent.change(view.getByRole("slider", { name: "Microphone" }), {
+    target: { value: "1.5" }
+  });
+  expect(change).not.toHaveBeenCalled();
+  expect(commit).not.toHaveBeenCalled();
+});
 test("song strip formats metadata and delegates seeking", () => {
   const seek = vi.fn();
   const result = render(<SongStrip song={{ title: "Song", performer: "Singer" }} currentTime={65} duration={130} onSeek={seek} />);

@@ -19,7 +19,9 @@ export default function RotaryKnob({
   onChange,
   onCommit,
   accent = "primary",
-  size = "lg"
+  size = "lg",
+  disabled = false,
+  displayFactor
 }) {
   const inputId = `rotary-knob-${normalizeId(useId())}`;
   const dragRef = useRef(null);
@@ -39,7 +41,11 @@ export default function RotaryKnob({
   const range = max - min || 1;
   const ratio = (normalized - min) / range;
   const percent = Math.round(ratio * 100);
+  const displayValue = Number.isFinite(displayFactor)
+    ? Math.round(normalized * displayFactor)
+    : percent;
   const setValue = (nextValue) => {
+    if (disabled) return valueRef.current;
     const next = clamp(nextValue, min, max);
     valueRef.current = next;
     onChange?.(next);
@@ -52,9 +58,17 @@ export default function RotaryKnob({
     if (drag) onCommit?.(drag.value);
   };
   const commitPercent = () => {
+    if (disabled) {
+      setEditing(false);
+      return;
+    }
     const number = Number(draftPercent);
     if (Number.isFinite(number)) {
-      const next = setValue(min + (clamp(number, 0, 100) / 100) * range);
+      const next = setValue(
+        Number.isFinite(displayFactor)
+          ? clamp(number / displayFactor, min, max)
+          : min + (clamp(number, 0, 100) / 100) * range
+      );
       onCommit?.(next);
     }
     setEditing(false);
@@ -64,6 +78,8 @@ export default function RotaryKnob({
     <label
       className={`karaoke-effect-dial karaoke-effect-dial--${accent} ui-control`}
       data-size={size}
+      data-disabled={disabled || undefined}
+      aria-disabled={disabled || undefined}
       htmlFor={inputId}
       style={{
         display: "flex",
@@ -75,7 +91,7 @@ export default function RotaryKnob({
         "--dial-angle": `${-135 + ratio * 270}deg`
       }}
       onPointerDown={(event) => {
-        if (event.button !== 0 || event.target.closest("input")) return;
+        if (disabled || event.button !== 0 || event.target.closest("input")) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture?.(event.pointerId);
         const control = event.target.closest(".karaoke-effect-dial__control");
@@ -111,6 +127,7 @@ export default function RotaryKnob({
       onPointerCancel={stopDrag}
       onLostPointerCapture={stopDrag}
       onWheel={(event) => {
+        if (disabled) return;
         event.preventDefault();
         const next = setValue(
           getRotaryWheelValue({
@@ -130,6 +147,7 @@ export default function RotaryKnob({
         className="karaoke-effect-dial__control"
         aria-hidden="true"
         onDoubleClick={(event) => {
+          if (disabled) return;
           event.preventDefault();
           event.stopPropagation();
           const next = setValue(defaultValue);
@@ -144,10 +162,10 @@ export default function RotaryKnob({
             className="ui-control"
             data-size="xs"
             ref={editorRef}
-            aria-label={`${label}, ${percent}%`}
+            aria-label={`${label}, ${displayValue}%`}
             inputMode="decimal"
             min="0"
-            max="100"
+            max={Number.isFinite(displayFactor) ? max * displayFactor : 100}
             type="number"
             value={draftPercent}
             onBlur={commitPercent}
@@ -162,13 +180,14 @@ export default function RotaryKnob({
       ) : (
         <strong
           onDoubleClick={(event) => {
+            if (disabled) return;
             event.preventDefault();
             event.stopPropagation();
-            setDraftPercent(String(percent));
+            setDraftPercent(String(displayValue));
             setEditing(true);
           }}
         >
-          {percent}%
+          {displayValue}%
         </strong>
       )}
       <input
@@ -188,9 +207,11 @@ export default function RotaryKnob({
         max={max}
         step={step}
         value={normalized}
+        disabled={disabled}
         aria-label={label}
-        aria-valuetext={`${percent}%`}
+        aria-valuetext={`${displayValue}%`}
         onChange={(event) => {
+          if (disabled) return;
           const next = setValue(Number(event.target.value));
           onCommit?.(next);
         }}
