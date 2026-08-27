@@ -1,6 +1,7 @@
 import { Volume2 } from "lucide-react";
+import LiveSignalWaveform from "../../components/LiveSignalWaveform";
 import { translateSaved as tr } from "../../i18n/runtime";
-import { Button, ConfigForm, Progress, Stack, Switch, Typography } from "../../theme/ui";
+import { Button, ConfigForm, Stack, Switch, Typography } from "../../theme/ui";
 import { bindField } from "./bindings";
 import { FIELDS } from "./schema";
 
@@ -44,11 +45,7 @@ const RENDERERS = {
           {value ? tr("Включено") : tr("Выключено")}
         </Typography>
       </Stack>
-      <Progress
-        size="sm"
-        value={value ? context.audio.level : 0}
-        aria-label={tr("Уровень микрофона")}
-      />
+      <LiveSignalWaveform active={Boolean(value)} level={context.audio.level} />
     </Stack>
   )
 };

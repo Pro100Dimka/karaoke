@@ -1,0 +1,53 @@
+.live-signal-wave {
+  position: relative;
+  inline-size: 100%;
+  block-size: 3rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 42%, transparent);
+  border-radius: var(--shape-md);
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 24%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 24% 25%,
+      transparent 25% 49%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 49% 50%,
+      transparent 50% 74%,
+      color-mix(in srgb, var(--color-primary) 7%, transparent) 74% 75%,
+      transparent 75%
+    ),
+    color-mix(in srgb, var(--ui-bg-deep) 78%, transparent);
+  box-shadow:
+    inset 0 0 1.2rem color-mix(in srgb, var(--color-primary) 8%, transparent),
+    0 0 0.8rem color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.live-signal-wave svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  filter: drop-shadow(0 0 0.22rem color-mix(in srgb, var(--color-primary) 78%, transparent));
+}
+
+.live-signal-wave__shape {
+  transition: opacity 180ms ease;
+}
+
+.live-signal-wave__axis {
+  stroke: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  stroke-width: 0.7;
+}
+
+.live-signal-wave[data-active="false"] .live-signal-wave__shape {
+  opacity: 0.28;
+}
+
+.live-signal-wave[data-compact="true"] {
+  flex: 0 0 4.6rem;
+  inline-size: 4.6rem;
+  block-size: 1.45rem;
+  border-radius: var(--radius-pill);
+  box-shadow:
+    inset 0 0 0.65rem color-mix(in srgb, var(--color-primary) 10%, transparent),
+    0 0 0.45rem color-mix(in srgb, var(--color-primary) 8%, transparent);
+}

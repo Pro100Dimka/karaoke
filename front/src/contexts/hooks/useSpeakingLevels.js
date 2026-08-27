@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const METER_INTERVAL_MS = 70;
-const MIN_LEVEL_DELTA_PERCENT = 4;
+const MIN_LEVEL_DELTA_PERCENT = 1;
 
 function disconnectNode(node) {
   try {
@@ -129,7 +129,7 @@ export default function useSpeakingLevels() {
         return;
       }
       analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.72;
+      analyser.smoothingTimeConstant = 0.55;
       source.connect(analyser);
 
       const samples = new Uint8Array(analyser.fftSize);
@@ -159,10 +159,11 @@ export default function useSpeakingLevels() {
         }
 
         const rms = Math.sqrt(sum / samples.length);
-        const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.012) / 0.16));
-        smoothed = smoothed * 0.68 + normalizedLevel * 0.32;
+        const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.004) / 0.12));
+        const response = normalizedLevel > smoothed ? 0.48 : 0.18;
+        smoothed += (normalizedLevel - smoothed) * response;
         const rounded = Number(smoothed.toFixed(2));
-        const published = rounded >= 0.04 ? rounded : 0;
+        const published = rounded >= 0.01 ? rounded : 0;
         if (Math.abs(published - lastPublished) * 100 < MIN_LEVEL_DELTA_PERCENT) return;
         lastPublished = published;
         publishLevel(key, published);

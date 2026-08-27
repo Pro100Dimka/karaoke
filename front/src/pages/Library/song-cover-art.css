@@ -1,0 +1,28 @@
+.library-song-cover__bar {
+  scale: 1 var(--bar-level);
+  animation-play-state: running;
+  will-change: scale, filter;
+}
+
+@keyframes library-card-wave {
+  0% {
+    scale: 1 max(0.12, calc(var(--bar-level) * 0.42));
+    filter: brightness(0.72);
+  }
+
+  45% {
+    scale: 1 min(1, calc(var(--bar-level) * 1.2));
+    filter: brightness(1.12);
+  }
+
+  100% {
+    scale: 1 max(0.2, calc(1.08 - var(--bar-level) * 0.35));
+    filter: brightness(1.45) drop-shadow(0 0 0.2rem var(--ui-primary));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-song-cover__bar {
+    animation: none !important;
+  }
+}

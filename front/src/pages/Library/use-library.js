@@ -145,11 +145,11 @@ export default function useLibrary() {
     [songsQuery.data, statusQuery.data]
   );
   const processingSongs = useMemo(() => getProcessingSongs(currentSongs), [currentSongs]);
+  const processingActive = hasActiveSongProcessing(currentSongs);
   useEffect(() => {
-    const active = hasActiveSongProcessing(currentSongs);
-    setProcessingLoadActive(active);
+    setProcessingLoadActive(processingActive);
     return () => setProcessingLoadActive(false);
-  }, [currentSongs]);
+  }, [processingActive]);
   const localSongs = useMemo(
     () => getLocalVisibleSongs(currentSongs, hiddenSongIds),
     [currentSongs, hiddenSongIds]
@@ -313,6 +313,7 @@ export default function useLibrary() {
         }))
     },
     processing: {
+      active: processingActive,
       cancel: cancelProcessing,
       close: closeProcessing,
       song: processingSong,

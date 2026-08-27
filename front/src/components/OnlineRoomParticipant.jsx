@@ -2,8 +2,7 @@ import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../i18n";
 import { Box, IconButton, Popover, Slider, Stack, Typography } from "../theme/ui";
-
-const LEVELS = [0.18, 0.38, 0.6, 0.82];
+import LiveSignalWaveform from "./LiveSignalWaveform";
 
 const key = (enabled, on, off) => `room.person.${enabled ? on : off}`;
 
@@ -70,30 +69,16 @@ export default function OnlineRoomParticipant({
             {Math.round(transferStatus.percent || 0)}%
           </Typography>
         )}
-        <Stack
-          as="span"
-          direction="row"
-          gap="var(--space-1)"
-          sx={{ width: "auto" }}
-          aria-label={t(key(speaking, "speaking", "silent"), {
+        <LiveSignalWaveform
+          active={!inactive}
+          level={level}
+          max={1}
+          compact
+          ariaLabel={t(key(speaking, "speaking", "silent"), {
             name: person.name
           })}
           title={t(key(speaking, "speakingNow", "noSignal"))}
-        >
-          {LEVELS.map((threshold) => (
-            <Box
-              as="i"
-              key={threshold}
-              data-active={level >= threshold || undefined}
-              sx={{
-                inlineSize: "var(--space-1)",
-                blockSize: "var(--space-3)",
-                borderRadius: "var(--radius-pill)",
-                background: level >= threshold ? "var(--color-primary)" : "var(--color-border)"
-              }}
-            />
-          ))}
-        </Stack>
+        />
       </Stack>
 
       <Stack

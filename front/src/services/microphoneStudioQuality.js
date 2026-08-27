@@ -65,6 +65,7 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       },
       async close() {
         globalThis.removeEventListener?.("audio-settings-changed", sync);
+        strip.close?.();
         disconnect(source);
         stop(input);
         stop(destination.stream);

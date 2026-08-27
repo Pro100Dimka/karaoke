@@ -80,7 +80,7 @@ describe("studio microphone quality", () => {
       [graph.getStream({ disabledEffects: true }), "toBe", rawStream],
       [created.filters.map((node) => node.type), "toEqual", ["highpass", "highshelf"]],
       [created.compressors, "toHaveLength", 1],
-      [created.shapers, "toHaveLength", 2],
+      [created.shapers, "toHaveLength", 1],
       [processedTrack.contentHint, "toBe", "music"]
     );
     await graph.close();

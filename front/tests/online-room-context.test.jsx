@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   createOnlineRoomMessageHandler: vi.fn(),
   muteApplicationAudio: vi.fn(),
   restoreApplicationAudio: vi.fn(),
+  prepareSpeakingMeter: vi.fn(),
   startSpeakingMeter: vi.fn(),
   stopSpeakingMeter: vi.fn(),
   stopAllSpeakingMeters: vi.fn()
@@ -36,6 +37,7 @@ vi.mock("../src/services/onlineRoom", () => {
     constructor(client) {
       this.client = client;
       this.start = mocks.start;
+      this.getMeterStream = () => this.meterStream;
       this.stop = vi.fn();
       this.setMicrophoneMuted = vi.fn();
       this.lifecycleVersion = 0;
@@ -70,6 +72,7 @@ vi.mock("../src/contexts/hooks/useSpeakingLevels", () => ({
   default: () => ({
     localSpeakingLevel: 0.4,
     speakingLevels: { guest: 0.2 },
+    prepareSpeakingMeter: mocks.prepareSpeakingMeter,
     startSpeakingMeter: mocks.startSpeakingMeter,
     stopSpeakingMeter: mocks.stopSpeakingMeter,
     stopAllSpeakingMeters: mocks.stopAllSpeakingMeters
@@ -151,8 +154,7 @@ describe("online room provider", () => {
     await act(() => result.current.createRoom("Alice"));
     act(() => result.current.setRoomSoundMuted(true));
     expect(result.current.roomSoundMuted).toBe(true);
-    const { onConnectionClosed, isCurrentConnection } =
-      mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
+    const { onConnectionClosed, isCurrentConnection } = mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
     expect(isCurrentConnection()).toBe(true);
     await act(async () => onConnectionClosed());
     expect(isCurrentConnection()).toBe(false);
@@ -300,9 +302,12 @@ describe("online room provider", () => {
 
     await act(() => hook.result.current.createRoom("Alice"));
     const unmutedStream = stream();
+    const rawMeterStream = stream();
+    mocks.voices[0].meterStream = rawMeterStream;
     mocks.start.mockResolvedValueOnce(unmutedStream);
     await act(() => hook.result.current.requestMicrophoneAccess());
-    expect(mocks.startSpeakingMeter).toHaveBeenLastCalledWith("local", unmutedStream);
+    expect(mocks.prepareSpeakingMeter).toHaveBeenCalled();
+    expect(mocks.startSpeakingMeter).toHaveBeenLastCalledWith("local", rawMeterStream);
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(false);
     expect(mocks.clients[0].send).toHaveBeenLastCalledWith("presence", { micMuted: false });
     act(() => mocks.voices[0].onTransferProgress({ stage: "sending", percent: 1 }));
@@ -330,15 +335,13 @@ describe("online room provider", () => {
       expect(await hook.result.current.requestMicrophoneAccess()).toBe(false);
     });
     expect(hook.result.current.voiceError).toBe(
-      "Не удалось получить доступ к микрофону: permission denied. " +
-        "Проверьте разрешение Windows и повторите попытку."
+      "Не удалось получить доступ к микрофону: permission denied. " + "Проверьте разрешение Windows и повторите попытку."
     );
 
     mocks.start.mockRejectedValueOnce(null);
     await act(() => hook.result.current.requestMicrophoneAccess());
     expect(hook.result.current.voiceError).toBe(
-      "Не удалось получить доступ к микрофону: нет доступа к микрофону. " +
-        "Проверьте разрешение Windows и повторите попытку."
+      "Не удалось получить доступ к микрофону: нет доступа к микрофону. " + "Проверьте разрешение Windows и повторите попытку."
     );
   });
 
@@ -723,10 +726,7 @@ describe("online room provider", () => {
         contexts.push(this);
       }
       createMediaStreamSource = () => this.source;
-      createGain = () =>
-        this.master.connect.mock.calls.length
-          ? { gain: { value: 0 }, connect: vi.fn() }
-          : this.master;
+      createGain = () => (this.master.connect.mock.calls.length ? { gain: { value: 0 }, connect: vi.fn() } : this.master);
       createDelay = () => ({ delayTime: { value: 0 }, connect: vi.fn() });
       createConvolver = () => ({ buffer: null, connect: vi.fn() });
       createBuffer = () => ({ numberOfChannels: 2, getChannelData: () => new Float32Array(10) });

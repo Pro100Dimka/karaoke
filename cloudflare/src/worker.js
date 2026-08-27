@@ -372,13 +372,35 @@ export async function handleLogUpload(request, env) {
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
-  const message = String(payload?.message || "").trim();
-  if (!message) return json({ error: "Empty log message" }, 400);
-  const user = sanitizeLogUser(payload?.user);
+  const legacyMessage = String(payload?.message || "").trim();
+  const events = Array.isArray(payload?.events)
+    ? payload.events
+        .filter((event) => ["WARNING", "ERROR"].includes(String(event?.level).toUpperCase()))
+        .map((event) => ({
+          timestamp: String(event?.timestamp || "").slice(0, 40),
+          level: String(event?.level || "WARNING").toUpperCase(),
+          message: String(event?.message || "").trim().slice(0, 16_000),
+        }))
+        .filter((event) => event.message)
+    : [];
+  const hardware = payload?.hardware && typeof payload.hardware === "object" ? payload.hardware : null;
+  if (!legacyMessage && !events.length && !hardware) return json({ error: "Empty log batch" }, 400);
+  const user = sanitizeLogUser(payload?.device_id || payload?.user);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const key = `logs/${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.log`;
-  await env.LOGS.put(key, message.slice(0, MAX_LOG_BYTES), {
-    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  const batch = legacyMessage
+    ? legacyMessage.slice(0, MAX_LOG_BYTES)
+    : JSON.stringify({
+        device_id: String(payload.device_id || "").slice(0, 80),
+        display_name: String(payload.display_name || "").slice(0, 80),
+        events,
+        ...(hardware ? { hardware } : {}),
+      });
+  const extension = legacyMessage ? "log" : "json";
+  const key = `logs/${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.${extension}`;
+  await env.LOGS.put(key, batch, {
+    httpMetadata: {
+      contentType: legacyMessage ? "text/plain; charset=utf-8" : "application/json; charset=utf-8",
+    },
   });
   return json({ ok: true });
 }

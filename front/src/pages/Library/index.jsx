@@ -15,7 +15,7 @@ export default function Library() {
   const { fileImport, online, processing, recordings } = state;
   return (
     <Stack align="center" sx={{ position: "relative" }}>
-      <QuantumFieldBackdrop />
+      {!state.processing.active && <QuantumFieldBackdrop />}
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
           songCount={state.totalCount}
@@ -104,7 +104,7 @@ export default function Library() {
           onSelectSong={processing.track}
           onClose={processing.close}
           onCancel={processing.cancel}
-          onOpenKaraoke={(songId) => state.navigate("/karaoke", { state: { songId } })}
+          onOpenKaraoke={() => state.openKaraoke(processing.song)}
         />
       )}
     </Stack>

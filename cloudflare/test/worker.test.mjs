@@ -43,7 +43,6 @@ test("fetch rejects a join attempt with a missing or wrong protocol version", as
   const wrong = await room.fetch(joinRequest({ v: String(ROOM_PROTOCOL_VERSION + 1) }));
   assert.equal(wrong.status, 400);
 });
-
 test("fetch lets a correctly-versioned join proceed past the version gate", async () => {
   // A join carrying the current version must reach the *next* gate (room
   // capacity) instead of being rejected for its version -- full WS upgrade
@@ -133,12 +132,27 @@ test("stores a plain-text log message under a sanitized per-user key", async () 
   assert.equal(bucket.objects.get(key), "something went wrong");
 });
 
-test("rejects batches without hardware, warnings or errors", async () => {
+test("stores installed-backend warning batches using the device id", async () => {
+  const bucket = new FakeR2();
   const response = await handleLogUpload(
     logRequest({
       device_id: "pc-abcdef123456",
-      events: [{ level: "INFO", message: "noise" }],
+      display_name: "Singer",
+      events: [{ timestamp: "2026-08-27T00:00:00Z", level: "WARNING", message: "warning" }],
     }),
+    { LOGS: bucket }
+  );
+  assert.equal(response.status, 200);
+  const [key] = [...bucket.objects.keys()];
+  assert.match(key, /^logs\/pc-abcdef123456\/.+\.json$/);
+  assert.deepEqual(JSON.parse(bucket.objects.get(key)).events, [
+    { timestamp: "2026-08-27T00:00:00Z", level: "WARNING", message: "warning" },
+  ]);
+});
+
+test("rejects batches without hardware, warnings or errors", async () => {
+  const response = await handleLogUpload(
+    logRequest({ device_id: "pc-abcdef123456", events: [{ level: "INFO", message: "noise" }] }),
     { LOGS: new FakeR2() }
   );
   assert.equal(response.status, 400);

@@ -208,12 +208,14 @@ describe("library page", () => {
     mocks.polls = [{ data: [{ id: "one", title: "One", status: "queued" }] }, { data: [] }, { data: null }];
     const result = render(<Library />);
     await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(true));
+    expect(result.queryByTestId("backdrop")).toBeNull();
     cleanup();
     mocks.setProcessingLoadActive.mockClear();
     mocks.pollIndex = 0;
     mocks.polls = [{ data: songs }, { data: [] }, { data: null }];
-    render(<Library />);
+    const idle = render(<Library />);
     await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(false));
+    expect(idle.getByTestId("backdrop")).not.toBeNull();
   });
   test("navigates to karaoke after transition and handles room refusal", async () => {
     vi.useFakeTimers();
@@ -245,8 +247,13 @@ describe("library page", () => {
     expect(result.getByTestId("processing-modal")).not.toBeNull();
     fireEvent.click(result.getByTestId("cancel-processing"));
     await waitFor(() => expect(mocks.cancelProcessing).toHaveBeenCalledWith("one"));
+    vi.useFakeTimers();
     fireEvent.click(result.getByTestId("open-processed"));
-    expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", { state: { songId: "one" } });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(920);
+    expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", {
+      state: { songId: "one", autoPlay: true }
+    });
     fireEvent.click(result.getByTestId("close-processing"));
     expect(result.queryByTestId("processing-modal")).toBeNull();
   });

@@ -99,6 +99,7 @@ export function OnlineRoomProvider({ children }) {
   const {
     localSpeakingLevel,
     speakingLevels,
+    prepareSpeakingMeter,
     startSpeakingMeter,
     stopSpeakingMeter,
     stopAllSpeakingMeters
@@ -165,13 +166,14 @@ export function OnlineRoomProvider({ children }) {
       }
       setVoiceError("");
       setTransferStatus(null);
+      prepareSpeakingMeter();
       try {
         const stream = await voice.start();
         if (voiceRef.current !== voice) {
           stream.getTracks().forEach((track) => track.stop());
           return false;
         }
-        startSpeakingMeter("local", stream);
+        startSpeakingMeter("local", voice.getMeterStream?.() || stream);
         const muted = microphoneMutedRef.current;
         voice.setMicrophoneMuted(muted);
         clientRef.current.send("presence", { micMuted: muted });
@@ -189,7 +191,7 @@ export function OnlineRoomProvider({ children }) {
       }
     },
     // Stryker disable next-line ArrayDeclaration: startSpeakingMeter is stable.
-    [setTransferStatus, startSpeakingMeter]
+    [prepareSpeakingMeter, setTransferStatus, startSpeakingMeter]
   );
   const requestSongSync = useCallback(
     (songId, ownerId) => {
@@ -540,6 +542,7 @@ export function OnlineRoomProvider({ children }) {
           }
         })
       );
+      prepareSpeakingMeter();
       try {
         const normalizedId = await client.connect({ id, name, host, hostToken });
         if (!isCurrentConnection())
@@ -569,7 +572,7 @@ export function OnlineRoomProvider({ children }) {
               stream.getTracks().forEach((track) => track.stop());
               return;
             }
-            startSpeakingMeter("local", stream);
+            startSpeakingMeter("local", voice.getMeterStream?.() || stream);
             voice.setMicrophoneMuted(microphoneMutedRef.current);
             client.send("presence", { micMuted: microphoneMutedRef.current });
           })
@@ -596,6 +599,7 @@ export function OnlineRoomProvider({ children }) {
       attachRemoteStream,
       cleanupConnection,
       removeRemoteAudio,
+      prepareSpeakingMeter,
       resetRoomState,
       restoreApplicationAudio,
       setParticipants,

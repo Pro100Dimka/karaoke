@@ -1,16 +1,8 @@
-const CURVES = { gate: 4096, limiter: 1024 };
+const CURVES = { limiter: 1024 };
 const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
 
 function curve(length, transform) {
   return Float32Array.from({ length }, (_, index) => transform((index / (length - 1)) * 2 - 1));
-}
-
-export function buildNoiseGateCurve(strength = 0.35) {
-  const threshold = 0.0015 + clamp01(strength) * 0.018;
-  return curve(CURVES.gate, (sample) => {
-    const magnitude = Math.abs(sample);
-    return sample * (magnitude >= threshold ? 1 : (magnitude / threshold) ** 2);
-  });
 }
 
 export function buildSoftLimiterCurve(drive = 1.03) {
@@ -31,7 +23,12 @@ export function connectMicrophoneChannelStrip(
 ) {
   const highpass = assign(context.createBiquadFilter(), { frequency: 70 });
   highpass.type = "highpass";
-  const noiseGate = context.createWaveShaper();
+  const analyser = context.createAnalyser?.();
+  if (analyser) {
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.45;
+  }
+  const noiseGate = assign(context.createGain(), { gain: 1 });
   // Boosting presence before the compressor makes the compressor's envelope
   // detector react harder to exactly the frequencies (~2-8kHz) where hiss and
   // sibilance live, and the following limiter then has to soft-clip that
@@ -49,21 +46,49 @@ export function connectMicrophoneChannelStrip(
   });
   const makeup = assign(context.createGain(), { gain: 1.04 });
   const limiter = context.createWaveShaper();
-  Object.assign(noiseGate, { curve: buildNoiseGateCurve(noiseSuppression), oversample: "2x" });
   Object.assign(limiter, { curve: buildSoftLimiterCurve(), oversample: "2x" });
-  [highpass, noiseGate, presence, compressor, makeup, limiter, destination].reduce(
-    (node, next) => node.connect(next),
-    source
-  );
+  [highpass, analyser, noiseGate, presence, compressor, makeup, limiter, destination]
+    .filter(Boolean)
+    .reduce((node, next) => node.connect(next), source);
+  let suppression = clamp01(noiseSuppression);
+  let lastVoiceAt = 0;
+  let timer = null;
+  if (analyser) {
+    const samples = new Uint8Array(analyser.fftSize);
+    const updateGate = () => {
+      analyser.getByteTimeDomainData(samples);
+      const rms = Math.sqrt(
+        samples.reduce((sum, sample) => sum + ((sample - 128) / 128) ** 2, 0) / samples.length
+      );
+      const now = Date.now();
+      const threshold = 0.0035 + suppression * 0.008;
+      if (rms >= threshold) lastVoiceAt = now;
+      const held = now - lastVoiceAt < 140;
+      const openness = Math.min(1, rms / threshold);
+      const target =
+        suppression === 0 || held ? 1 : Math.max(0.12, 1 - suppression * 0.88 * (1 - openness));
+      if (typeof noiseGate.gain.setTargetAtTime === "function") {
+        noiseGate.gain.setTargetAtTime(
+          target,
+          context.currentTime,
+          target > noiseGate.gain.value ? 0.008 : 0.12
+        );
+      } else noiseGate.gain.value = target;
+    };
+    timer = globalThis.setInterval(updateGate, 24);
+    timer?.unref?.();
+  }
   return {
     highpass,
+    analyser,
     noiseGate,
     presence,
     compressor,
     makeup,
     limiter,
     setNoiseSuppression: (value) => {
-      noiseGate.curve = buildNoiseGateCurve(value);
-    }
+      suppression = clamp01(value);
+    },
+    close: () => timer && globalThis.clearInterval(timer)
   };
 }

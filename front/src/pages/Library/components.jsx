@@ -11,6 +11,7 @@ import {
 import { translateSaved as tr } from "../../i18n/runtime";
 import { Box, ProcessingSignal, Stack } from "../../theme/ui";
 import useSongCover from "./hooks/useSongCover";
+import "./song-cover-art.css";
 
 const EQUALIZER_BARS = Array.from({ length: 16 }, (_, index) => ({
   level: 0.28 + ((index * 37 + 19) % 61) / 100,
@@ -52,6 +53,7 @@ export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
               <Box
                 as="span"
                 key={index}
+                className="library-song-cover__bar"
                 sx={{
                   flex: 1,
                   alignSelf: "stretch",

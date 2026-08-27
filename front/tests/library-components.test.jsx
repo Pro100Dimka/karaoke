@@ -92,6 +92,8 @@ test("hero and cover reflect saved theme and song counts", () => {
   fireEvent.error(container.querySelector('img[src="cover/song"]'));
   expect(container.querySelector('img[src="cover/song"]')).toBeNull();
   expect(container.querySelector(".lucide-music2")).not.toBeNull();
+  expect(container.querySelectorAll(".library-song-cover__bar")).toHaveLength(16);
+  expect(container.querySelector(".library-song-cover__bar").style.animation).toContain("library-card-wave");
   mocks.noSettings = true;
   verify([() => render(<LibraryHero songCount={0} readyCount={0} />), "not.toThrow"]);
 });

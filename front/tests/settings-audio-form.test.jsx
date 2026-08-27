@@ -25,6 +25,10 @@ test("audio settings group devices, actions and levels semantically", () => {
   );
 
   expect(screen.getAllByRole("slider")).toHaveLength(2);
+  const meter = screen.getByRole("meter", { name: "Уровень микрофона" });
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  expect(meter.querySelector("path")).not.toBeNull();
+  expect(meter.querySelector("rect")).toBeNull();
   expect(screen.getByRole("button", { name: "Проверить динамики" })).not.toBeNull();
   fireEvent.click(screen.getByRole("switch"));
   expect(monitor).toHaveBeenCalledOnce();

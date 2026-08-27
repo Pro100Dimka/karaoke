@@ -95,7 +95,10 @@ describe("online room participants", () => {
       onTogglePersonEffects: vi.fn()
     };
     const view = render(<OnlineRoomParticipant {...props} />);
-    verify([document.querySelectorAll("[data-active]"), "toHaveLength", 3]);
+    const meter = screen.getByRole("meter", { name: /room.person.speaking/ });
+    expect(meter.getAttribute("aria-valuenow")).toBe("70");
+    expect(meter.querySelector("path")).not.toBeNull();
+    expect(meter.querySelector("rect")).toBeNull();
     fireEvent.click(screen.getByLabelText("room.microphone.disable"));
     fireEvent.click(screen.getByLabelText("room.sound.disable"));
     fireEvent.click(screen.getByLabelText("room.leave"));

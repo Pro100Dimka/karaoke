@@ -26,6 +26,16 @@ afterEach(() => {
   }
 });
 describe("online voice mesh", () => {
+  test("uses the raw microphone stream for the visual level meter", () => {
+    const mesh = makeMesh();
+    const processedStream = { id: "processed" };
+    const rawStream = { id: "raw" };
+    mesh.stream = processedStream;
+    expect(mesh.getMeterStream()).toBe(processedStream);
+    mesh.microphoneGraph = { rawStream };
+    expect(mesh.getMeterStream()).toBe(rawStream);
+  });
+
   test("uses the exact capture, peer and sender quality contracts", async () => {
     const media = stream([track("voice"), { ...track("video"), kind: "video" }]);
     const capture = vi.fn().mockResolvedValue(media);
@@ -38,7 +48,7 @@ describe("online voice mesh", () => {
     expect(capture).toHaveBeenCalledWith({
       audio: {
         echoCancellation: false,
-        noiseSuppression: true,
+        noiseSuppression: false,
         autoGainControl: false,
         channelCount: 1,
         latency: { ideal: 0 },
@@ -671,7 +681,11 @@ describe("online voice mesh", () => {
     expect(clear).toHaveBeenCalledWith(21);
     expect(clear).toHaveBeenCalledWith(22);
     expect(clear).toHaveBeenCalledWith(23);
-    expect(reject).toHaveBeenCalledWith(expect.objectContaining({ message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя." }));
+    expect(reject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя."
+      })
+    );
     expect(mesh.onPeerClosed).toHaveBeenCalledWith("guest");
     clear.mockClear();
     mesh.incomingFiles.set("untimed", { timer: 0 });
@@ -1836,7 +1850,11 @@ describe("online voice mesh", () => {
       timer: 1
     });
     mesh.removePeer("guest");
-    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя." }));
+    expect(rejected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя."
+      })
+    );
     expect(mesh.pendingTransferConfirmations.has("pending")).toBe(false);
   });
   test("cleans detached timers and detects channels closed after waiting", async () => {
