@@ -118,6 +118,13 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
     }
     semantic = pipeline_service.get_processing_telemetry("semantic")
     assert semantic["semantic"] is True and 48 < semantic["progress_percent"] < 70
+    pipeline_service._progress_runtime["semantic"]["completed_stage_seconds"] = {
+        "decode": 300,
+        "separate": 300,
+    }
+    # A slow GPU separation must not multiply the estimates for unrelated
+    # CPU-bound lyrics/notes stages and make the displayed ETA jump upward.
+    assert pipeline_service.get_processing_telemetry("semantic")["eta_seconds"] == semantic["eta_seconds"]
     pipeline_service._progress_runtime["unknown"] = {
         "stage": "other",
         "direct_percent": 99,

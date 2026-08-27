@@ -54,8 +54,9 @@ export function SelectedFilePreview({ file }) {
   return (
     <>
       <IconButton
-        variant="outline"
         label={label}
+        variant={playing ? "contained" : "outlined"}
+        size="lg"
         disabled={!source}
         onClick={async () => setPlaying(await toggleAudioPlayback(audio.current))}
       >
@@ -87,7 +88,17 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
           ? tr("Песня {0} из {1}", { 0: review.index + 1, 1: review.items.length })
           : "",
         title: tr("Проверьте данные песни"),
-        description: tr("Обработка начнётся только после подтверждения всех файлов")
+        description: tr("Обработка начнётся только после подтверждения всех файлов"),
+        actions: item ? (
+          <>
+            <Button variant="outlined" type="button" onClick={onCancel}>
+              {tr("Пропустить")}
+            </Button>
+            <Button variant="contained" type="submit" disabled={!item.title.trim()}>
+              {tr("Подтвердить")}
+            </Button>
+          </>
+        ) : undefined
       }}
     >
       {item && (
@@ -99,47 +110,31 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
           }}
           sx={{ padding: "var(--space-5)" }}
         >
-          <Stack gap={1}>
-            <Stack direction="row" gap={1}>
-              <TextField
-                label={tr("Исполнитель")}
-                value={item.artist}
-                onChange={(artist) => onUpdate({ artist })}
-              />
-              <TextField
-                label={tr("Название песни")}
-                required
-                value={item.title}
-                onChange={(title) => onUpdate({ title })}
-              />
-              <Select
-                label={tr("Режим обработки")}
-                value={item.processingMode}
-                options={getProcessingModeOptions()}
-                onChange={(processingMode) => onUpdate({ processingMode })}
-              />
-            </Stack>
-            <Card sx={{ padding: "var(--space-3) var(--space-4)" }}>
-              <Stack direction="row" align="center" gap={0.75}>
-                <SelectedFilePreview file={item.file} />
-                <Stack gap={0.15}>
-                  <Typography variant="caption" tone="muted">
-                    {tr("Выбранный аудиофайл")}
-                  </Typography>
-                  <Typography sx={{ fontWeight: 750, overflowWrap: "anywhere" }}>
-                    {item.file.name}
-                  </Typography>
-                </Stack>
-              </Stack>
-            </Card>
-            <Stack direction="row" justify="flex-end" gap={0.75}>
-              <Button variant="outlined" type="button" onClick={onCancel}>
-                {tr("Пропустить")}
-              </Button>
-              <Button variant="contained" type="submit" disabled={!item.title.trim()}>
-                {tr("Подтвердить")}
-              </Button>
-            </Stack>
+          <Stack direction="row" align="center" gap="var(--space-5)">
+            <TextField
+              label={tr("Исполнитель")}
+              value={item.artist}
+              size="lg"
+              required
+              fullWidth
+              onChange={(artist) => onUpdate({ artist })}
+            />
+            <TextField
+              label={tr("Название песни")}
+              required
+              fullWidth
+              size="lg"
+              value={item.title}
+              onChange={(title) => onUpdate({ title })}
+            />
+            <Select
+              label={tr("Режим обработки")}
+              size="lg"
+              value={item.processingMode}
+              options={getProcessingModeOptions()}
+              onChange={(processingMode) => onUpdate({ processingMode })}
+            />
+            <SelectedFilePreview file={item.file} />
           </Stack>
         </Box>
       )}

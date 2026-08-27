@@ -133,6 +133,12 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
     filters = command[command.index("-filter_complex") + 1]
     assert ('volume=0.800000' in filters) and ('aecho' in filters) and (command[-4:] == ['libmp3lame', '-b:a', '320k', str(tmp_path / 'mix.mp3')])
 
+    wav_command = recording_service._performance_mix_command(
+        "ffmpeg", current, tmp_path / "instrumental.mp3", tmp_path / "mix.wav",
+        0, 1, {},
+    )
+    assert wav_command[-3:] == ["-c:a", "pcm_s24le", str(tmp_path / "mix.wav")]
+
 
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):
     assert recording_service._find_instrumental(tmp_path) is None

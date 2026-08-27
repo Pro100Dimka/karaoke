@@ -525,6 +525,9 @@ def _performance_mix_command(
         f"[music][{performer_label}]amix=inputs=2:duration=first:normalize=0,"
         "alimiter=limit=0.95[mix]"
     )
+    codec = ["-c:a", "pcm_s24le"] if destination.suffix.casefold() == ".wav" else [
+        "-c:a", "libmp3lame", "-b:a", "320k"
+    ]
     return [
         ffmpeg,
         "-y",
@@ -535,10 +538,7 @@ def _performance_mix_command(
         ";".join(filters),
         "-map",
         "[mix]",
-        "-c:a",
-        "libmp3lame",
-        "-b:a",
-        "320k",
+        *codec,
         str(destination),
     ]
 
@@ -563,21 +563,33 @@ def _create_performance_mix(
     music_gain: float,
     effects: dict[str, float] | None = None,
 ) -> None:
-    ffmpeg = config.FFMPEG_EXE
-    if (ffmpeg == "ffmpeg" and not Path(ffmpeg).is_file()) or not song.output_dir: return
+    ffmpeg = str(config.FFMPEG_EXE)
+    if not song.output_dir: return
+    if not Path(ffmpeg).is_file():
+        ffmpeg = shutil.which(ffmpeg) or ""
+    if not ffmpeg: return
     instrumental = _find_instrumental(song_service.resolve_output_dir(song))
     if instrumental is None: return
-    destination = performance_mix_path(recording)
-    command = _performance_mix_command(
-        ffmpeg,
-        recording,
-        instrumental,
-        destination,
-        offset_sec,
-        music_gain,
-        effects,
+    destinations = performance_mix_paths(recording)
+    failures: list[str] = []
+    for destination in destinations:
+        command = _performance_mix_command(
+            ffmpeg,
+            recording,
+            instrumental,
+            destination,
+            offset_sec,
+            music_gain,
+            effects,
+        )
+        try:
+            subprocess.run(command, capture_output=True, check=True, timeout=90)
+            return
+        except (OSError, subprocess.SubprocessError) as exc:
+            failures.append(f"{destination.suffix}: {exc}")
+            destination.unlink(missing_ok=True)
+    logger.warning(
+        "Could not create performance mix: recording_id=%s attempts=%s",
+        recording.id,
+        "; ".join(failures),
     )
-    try:
-        subprocess.run(command, capture_output=True, check=True, timeout=90)
-    except (OSError, subprocess.SubprocessError):
-        destination.unlink(missing_ok=True)

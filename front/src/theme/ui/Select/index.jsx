@@ -44,6 +44,7 @@ const Select = forwardRef(
       sx,
       fieldSx,
       style,
+      fullWidth,
       fieldStyle,
       ...props
     },
@@ -174,7 +175,7 @@ const Select = forwardRef(
             className={cx("ui-select-field", className)}
             data-filled={Boolean(selected) || undefined}
             sx={sx}
-            style={style}
+            style={{ ...style, ...(fullWidth && { width: "100%" }) }}
           >
             <InputBase
               component={Button}

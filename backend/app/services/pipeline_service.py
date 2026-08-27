@@ -115,11 +115,11 @@ _STEP_PLAN = {
 # and text intended for a person rather than an internal engine log.
 _AI_STAGE_PLAN = {
     "decode": (10.0, 5, "Подготавливаем аудио"),
-    "separate": (42.0, 35, "Отделяем голос исполнителя от музыки"),
-    "vocal": (48.0, 8, "Очищаем голос и переводим его в моно"),
-    "analysis": (70.0, 35, "Определяем темп, тональность и мелодию голоса"),
-    "lyrics": (84.0, 55, "Синхронизируем слова с голосом"),
-    "notes": (98.0, 12, "Строим вокальные ноты"),
+    "separate": (42.0, 70, "Отделяем голос исполнителя от музыки"),
+    "vocal": (48.0, 10, "Очищаем голос и переводим его в моно"),
+    "analysis": (70.0, 18, "Определяем темп, тональность и мелодию голоса"),
+    "lyrics": (84.0, 35, "Синхронизируем слова с голосом"),
+    "notes": (98.0, 8, "Строим вокальные ноты"),
     "validate": (99.7, 3, "Проверяем результат"),
     "complete": (100.0, 1, "Завершаем обработку"),
 }
@@ -263,16 +263,10 @@ def get_processing_telemetry(song_id: str) -> dict:
                     runtime.get("detail") or "Обрабатываем песню")
         )
         elapsed = max(0.0, now - float(runtime.get("stage_started_at", now)))
-        completed = runtime.get("completed_stage_seconds", {})
-        expected_done = sum(_AI_STAGE_PLAN[name][1]
-                            for name in completed if name in _AI_STAGE_PLAN)
-        actual_done = sum(float(value) for value in completed.values())
-        speed_factor = (
-            min(3.0, max(0.35, actual_done / expected_done))
-            if expected_done >= 5 and actual_done > 0
-            else 1.0
-        )
-        scale = max(1.0, expected * speed_factor)
+        # GPU separation, CPU lyrics and short validation stages do not share
+        # one speed factor. Applying the duration of one completed stage to all
+        # later stages made ETA jump from seconds to minutes and back again.
+        scale = max(1.0, expected)
         fraction = 1.0 - math.exp(-2.0 * elapsed / scale)
         percent = base + (next_percent - base) * fraction
         percent = min(next_percent - 0.1,
@@ -282,9 +276,9 @@ def get_processing_telemetry(song_id: str) -> dict:
             stage_index = stage_names.index(stage)
         except ValueError:
             stage_index = len(stage_names) - 1
-        remaining = max(0.0, expected * speed_factor - elapsed)
+        remaining = max(0.0, expected - elapsed)
         remaining += sum(
-            _AI_STAGE_PLAN[name][1] * speed_factor for name in stage_names[stage_index + 1:]
+            _AI_STAGE_PLAN[name][1] for name in stage_names[stage_index + 1:]
         )
         return {
             "step": float(runtime.get("step", 0.0)),

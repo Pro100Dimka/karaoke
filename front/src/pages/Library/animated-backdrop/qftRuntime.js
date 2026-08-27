@@ -1351,8 +1351,19 @@ void main() {
 
                     const mat = new THREE.ShaderMaterial({
                         vertexShader: `attribute float alpha; varying float vAlpha; void main() { vAlpha = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-                        fragmentShader: `uniform vec3 uColor; uniform float uOpacity, uBeat; varying float vAlpha; void main() { vec3 c = min(uColor * (0.78 + uBeat * 0.32), vec3(1.2)); gl_FragColor = vec4(c, clamp(vAlpha * uOpacity * (0.32 + uBeat * 0.28), 0.0, 0.68)); }`,
-                        uniforms: { uColor: { value: trail.color }, uOpacity: { value: 0.4 }, uBeat: { value: 0 } },
+                        fragmentShader: `uniform vec3 uColor; uniform float uOpacity, uBeat, uImpact, uLongness; varying float vAlpha; void main() {
+                            float longHit = uLongness * uImpact;
+                            vec3 c = min(uColor * (0.76 + uBeat * 0.28 + longHit * 1.15), vec3(1.35));
+                            float alpha = vAlpha * uOpacity * (0.28 + uBeat * 0.22 + longHit * 0.72);
+                            gl_FragColor = vec4(c, clamp(alpha, 0.0, 0.82));
+                        }`,
+                        uniforms: {
+                            uColor: { value: trail.color },
+                            uOpacity: { value: 0.4 },
+                            uBeat: { value: 0 },
+                            uImpact: { value: 0 },
+                            uLongness: { value: 0 }
+                        },
                         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
                     });
 
@@ -1376,6 +1387,12 @@ void main() {
                         Math.sin(angle) * radius + Math.sin(time * trail.speed * 0.5 + trail.phase * 2) * (10 + audio.high * 10)
                     );
 
+                    const tail = trail.positions[trail.positions.length - 1];
+                    const span = newPos.distanceTo(tail);
+                    const longness = THREE.MathUtils.smoothstep(span, 18, 48);
+                    const impact = Math.max(audio.beat, audio.onset, audio.highMid * 0.72, audio.high * 0.58);
+                    if (longness > 0) newPos.multiplyScalar(1 + longness * impact * 0.12);
+
                     for (let j = trail.positions.length - 1; j > 0; j--) trail.positions[j].copy(trail.positions[j - 1]);
                     trail.positions[0].copy(newPos);
 
@@ -1386,6 +1403,8 @@ void main() {
                     posAttr.needsUpdate = true;
 
                     mesh.material.uniforms.uBeat.value = audio.beat;
+                    mesh.material.uniforms.uImpact.value = impact;
+                    mesh.material.uniforms.uLongness.value = longness;
                     mesh.material.uniforms.uOpacity.value = STATE.particleTrailOpacity;
                     if (fieldColor) trail.color.lerp(fieldColor, 0.01);
                 }
@@ -1911,7 +1930,9 @@ void main() {
         composer.addPass(new RenderPass(scene, camera));
 
         const afterimagePass = new AfterimagePass();
-        afterimagePass.uniforms['damp'].value = STATE.trails;
+        // Bright sub-pixel stars must not leave a second visible copy behind them.
+        // Keep only a nearly-imperceptible temporal blend for motion continuity.
+        afterimagePass.uniforms['damp'].value = Math.min(0.025, STATE.motionBlurStrength * 0.12);
         afterimagePass.enabled = STATE.motionBlurEnabled;
         composer.addPass(afterimagePass);
 
@@ -2394,6 +2415,8 @@ void main() {
             tickGuiTheme();
 
             // Update post-processing
+            afterimagePass.enabled = STATE.motionBlurEnabled;
+            afterimagePass.uniforms['damp'].value = Math.min(0.025, STATE.motionBlurStrength * 0.12);
             chromaticPass.uniforms.uBeatEnergy.value = material.uniforms.uBeatEnergy.value;
             godRaysPass.uniforms.uBeatEnergy.value = material.uniforms.uBeatEnergy.value;
             lensFlarePass.uniforms.uBeatEnergy.value = material.uniforms.uBeatEnergy.value;
@@ -2407,7 +2430,9 @@ void main() {
                 bass: material.uniforms.uBass.value,
                 mid: material.uniforms.uMid.value,
                 high: material.uniforms.uHigh.value,
-                beat: material.uniforms.uBeatEnergy.value
+                highMid: material.uniforms.uHighMid.value,
+                beat: material.uniforms.uBeatEnergy.value,
+                onset: material.uniforms.uOnsetEnergy.value
             }, material.uniforms.uColor1.value);
 
             // Update lens flare

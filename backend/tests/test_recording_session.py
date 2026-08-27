@@ -1,5 +1,6 @@
 import builtins
 import importlib
+import subprocess
 from unittest.mock import MagicMock, Mock
 
 import numpy as np
@@ -364,6 +365,37 @@ def test_create_performance_mix_runs_ffmpeg_and_cleans_failure(monkeypatch, tmp_
     run.reset_mock()
     recording_service._create_performance_mix(current, current_song, 0, 1)
     run.assert_not_called()
+
+
+def test_create_performance_mix_resolves_path_ffmpeg_and_falls_back_to_wav(monkeypatch, tmp_path):
+    executable = tmp_path / "ffmpeg.exe"
+    executable.write_bytes(b"binary")
+    instrumental = tmp_path / "instrumental.flac"
+    instrumental.write_bytes(b"music")
+    voice = tmp_path / "take.wav"
+    voice.write_bytes(b"voice")
+    current = models.Recording(
+        id="recording", song_id="song", filename="take.wav", path=str(voice),
+        duration_sec=4, sample_rate=48000,
+    )
+    current_song = make_song(output_dir=str(tmp_path))
+    patch_many(
+        monkeypatch,
+        (recording_service.config, "FFMPEG_EXE", "ffmpeg"),
+        (recording_service.song_service, "resolve_output_dir", Mock(return_value=tmp_path)),
+        (recording_service, "resolve_recording_path", Mock(return_value=voice)),
+        (recording_service.shutil, "which", Mock(return_value=str(executable))),
+    )
+    run = Mock(side_effect=[subprocess.CalledProcessError(1, "ffmpeg"), None])
+    monkeypatch.setattr(recording_service.subprocess, "run", run)
+
+    recording_service._create_performance_mix(current, current_song, 0, 0.8, {"reverb": 0.5})
+
+    assert run.call_count == 2
+    first, second = (call.args[0] for call in run.call_args_list)
+    assert first[0] == str(executable) and first[-1].endswith("-performance.mp3")
+    assert second[0] == str(executable) and second[-1].endswith("-performance.wav")
+    assert "aecho" in second[second.index("-filter_complex") + 1]
 
 
 def test_create_performance_mix_skips_missing_instrumental(monkeypatch, tmp_path):
