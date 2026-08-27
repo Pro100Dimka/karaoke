@@ -1,4 +1,4 @@
-"""CLI entry point for preparing model-training examples from .kar and .kfn files."""
+"""CLI entry point for preparing examples from .kar, karaoke .mid and .kfn files."""
 
 from __future__ import annotations
 
@@ -11,13 +11,17 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.services.kar_dataset_service import DATASET_DIR, prepare_kar_file  # noqa: E402
+from app.services.kar_dataset_service import (  # noqa: E402
+    DATASET_DIR,
+    MidiSkipped,
+    prepare_kar_file,
+)
 from app.services.kfn_dataset_service import KfnSkipped, prepare_kfn_file  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("files", nargs="+", type=Path, help="One or more .kar/.kfn files")
+    parser.add_argument("files", nargs="+", type=Path, help="One or more .kar/.mid/.kfn files")
     parser.add_argument("--output", type=Path, default=DATASET_DIR)
     parser.add_argument("--no-download", action="store_true")
     args = parser.parse_args()
@@ -25,7 +29,7 @@ def main() -> int:
     for source in args.files:
         try:
             suffix = source.suffix.casefold()
-            if suffix == ".kar":
+            if suffix in {".kar", ".mid"}:
                 result = prepare_kar_file(
                     source,
                     output_root=args.output,
@@ -34,9 +38,9 @@ def main() -> int:
             elif suffix == ".kfn":
                 result = prepare_kfn_file(source, output_root=args.output)
             else:
-                raise ValueError("Поддерживаются только файлы .kar и .kfn")
+                raise ValueError("Поддерживаются только файлы .kar, .mid и .kfn")
             results.append(result)
-        except KfnSkipped as exc:
+        except (MidiSkipped, KfnSkipped) as exc:
             results.append({"file": str(source), "status": "skipped", "error": str(exc)})
         except Exception as exc:  # noqa: BLE001 - batch CLI boundary
             results.append({"file": str(source), "status": "error", "error": str(exc)})

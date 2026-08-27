@@ -153,6 +153,60 @@ def test_prepares_reviewable_dataset_without_network_or_ai(tmp_path):
     assert Path(duplicate["dataset_dir"]).name == "Artist Test Song (2)"
 
 
+def test_prepares_karaoke_mid_into_the_same_dataset_contract(tmp_path):
+    source = build_kar(tmp_path / "song.mid")
+
+    result = kar_dataset_service.prepare_kar_file(
+        source,
+        output_root=tmp_path / "dataset",
+        download_audio=False,
+    )
+
+    output = Path(result["dataset_dir"])
+    metadata = json.loads((output / "metadata.json").read_text(encoding="utf-8"))
+    lyrics = json.loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+    assert result["status"] == "review"
+    assert metadata["preparation_mode"] == "mid-reference"
+    assert metadata["note_count"] == 2
+    assert "mid_sha256" in metadata
+    assert lyrics["source"] == "mid"
+    assert (output / "source.mid").is_file()
+
+
+def test_skips_instrumental_mid_without_karaoke_markup(tmp_path):
+    source = tmp_path / "instrumental.mid"
+    midi = mido.MidiFile(ticks_per_beat=480)
+    track = mido.MidiTrack()
+    midi.tracks.append(track)
+    track.append(mido.Message("note_on", note=60, velocity=90, time=0))
+    track.append(mido.Message("note_off", note=60, velocity=0, time=480))
+    midi.save(source)
+
+    with pytest.raises(kar_dataset_service.MidiSkipped, match="текст"):
+        kar_dataset_service.prepare_kar_file(
+            source,
+            output_root=tmp_path / "dataset",
+            download_audio=False,
+        )
+
+    assert not (tmp_path / "dataset").exists()
+
+
+def test_mid_octave_doubles_are_reduced_to_one_vocal_line(tmp_path):
+    source = build_kar(tmp_path / "doubled.mid")
+    midi = mido.MidiFile(source, charset="cp1251")
+    melody = midi.tracks[1]
+    melody.insert(2, mido.Message("note_on", note=48, velocity=80, time=0))
+    melody.insert(4, mido.Message("note_off", note=48, velocity=0, time=0))
+    midi.save(source)
+
+    document = kar_dataset_service.parse_kar(source)
+    notes = [note for word in document.words for note in word["notes"]]
+
+    assert [note["note"] for note in notes] == [60, 62]
+    assert all(left["end"] <= right["start"] for left, right in zip(notes, notes[1:], strict=False))
+
+
 def test_prepares_kfn_into_the_same_dataset_contract(tmp_path):
     midi = build_kar(tmp_path / "embedded.kar").read_bytes()
     source = build_kfn(tmp_path / "song.kfn", midi)
@@ -198,8 +252,8 @@ def test_skips_kfn_without_ready_midi_notes_without_creating_dataset(tmp_path):
     assert not (tmp_path / "dataset").exists()
 
 
-@pytest.mark.parametrize(("name", "payload"), [("song.mid", b"MThd"), ("song.kar", b"bad")])
-def test_rejects_non_kar_and_invalid_midi(tmp_path, name, payload):
+@pytest.mark.parametrize(("name", "payload"), [("song.txt", b"MThd"), ("song.kar", b"bad")])
+def test_rejects_unsupported_extension_and_invalid_midi(tmp_path, name, payload):
     source = tmp_path / name
     source.write_bytes(payload)
     with pytest.raises(ValueError):
@@ -377,9 +431,7 @@ def test_batch_endpoint_dispatches_kfn_and_reports_skipped(monkeypatch, tmp_path
         raise kfn_dataset_service.KfnSkipped("нет готовых нот")
 
     monkeypatch.setattr(kfn_dataset_service, "prepare_kfn_file", skip)
-    result = asyncio.run(
-        songs.prepare_kar_training_dataset([upload_file(b"KFNB", "song.kfn")])
-    )
+    result = asyncio.run(songs.prepare_kar_training_dataset([upload_file(b"KFNB", "song.kfn")]))
 
     assert result["items"] == [
         {
@@ -388,3 +440,26 @@ def test_batch_endpoint_dispatches_kfn_and_reports_skipped(monkeypatch, tmp_path
             "error": "нет готовых нот",
         }
     ]
+
+
+def test_batch_endpoint_dispatches_mid_to_midi_preparer(monkeypatch, tmp_path):
+    monkeypatch.setattr(kar_dataset_service, "DATASET_DIR", tmp_path / "dataset")
+
+    def prepare(path, *, original_filename=None):
+        assert path.suffix == ".mid"
+        assert original_filename == "song.mid"
+        return {
+            "status": "review",
+            "dataset_dir": str(tmp_path / "dataset" / "song"),
+            "title": "Test Song",
+            "artist": "Artist",
+            "word_count": 2,
+            "note_count": 2,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(kar_dataset_service, "prepare_kar_file", prepare)
+    result = asyncio.run(songs.prepare_kar_training_dataset([upload_file(b"MThd", "song.mid")]))
+
+    assert result["items"][0]["status"] == "review"
+    assert result["items"][0]["filename"] == "song.mid"

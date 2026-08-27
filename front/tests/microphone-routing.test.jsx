@@ -15,6 +15,7 @@ vi.mock("../src/utils/audio-preferences", () => ({
 }));
 import useAudioOutputRouting from "../src/pages/Karaoke/hooks/useAudioOutputRouting.js";
 import useMicrophoneSettings from "../src/pages/Karaoke/hooks/useMicrophoneSettings.js";
+import { createOutputDeviceOptions } from "../src/pages/Karaoke/utils/devices.js";
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.releaseDirectMonitoring.mockResolvedValue(undefined);
@@ -24,6 +25,38 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+describe("audio output device choices", () => {
+  test("keeps active host endpoints and removes legacy duplicates and mappers", () => {
+    const devices = [
+      { index: 0, name: "Microsoft Sound Mapper - Output [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 1, name: "Speakers [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 2, name: "Speakers [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 2 },
+      { index: 3, name: "HDMI [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 2 },
+      { index: 4, name: "Disabled [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 0 },
+      { index: 5, name: "Kernel output [Windows WDM-KS]", host_api: "Windows WDM-KS", max_output_channels: 2 }
+    ];
+
+    expect(createOutputDeviceOptions(devices, "", "auto", "System")).toEqual([
+      { value: "", label: "System" },
+      { value: 2, label: "Speakers" },
+      { value: 3, label: "HDMI" }
+    ]);
+  });
+
+  test("uses only ASIO outputs while ASIO mode is active", () => {
+    const devices = [
+      { index: 1, name: "Interface [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 2, name: "Interface [ASIO]", host_api: "ASIO", max_output_channels: 2 },
+      { index: 3, name: "Monitor [ASIO]", host_api: "ASIO", max_output_channels: 2 }
+    ];
+
+    expect(createOutputDeviceOptions(devices, 1, "asio", "System")).toEqual([
+      { value: "", label: "System" },
+      { value: 2, label: "Interface" },
+      { value: 3, label: "Monitor" }
+    ]);
+  });
 });
 describe("microphone settings", () => {
   test("normalizes backend settings and reacts to global changes", () => {

@@ -29,6 +29,13 @@ except ImportError:  # pragma: no cover - lightweight API-only installations
 
 DATASET_DIR = config.DATA_DIR / "kar-training-dataset"
 MAX_KAR_BYTES = 8 * 1024 * 1024
+SUPPORTED_KARAOKE_MIDI_SUFFIXES = {".kar", ".mid"}
+
+
+class MidiSkipped(ValueError):
+    """A valid MIDI file that does not contain reliable karaoke markup."""
+
+
 _REJECTED_AUDIO_HINTS = (
     "karaoke",
     "lyrics",
@@ -322,6 +329,7 @@ def _select_melody_track(
     lyric_track: int,
     lyric_start: float,
     lyric_end: float,
+    lyric_onsets: list[float] | None = None,
 ) -> tuple[int | None, list[dict[str, Any]]]:
     ranked = []
     for track_index, name, notes in candidates:
@@ -343,9 +351,21 @@ def _select_melody_track(
         same_track = 45 if track_index == lyric_track else 0
         median_pitch = float(np.median([note["note"] for note in relevant]))
         range_bonus = 25 if 48 <= median_pitch <= 84 else 0
+        onset_ratio = 0.0
+        if lyric_onsets:
+            note_starts = [float(note["start"]) for note in relevant]
+            matched = sum(
+                any(abs(start - onset) <= 0.06 for start in note_starts) for onset in lyric_onsets
+            )
+            onset_ratio = matched / len(lyric_onsets)
         ranked.append(
             (
-                hint + same_track + range_bonus + min(len(relevant), 120) + overlap,
+                hint
+                + same_track
+                + range_bonus
+                + min(len(relevant), 120)
+                + overlap
+                + onset_ratio * 20_000,
                 track_index,
                 relevant,
             )
@@ -384,6 +404,42 @@ def _attach_notes(words: list[dict[str, Any]], notes: list[dict[str, Any]]) -> i
     return count
 
 
+def _monophonize_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse octave doubles/chords into one continuous vocal line."""
+    groups: list[list[dict[str, Any]]] = []
+    for note in sorted(notes, key=lambda item: (item["start"], item["end"], -item["velocity"])):
+        if groups and abs(float(note["start"]) - float(groups[-1][0]["start"])) <= 0.01:
+            groups[-1].append(note)
+        else:
+            groups.append([note])
+
+    selected: list[dict[str, Any]] = []
+    previous_pitch: int | None = None
+    for group in groups:
+        if previous_pitch is None:
+            chosen = max(group, key=lambda item: (item["velocity"], item["note"]))
+        else:
+            chosen = min(
+                group,
+                key=lambda item: (
+                    abs(int(item["note"]) - previous_pitch),
+                    -int(item["velocity"]),
+                    -int(item["note"]),
+                ),
+            )
+        selected.append(dict(chosen))
+        previous_pitch = int(chosen["note"])
+
+    normalized: list[dict[str, Any]] = []
+    for note in selected:
+        if normalized and float(note["start"]) < float(normalized[-1]["end"]):
+            normalized[-1]["end"] = float(note["start"])
+            if normalized[-1]["end"] - normalized[-1]["start"] < 0.02:
+                normalized.pop()
+        normalized.append(note)
+    return normalized
+
+
 def parse_kar(
     path: str | Path,
     *,
@@ -392,10 +448,11 @@ def parse_kar(
     offset_seconds: float = 0.0,
 ) -> KarDocument:
     source = Path(path)
-    if source.suffix.casefold() != ".kar":
-        raise ValueError("Поддерживаются только файлы .kar")
+    suffix = source.suffix.casefold()
+    if suffix not in SUPPORTED_KARAOKE_MIDI_SUFFIXES:
+        raise ValueError("Поддерживаются только файлы .kar и .mid")
     if source.stat().st_size > MAX_KAR_BYTES:
-        raise ValueError("Файл .kar превышает допустимый размер 8 МБ")
+        raise ValueError(f"Файл {suffix} превышает допустимый размер 8 МБ")
     if source.read_bytes()[:4] != b"MThd":
         raise ValueError("Файл не является корректным MIDI/KAR")
     midi = _load_midi(source)
@@ -417,8 +474,14 @@ def parse_kar(
     words = _word_events(lyric_events, track_duration)
     candidates = _notes_by_track(tracks, convert)
     melody_track, notes = _select_melody_track(
-        candidates, lyric_track, words[0]["start"], words[-1]["end"]
+        candidates,
+        lyric_track,
+        words[0]["start"],
+        words[-1]["end"],
+        [float(word["start"]) for word in words],
     )
+    if suffix == ".mid":
+        notes = _monophonize_notes(notes)
     if notes:
         last = words[-1]
         sustained = [
@@ -735,7 +798,7 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     }
 
 
-def _lyrics_payload(document: KarDocument) -> dict[str, Any]:
+def _lyrics_payload(document: KarDocument, source_kind: str = "kar") -> dict[str, Any]:
     return validate_lyrics_document(
         {
             "schemaVersion": 1,
@@ -747,7 +810,7 @@ def _lyrics_payload(document: KarDocument) -> dict[str, Any]:
             "words": [
                 {**word, "notes": [dict(note) for note in word["notes"]]} for word in document.words
             ],
-            "source": "kar",
+            "source": source_kind,
         }
     )
 
@@ -775,17 +838,28 @@ def prepare_kar_file(
     download_audio: bool = True,
 ) -> dict[str, Any]:
     source = Path(path)
-    document = parse_kar(source, original_filename=original_filename)
+    source_kind = "mid" if source.suffix.casefold() == ".mid" else "kar"
+    try:
+        document = parse_kar(source, original_filename=original_filename)
+    except ValueError as exc:
+        if source_kind == "mid":
+            raise MidiSkipped(f"MID пропущен: {exc}") from exc
+        raise
+    if source_kind == "mid":
+        words_with_notes = sum(bool(word.get("notes")) for word in document.words)
+        coverage = words_with_notes / max(1, len(document.words))
+        if document.melody_track is None or coverage < 0.45:
+            raise MidiSkipped("MID пропущен: нет надёжно синхронизированных текста и вокальных нот")
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
     target = _unique_dataset_dir(root, document)
     warnings: list[str] = []
-    shutil.copy2(source, target / "source.kar")
-    reference = _lyrics_payload(document)
+    shutil.copy2(source, target / f"source.{source_kind}")
+    reference = _lyrics_payload(document, source_kind)
     audio_source: dict[str, Any] | None = None
     comparison: dict[str, Any] = {
-        "status": "kar-reference",
+        "status": f"{source_kind}-reference",
         "time_scale": 1.0,
         "offset_seconds": 0.0,
         "pitch_shift_semitones": 0,
@@ -800,7 +874,7 @@ def prepare_kar_file(
                 bpm_override=float(match["audio_bpm"]),
                 offset_seconds=float(match["offset_seconds"]),
             )
-            reference = _lyrics_payload(document)
+            reference = _lyrics_payload(document, source_kind)
             comparison = {
                 **match,
                 "status": "audio-bpm-applied",
@@ -818,7 +892,9 @@ def prepare_kar_file(
     metadata = {
         "dataset_version": 2,
         "status": "ready" if original_ready else "review",
-        "preparation_mode": "kar-with-original-audio-bpm" if audio_source else "kar-reference",
+        "preparation_mode": (
+            f"{source_kind}-with-original-audio-bpm" if audio_source else f"{source_kind}-reference"
+        ),
         "stems_status": "ready" if stems_ready else "deferred",
         "title": document.title,
         "artist": document.artist,
@@ -827,7 +903,7 @@ def prepare_kar_file(
         "duration": reference.get("duration", document.duration),
         "word_count": len(reference["words"]),
         "note_count": note_count,
-        "kar_sha256": digest,
+        f"{source_kind}_sha256": digest,
         "original_filename": original_filename or source.name,
         "lyric_track": document.lyric_track,
         "melody_track": document.melody_track,

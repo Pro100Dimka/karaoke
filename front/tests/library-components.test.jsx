@@ -75,7 +75,9 @@ test("library actions cover search, room, adding and file selection", async () =
   fireEvent.click(view.getByRole("button", { name: /Петь вместе|Співати разом/ }));
   fireEvent.click(view.getByRole("button", { name: /Добавить песню|Додати пісню/ }));
   fireEvent.click(
-    view.getByRole("button", { name: /Обучить на \.kar\/\.kfn|Навчити на \.kar\/\.kfn/ })
+    view.getByRole("button", {
+      name: /Обучить на \.kar\/\.mid\/\.kfn|Навчити на \.kar\/\.mid\/\.kfn/
+    })
   );
   fireEvent.change(view.container.querySelector('input[type=file][accept*=".mp3"]'), {
     target: { files: [new File(["audio"], "song.mp3", { type: "audio/mpeg" })] }

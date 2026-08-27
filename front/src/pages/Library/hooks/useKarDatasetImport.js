@@ -26,7 +26,7 @@ export default function useKarDatasetImport({ notify }) {
           const detailBlocks = [skippedDetails, details].filter(Boolean);
           return notify(
             tr(
-              "Подготовка .kar/.kfn завершена. Готово: {0}, требует проверки: {1}, пропущено: {2}, ошибок: {3}. Папка: {4}{5}",
+              "Подготовка .kar/.mid/.kfn завершена. Готово: {0}, требует проверки: {1}, пропущено: {2}, ошибок: {3}. Папка: {4}{5}",
               {
                 0: ready,
                 1: review,
@@ -40,7 +40,7 @@ export default function useKarDatasetImport({ notify }) {
         },
         (error) =>
           notify(
-            tr("Не удалось подготовить данные из .kar/.kfn: {0}", {
+            tr("Не удалось подготовить данные из .kar/.mid/.kfn: {0}", {
               0: getErrorMessage(error)
             })
           )
