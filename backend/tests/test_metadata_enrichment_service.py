@@ -41,6 +41,29 @@ def test_youtube_quality_rejects_static_and_low_quality_candidates(monkeypatch):
     assert metadata._youtube_video_is_acceptable("DAaLa3vF8sU", "Song", "Artist") is False
 
 
+def test_youtube_download_has_a_format_fallback_and_quiet_logger(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def download(self, _urls):
+            return 1
+
+    monkeypatch.setattr(metadata, "YoutubeDL", FakeYoutubeDL)
+
+    assert metadata._download_youtube_video("DAaLa3vF8sU", tmp_path) is False
+    assert captured["format"].endswith("bestvideo/best")
+    assert isinstance(captured["logger"], metadata._YtDlpLogger)
+
+
 def test_enrichment_persists_missing_metadata(monkeypatch):
     song = SimpleNamespace(
         id="song",

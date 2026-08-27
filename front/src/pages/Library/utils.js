@@ -47,12 +47,21 @@ export const getLocalVisibleSongs = (songs, hidden) =>
   array(songs).filter((song) => song && typeof song === "object" && !hidden?.has?.(song.id));
 
 export const resolveVisibleSongs = ({ localSongs, room, roomSongs, roomSongsByParticipant }) => {
-  if (!room || room.host) return array(localSongs);
+  if (!room) return array(localSongs);
   const merged = new Map();
-  [...Object.values(roomSongsByParticipant || {}).flatMap(array), ...array(roomSongs)].forEach(
-    (song) => song?.id && !merged.has(song.id) && merged.set(song.id, song)
-  );
-  return merged.size ? [...merged.values()] : array(localSongs);
+  const add = (song, local = false) => {
+    if (!song?.id || merged.has(song.id)) return;
+    merged.set(
+      song.id,
+      local
+        ? { ...song, __roomLocal: true, __roomOwnerId: room.selfId || song.__roomOwnerId }
+        : song
+    );
+  };
+  array(localSongs).forEach((song) => add(song, true));
+  array(roomSongs).forEach((song) => add(song));
+  Object.values(roomSongsByParticipant || {}).flatMap(array).forEach((song) => add(song));
+  return [...merged.values()];
 };
 
 export const filterSongs = (songs, query) => {

@@ -132,6 +132,40 @@ test("a guest can acknowledge an imported song without being disconnected", asyn
   assert.equal(Number.isFinite(host.messages.at(-1).sentAt), true);
 });
 
+test("a guest can ask the host to start a song owned by any room participant", async () => {
+  const sender = new FakeSocket({ id: "guest", role: "guest" });
+  const owner = new FakeSocket({ id: "owner", role: "guest" });
+  const host = new FakeSocket({ id: "host", role: "host" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, owner, host] });
+  const revision = `sha256:${"b".repeat(64)}`;
+
+  await room.webSocketMessage(
+    sender,
+    JSON.stringify({
+      type: "sync",
+      state: {
+        type: "karaoke-request",
+        songId: "song-2",
+        ownerId: "owner",
+        commandId: "command-2",
+        revision,
+        requesterId: "forged-id"
+      }
+    })
+  );
+
+  assert.equal(sender.closed, null);
+  assert.deepEqual(host.messages.at(-1).state, {
+    type: "karaoke-request",
+    songId: "song-2",
+    ownerId: "owner",
+    commandId: "command-2",
+    revision,
+    requesterId: "guest"
+  });
+  assert.deepEqual(owner.messages.at(-1).state, host.messages.at(-1).state);
+});
+
 test("an owner can lock remote effect control and unlock it again", async () => {
   const owner = new FakeSocket({ id: "owner", name: "Owner", role: "guest" });
   const controller = new FakeSocket({ id: "controller", name: "Controller", role: "guest" });

@@ -6,6 +6,7 @@ export default function useOnlineRoomCommands({
   clientRef,
   connectionTokenRef,
   hostSongCommandRef,
+  onTransferStatus,
   participantsRef,
   roomRef,
   voiceRef
@@ -28,21 +29,33 @@ export default function useOnlineRoomCommands({
   );
 
   const openKaraoke = useCallback(
-    (songId) => {
+    (songId, options = {}) => {
       const client = clientRef.current;
       const connectionToken = connectionTokenRef.current;
       return openKaraokeInRoom({
         songId,
+        ownerId: options.ownerId,
+        revision: options.revision,
         room: roomRef.current,
         client,
         roomApi: api,
         hostSongCommandRef,
+        onTransferStatus,
         participantsRef,
         voice: voiceRef.current,
         isCurrentConnection: () => connectionToken === connectionTokenRef.current
       });
     },
-    [api, clientRef, connectionTokenRef, hostSongCommandRef, participantsRef, roomRef, voiceRef]
+    [
+      api,
+      clientRef,
+      connectionTokenRef,
+      hostSongCommandRef,
+      onTransferStatus,
+      participantsRef,
+      roomRef,
+      voiceRef
+    ]
   );
 
   return { openKaraoke, syncCommand, syncUi };

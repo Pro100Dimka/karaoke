@@ -77,7 +77,7 @@ export default class OnlineVoiceMesh {
           ...MICROPHONE_CAPTURE_CONSTRAINTS,
           channelCount: 1,
           latency: { ideal: 0 },
-          sampleRate: { ideal: 48_000 },
+          sampleRate: { ideal: 41_000 },
           sampleSize: { ideal: 24 }
         }
       })

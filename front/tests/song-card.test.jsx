@@ -88,6 +88,26 @@ test("an in-progress room transfer still shows the normal progress bar", () => {
   fireEvent.click(view.getByRole("progressbar").closest("button"));
   expect(actions.onOpenKaraoke).not.toHaveBeenCalled();
 });
+test("room transfer explains waiting to owners and downloading to participants without the song", () => {
+  const status = { stage: "waiting", percent: 25 };
+  const owner = render(
+    <LibrarySongCard
+      song={{ id: "owned", title: "Owned", status: "done", __roomLocal: true }}
+      transferStatus={status}
+      {...handlers()}
+    />
+  );
+  expect(owner.getByText(/Ожидаем, пока другие участники получат песню/)).toBeTruthy();
+  owner.unmount();
+  const receiver = render(
+    <LibrarySongCard
+      song={{ id: "remote", title: "Remote", status: "done" }}
+      transferStatus={status}
+      {...handlers()}
+    />
+  );
+  expect(receiver.getByText(/Песня скачивается/)).toBeTruthy();
+});
 test("unknown song status uses safe badge fallback", () => {
   const actions = handlers();
   const { container } = render(<LibrarySongCard cardIndex={0} song={{ id: "song", title: "Title", status: "custom" }} {...actions} />);

@@ -201,7 +201,7 @@ export class KaraokeRoom {
   // | tempo/key/radio/search filters (ui state) | yes  | no (rejected) |
   // | own participant audio effects             | yes  | yes           |
   // | own shared library (songs)                | yes  | yes           |
-  // | song-request / song-ready handshake       | n/a  | yes           |
+  // | song request/ready and karaoke request    | n/a  | yes           |
   // | mic mute presence                         | yes  | yes           |
   // | signal (WebRTC SDP/ICE relay)              | yes  | yes           |
   // | chat                                       | yes  | yes           |
@@ -322,6 +322,28 @@ export class KaraokeRoom {
           state: {
             type: state.type,
             songId: state.songId,
+            commandId: state.commandId,
+            revision: state.revision,
+            requesterId: sender.id
+          }
+        }, sender.id);
+        return;
+      }
+      if (
+        state.type === "karaoke-request" &&
+        typeof state.songId === "string" && state.songId.length <= 128 &&
+        typeof state.ownerId === "string" && state.ownerId.length <= 128 &&
+        this.participants().some((participant) => participant.id === state.ownerId) &&
+        typeof state.commandId === "string" && state.commandId.length <= 128 &&
+        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
+      ) {
+        this.broadcast("sync", {
+          fromId: sender.id,
+          sentAt: Date.now(),
+          state: {
+            type: "karaoke-request",
+            songId: state.songId,
+            ownerId: state.ownerId,
             commandId: state.commandId,
             revision: state.revision,
             requesterId: sender.id

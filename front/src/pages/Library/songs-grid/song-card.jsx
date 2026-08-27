@@ -147,12 +147,21 @@ const LibrarySongCard = memo(
                         {tr("Передача прервана — нажмите, чтобы повторить")}
                       </Typography>
                     ) : (
-                      <ProcessingSignal
-                        progress={transferStatus?.percent ?? song.progress_percent}
-                        url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
-                        fetchParams={waveformFetchParams}
-                        compact
-                      />
+                      <Stack gap="var(--space-1)" sx={{ width: "100%" }}>
+                        {transferStatus && (
+                          <Typography variant="body2" tone="muted">
+                            {song.__roomLocal
+                              ? tr("Ожидаем, пока другие участники получат песню")
+                              : tr("Песня скачивается…")}
+                          </Typography>
+                        )}
+                        <ProcessingSignal
+                          progress={transferStatus?.percent ?? song.progress_percent}
+                          url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
+                          fetchParams={waveformFetchParams}
+                          compact
+                        />
+                      </Stack>
                     )}
                   </Button>
                 </Box>

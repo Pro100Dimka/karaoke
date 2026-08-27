@@ -28,6 +28,7 @@ export default function useOnlineRoomValue(state) {
     togglePersonEffects,
     togglePersonMuted,
     transferStatus,
+    transferStatuses,
     voiceError
   } = state;
   return useMemo(
@@ -44,6 +45,7 @@ export default function useOnlineRoomValue(state) {
       roomCommand,
       voiceError,
       transferStatus,
+      transferStatuses,
       createRoom,
       joinRoom,
       leaveRoom,
@@ -87,6 +89,7 @@ export default function useOnlineRoomValue(state) {
       togglePersonEffects,
       togglePersonMuted,
       transferStatus,
+      transferStatuses,
       voiceError
     ]
   );

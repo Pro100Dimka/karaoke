@@ -10,23 +10,54 @@ const SONG_READY_TIMEOUT_MS = 5 * 60_000;
 
 export async function openKaraokeInRoom({
   songId,
+  ownerId,
+  revision: suppliedRevision,
   room,
   client,
   roomApi,
   isCurrentConnection,
   hostSongCommandRef,
+  onTransferStatus,
   participantsRef,
   voice
 }) {
-  if (room && !room.host) return false;
   if (!isCurrentConnection()) return true;
-  const revisionPayload = await roomApi?.getSongRevision?.(songId);
-  const revision = revisionPayload?.revision;
+  const revisionPayload = suppliedRevision
+    ? null
+    : await roomApi?.getSongRevision?.(songId);
+  const revision = suppliedRevision || revisionPayload?.revision;
   if (typeof revision !== "string" || !revision.startsWith("sha256:"))
     throw new Error(translateSaved("Не удалось определить версию содержимого песни"));
   if (!isCurrentConnection()) return false;
 
+  if (room && !room.host) {
+    client?.send("sync", {
+      state: {
+        type: "karaoke-request",
+        songId,
+        commandId: createCommandId(),
+        revision,
+        ownerId: ownerId || room.selfId,
+        requesterId: room.selfId
+      }
+    });
+    return false;
+  }
+
   const command = { type: "open-karaoke", songId, commandId: createCommandId(), revision };
+  const publishTransferStatus = (stage, percent, error) => {
+    if (!room) return;
+    const status = {
+      participantId: "room",
+      songId,
+      commandId: command.commandId,
+      stage,
+      percent,
+      ...(error ? { error } : {})
+    };
+    onTransferStatus?.(status);
+    client?.send("sync", { state: { type: "song-transfer-status", ...status } });
+  };
   const previousCommandId = hostSongCommandRef?.current?.commandId;
   if (previousCommandId && previousCommandId !== command.commandId)
     voice?.cancelTransfersByCommandId?.(previousCommandId);
@@ -56,11 +87,14 @@ export async function openKaraokeInRoom({
       readyIds: new Set(),
       markReady(participantId) {
         this.readyIds.add(participantId);
+        const ready = [...this.expectedIds].filter((id) => this.readyIds.has(id)).length;
+        publishTransferStatus("waiting", Math.round((ready / this.expectedIds.size) * 100));
         if ([...this.expectedIds].every((id) => this.readyIds.has(id))) resolveReady(true);
       }
     };
   }
   if (!expectedIds.size) resolveReady(true);
+  else publishTransferStatus("waiting", 0);
   client?.send("sync", { state: command });
   try {
     await readyPromise;
@@ -69,7 +103,11 @@ export async function openKaraokeInRoom({
     client?.send("sync", {
       state: { type: "start-karaoke", songId, commandId: command.commandId, revision }
     });
+    publishTransferStatus("complete", 100);
     return true;
+  } catch (error) {
+    publishTransferStatus("error", 0, error?.message || String(error));
+    throw error;
   } finally {
     globalThis.clearTimeout(timer);
   }

@@ -251,12 +251,16 @@ describe("library page", () => {
     await Promise.resolve();
     expect(mocks.navigate).not.toHaveBeenCalledTimes(2);
     room.unmount();
-    mocks.sharedRoom.openKaraoke.mockResolvedValueOnce(true);
+    mocks.sharedRoom.openKaraoke.mockResolvedValueOnce(false);
     mocks.pollIndex = 0;
     const accepted = render(<Library />);
     fireEvent.click(accepted.getAllByTestId("karaoke")[0]);
-    await vi.advanceTimersByTimeAsync(920);
-    expect(mocks.navigate).toHaveBeenCalledTimes(2);
+    await Promise.resolve();
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+    expect(mocks.sharedRoom.openKaraoke).toHaveBeenLastCalledWith("one", {
+      ownerId: undefined,
+      revision: undefined
+    });
   });
   test("tracks processing, cancels work and opens completed song", async () => {
     const result = render(<Library />);

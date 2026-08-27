@@ -101,7 +101,7 @@ export default function OnlineRoomParticipant({
   ];
 
   const effectFields = [
-    ["volume", t("Громкость микрофона"), 2, 1, "primary"],
+    ["volume", t("Громкость"), 2, 1, "primary"],
     ["reverb", t("Реверб"), 1, 0, "secondary"],
     ["echo", t("Эхо"), 1, 0, "primary"],
     ["delay", t("Дилей"), 1, 0, "secondary"],

@@ -550,15 +550,27 @@ describe("resolveVisibleSongs merges the room's shared library", () => {
     expect(resolveVisibleSongs({ localSongs: local, room: null })).toEqual(local);
   });
 
-  test("the host always sees their own local library", () => {
-    expect(resolveVisibleSongs({ localSongs: local, room: { host: true } })).toEqual(local);
+  test("the host sees their own library together with every participant library", () => {
+    expect(
+      resolveVisibleSongs({
+        localSongs: local,
+        room: { host: true, selfId: "host" },
+        roomSongsByParticipant: { guest: [{ id: "guest-song", title: "Guest song" }] }
+      })
+    ).toEqual([
+      { id: "mine", title: "Mine", __roomLocal: true, __roomOwnerId: "host" },
+      { id: "guest-song", title: "Guest song" }
+    ]);
   });
 
-  test("a guest sees the host's broadcast room song list instead of their own", () => {
+  test("a guest sees their own songs and the host's broadcast room songs", () => {
     const roomSongs = [{ id: "host-song", title: "Host song" }];
     expect(
-      resolveVisibleSongs({ localSongs: local, room: { host: false }, roomSongs })
-    ).toEqual(roomSongs);
+      resolveVisibleSongs({ localSongs: local, room: { host: false, selfId: "guest" }, roomSongs })
+    ).toEqual([
+      { id: "mine", title: "Mine", __roomLocal: true, __roomOwnerId: "guest" },
+      ...roomSongs
+    ]);
   });
 
   test("a guest sees both per-participant songs and the flat room list combined", () => {
@@ -567,22 +579,26 @@ describe("resolveVisibleSongs merges the room's shared library", () => {
     expect(
       resolveVisibleSongs({
         localSongs: local,
-        room: { host: false },
+        room: { host: false, selfId: "guest" },
         roomSongs,
         roomSongsByParticipant
       })
-    ).toEqual([{ id: "peer-song", title: "Peer song" }, { id: "host-song", title: "Host song" }]);
+    ).toEqual([
+      { id: "mine", title: "Mine", __roomLocal: true, __roomOwnerId: "guest" },
+      { id: "host-song", title: "Host song" },
+      { id: "peer-song", title: "Peer song" }
+    ]);
   });
 
   test("falls back to local songs when no remote song list is available", () => {
     expect(
       resolveVisibleSongs({
         localSongs: local,
-        room: { host: false },
+        room: { host: false, selfId: "guest" },
         roomSongs: [],
         roomSongsByParticipant: {}
       })
-    ).toEqual(local);
+    ).toEqual([{ id: "mine", title: "Mine", __roomLocal: true, __roomOwnerId: "guest" }]);
   });
 
   test("ignores malformed remote entries instead of throwing", () => {

@@ -154,7 +154,14 @@ async def attach_correlation_id(request: Request, call_next):
 @app.exception_handler(StarletteHTTPException)
 async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     correlation_id = get_current() or "-"
-    logger.error(
+    # A missing optional cover is a normal cache miss. Logging it as ERROR
+    # caused harmless library thumbnail probes to be uploaded as diagnostics.
+    log = (
+        logger.info
+        if exc.status_code == 404 and request.method == "GET" and request.url.path.endswith("/cover")
+        else logger.error
+    )
+    log(
         "HTTP %s on %s %s: %s (request_id=%s)",
         exc.status_code, request.method, request.url.path, exc.detail, correlation_id,
     )

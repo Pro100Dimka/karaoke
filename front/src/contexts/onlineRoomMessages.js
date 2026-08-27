@@ -64,6 +64,28 @@ export function createOnlineRoomMessageHandler(options) {
     isCurrentConnection() && pendingCommandRef.current?.commandId === command.commandId;
 
   const syncHandlers = {
+    "karaoke-request": (command, message) => {
+      if (
+        !activeRoomRef.current?.host ||
+        !command.requesterId ||
+        message.fromId !== command.requesterId ||
+        !command.songId ||
+        !command.ownerId ||
+        !command.revision
+      )
+        return false;
+      const transferStatus = {
+        participantId: "room",
+        songId: command.songId,
+        commandId: command.commandId,
+        stage: "waiting",
+        percent: 0
+      };
+      setTransferStatus(transferStatus);
+      client.send("sync", { state: { type: "song-transfer-status", ...transferStatus } });
+      publishRoomCommand(command, "karaoke-request", message.sentAt);
+      return true;
+    },
     "song-request": (command, message) => {
       const offered = hostSongCommandRef.current;
       if (
@@ -94,7 +116,12 @@ export function createOnlineRoomMessageHandler(options) {
         .then(async (blob) => {
           if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId)
             return null;
-          setTransferStatus({ participantId: command.requesterId, stage: "sending", percent: 0 });
+          setTransferStatus({
+            participantId: command.requesterId,
+            songId: command.songId,
+            stage: "sending",
+            percent: 0
+          });
           return voice.sendFile(command.requesterId, blob, {
             kind: "song-package",
             songId: command.songId,
@@ -107,6 +134,7 @@ export function createOnlineRoomMessageHandler(options) {
           if (isCurrentConnection() && hostSongCommandRef.current?.commandId === command.commandId)
             setTransferStatus({
               participantId: command.requesterId,
+              songId: command.songId,
               stage: "complete",
               percent: 100
             });
@@ -126,6 +154,7 @@ export function createOnlineRoomMessageHandler(options) {
           });
           setTransferStatus({
             participantId: command.requesterId,
+            songId: command.songId,
             stage: "error",
             error: errorText,
             percent: 0
@@ -156,6 +185,25 @@ export function createOnlineRoomMessageHandler(options) {
       offered.markReady?.(command.requesterId);
       return true;
     },
+    "song-transfer-status": (command, message) => {
+      if (
+        activeRoomRef.current?.host ||
+        !senderIsHost(message) ||
+        !command.songId ||
+        !command.commandId ||
+        !["waiting", "error", "complete"].includes(command.stage)
+      )
+        return false;
+      setTransferStatus({
+        participantId: "room",
+        songId: command.songId,
+        commandId: command.commandId,
+        stage: command.stage,
+        percent: Math.max(0, Math.min(100, Number(command.percent) || 0)),
+        ...(command.error ? { error: command.error } : {})
+      });
+      return true;
+    },
     "start-karaoke": (command, message) => {
       if (activeRoomRef.current?.host || !senderIsHost(message) || !isCurrentPending(command))
         return false;
@@ -178,6 +226,7 @@ export function createOnlineRoomMessageHandler(options) {
       pendingCommandRef.current = null;
       setTransferStatus({
         participantId: message.fromId,
+        songId: command.songId,
         stage: "error",
         error: command.error || translateSaved("Ведущий не смог передать песню"),
         percent: 0
@@ -221,7 +270,12 @@ export function createOnlineRoomMessageHandler(options) {
           }
           if (!isCurrentPending(command)) return;
           pendingCommandRef.current = { ...command, localSongId };
-          setTransferStatus({ participantId: message.fromId, stage: "complete", percent: 100 });
+          setTransferStatus({
+            participantId: message.fromId,
+            songId: command.songId,
+            stage: "complete",
+            percent: 100
+          });
           client.send("sync", {
             state: {
               type: "song-ready",
@@ -234,7 +288,12 @@ export function createOnlineRoomMessageHandler(options) {
         })
         .catch(() => {
           if (!isCurrentPending(command)) return;
-          setTransferStatus({ participantId: message.fromId, stage: "waiting", percent: 0 });
+          setTransferStatus({
+            participantId: message.fromId,
+            songId: command.songId,
+            stage: "waiting",
+            percent: 0
+          });
           client.send("sync", {
             state: {
               type: "song-request",

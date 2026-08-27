@@ -229,6 +229,14 @@ export default function useLibrary() {
       if (transition.current) return;
       transition.current = true;
       try {
+        if (room?.room && !room.room.host) {
+          await room.openKaraoke(song.id, {
+            ownerId: song.__roomOwnerId || room.room.selfId,
+            revision: song.__roomRevision
+          });
+          transition.current = false;
+          return;
+        }
         let localSongId = song.id;
         if (room?.room && !localSongs.some(({ id }) => id === localSongId)) {
           const match = song.__roomRevision
@@ -237,7 +245,9 @@ export default function useLibrary() {
           if (match?.song_id) {
             localSongId = match.song_id;
           } else {
-            if (!(await room.requestSongSync(song.id, song.__roomOwnerId)))
+            if (
+              !(await room.requestSongSync(song.id, song.__roomOwnerId, { roomWide: true }))
+            )
               throw new Error(tr("Не удалось получить песню от участника"));
             await songsQuery.refresh();
             if (!room.room.host) {
@@ -263,6 +273,30 @@ export default function useLibrary() {
     },
     [dialog.alert, localSongs, navigate, room, songsQuery.refresh]
   );
+
+  const handledKaraokeRequest = useRef(null);
+  useEffect(() => {
+    const command = room?.roomCommand;
+    if (
+      !room?.room?.host ||
+      command?.type !== "karaoke-request" ||
+      !command.__eventId ||
+      handledKaraokeRequest.current === command.__eventId
+    )
+      return;
+    handledKaraokeRequest.current = command.__eventId;
+    const song =
+      visibleSongs.find(
+        (candidate) =>
+          candidate?.id === command.songId ||
+          (command.revision && candidate?.__roomRevision === command.revision)
+      ) || {
+        id: command.songId,
+        __roomOwnerId: command.ownerId,
+        __roomRevision: command.revision
+      };
+    openKaraoke(song);
+  }, [openKaraoke, room?.room?.host, room?.roomCommand, visibleSongs]);
 
   const deleteRecording = useCallback(
     async (recording) => {

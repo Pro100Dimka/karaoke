@@ -63,12 +63,96 @@ test("only the host can publish the room karaoke selection", async () => {
   assert.equal(client.send.mock.calls.at(-1)[1].state.type, "start-karaoke");
   client.send.mockClear();
   assert.equal(await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => true }), true);
-  assert.equal(client.send.mock.calls.length, 2);
+  assert.equal(client.send.mock.calls.length, 3);
+  assert.equal(client.send.mock.calls.at(-1)[1].state.type, "song-transfer-status");
   client.send.mockClear();
-  assert.equal(await openKaraokeInRoom({ ...base, room: { host: false }, isCurrentConnection: () => true }), false);
-  assert.equal(client.send.mock.calls.length, 0);
+  assert.equal(
+    await openKaraokeInRoom({
+      ...base,
+      ownerId: "host",
+      room: { host: false, selfId: "guest" },
+      isCurrentConnection: () => true
+    }),
+    false
+  );
+  assert.equal(client.send.mock.calls.length, 1);
+  assert.deepEqual(client.send.mock.calls[0][1].state, {
+    type: "karaoke-request",
+    songId: "song",
+    commandId: client.send.mock.calls[0][1].state.commandId,
+    revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ownerId: "host",
+    requesterId: "guest"
+  });
+  client.send.mockClear();
   assert.equal(await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => false }), true);
   assert.equal(client.send.mock.calls.length, 0);
+});
+
+test("a guest karaoke request reaches the host and room transfer status reaches guests", () => {
+  const revision = `sha256:${"c".repeat(64)}`;
+  const client = { send: vi.fn(), serverNow: vi.fn(() => 200) };
+  const setRoomCommand = vi.fn();
+  const setTransferStatus = vi.fn();
+  const roomRef = { current: { selfId: "host", host: true } };
+  const participantsRef = {
+    current: [
+      { id: "host", role: "host" },
+      { id: "guest", role: "guest" }
+    ]
+  };
+  const handler = createOnlineRoomMessageHandler({
+    id: "ROOM",
+    client,
+    voice: {},
+    roomApi: {},
+    roomRef,
+    participantsRef,
+    cleanupConnection: vi.fn(),
+    setRoom: vi.fn(),
+    setParticipants: vi.fn(),
+    setRoomUi: vi.fn(),
+    setRoomCommand,
+    setVoiceError: vi.fn(),
+    setTransferStatus
+  });
+
+  handler({
+    type: "sync",
+    fromId: "guest",
+    sentAt: 100,
+    state: {
+      type: "karaoke-request",
+      requesterId: "guest",
+      ownerId: "guest",
+      songId: "song",
+      commandId: "command",
+      revision
+    }
+  });
+  assert.equal(setRoomCommand.mock.calls.at(-1)[0].type, "karaoke-request");
+  assert.deepEqual(setTransferStatus.mock.calls.at(-1)[0], {
+    participantId: "room",
+    songId: "song",
+    commandId: "command",
+    stage: "waiting",
+    percent: 0
+  });
+  assert.equal(client.send.mock.calls.at(-1)[1].state.type, "song-transfer-status");
+
+  roomRef.current = { selfId: "guest", host: false };
+  handler({
+    type: "sync",
+    fromId: "host",
+    state: {
+      type: "song-transfer-status",
+      songId: "song",
+      commandId: "command",
+      stage: "waiting",
+      percent: 45
+    }
+  });
+  assert.equal(setTransferStatus.mock.calls.at(-1)[0].percent, 45);
 });
 
 test("room messages update participants, UI, voice and connection state", async () => {
@@ -374,6 +458,6 @@ test("room song error is correlated to the current pending command", () => {
   });
   assert.equal(pendingSongCommandRef.current, null);
   assert.deepEqual(setTransferStatus.mock.calls.at(-1)[0], {
-    participantId: "host", stage: "error", error: "current", percent: 0
+    participantId: "host", songId: "B", stage: "error", error: "current", percent: 0
   });
 });

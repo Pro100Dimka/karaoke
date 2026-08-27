@@ -27,6 +27,22 @@ from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+
+class _YtDlpLogger:
+    """Keep optional clip lookup failures out of the process-wide stderr log."""
+
+    def debug(self, message: str) -> None:
+        logger.debug("yt-dlp: %s", message)
+
+    def info(self, message: str) -> None:
+        logger.info("yt-dlp: %s", message)
+
+    def warning(self, message: str) -> None:
+        logger.info("yt-dlp warning: %s", message)
+
+    def error(self, message: str) -> None:
+        logger.info("yt-dlp error: %s", message)
+
 try:
     from yt_dlp import YoutubeDL
 except ImportError:  # Optional in lightweight developer environments.
@@ -363,6 +379,7 @@ def _download_youtube_video(video_id: str, output_dir: Path) -> bool:
         "retries": 2,
         "fragment_retries": 2,
         "max_filesize": 400 * 1024 * 1024,
+        "logger": _YtDlpLogger(),
     }
     try:
         with YoutubeDL(options) as downloader:

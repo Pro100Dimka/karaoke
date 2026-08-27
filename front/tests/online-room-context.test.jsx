@@ -648,6 +648,7 @@ describe("online room provider", () => {
     });
     expect(importError?.message).toBe("bad package");
     expect(hook.result.current.transferStatus).toEqual({
+      songId: "song",
       stage: "error",
       error: "Не удалось импортировать песню: bad package",
       percent: 0
@@ -966,7 +967,11 @@ describe("online room provider", () => {
       revision
     });
     await act(async () => Promise.resolve());
-    expect(hook.result.current.transferStatus).toEqual({ stage: "importing", percent: 100 });
+    expect(hook.result.current.transferStatus).toEqual({
+      songId: "late",
+      stage: "importing",
+      percent: 100
+    });
     await act(() => hook.result.current.leaveRoom());
     const postLeaveCommand = {
       type: "open-karaoke",

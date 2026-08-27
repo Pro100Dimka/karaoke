@@ -220,7 +220,7 @@ export function OnlineRoomProvider({ children }) {
     [prepareSpeakingMeter, setTransferStatus, startSpeakingMeter]
   );
   const requestSongSync = useCallback(
-    (songId, ownerId) => {
+    (songId, ownerId, options = {}) => {
       const voice = voiceRef.current;
       const selfId = roomRef.current?.selfId;
       if (!voice || !songId || !ownerId || ownerId === selfId || librarySyncRef.current)
@@ -234,11 +234,24 @@ export function OnlineRoomProvider({ children }) {
           if (error) {
             setTransferStatus({
               participantId: ownerId,
+              songId,
               commandId,
               stage: "error",
               error: getErrorMessage(error),
               percent: 0
             });
+            if (options.roomWide && roomRef.current?.host)
+              clientRef.current?.send("sync", {
+                state: {
+                  type: "song-transfer-status",
+                  participantId: "room",
+                  songId,
+                  commandId,
+                  stage: "error",
+                  error: getErrorMessage(error),
+                  percent: 0
+                }
+              });
           }
           resolve(result);
         };
@@ -249,7 +262,24 @@ export function OnlineRoomProvider({ children }) {
           () => pending.reject(new Error(translateSaved("Участник не ответил на запрос песни"))),
           SONG_SYNC_REQUEST_TIMEOUT_MS
         );
-        setTransferStatus({ participantId: ownerId, commandId, stage: "waiting", percent: 0 });
+        setTransferStatus({
+          participantId: ownerId,
+          songId,
+          commandId,
+          stage: "waiting",
+          percent: 0
+        });
+        if (options.roomWide && roomRef.current?.host)
+          clientRef.current?.send("sync", {
+            state: {
+              type: "song-transfer-status",
+              participantId: "room",
+              songId,
+              commandId,
+              stage: "waiting",
+              percent: 0
+            }
+          });
         voice
           .waitForDataChannel(ownerId, SONG_SYNC_REQUEST_TIMEOUT_MS, voice.lifecycleVersion)
           .then((channel) => {
@@ -362,7 +392,25 @@ export function OnlineRoomProvider({ children }) {
             : pendingSongCommandRef.current?.commandId;
           if (commandId && commandId !== currentCommandId) return;
         }
-        setTransferStatus({ participantId, commandId, stage, percent: Number(percent) || 0 });
+        const normalizedPercent = Number(percent) || 0;
+        setTransferStatus({
+          participantId,
+          songId: metadata?.songId,
+          commandId,
+          stage,
+          percent: normalizedPercent
+        });
+        if (roomRef.current?.host && metadata?.kind === "song-package")
+          clientRef.current?.send("sync", {
+            state: {
+              type: "song-transfer-status",
+              participantId: "room",
+              songId: metadata.songId,
+              commandId,
+              stage: "waiting",
+              percent: normalizedPercent
+            }
+          });
       };
       const canAcceptSongPackage = (participantId, metadata) => {
         const pending = pendingSongCommandRef.current;
@@ -403,6 +451,7 @@ export function OnlineRoomProvider({ children }) {
         try {
           setTransferStatus({
             participantId,
+            songId: metadata.songId,
             commandId: metadata.commandId,
             stage: "importing",
             percent: 100
@@ -414,6 +463,7 @@ export function OnlineRoomProvider({ children }) {
           if (!isCurrentConnection() || librarySyncRef.current !== pending) return false;
           setTransferStatus({
             participantId,
+            songId: metadata.songId,
             commandId: metadata.commandId,
             stage: "complete",
             percent: 100
@@ -440,6 +490,7 @@ export function OnlineRoomProvider({ children }) {
         try {
           setTransferStatus({
             participantId,
+            songId: metadata.songId,
             commandId: metadata.commandId,
             stage: "importing",
             percent: 100
@@ -460,6 +511,7 @@ export function OnlineRoomProvider({ children }) {
             return false;
           setTransferStatus({
             participantId,
+            songId: metadata.songId,
             commandId: metadata.commandId,
             stage: "complete",
             percent: 100
@@ -484,6 +536,7 @@ export function OnlineRoomProvider({ children }) {
           if (isCurrentConnection()) {
             setTransferStatus({
               participantId,
+              songId: metadata.songId,
               commandId: metadata.commandId,
               stage: "error",
               error: translateSaved("Не удалось импортировать песню: {0}", {
@@ -747,6 +800,7 @@ export function OnlineRoomProvider({ children }) {
     clientRef,
     connectionTokenRef,
     hostSongCommandRef,
+    onTransferStatus: setTransferStatus,
     participantsRef,
     roomRef,
     voiceRef
@@ -778,6 +832,7 @@ export function OnlineRoomProvider({ children }) {
     togglePersonEffects,
     togglePersonMuted,
     transferStatus,
+    transferStatuses,
     voiceError
   });
   const speakingValue = useMemo(
