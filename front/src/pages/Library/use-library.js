@@ -227,23 +227,31 @@ export default function useLibrary() {
       if (transition.current) return;
       transition.current = true;
       try {
-        if (room?.room && !localSongs.some(({ id }) => id === song.id)) {
-          if (!(await room.requestSongSync(song.id, song.__roomOwnerId)))
-            throw new Error(tr("Не удалось получить песню от участника"));
-          await songsQuery.refresh();
-          if (!room.room.host) {
-            transition.current = false;
-            return;
+        let localSongId = song.id;
+        if (room?.room && !localSongs.some(({ id }) => id === localSongId)) {
+          const match = song.__roomRevision
+            ? await api.resolveSongRevision(song.__roomRevision).catch(() => null)
+            : null;
+          if (match?.song_id) {
+            localSongId = match.song_id;
+          } else {
+            if (!(await room.requestSongSync(song.id, song.__roomOwnerId)))
+              throw new Error(tr("Не удалось получить песню от участника"));
+            await songsQuery.refresh();
+            if (!room.room.host) {
+              transition.current = false;
+              return;
+            }
           }
         }
-        if (room?.room && !(await room.openKaraoke(song.id))) {
+        if (room?.room && !(await room.openKaraoke(localSongId))) {
           transition.current = false;
           return;
         }
         setGlobalRouteBlackout(true);
         setTransitioning(true);
         await new Promise((resolve) => setTimeout(resolve, 920));
-        navigate("/karaoke", { state: { songId: song.id, autoPlay: true } });
+        navigate("/karaoke", { state: { songId: localSongId, autoPlay: true } });
       } catch (error) {
         transition.current = false;
         setTransitioning(false);

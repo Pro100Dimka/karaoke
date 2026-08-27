@@ -8,7 +8,13 @@ const mocks = vi.hoisted(() => ({
   songsPoll: { data: [] },
   listSongs: vi.fn(),
   result: { result: null, loading: false, error: null },
-  room: { room: null, participants: [], roomUi: {}, syncUi: vi.fn() },
+  room: {
+    room: null,
+    participants: [],
+    roomUi: {},
+    syncUi: vi.fn(),
+    setLocalMonitoring: vi.fn().mockResolvedValue(false)
+  },
   radio: {
     isPlaying: false,
     setRecordingActive: vi.fn(),
@@ -169,6 +175,7 @@ beforeEach(() => {
   mocks.room.room = null;
   mocks.room.participants = [];
   mocks.room.syncUi.mockReset();
+  mocks.room.setLocalMonitoring.mockReset().mockResolvedValue(false);
   mocks.radio.isPlaying = false;
   Object.values(mocks.radio).forEach((value) => value?.mockClear?.());
   mocks.preferences = {
@@ -314,6 +321,14 @@ describe("karaoke page", () => {
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(page.container.querySelector("[role=alert]").textContent).toContain("monitor failed"));
+  });
+  test("uses native monitoring while an online room is active", async () => {
+    mocks.room.room = { host: true };
+    const page = render(<Karaoke />);
+    fireEvent.click(page.getByTestId("monitor"));
+    await waitFor(() => expect(mocks.startMonitoring).toHaveBeenCalled());
+    expect(mocks.room.setLocalMonitoring).toHaveBeenCalledWith(false);
+    expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(true);
   });
   test("wires all console mutations and stopping monitoring", async () => {
     const page = render(<Karaoke />);

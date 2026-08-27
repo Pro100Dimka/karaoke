@@ -335,6 +335,24 @@ describe("audio output routing", () => {
     expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
     await act(async () => Promise.resolve());
   });
+  test("releases backend monitoring when leaving karaoke through client-side navigation", () => {
+    const hook = renderHook(() =>
+      useAudioOutputRouting({
+        audioDriver: "auto",
+        audioSettings: {},
+        directOutputDeviceId: "",
+        directOutputDevices: [],
+        instrumentalRef: { current: null },
+        microphoneOpen: false,
+        setDirectOutputDeviceId: vi.fn(),
+        updateMicrophone: vi.fn(),
+        videoRef: { current: null },
+        vocalsRef: { current: null }
+      })
+    );
+    hook.unmount();
+    expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
+  });
   test("isolates browser device enumeration failures", async () => {
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,

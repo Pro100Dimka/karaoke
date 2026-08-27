@@ -147,6 +147,14 @@ class SongRevisionsOut(BaseModel):
     revisions: list[SongRevisionResult]
 
 
+class SongRevisionResolveRequest(BaseModel):
+    revision: str = Field(min_length=71, max_length=71, pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class SongRevisionResolveOut(BaseModel):
+    song_id: str | None = None
+
+
 class SongEditorUpdate(BaseModel):
     notes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
     word_texts: list[str] | None = Field(default=None, max_length=20_000)

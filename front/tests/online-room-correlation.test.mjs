@@ -11,12 +11,16 @@ function guestHarness() {
   const setRoomCommand = vi.fn();
   const setTransferStatus = vi.fn();
   const lookups = new Map();
+  const resolveSongRevision = vi.fn().mockResolvedValue({ song_id: null });
   const voice = { invite: vi.fn(), removePeer: vi.fn(), accept: vi.fn() };
   const handler = createOnlineRoomMessageHandler({
     id: "room",
     client,
     voice,
-    roomApi: { getSongRevision: vi.fn((songId) => lookups.get(songId).promise) },
+    roomApi: {
+      getSongRevision: vi.fn((songId) => lookups.get(songId).promise),
+      resolveSongRevision
+    },
     isCurrentConnection: () => true,
     roomRef,
     participantsRef,
@@ -35,6 +39,7 @@ function guestHarness() {
     handler,
     lookups,
     pendingSongCommandRef,
+    resolveSongRevision,
     setRoomCommand,
     setTransferStatus,
     voice
@@ -106,6 +111,42 @@ test("guest never claims song-ready when its local copy's revision differs from 
     "sync",
     expect.objectContaining({ state: expect.objectContaining({ type: "song-ready" }) })
   );
+});
+test("guest reuses identical local content even when its song id differs from the host's", async () => {
+  const h = guestHarness();
+  h.lookups.set("host-song", deferred());
+  h.resolveSongRevision.mockResolvedValueOnce({ song_id: "local-song" });
+  h.handler({
+    type: "sync",
+    fromId: "host",
+    state: {
+      type: "open-karaoke",
+      songId: "host-song",
+      commandId: "cmd",
+      revision: TEST_REVISION
+    }
+  });
+  h.lookups.get("host-song").reject(new Error("different local id"));
+  await flush();
+  expect(h.client.send).toHaveBeenCalledWith("sync", {
+    state: expect.objectContaining({ type: "song-ready", songId: "host-song" })
+  });
+  expect(h.client.send).not.toHaveBeenCalledWith("sync", {
+    state: expect.objectContaining({ type: "song-request" })
+  });
+
+  h.handler({
+    type: "sync",
+    fromId: "host",
+    sentAt: 123,
+    state: {
+      type: "start-karaoke",
+      songId: "host-song",
+      commandId: "cmd",
+      revision: TEST_REVISION
+    }
+  });
+  expect(h.setRoomCommand).toHaveBeenCalledWith(expect.objectContaining({ type: "start-karaoke", songId: "local-song" }));
 });
 test("stale song-transfer-error cannot clear newer pending command", () => {
   const h = guestHarness();

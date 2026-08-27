@@ -59,38 +59,22 @@ export default function OnlineRoomParticipant({
       gap="var(--space-3)"
       data-self={self || undefined}
       data-speaking={speaking || undefined}
-      sx={{
-        overflow: "visible"
-      }}
+      sx={{ overflow: "visible" }}
     >
-      <Stack
-        direction="row"
-        align="center"
-        gap="var(--space-2)"
-        sx={{
-          minInlineSize: 0
-        }}
-      >
+      <Stack direction="row" align="center" justify="space-between" gap="var(--space-2)">
         <Typography as="strong" noWrap>
           {person.name}
         </Typography>
-
-        {person.role === "host" && (
-          <Typography variant="caption" tone="muted">
-            {t("room.role.host")}
-          </Typography>
-        )}
-
         {transferStatus && transferStatus.stage !== "error" && (
           <Typography variant="caption" tone="muted">
             {Math.round(transferStatus.percent || 0)}%
           </Typography>
         )}
-
         <Stack
           as="span"
           direction="row"
           gap="var(--space-1)"
+          sx={{ width: "auto" }}
           aria-label={t(key(speaking, "speaking", "silent"), {
             name: person.name
           })}
@@ -116,10 +100,7 @@ export default function OnlineRoomParticipant({
         direction="row"
         align="center"
         gap="var(--space-2)"
-        sx={{
-          inlineSize: "auto",
-          overflow: "visible"
-        }}
+        sx={{ inlineSize: "auto", overflow: "visible" }}
       >
         {self ? (
           selfActions.map(([icon, label, onClick, disabled]) => (

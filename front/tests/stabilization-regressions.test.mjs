@@ -22,11 +22,15 @@ test("room output mute never toggles the outgoing WebRTC microphone", () => {
   const body = context.slice(start, end);
   verify([body, "not.toContain", "setMicrophoneMuted("], [body, "toContain", "applyRemoteAudioMute()"]);
 });
-test("room self-monitor reuses the existing WebRTC stream", () => {
+test("room self-monitor keeps WebRTC transport but uses the configured native output", () => {
   const audio = read("src/contexts/hooks/useOnlineRoomAudio.js");
   verify([audio, "toContain", "const stream = await voice.start()"], [audio, "toContain", "context.createMediaStreamSource(stream)"]);
   const karaoke = read("src/pages/Karaoke/index.jsx");
-  expect(karaoke).toContain("onlineRoom.setLocalMonitoring(enabled)");
+  verify(
+    [karaoke, "toContain", "onlineRoom.setLocalMonitoring(false)"],
+    [karaoke, "toContain", "api.startDirectMonitoring"],
+    [karaoke, "toContain", "api.stopDirectMonitoring"]
+  );
 });
 test("karaoke waveform loads the real instrumental through WaveSurfer", () => {
   const timeline = read("src/pages/Karaoke/components/waveform-timeline.jsx");

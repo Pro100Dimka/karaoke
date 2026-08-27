@@ -321,9 +321,12 @@ export default function Karaoke({ onOpenAppSettings }) {
   const handleMonitoringChange = async (enabled) => {
     try {
       if (onlineRoomState) {
-        const active = await onlineRoom.setLocalMonitoring(enabled);
-        setMonitoringEnabled(enabled ? active : false);
-        return;
+        // The room's Web Audio monitor follows the browser's default output
+        // and can report success while the singer listens through another
+        // device selected in A&D Voice. Keep the room microphone transport,
+        // but route local monitoring through the same native backend used by
+        // solo karaoke so the configured input/output and effects are honored.
+        await onlineRoom.setLocalMonitoring(false);
       }
       const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
       const updated = await action();

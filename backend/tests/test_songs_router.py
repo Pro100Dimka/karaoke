@@ -190,6 +190,25 @@ def test_get_song_revisions_maps_the_batch_service_result(monkeypatch):
     }
 
 
+def test_resolve_song_revision_returns_matching_local_id(monkeypatch):
+    database = Mock()
+    revision = "sha256:" + "a" * 64
+    patch_attrs(
+        monkeypatch,
+        songs.song_package_service,
+        find_song_id_by_content_revision=Mock(return_value="local-song"),
+    )
+
+    response = songs.resolve_song_revision(
+        schemas.SongRevisionResolveRequest(revision=revision), database
+    )
+
+    assert response == {"song_id": "local-song"}
+    songs.song_package_service.find_song_id_by_content_revision.assert_called_once_with(
+        database, revision
+    )
+
+
 def test_import_package_streams_and_maps_archive_errors(monkeypatch, tmp_path):
     patch_attrs(monkeypatch, songs.config, DATA_DIR=tmp_path / 'data', CACHE_DIR=tmp_path)
     patch_many(monkeypatch, (songs, "save_upload_limited", AsyncMock()), (songs.song_package_service, "import_package", Mock(return_value="song")))

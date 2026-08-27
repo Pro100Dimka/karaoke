@@ -68,11 +68,17 @@ export default function useAudioOutputRouting(options) {
 
   useEffect(
     () => {
+      let released = false;
       const releaseMonitorOnClose = () => {
+        if (released) return;
+        released = true;
         api.releaseDirectMonitoring().catch(() => {});
       };
       window.addEventListener("pagehide", releaseMonitorOnClose);
-      return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
+      return () => {
+        window.removeEventListener("pagehide", releaseMonitorOnClose);
+        releaseMonitorOnClose();
+      };
     },
     // Stryker disable next-line ArrayDeclaration: browser/API globals are stable.
     []

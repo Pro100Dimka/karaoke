@@ -217,6 +217,15 @@ def content_revisions_for_songs(
     return results
 
 
+def find_song_id_by_content_revision(db: Session, revision: str) -> str | None:
+    """Return the local id of a completed song with identical packaged content."""
+    done_ids = [song.id for song in song_service.list_songs(db) if song_service.is_done(song)]
+    for song_id, local_revision, _error in content_revisions_for_songs(db, done_ids):
+        if local_revision == revision:
+            return song_id
+    return None
+
+
 def build_package_for_song(
     db: Session, song_id: str, *, expected_revision: str | None = None,
 ) -> tuple[Path, str]:

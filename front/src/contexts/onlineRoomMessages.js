@@ -157,8 +157,13 @@ export function createOnlineRoomMessageHandler(options) {
     "start-karaoke": (command, message) => {
       if (activeRoomRef.current?.host || !senderIsHost(message) || !isCurrentPending(command))
         return false;
+      const localSongId = pendingCommandRef.current?.localSongId;
       pendingCommandRef.current = null;
-      publishRoomCommand(command, "start", message.sentAt);
+      publishRoomCommand(
+        localSongId ? { ...command, songId: localSongId } : command,
+        "start",
+        message.sentAt
+      );
       return true;
     },
     "song-transfer-error": (command, message) => {
@@ -201,11 +206,19 @@ export function createOnlineRoomMessageHandler(options) {
         );
       }
       pendingCommandRef.current = command;
-      roomApi
-        .getSongRevision(command.songId)
-        .then((local) => {
+      Promise.resolve()
+        .then(async () => {
+          let localSongId = command.songId;
+          try {
+            const local = await roomApi.getSongRevision(command.songId);
+            if (local?.revision !== command.revision) throw new Error("Song revision differs");
+          } catch {
+            const match = await roomApi.resolveSongRevision(command.revision);
+            if (!match?.song_id) throw new Error("Song is not available locally");
+            localSongId = match.song_id;
+          }
           if (!isCurrentPending(command)) return;
-          if (local?.revision !== command.revision) throw new Error("Song revision differs");
+          pendingCommandRef.current = { ...command, localSongId };
           setTransferStatus({ participantId: message.fromId, stage: "complete", percent: 100 });
           client.send("sync", {
             state: {

@@ -2,6 +2,7 @@ import contextlib
 import json
 import zipfile
 from datetime import UTC, datetime
+from unittest.mock import Mock
 
 import soundfile as sf
 from sqlalchemy import create_engine
@@ -197,6 +198,35 @@ def test_content_revisions_for_songs_holds_the_library_lock_once_for_the_whole_b
     # One lock acquisition for the whole batch, not one per song -- that's
     # the entire point of batching instead of calling this once per song.
     assert lock_acquisitions == [1]
+
+
+def test_find_song_id_by_content_revision_matches_completed_local_copy(monkeypatch):
+    songs = [Mock(id="pending"), Mock(id="local-copy"), Mock(id="other")]
+    patch_attrs(
+        monkeypatch,
+        song_package_service.song_service,
+        list_songs=Mock(return_value=songs),
+        is_done=Mock(side_effect=lambda item: item.id != "pending"),
+    )
+    patch_attrs(
+        monkeypatch,
+        song_package_service,
+        content_revisions_for_songs=Mock(
+            return_value=[
+                ("local-copy", "sha256:" + "a" * 64, None),
+                ("other", "sha256:" + "b" * 64, None),
+            ]
+        ),
+    )
+
+    result = song_package_service.find_song_id_by_content_revision(
+        None, "sha256:" + "a" * 64
+    )
+
+    assert result == "local-copy"
+    song_package_service.content_revisions_for_songs.assert_called_once_with(
+        None, ["local-copy", "other"]
+    )
 
 
 def test_member_path_rejects_traversal():

@@ -384,6 +384,12 @@ describe("API domains", () => {
       [() => songsApi.getStatus(id), "/songs/a%2Fb/status"],
       [() => songsApi.getLog(id), "/songs/a%2Fb/log"],
       [() => songsApi.getResult(id), "/songs/a%2Fb/result"],
+      [
+        () => songsApi.resolveSongRevision("sha256:abc"),
+        "/songs/revision/resolve",
+        "POST",
+        { revision: "sha256:abc" }
+      ],
       [() => songsApi.getSongEditor(id), "/songs/a%2Fb/editor"],
       [
         () => songsApi.saveSongEditor(id, [{ pitch: 60 }]),

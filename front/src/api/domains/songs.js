@@ -12,6 +12,11 @@ export const songsApi = {
   getSongRevision: (id) => request(`/songs/${encodePathSegment(id)}/revision`),
   getSongRevisions: (ids) =>
     request("/songs/revisions", { method: "POST", body: JSON.stringify({ song_ids: ids }) }),
+  resolveSongRevision: (revision) =>
+    request("/songs/revision/resolve", {
+      method: "POST",
+      body: JSON.stringify({ revision })
+    }),
   addSong: (file, title, artist = "") => {
     const form = new FormData();
     form.append("file", file);

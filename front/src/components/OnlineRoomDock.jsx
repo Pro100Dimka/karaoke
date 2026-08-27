@@ -41,12 +41,11 @@ export function OnlineRoomDock() {
           sx={{
             position: "fixed",
             inset: "auto auto var(--space-5) var(--space-5)",
-            zIndex: 20,
-            inlineSize: "min(var(--content-sm), calc(100vw - var(--space-10)))"
+            zIndex: 20
           }}
         >
           <Stack gap="var(--space-3)" sx={{ padding: "var(--space-4)" }}>
-            <Stack direction="row" align="center" justify="space-between">
+            <Stack direction="row" align="center" justify="space-between" gap="var(--space-4)">
               <Typography as="strong">
                 {t("room.heading", {
                   role: t(online.room.host ? "room.role.host" : "room.role.participant")
