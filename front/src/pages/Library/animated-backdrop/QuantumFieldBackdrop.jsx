@@ -31,11 +31,16 @@ export default function QuantumFieldBackdrop() {
 
       const styles = getComputedStyle(document.documentElement);
       const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+      const themeBackground = document.querySelector("[data-library-theme-background]");
+      const backgroundImage = themeBackground
+        ? getComputedStyle(themeBackground).backgroundImage
+        : "none";
 
       frameWindow.postMessage(
         {
           type: "QFT_THEME",
           theme: document.documentElement.dataset.theme || "dark",
+          backgroundImage,
           palette: {
             primary: color("--color-primary", "#ff153f"),
             primaryHover: color("--color-primary-hover", "#ff5a69"),
@@ -109,7 +114,15 @@ export default function QuantumFieldBackdrop() {
     <div
       className="qft-original-backdrop"
       aria-hidden="true"
-      style={{ position: "fixed", pointerEvents: "none" }}
+      style={{
+        position: "fixed",
+        pointerEvents: "none",
+        // The iframe owns both the theme artwork and WebGL. Keeping their
+        // composition on one surface avoids an opaque white/black iframe in
+        // packaged Electron builds.
+        mixBlendMode: "normal",
+        filter: "none"
+      }}
     >
       <iframe
         ref={frameRef}

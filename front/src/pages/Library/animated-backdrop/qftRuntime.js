@@ -2105,6 +2105,18 @@ void main() {
             const palette = event.data.palette;
             if (!palette || !['primary', 'primaryHover', 'secondary', 'accent', 'highlight'].every(key => typeof palette[key] === 'string')) return;
 
+            const backgroundImage = typeof event.data.backgroundImage === 'string'
+                ? event.data.backgroundImage
+                : 'none';
+            for (const element of [document.documentElement, document.body]) {
+                element.style.backgroundColor = 'transparent';
+                element.style.backgroundImage = backgroundImage;
+                element.style.backgroundPosition = 'center';
+                element.style.backgroundSize = 'cover';
+                element.style.backgroundRepeat = 'no-repeat';
+                element.style.backgroundAttachment = 'fixed';
+            }
+
             const lightTheme = event.data.theme === 'light';
             const renderColor = value => {
                 if (!lightTheme) return value;

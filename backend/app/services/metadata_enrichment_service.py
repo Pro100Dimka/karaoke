@@ -350,7 +350,8 @@ def _download_youtube_video(video_id: str, output_dir: Path) -> bool:
         "format": (
             "bestvideo[vcodec^=avc1][ext=mp4][height>=720]/"
             "best[vcodec^=avc1][ext=mp4][height>=720]/"
-            "bestvideo[ext=mp4][height>=720]/best[ext=mp4][height>=720]"
+            "bestvideo[ext=mp4][height>=720]/best[ext=mp4][height>=720]/"
+            "bestvideo/best"
         ),
         "outtmpl": str(output_dir / ".clip-download.%(ext)s"),
         "noplaylist": True,

@@ -57,6 +57,7 @@ export default function LibraryParallaxBackground() {
   return (
     <Box
       ref={layerRef}
+      data-library-theme-background="true"
       aria-hidden="true"
       sx={{
         position: "fixed",

@@ -247,7 +247,7 @@ describe("library room synchronization", () => {
     expect(api.getSongRevisions).toHaveBeenCalledOnce();
     expect(api.getSongRevisions).toHaveBeenCalledWith(["done", "broken"]);
     expect(syncUi).toHaveBeenCalledWith({
-      participantSongs: [
+      songs: [
         { id: "done", status: "done", __roomOwnerId: "self", __roomRevision: "sha256:done" },
         { id: "broken", status: "done", __roomOwnerId: "self" },
         { id: "queued", status: "processing", __roomOwnerId: "self" }

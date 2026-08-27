@@ -311,7 +311,7 @@ export class KaraokeRoom {
         return;
       }
       if (
-        state.type === "song-request" &&
+        (state.type === "song-request" || state.type === "song-ready") &&
         typeof state.songId === "string" && state.songId.length <= 128 &&
         typeof state.commandId === "string" && state.commandId.length <= 128 &&
         typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
@@ -320,7 +320,7 @@ export class KaraokeRoom {
           fromId: sender.id,
           sentAt: Date.now(),
           state: {
-            type: "song-request",
+            type: state.type,
             songId: state.songId,
             commandId: state.commandId,
             revision: state.revision,

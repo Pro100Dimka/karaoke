@@ -5,7 +5,7 @@ const MAX_SONGS = 500;
 const MAX_BYTES = 120 * 1024;
 export const capParticipantSongs = (songs) => {
   const result = songs.slice(0, MAX_SONGS);
-  while (result.length && JSON.stringify({ participantSongs: result }).length > MAX_BYTES)
+  while (result.length && JSON.stringify({ songs: result }).length > MAX_BYTES)
     result.pop();
   return result;
 };
@@ -122,7 +122,11 @@ export default function useLibraryRoomSync({
         const revision = revisionById.get(song.id);
         return revision ? { ...owned, __roomRevision: revision } : owned;
       });
-      syncUi({ participantSongs: capParticipantSongs(songs) });
+      // Every participant publishes their own local library under the
+      // worker's allowed `songs` contract. `participantSongs` was silently
+      // discarded for guests, so the host could not know that a guest
+      // already had (or was missing) a particular revision.
+      syncUi({ songs: capParticipantSongs(songs) });
     });
     return () => {
       active = false;

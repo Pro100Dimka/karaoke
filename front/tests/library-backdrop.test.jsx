@@ -10,6 +10,8 @@ test("library backdrop is decorative and cannot intercept controls", () => {
   expect(backdrop.getAttribute("aria-hidden")).toBe("true");
   expect(backdrop.style.position).toBe("fixed");
   expect(backdrop.style.pointerEvents).toBe("none");
+  expect(backdrop.style.mixBlendMode).toBe("normal");
+  expect(backdrop.style.filter).toBe("none");
 });
 
 test("library backdrop keeps its packaged runtime URL stable and query-free", () => {
@@ -25,6 +27,7 @@ test("library backdrop keeps black WebGL pixels transparent over the theme artwo
   const runtime = fs.readFileSync("src/pages/Library/animated-backdrop/qftRuntime.js", "utf8");
   expect(runtime).toContain("float overlayAlpha = clamp(visibleLight * 1.35, 0.0, 1.0);");
   expect(runtime).not.toContain("gl_FragColor = vec4(detailLift, 1.0);");
+  expect(runtime).toContain("element.style.backgroundImage = backgroundImage;");
 });
 
 test("library backdrop watches the theme attribute instead of polling it every frame", () => {
