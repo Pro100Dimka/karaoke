@@ -65,7 +65,7 @@ class SongIdentityOut(BaseModel):
 
 class KarDatasetItemOut(BaseModel):
     filename: str
-    status: Literal["ready", "review", "error"]
+    status: Literal["ready", "review", "skipped", "error"]
     dataset_dir: str | None = None
     title: str | None = None
     artist: str | None = None

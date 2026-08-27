@@ -1,6 +1,8 @@
 import asyncio
 import json
+import struct
 import sys
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,7 +10,7 @@ import mido
 import pytest
 
 from app.routers import songs
-from app.services import kar_dataset_service
+from app.services import kar_dataset_service, kfn_dataset_service
 from tests._shared import upload_file
 
 
@@ -28,6 +30,31 @@ def build_kar(path):
     melody.append(mido.Message("note_on", note=62, velocity=90, time=0))
     melody.append(mido.Message("note_off", note=62, velocity=0, time=480))
     midi.save(path)
+    return path
+
+
+def build_kfn(path, midi_payload=None):
+    songini = (
+        b"[General]\nTitle=KFN Song\nArtist=KFN Artist\n"
+        b"[Eff1]\nID=2\nSync0=50,100\nTextCount=1\nText0=Hello world\n"
+    )
+    entries = [("Song.ini", 1, songini)]
+    if midi_payload is not None:
+        entries.append(("melody.kar", 2, midi_payload))
+    header = bytearray(b"KFNB")
+    for tag, value in ((b"TITL", b"KFN Song"), (b"ARTS", b"KFN Artist"), (b"FLID", bytes(16))):
+        header.extend(tag + b"\x02" + struct.pack("<I", len(value)) + value)
+    header.extend(b"ENDH\x01" + struct.pack("<I", 0xFFFFFFFF))
+    header.extend(struct.pack("<I", len(entries)))
+    payload_offset = 0
+    payloads = bytearray()
+    for name, kind, payload in entries:
+        encoded = name.encode()
+        header.extend(struct.pack("<I", len(encoded)) + encoded)
+        header.extend(struct.pack("<IIIII", kind, len(payload), payload_offset, len(payload), 0))
+        payloads.extend(payload)
+        payload_offset += len(payload)
+    path.write_bytes(header + payloads)
     return path
 
 
@@ -124,6 +151,51 @@ def test_prepares_reviewable_dataset_without_network_or_ai(tmp_path):
         download_audio=False,
     )
     assert Path(duplicate["dataset_dir"]).name == "Artist Test Song (2)"
+
+
+def test_prepares_kfn_into_the_same_dataset_contract(tmp_path):
+    midi = build_kar(tmp_path / "embedded.kar").read_bytes()
+    source = build_kfn(tmp_path / "song.kfn", midi)
+
+    result = kfn_dataset_service.prepare_kfn_file(source, output_root=tmp_path / "dataset")
+
+    output = Path(result["dataset_dir"])
+    metadata = json.loads((output / "metadata.json").read_text(encoding="utf-8"))
+    lyrics = json.loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+    comparison = json.loads((output / "comparison.json").read_text(encoding="utf-8"))
+    assert result["status"] == "review"
+    assert metadata["preparation_mode"] == "kfn-embedded-reference"
+    assert metadata["note_count"] == 2
+    assert lyrics["source"] == "kfn"
+    assert [word["text"] for word in lyrics["words"]] == ["Hello", "world"]
+    assert comparison["time_scale"] == 1
+    assert (output / "source.kfn").is_file()
+
+
+def test_prepares_legacy_zip_kfn_with_the_same_logic(tmp_path):
+    midi = build_kar(tmp_path / "embedded.kar").read_bytes()
+    source = tmp_path / "legacy.kfn"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr(
+            "Song.ini",
+            "[General]\nTitle=ZIP Song\nArtist=ZIP Artist\n"
+            "[Eff1]\nID=2\nSync0=50,100\nTextCount=1\nText0=Hello world\n",
+        )
+        archive.writestr("melody.kar", midi)
+
+    result = kfn_dataset_service.prepare_kfn_file(source, output_root=tmp_path / "dataset")
+
+    assert result["container_variant"] == "ZIP"
+    assert result["note_count"] == 2
+
+
+def test_skips_kfn_without_ready_midi_notes_without_creating_dataset(tmp_path):
+    source = build_kfn(tmp_path / "song.kfn")
+
+    with pytest.raises(kfn_dataset_service.KfnSkipped, match="MIDI"):
+        kfn_dataset_service.prepare_kfn_file(source, output_root=tmp_path / "dataset")
+
+    assert not (tmp_path / "dataset").exists()
 
 
 @pytest.mark.parametrize(("name", "payload"), [("song.mid", b"MThd"), ("song.kar", b"bad")])
@@ -294,3 +366,25 @@ def test_batch_endpoint_keeps_per_file_errors(monkeypatch, tmp_path):
     assert [item["status"] for item in result["items"]] == ["review", "error"]
     assert result["items"][0]["filename"] == "song.kar"
     assert "только файлы .kar" in result["items"][1]["error"]
+
+
+def test_batch_endpoint_dispatches_kfn_and_reports_skipped(monkeypatch, tmp_path):
+    monkeypatch.setattr(kar_dataset_service, "DATASET_DIR", tmp_path / "dataset")
+
+    def skip(path, *, original_filename=None):
+        assert path.suffix == ".kfn"
+        assert original_filename == "song.kfn"
+        raise kfn_dataset_service.KfnSkipped("нет готовых нот")
+
+    monkeypatch.setattr(kfn_dataset_service, "prepare_kfn_file", skip)
+    result = asyncio.run(
+        songs.prepare_kar_training_dataset([upload_file(b"KFNB", "song.kfn")])
+    )
+
+    assert result["items"] == [
+        {
+            "filename": "song.kfn",
+            "status": "skipped",
+            "error": "нет готовых нот",
+        }
+    ]

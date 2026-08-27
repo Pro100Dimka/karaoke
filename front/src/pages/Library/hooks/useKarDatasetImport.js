@@ -17,24 +17,30 @@ export default function useKarDatasetImport({ notify }) {
         (result) => {
           const ready = result.items.filter((item) => item.status === "ready").length;
           const review = result.items.filter((item) => item.status === "review").length;
+          const skipped = result.items.filter((item) => item.status === "skipped");
           const failed = result.items.filter((item) => item.status === "error");
           const details = failed.map((item) => `${item.filename}: ${item.error}`).join("\n");
+          const skippedDetails = skipped
+            .map((item) => `${item.filename}: ${item.error}`)
+            .join("\n");
+          const detailBlocks = [skippedDetails, details].filter(Boolean);
           return notify(
             tr(
-              "Подготовка .kar завершена. Готово: {0}, требует проверки: {1}, ошибок: {2}. Папка: {3}{4}",
+              "Подготовка .kar/.kfn завершена. Готово: {0}, требует проверки: {1}, пропущено: {2}, ошибок: {3}. Папка: {4}{5}",
               {
                 0: ready,
                 1: review,
-                2: failed.length,
-                3: result.output_root,
-                4: details ? `\n\n${details}` : ""
+                2: skipped.length,
+                3: failed.length,
+                4: result.output_root,
+                5: detailBlocks.length ? `\n\n${detailBlocks.join("\n\n")}` : ""
               }
             )
           );
         },
         (error) =>
           notify(
-            tr("Не удалось подготовить данные из .kar: {0}", {
+            tr("Не удалось подготовить данные из .kar/.kfn: {0}", {
               0: getErrorMessage(error)
             })
           )

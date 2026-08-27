@@ -135,15 +135,15 @@ export default function LibraryActions({
                     startIcon={<BrainCircuit />}
                     fullWidth
                     disabled={importing || karDataset.pending}
-                    title={tr("Обучить модель на файлах .kar")}
+                    title={tr("Подготовить данные из файлов .kar и .kfn")}
                     onClick={karDataset.openFilePicker}
                   >
-                    {tr(karDataset.pending ? "Подготовка .kar…" : "Обучить на .kar")}
+                    {tr(karDataset.pending ? "Подготовка .kar/.kfn…" : "Обучить на .kar/.kfn")}
                   </Button>
                   <input
                     ref={karDataset.inputRef}
                     type="file"
-                    accept=".kar"
+                    accept=".kar,.kfn"
                     multiple
                     hidden
                     onChange={karDataset.importFiles}

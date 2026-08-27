@@ -32,6 +32,7 @@ from app.api.errors import http_error
 from app.services import (
     ai_bridge,
     kar_dataset_service,
+    kfn_dataset_service,
     metadata_enrichment_service,
     pipeline_service,
     recording_service,
@@ -200,24 +201,25 @@ async def inspect_song_identity(file: UploadFile = File(...)):
 @router.post("/training/kar", response_model=schemas.KarDatasetBatchOut)
 async def prepare_kar_training_dataset(files: list[UploadFile] = File(...)):
     if not files:
-        raise HTTPException(status_code=400, detail="Выберите хотя бы один файл .kar")
+        raise HTTPException(status_code=400, detail="Выберите хотя бы один файл .kar или .kfn")
     if len(files) > 250:
         raise HTTPException(status_code=400, detail="За один раз можно подготовить не более 250 файлов")
     semaphore = asyncio.Semaphore(3)
 
     async def prepare_one(upload: UploadFile):
         filename = Path(upload.filename or "song.kar").name
-        if Path(filename).suffix.casefold() != ".kar":
+        suffix = Path(filename).suffix.casefold()
+        if suffix not in {".kar", ".kfn"}:
             await upload.close()
             return {
                 "filename": filename,
                 "status": "error",
-                "error": "Поддерживаются только файлы .kar",
+                "error": "Поддерживаются только файлы .kar и .kfn",
             }
         config.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             prefix=".kar-training-",
-            suffix=".kar",
+            suffix=suffix,
             dir=config.UPLOAD_TEMP_DIR,
             delete=False,
         ) as temporary:
@@ -227,16 +229,29 @@ async def prepare_kar_training_dataset(files: list[UploadFile] = File(...)):
                 await save_upload_limited(
                     upload,
                     temporary_path,
-                    limit=kar_dataset_service.MAX_KAR_BYTES,
+                    limit=(
+                        kar_dataset_service.MAX_KAR_BYTES
+                        if suffix == ".kar"
+                        else kfn_dataset_service.MAX_KFN_BYTES
+                    ),
                     chunk_size=256 * 1024,
-                    too_large_message="Файл .kar превышает допустимый размер 8 МБ",
+                    too_large_message=(
+                        "Файл .kar превышает допустимый размер 8 МБ"
+                        if suffix == ".kar"
+                        else "Файл .kfn превышает допустимый размер 256 МБ"
+                    ),
+                )
+                prepare = (
+                    kar_dataset_service.prepare_kar_file
+                    if suffix == ".kar"
+                    else kfn_dataset_service.prepare_kfn_file
                 )
                 prepared = await run_in_threadpool(
-                    kar_dataset_service.prepare_kar_file,
-                    temporary_path,
-                    original_filename=filename,
+                    prepare, temporary_path, original_filename=filename
                 )
                 return {"filename": filename, **prepared}
+        except kfn_dataset_service.KfnSkipped as exc:
+            return {"filename": filename, "status": "skipped", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001 - one bad file must not cancel the batch
             return {"filename": filename, "status": "error", "error": str(exc)}
         finally:
