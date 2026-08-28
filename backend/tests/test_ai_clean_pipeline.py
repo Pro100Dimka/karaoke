@@ -1,4 +1,6 @@
+import sys
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -20,6 +22,7 @@ from AI.errors import ProcessingCancelledError
 from AI.lyrics_sources import LyricsDiscovery, TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
+import AI.pipeline as pipeline_module
 
 
 class Separator:
@@ -34,6 +37,33 @@ class Separator:
     @staticmethod
     def close():
         return None
+
+
+def test_model_parking_unloads_on_memory_constrained_computers(monkeypatch):
+    engine = SimpleNamespace(close=Mock(), park=Mock())
+    memory = SimpleNamespace(total=16 * 1024**3, available=5 * 1024**3)
+    monkeypatch.setitem(sys.modules, "psutil", SimpleNamespace(virtual_memory=lambda: memory))
+    monkeypatch.setattr(pipeline_module, "release_torch_memory", lambda: None)
+
+    KaraokePipeline._park_engines(engine)
+
+    engine.close.assert_called_once_with()
+    engine.park.assert_not_called()
+
+
+def test_model_parking_keeps_warm_models_only_with_ram_headroom(monkeypatch):
+    engine = SimpleNamespace(
+        close=Mock(),
+        park=Mock(),
+    )
+    memory = SimpleNamespace(total=64 * 1024**3, available=20 * 1024**3)
+    monkeypatch.setitem(sys.modules, "psutil", SimpleNamespace(virtual_memory=lambda: memory))
+    monkeypatch.setattr(pipeline_module, "release_torch_memory", lambda: None)
+
+    KaraokePipeline._park_engines(engine)
+
+    engine.park.assert_called_once_with()
+    engine.close.assert_not_called()
 
 
 class Pitch:
@@ -408,6 +438,48 @@ def test_forced_aligner_does_not_expect_timestamps_for_punctuation(monkeypatch):
     assert [word.text for word in words] == ["Ты", "станешь", "слаще", "А", "я"]
 
 
+def test_long_asr_is_batched_by_vocal_chunks(monkeypatch):
+    from AI.engines.text import Qwen3Transcriber
+
+    calls = []
+    model = SimpleNamespace(
+        transcribe=lambda **kwargs: (
+            calls.append(kwargs)
+            or [SimpleNamespace(text="первая"), SimpleNamespace(text="вторая")]
+        )
+    )
+    transcriber = Qwen3Transcriber("test-model")
+    transcriber._model = model
+    chunks = [(np.ones(16000, dtype=np.float32), 16000)] * 2
+    monkeypatch.setattr("AI.engines.text._asr_voice_chunks", lambda _audio: chunks)
+
+    text, words = transcriber.transcribe("vocals.flac", "ru")
+
+    assert text == "первая\nвторая"
+    assert words == []
+    assert calls[0]["audio"] == chunks
+    assert calls[0]["language"] == ["Russian", "Russian"]
+
+
+def test_russian_asr_prefers_fast_ctc_words_without_loading_qwen(monkeypatch):
+    from AI.engines.ctc import CTCWordAligner
+    from AI.engines.text import Qwen3Transcriber
+
+    direct = [
+        Word(index, index + 0.5, token, 0.7, index)
+        for index, token in enumerate(("это", "быстрый", "прямой", "текст"))
+    ]
+    monkeypatch.setenv("KARAOKE_AI_CTC_RU_MODEL", "ctc-model")
+    monkeypatch.setattr(CTCWordAligner, "transcribe", lambda _self, _audio: direct)
+    transcriber = Qwen3Transcriber("qwen-model")
+
+    text, words = transcriber.transcribe("vocals.flac", "ru")
+
+    assert text == "это быстрый прямой текст"
+    assert words == direct
+    assert transcriber._model is None
+
+
 def test_long_alignment_realigns_collapsed_ranges_acoustically(tmp_path, monkeypatch):
     audio = tmp_path / "vocals.flac"
     sf.write(audio, np.zeros(44100 * 5, dtype=np.float32), 44100)
@@ -660,6 +732,41 @@ def test_long_ukrainian_alignment_uses_acoustic_ctc_when_qwen_remains_invalid(
         ("у", 1.2, 1.8),
         ("очі", 2.2, 2.8),
     ]
+    assert aligner.needs_voice_anchoring is False
+
+
+def test_timed_russian_lines_use_one_full_ctc_pass_before_qwen(tmp_path, monkeypatch):
+    audio = tmp_path / "vocals.flac"
+    sf.write(audio, np.zeros(44100 * 4, dtype=np.float32), 44100)
+    tokens = ["Этот", "парень", "пел"]
+    qwen_calls = []
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = SimpleNamespace(align=lambda **kwargs: qwen_calls.append(kwargs))
+
+    class AcousticCTC:
+        def __init__(self, model_path):
+            assert model_path == "ru-model"
+
+        def align(self, _samples, _rate, canonical, offset):
+            assert canonical == [token.casefold() for token in tokens]
+            assert offset == 0
+            return [
+                Word(index + 0.2, index + 0.8, token, 0.9, index)
+                for index, token in enumerate(canonical)
+            ]
+
+    monkeypatch.setenv("KARAOKE_AI_CTC_RU_MODEL", "ru-model")
+    monkeypatch.setattr("AI.engines.ctc.CTCWordAligner", AcousticCTC)
+
+    words = aligner.align_timed_lines(
+        audio,
+        "Этот парень\nпел",
+        (TimedLine(0, "Этот парень"), TimedLine(2, "пел")),
+        "ru",
+    )
+
+    assert [word.text for word in words] == tokens
+    assert qwen_calls == []
     assert aligner.needs_voice_anchoring is False
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from statistics import median
 
 from .models import PitchFrame, VocalNote, Word
@@ -28,12 +29,23 @@ def _segments(frames: list[PitchFrame], gap: float, split: float):
         yield current
 
 
-def _owner(words: list[Word], midpoint: float, tolerance: float) -> Word | None:
-    candidates = [
-        (max(word.start - midpoint, midpoint - word.end, 0.0), word)
-        for word in words
-        if word.start - tolerance <= midpoint <= word.end + tolerance
-    ]
+def _owner(
+    words: list[Word], midpoint: float, tolerance: float, starts: list[float] | None = None,
+) -> Word | None:
+    # Notes and words are time ordered.  Looking through every word for every
+    # pitch segment made this stage O(notes * words), which is especially
+    # visible at 84%.  Bisect to the last possible start and inspect only the
+    # small set of intervals that can overlap this midpoint.
+    starts = starts if starts is not None else [word.start for word in words]
+    upper = bisect_right(starts, midpoint + tolerance)
+    candidates = []
+    for index in range(upper - 1, -1, -1):
+        word = words[index]
+        if word.end + tolerance < midpoint:
+            break
+        candidates.append(
+            (max(word.start - midpoint, midpoint - word.end, 0.0), word)
+        )
     return min(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
@@ -50,6 +62,8 @@ def build_vocal_notes(
     **_context,
 ) -> list[VocalNote]:
     frames = [frame for frame in pitch if frame.voiced and frame.confidence >= min_confidence]
+    lyric_words = words or []
+    word_starts = [word.start for word in lyric_words]
     notes: list[VocalNote] = []
     segments = list(_segments(frames, max_gap, split_semitones))
     steps = [
@@ -66,7 +80,9 @@ def build_vocal_notes(
         if end - start < min_note:
             continue
         midi = round(median(hz_to_midi(frame.frequency) for frame in segment))
-        owner = _owner(words or [], (start + end) / 2, word_boundary_tolerance)
+        owner = _owner(
+            lyric_words, (start + end) / 2, word_boundary_tolerance, word_starts
+        )
         if owner is None:
             continue
         notes.append(VocalNote(start, end, midi, word_index=owner.index))

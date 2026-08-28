@@ -34,6 +34,14 @@ import useSongCover from "./hooks/useSongCover";
 import { getProcessingModeOptions } from "./processing-modes";
 import { formatEta, getProcessingProgress, isProcessingActive } from "./utils";
 
+const formatFinishTime = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+};
+
 export function SelectedFilePreview({ file }) {
   const audio = useRef(null);
   const [source, setSource] = useState("");
@@ -315,19 +323,30 @@ export function ProcessingModal({
             </Stack>
           </Card>
         ) : (
-          <Stack direction="row" justify="space-between" gap={1}>
-            <Typography>
-              {state === "done"
-                ? tr("Песня готова к караоке")
-                : cancelled
-                  ? tr("Обработка отменена")
-                  : (current?.progress_detail ??
-                    current?.progress_step ??
-                    tr("Подготавливаем обработку песни"))}
-            </Typography>
-            {active && (
-              <Typography sx={{ fontWeight: 800 }}>
-                {tr("Осталось:")} {formatEta(current?.eta_seconds)}
+          <Stack gap={0.4}>
+            <Stack direction="row" justify="space-between" gap={1}>
+              <Typography>
+                {state === "done"
+                  ? tr("Песня готова к караоке")
+                  : cancelled
+                    ? tr("Обработка отменена")
+                    : (current?.progress_detail ??
+                      current?.progress_step ??
+                      tr("Подготавливаем обработку песни"))}
+              </Typography>
+              {active && (
+                <Typography sx={{ fontWeight: 800 }}>
+                  {current?.eta_seconds == null
+                    ? tr("Уточняем время…")
+                    : `${tr("Осталось:")} ${formatEta(current.eta_seconds)}`}
+                </Typography>
+              )}
+            </Stack>
+            {active && current?.stage_elapsed_seconds != null && (
+              <Typography variant="caption" tone="muted">
+                {tr("Текущий этап:")} {formatEta(current.stage_elapsed_seconds)} · {tr("Всего:")}{" "}
+                {formatEta(current.total_elapsed_seconds)} · {tr("Ориентировочно до:")}{" "}
+                {formatFinishTime(current.estimated_finish_at)}
               </Typography>
             )}
           </Stack>

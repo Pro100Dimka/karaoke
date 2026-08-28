@@ -16,13 +16,19 @@ class CTCWordAligner:
         self._model = self._processor = self._device = None
 
     def _load(self):
+        import torch
+
         if self._model is None:
-            import torch
             from transformers import AutoModelForCTC, Wav2Vec2Processor
 
             self._device = select_torch_device(torch, "ctc")
             self._processor = Wav2Vec2Processor.from_pretrained(self.model_path)
             self._model = AutoModelForCTC.from_pretrained(self.model_path).to(self._device).eval()
+        else:
+            device = select_torch_device(torch, "ctc")
+            if str(next(self._model.parameters()).device) != device:
+                self._model.to(device)
+            self._device = device
         return self._model, self._processor
 
     def align(self, samples, rate: int, tokens: list[str], offset: float) -> list[Word]:
@@ -84,5 +90,77 @@ class CTCWordAligner:
             for index, (token, (start, end)) in enumerate(zip(tokens, ranges, strict=True))
         ]
 
+    def transcribe(self, audio, *, max_window_seconds: float = 22.0) -> list[Word]:
+        """Greedy CTC transcription with native word timestamps.
+
+        Short voice-aware windows avoid the quadratic memory/time cost of a
+        whole-song wav2vec pass.  Unlike generative ASR, decoding cannot run
+        away to hundreds of output tokens when a vocal stem is noisy.
+        """
+        import torch
+        import torchaudio
+
+        from ..audio import read_mono
+        from ..word_voicing import voice_activity_intervals
+
+        samples, rate = read_mono(audio)
+        intervals = voice_activity_intervals(audio)
+        span = len(samples) / max(1, rate)
+        if not intervals:
+            intervals = [(0.0, span)]
+
+        windows: list[tuple[float, float]] = []
+        first, previous_end = intervals[0]
+        for start, end in intervals[1:]:
+            if end - first > max_window_seconds:
+                windows.append((first, previous_end))
+                first = start
+            previous_end = end
+        windows.append((first, previous_end))
+
+        bounded: list[tuple[float, float]] = []
+        for start, end in windows:
+            start, end = max(0.0, start - 0.08), min(span, end + 0.08)
+            while end - start > max_window_seconds:
+                bounded.append((start, start + max_window_seconds))
+                start += max_window_seconds
+            if end - start >= 0.5:
+                bounded.append((start, end))
+
+        model, processor = self._load()
+        target_rate = int(processor.feature_extractor.sampling_rate)
+        words: list[Word] = []
+        for window_start, window_end in bounded:
+            lower, upper = round(window_start * rate), round(window_end * rate)
+            signal = torch.as_tensor(samples[lower:upper], dtype=torch.float32)
+            if rate != target_rate:
+                signal = torchaudio.functional.resample(signal, rate, target_rate)
+            inputs = processor(
+                signal.numpy(), sampling_rate=target_rate, return_tensors="pt"
+            )
+            with torch.inference_mode():
+                logits = model(inputs.input_values.to(self._device)).logits[0]
+            predicted = torch.argmax(logits, dim=-1)
+            decoded = processor.tokenizer.decode(
+                predicted, output_word_offsets=True
+            )
+            time_offset = (
+                float(model.config.inputs_to_logits_ratio) / target_rate
+            )
+            for item in decoded.word_offsets or ():
+                token = str(item.get("word") or "").strip().casefold()
+                if not token:
+                    continue
+                start = window_start + float(item["start_offset"]) * time_offset
+                end = window_start + float(item["end_offset"]) * time_offset
+                if end > start:
+                    words.append(Word(start, end, token, 0.7, len(words)))
+        return words
+
     def close(self) -> None:
         self._model = self._processor = self._device = None
+
+    def park(self) -> None:
+        if self._model is not None:
+            self._model.to("cpu")
+            self._device = "cpu"

@@ -30,7 +30,7 @@ class CoreConfig:
     # analyze_pitch) at once. Kept modest by default since concurrent jobs
     # share GPU memory/compute -- raise it only on hardware known to have
     # headroom for more than one model resident at a time.
-    max_concurrent_jobs: int = 2
+    max_concurrent_jobs: int = 1
 
     def __post_init__(self) -> None:
         if self.sample_rate <= 0 or self.pitch_sample_rate <= 0:
@@ -55,7 +55,7 @@ class CoreConfig:
             split_note_semitones=_value("KARAOKE_AI_SPLIT_SEMITONES", 0.78, float),
             max_gap_sec=_value("KARAOKE_AI_MAX_GAP_SEC", 0.05, float),
             allow_fallback=os.getenv("KARAOKE_AI_ALLOW_FALLBACK", "0").lower() in {"1", "true"},
-            max_concurrent_jobs=_value("KARAOKE_AI_MAX_CONCURRENT_JOBS", 2, int),
+            max_concurrent_jobs=_value("KARAOKE_AI_MAX_CONCURRENT_JOBS", 1, int),
         )
 
     def fingerprint(self) -> dict[str, object]:

@@ -118,6 +118,10 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
     }
     semantic = pipeline_service.get_processing_telemetry("semantic")
     assert semantic["semantic"] is True and 48 < semantic["progress_percent"] < 70
+    assert semantic["stage"] == "analysis"
+    assert semantic["stage_elapsed_seconds"] == 10
+    assert semantic["total_elapsed_seconds"] >= 0
+    assert semantic["estimated_finish_at"]
     pipeline_service._progress_runtime["semantic"]["completed_stage_seconds"] = {
         "decode": 300,
         "separate": 300,
@@ -132,6 +136,15 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
         "detail": "other",
     }
     assert pipeline_service.get_processing_telemetry("unknown")["eta_seconds"] >= 1
+    pipeline_service._progress_runtime["overdue"] = {
+        "stage": "transcribe",
+        "direct_percent": 70,
+        "stage_started_at": -100,
+        "detail": "asr",
+    }
+    overdue = pipeline_service.get_processing_telemetry("overdue")
+    assert overdue["eta_seconds"] is None
+    assert overdue["estimated_finish_at"] is None
 
 
 

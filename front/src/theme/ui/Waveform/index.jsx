@@ -23,6 +23,20 @@ const fallbackPath = (() => {
   return `M ${upper[0]} L ${upper.slice(1).join(" L ")} L ${lower.join(" L ")} Z`;
 })();
 const clampProgress = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+const waveformPeakCache = new Map();
+const MAX_CACHED_WAVEFORMS = 32;
+
+const rememberWaveform = (url, wavesurfer) => {
+  const duration = wavesurfer.getDuration();
+  if (!(duration > 0)) return;
+  const peaks = wavesurfer.exportPeaks({ channels: 1, maxLength: 1600, precision: 5 });
+  if (!peaks?.[0]?.length) return;
+  waveformPeakCache.delete(url);
+  waveformPeakCache.set(url, { duration, peaks });
+  while (waveformPeakCache.size > MAX_CACHED_WAVEFORMS) {
+    waveformPeakCache.delete(waveformPeakCache.keys().next().value);
+  }
+};
 
 export default function Waveform({
   value = 0,
@@ -50,11 +64,14 @@ export default function Waveform({
   useEffect(() => {
     if (!url || !host.current) return undefined;
     let active = true;
+    setReal(false);
     import("wavesurfer.js")
       .then(({ default: WaveSurfer }) => {
         if (!active || !host.current) return;
         const styles = getComputedStyle(host.current);
         const color = (name) => styles.getPropertyValue(name).trim();
+        const cached = waveformPeakCache.get(url);
+        host.current.replaceChildren();
         const wavesurfer = WaveSurfer.create({
           container: host.current,
           cursorColor: color("--color-primary-hover"),
@@ -64,12 +81,19 @@ export default function Waveform({
           hideScrollbar: true,
           interact: false,
           normalize: true,
+          ...(cached
+            ? { duration: cached.duration, peaks: cached.peaks }
+            : { fetchParams, url }),
           progressColor: [color("--color-highlight"), color("--color-primary-hover")],
-          url,
           waveColor: [color("--color-primary"), color("--color-secondary")]
         });
         instance.current = wavesurfer;
-        wavesurfer.once("ready", () => active && setReal(true));
+        if (cached) setReal(true);
+        wavesurfer.once("ready", () => {
+          if (!active) return;
+          if (!cached) rememberWaveform(url, wavesurfer);
+          setReal(true);
+        });
         wavesurfer.once("error", () => active && setReal(false));
       })
       .catch(() => {
@@ -77,7 +101,11 @@ export default function Waveform({
       });
     return () => {
       active = false;
-      instance.current?.destroy();
+      try {
+        instance.current?.destroy();
+      } catch {
+        // An aborted media fetch may already have disposed the player.
+      }
       instance.current = null;
     };
   }, [fetchParams, url]);

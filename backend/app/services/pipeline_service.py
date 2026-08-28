@@ -11,6 +11,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable, Iterator
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import soundfile as sf
@@ -65,14 +66,46 @@ def _configure_ai_runtime() -> RuntimePlan:
     config.configure_ai_resource_environment(force=True)
     settings = app_settings_service.read_settings()
     configured_device, override = str(settings['compute_mode']), os.getenv('KARAOKE_AI_RUNTIME_OVERRIDE', '').strip().lower()
-    device, thread_count = override if override in {'auto', 'cuda', 'cpu'} else configured_device, int(settings['thread_count'])
+    device = override if override in {'auto', 'cuda', 'cpu'} else configured_device
+    configured_threads = int(settings['thread_count'])
+    thread_count = configured_threads
+    try:
+        import psutil
+
+        physical = int(psutil.cpu_count(logical=False) or os.cpu_count() or 2)
+        reserve = 2 if physical >= 6 else 1
+        thread_count = min(configured_threads, max(1, physical - reserve))
+        process = psutil.Process()
+        if os.name == "nt":
+            process.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else:
+            process.nice(max(int(process.nice()), 5))
+    except (ImportError, OSError, ValueError, TypeError):
+        pass
     os.environ["SONGAPP_DEVICE"] = device
     for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"): os.environ[name] = str(thread_count)
     with contextlib.suppress(ImportError, RuntimeError):
         import torch
 
         torch.set_num_threads(thread_count)
+    logger.info(
+        "AI background resources: configured_threads=%s effective_threads=%s priority=background",
+        configured_threads, thread_count,
+    )
     return configure_runtime(device, force=True)
+
+
+@contextlib.contextmanager
+def _limit_background_native_threads() -> Iterator[None]:
+    """Apply the configured background limit to already-loaded BLAS pools."""
+    limit = max(1, int(os.environ.get("OMP_NUM_THREADS", "1")))
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        yield
+        return
+    with threadpool_limits(limits=limit):
+        yield
 
 
 
@@ -119,7 +152,8 @@ _AI_STAGE_PLAN = {
     "separate": (42.0, 70, "Отделяем голос исполнителя от музыки"),
     "vocal": (48.0, 10, "Очищаем голос и переводим его в моно"),
     "analysis": (70.0, 18, "Определяем темп, тональность и мелодию голоса"),
-    "lyrics": (84.0, 35, "Синхронизируем слова с голосом"),
+    "transcribe": (84.0, 30, "Распознаём текст вокала"),
+    "align": (98.0, 20, "Синхронизируем слова с голосом"),
     "notes": (98.0, 8, "Строим вокальные ноты"),
     "validate": (99.7, 3, "Проверяем результат"),
     "complete": (100.0, 1, "Завершаем обработку"),
@@ -277,15 +311,29 @@ def get_processing_telemetry(song_id: str) -> dict:
             stage_index = stage_names.index(stage)
         except ValueError:
             stage_index = len(stage_names) - 1
-        remaining = max(0.0, expected - elapsed)
-        remaining += sum(
+        future_seconds = sum(
             _AI_STAGE_PLAN[name][1] for name in stage_names[stage_index + 1:]
+        )
+        overdue = elapsed > max(15.0, expected * 1.25)
+        remaining = max(0.0, expected - elapsed) + future_seconds
+        eta_seconds = None if overdue else max(1, int(round(remaining)))
+        total_elapsed = max(0.0, now - float(runtime.get("started_at", now)))
+        estimated_finish = (
+            datetime.now().astimezone() + timedelta(seconds=eta_seconds)
+            if eta_seconds is not None else None
         )
         return {
             "step": float(runtime.get("step", 0.0)),
             "progress_percent": round(min(99.7, percent), 1),
             "progress_detail": runtime.get("detail"),
-            "eta_seconds": max(1, int(round(remaining))),
+            "eta_seconds": eta_seconds,
+            "stage": stage,
+            "stage_elapsed_seconds": int(round(elapsed)),
+            "total_elapsed_seconds": int(round(total_elapsed)),
+            "estimated_finish_at": (
+                estimated_finish.isoformat(timespec="seconds")
+                if estimated_finish is not None else None
+            ),
             "semantic": True,
         }
 
@@ -321,6 +369,25 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
                     step_label=label,
                     percent=telemetry["progress_percent"],
                 )
+                if telemetry.get("semantic"):
+                    should_log = False
+                    with _progress_runtime_lock:
+                        if runtime := _progress_runtime.get(song_id):
+                            now = time.monotonic()
+                            last = float(runtime.get("last_stage_log_at", 0.0))
+                            if now - last >= 15.0:
+                                runtime["last_stage_log_at"] = now
+                                should_log = True
+                    if should_log:
+                        logger.info(
+                            "AI stage active: song_id=%s stage=%s elapsed_sec=%s "
+                            "total_elapsed_sec=%s eta_sec=%s estimated_finish=%s",
+                            song_id, telemetry.get("stage"),
+                            telemetry.get("stage_elapsed_seconds"),
+                            telemetry.get("total_elapsed_seconds"),
+                            telemetry.get("eta_seconds"),
+                            telemetry.get("estimated_finish_at"),
+                        )
         except Exception:  # A transient SQLite error must not kill telemetry forever.
             logger.warning(
                 "Could not persist pipeline heartbeat for song %s", song_id, exc_info=True
@@ -570,6 +637,9 @@ def _create_ai_progress_callback(
     def on_ai_progress(stage: str, percent: float, detail: str) -> None:
         if _is_cancelled(song_id): raise ProcessingCancelled("Processing cancelled by user")
         bounded_percent, friendly = max(0.0, min(99.7, float(percent))), _AI_STAGE_PLAN.get(stage, (0, 0, 'Обрабатываем песню'))[2]
+        finished_stage = None
+        finished_elapsed = None
+        started_stage = False
         with _progress_runtime_lock:
             if (runtime := _progress_runtime.get(song_id)) is not None:
                 now = time.monotonic()
@@ -580,12 +650,31 @@ def _create_ai_progress_callback(
                     completed[previous_stage] = max(
                         0.0, now - float(runtime.get("stage_started_at", now))
                     )
-                if previous_stage != stage: runtime["stage_started_at"] = now
+                    finished_stage = previous_stage
+                    finished_elapsed = completed[previous_stage]
+                if previous_stage != stage:
+                    runtime["stage_started_at"] = now
+                    runtime["last_stage_log_at"] = now
+                    started_stage = True
                 runtime["stage"] = stage
                 runtime["direct_percent"] = bounded_percent
                 runtime["detail"] = friendly
         _update_progress(song_id, step_label=friendly, percent=bounded_percent)
         capture.write(f"[AI] {bounded_percent:5.1f}% {stage} · {detail}\n")
+        if finished_stage is not None:
+            logger.info(
+                "AI stage finished: song_id=%s stage=%s elapsed_sec=%.1f finished_at=%s",
+                song_id, finished_stage, finished_elapsed,
+                datetime.now().astimezone().isoformat(timespec="seconds"),
+            )
+        if started_stage:
+            expected = _AI_STAGE_PLAN.get(stage, (0, 10, friendly))[1]
+            estimated_finish = datetime.now().astimezone() + timedelta(seconds=expected)
+            logger.info(
+                "AI stage started: song_id=%s stage=%s expected_sec=%s estimated_finish=%s detail=%s",
+                song_id, stage, expected,
+                estimated_finish.isoformat(timespec="seconds"), friendly,
+            )
 
     return on_ai_progress
 
@@ -724,11 +813,12 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
 
-        result = _invoke_ai_pipeline(
-            song_id, source_path, out_dir, lyrics_path, searchable_title,
-            bpm_override, key_override, processing_mode, capture,
-            reuse_vocals=reuse_vocals,
-        )
+        with _limit_background_native_threads():
+            result = _invoke_ai_pipeline(
+                song_id, source_path, out_dir, lyrics_path, searchable_title,
+                bpm_override, key_override, processing_mode, capture,
+                reuse_vocals=reuse_vocals,
+            )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
             logger.warning("Song processing warning: song_id=%s warning=%s", song_id, warning)

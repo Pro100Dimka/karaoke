@@ -65,3 +65,12 @@ test("recording and processing waveforms use their real audio files", () => {
     [processing, "toContain", "fetchParams={waveformFetchParams}"]
   );
 });
+test("a reopened waveform reuses the decoded real-audio peaks", () => {
+  const waveform = read("src/theme/ui/Waveform/index.jsx");
+  verify(
+    [waveform, "toContain", "const waveformPeakCache = new Map()"],
+    [waveform, "toContain", "wavesurfer.exportPeaks"],
+    [waveform, "toContain", "waveformPeakCache.get(url)"],
+    [waveform, "toContain", "{ duration: cached.duration, peaks: cached.peaks }"]
+  );
+});

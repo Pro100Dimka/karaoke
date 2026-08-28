@@ -463,18 +463,81 @@ def _fill_unresolved_timed_lines(
                 remaining -= weight
 
 
-def _load(model_class, name, role):
+def _load(model_class, name, role, **options):
     import torch
 
     device = select_torch_device(torch, role)
-    return model_class.from_pretrained(name, device_map=device, dtype=torch.float16 if device == "cuda" else torch.float32)
+    return model_class.from_pretrained(
+        name,
+        device_map=device,
+        dtype=torch.float16 if device == "cuda" else torch.float32,
+        **options,
+    )
+
+
+def _activate_loaded(wrapper, role):
+    if wrapper is None or getattr(wrapper, "backend", "transformers") != "transformers":
+        return wrapper
+    import torch
+
+    device = select_torch_device(torch, role)
+    model = getattr(wrapper, "model", None)
+    if model is not None and str(getattr(model, "device", "")) != device:
+        model.to(device)
+        if hasattr(wrapper, "device"):
+            wrapper.device = getattr(model, "device", device)
+    return wrapper
+
+
+def _park_loaded(wrapper):
+    if wrapper is None or getattr(wrapper, "backend", "transformers") != "transformers":
+        return
+    model = getattr(wrapper, "model", None)
+    if model is not None and str(getattr(model, "device", "")) != "cpu":
+        model.to("cpu")
+        if hasattr(wrapper, "device"):
+            wrapper.device = getattr(model, "device", "cpu")
+
+
+def _asr_voice_chunks(audio, max_seconds: float = 30.0):
+    """Batch long vocals at real silence boundaries instead of one huge prompt."""
+    import numpy as np
+
+    from ..audio import read_mono
+    from ..word_voicing import voice_activity_intervals
+
+    samples, rate = read_mono(audio)
+    intervals = voice_activity_intervals(audio)
+    if not intervals or len(samples) <= round(max_seconds * rate):
+        return [(samples.astype(np.float32), rate)]
+
+    windows = []
+    first, previous_end = intervals[0]
+    for start, end in intervals[1:]:
+        if end - first > max_seconds:
+            windows.append((first, previous_end))
+            first = start
+        previous_end = end
+    windows.append((first, previous_end))
+
+    chunks = []
+    for start, end in windows:
+        lower = max(0, round((start - 0.12) * rate))
+        upper = min(len(samples), round((end + 0.12) * rate))
+        while upper - lower > round(max_seconds * rate):
+            split = lower + round(max_seconds * rate)
+            chunks.append((samples[lower:split].astype(np.float32), rate))
+            lower = split
+        if upper > lower:
+            chunks.append((samples[lower:upper].astype(np.float32), rate))
+    return chunks or [(samples.astype(np.float32), rate)]
 
 
 class Qwen3Transcriber(Transcriber):
     name = "qwen3-asr"
 
     def __init__(self, model: str):
-        self.model_name, self._model = model, None
+        self.model_name, self._model, self._ctc = model, None, {}
 
     def _load(self):
         try:
@@ -482,21 +545,77 @@ class Qwen3Transcriber(Transcriber):
         except ImportError as error:
             raise EngineUnavailableError("qwen-asr is unavailable") from error
         if self._model is None:
-            self._model = _load(Qwen3ASRModel, self.model_name, "asr")
-        return self._model
+            self._model = _load(
+                Qwen3ASRModel,
+                self.model_name,
+                "asr",
+                # Two concurrent chunks keep the GPU responsive for the
+                # desktop compositor/browser while retaining most of the
+                # throughput benefit over one whole-song request.
+                max_inference_batch_size=2,
+                # A noisy singing stem can fail to emit EOS.  The upstream
+                # default of 512 then spends many minutes generating garbage;
+                # 30-second voice chunks do not need such a large allowance.
+                max_new_tokens=192,
+            )
+        return _activate_loaded(self._model, "asr")
 
     def transcribe(self, audio, language):
-        kwargs = {"audio": str(audio)}
+        resolved = resolve_alignment_language("", language)
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if model_path:
+            try:
+                from .ctc import CTCWordAligner
+
+                ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+                direct = ctc.transcribe(audio)
+                text = " ".join(word.text for word in direct).strip()
+                if len(direct) >= 4 and sum(char.isalnum() for char in text) >= 12:
+                    print(
+                        f"[AI] transcription=ctc-direct language={resolved} "
+                        f"words={len(direct)}",
+                        flush=True,
+                    )
+                    return text, direct
+                print(
+                    f"[AI] transcription=ctc-direct rejected words={len(direct)}; "
+                    "falling back to Qwen",
+                    flush=True,
+                )
+            except (EngineUnavailableError, InvalidArtifactError, OSError, RuntimeError, ValueError) as error:
+                print(
+                    f"[AI] transcription=ctc-direct unavailable; falling back to Qwen: {error}",
+                    flush=True,
+                )
+        chunks = _asr_voice_chunks(audio)
+        kwargs = {"audio": chunks if len(chunks) > 1 else chunks[0]}
         if language:
-            kwargs["language"] = resolve_alignment_language("", language)
+            resolved = resolve_alignment_language("", language)
+            kwargs["language"] = [resolved] * len(chunks) if len(chunks) > 1 else resolved
         raw = self._load().transcribe(**kwargs)
-        item = raw[0] if isinstance(raw, (list, tuple)) and raw else raw
-        text = str(item.get("text", "") if isinstance(item, dict)
-                   else getattr(item, "text", item)).strip()
-        return text, _words(item)
+        items = list(raw) if isinstance(raw, (list, tuple)) else [raw]
+        text = "\n".join(
+            str(item.get("text", "") if isinstance(item, dict)
+                else getattr(item, "text", item)).strip()
+            for item in items
+            if item is not None
+        ).strip()
+        return text, _words(items[0]) if len(items) == 1 else []
 
     def close(self) -> None:
+        for transcriber in self._ctc.values():
+            getattr(transcriber, "close", lambda: None)()
+        self._ctc.clear()
         self._model = None
+
+    def park(self) -> None:
+        for transcriber in self._ctc.values():
+            getattr(transcriber, "park", lambda: None)()
+        _park_loaded(self._model)
 
 
 class Qwen3ForcedAligner(Aligner):
@@ -514,13 +633,18 @@ class Qwen3ForcedAligner(Aligner):
                 "Qwen forced aligner is unavailable") from error
         if self._model is None:
             self._model = _load(Qwen3ForcedAligner, self.model_name, "aligner")
-        return self._model
+        return _activate_loaded(self._model, "aligner")
 
     def close(self) -> None:
         for aligner in self._ctc.values():
             getattr(aligner, "close", lambda: None)()
         self._ctc.clear()
         self._model = None
+
+    def park(self) -> None:
+        _park_loaded(self._model)
+        for aligner in self._ctc.values():
+            getattr(aligner, "park", lambda: None)()
 
     def _raw(self, audio, text, language) -> list[Word]:
         raw = self._load().align(audio=str(audio), text=text,
@@ -588,6 +712,40 @@ class Qwen3ForcedAligner(Aligner):
                 )
         return words
 
+    def _ctc_full(self, samples, rate, tokens, span, resolved):
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if not model_path or not tokens:
+            return None
+        try:
+            from .ctc import CTCWordAligner
+
+            ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+            aligned = ctc.align(samples, rate, _ctc_tokens(tokens, resolved), 0)
+            words = _relabel_ctc_words(aligned, tokens, 0)
+            validated = self._validate(words, tokens, span)
+            self.needs_voice_anchoring = False
+            print(
+                f"[AI] alignment=ctc-full language={resolved} words={len(words)}",
+                flush=True,
+            )
+            return validated
+        except (
+            EngineUnavailableError,
+            InvalidArtifactError,
+            OSError,
+            RuntimeError,
+            ValueError,
+        ) as error:
+            print(
+                f"[AI] alignment=ctc-full unavailable; falling back to Qwen: {error}",
+                flush=True,
+            )
+            return None
+
     @staticmethod
     def _validate(words: list[Word], tokens: list[str], span: float) -> list[Word]:
         if len(words) != len(tokens):
@@ -637,6 +795,23 @@ class Qwen3ForcedAligner(Aligner):
                 "Synchronized lyric lines do not match canonical lyrics")
         samples, rate = read_mono(audio)
         samples = samples.astype(np.float32)
+        resolved = resolve_alignment_language(text, language)
+        if ctc_words := self._ctc_full(samples, rate, tokens, span, resolved):
+            # Repeated choruses can occasionally make a whole-song CTC path
+            # choose the wrong occurrence. Timed lyric line starts are cheap,
+            # trusted anchors: reject only a gross mismatch and retain the
+            # existing windowed Qwen path as the quality fallback.
+            if all(
+                abs(ctc_words[lower].start - line_start) <= 3.0
+                for line_start, lower, _upper in entries
+            ):
+                return ctc_words
+            self.needs_voice_anchoring = True
+            print(
+                "[AI] alignment=ctc-full rejected by timed-line anchors; "
+                "falling back to Qwen",
+                flush=True,
+            )
         groups, first = [], 0
         while first < len(entries):
             last = first + 1
@@ -736,7 +911,6 @@ class Qwen3ForcedAligner(Aligner):
         if wide_singles:
             apply(wide_singles)
         if any(word is None for word in words):
-            resolved = resolve_alignment_language(text, language)
             variable = {
                 "Russian": "KARAOKE_AI_CTC_RU_MODEL",
                 "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
@@ -879,36 +1053,11 @@ class Qwen3ForcedAligner(Aligner):
             "Russian": "KARAOKE_AI_CTC_RU_MODEL",
             "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
         }.get(resolved)
-        model_path = os.getenv(variable) if variable else None
-        if model_path and tokens:
+        if variable and os.getenv(variable) and tokens:
             samples, rate = read_mono(audio)
             samples = samples.astype(np.float32)
-            try:
-                from .ctc import CTCWordAligner
-
-                ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
-                aligned = ctc.align(
-                    samples, rate, _ctc_tokens(tokens, resolved), 0
-                )
-                words = _relabel_ctc_words(aligned, tokens, 0)
-                validated = self._validate(words, tokens, span)
-                self.needs_voice_anchoring = False
-                print(
-                    f"[AI] alignment=ctc-full language={resolved} words={len(words)}",
-                    flush=True,
-                )
-                return validated
-            except (
-                EngineUnavailableError,
-                InvalidArtifactError,
-                OSError,
-                RuntimeError,
-                ValueError,
-            ) as error:
-                print(
-                    f"[AI] alignment=ctc-full unavailable; falling back to Qwen: {error}",
-                    flush=True,
-                )
+            if ctc_words := self._ctc_full(samples, rate, tokens, span, resolved):
+                return ctc_words
         # Windowing exists only because a single aligner call has *some*
         # practical limit -- it is not a quality improvement, it's a
         # necessary evil that trades one long, consistent alignment for

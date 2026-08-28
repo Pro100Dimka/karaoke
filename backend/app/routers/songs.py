@@ -66,6 +66,19 @@ def _processing_status(
         ),
         progress_detail=progress_detail if isinstance(progress_detail, str) else None,
         eta_seconds=eta_seconds if isinstance(eta_seconds, int) else None,
+        stage=telemetry.get("stage") if isinstance(telemetry.get("stage"), str) else None,
+        stage_elapsed_seconds=(
+            telemetry.get("stage_elapsed_seconds")
+            if isinstance(telemetry.get("stage_elapsed_seconds"), int) else None
+        ),
+        total_elapsed_seconds=(
+            telemetry.get("total_elapsed_seconds")
+            if isinstance(telemetry.get("total_elapsed_seconds"), int) else None
+        ),
+        estimated_finish_at=(
+            telemetry.get("estimated_finish_at")
+            if isinstance(telemetry.get("estimated_finish_at"), str) else None
+        ),
         error_message=song.error_message,
     )
 

@@ -44,6 +44,11 @@ class FCPEPitchEstimator(PitchEstimator):
         if self._model is None:
             self._device = select_torch_device(torch, "pitch")
             self._model = torchfcpe.spawn_bundled_infer_model(device=self._device)
+        else:
+            device = select_torch_device(torch, "pitch")
+            if device != self._device:
+                self._model.to(device)
+                self._device = device
         return torch, self._model
 
     def estimate(self, audio):
@@ -60,6 +65,11 @@ class FCPEPitchEstimator(PitchEstimator):
 
     def close(self) -> None:
         self._model = self._device = None
+
+    def park(self) -> None:
+        if self._model is not None:
+            self._model.to("cpu")
+            self._device = "cpu"
 
 
 class PyinFallbackPitchEstimator(FCPEPitchEstimator):

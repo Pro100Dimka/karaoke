@@ -149,6 +149,10 @@ class ProcessingStatusOut(BaseModel):
     progress_percent: float
     progress_detail: str | None = None
     eta_seconds: int | None = None
+    stage: str | None = None
+    stage_elapsed_seconds: int | None = None
+    total_elapsed_seconds: int | None = None
+    estimated_finish_at: str | None = None
     error_message: str | None = None
 
 

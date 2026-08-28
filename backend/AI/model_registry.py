@@ -38,7 +38,7 @@ class ModelSpec:
 
 
 MODELS = (
-    ModelSpec("asr", "Qwen3 ASR", "Qwen/Qwen3-ASR-1.7B", "7278e1e70fe206f11671096ffdd38061171dd6e5", "qwen/Qwen3-ASR-1.7B", "KARAOKE_AI_ASR_MODEL", 4_703_114_308),
+    ModelSpec("asr", "Qwen3 ASR", "Qwen/Qwen3-ASR-0.6B", "5eb144179a02acc5e5ba31e748d22b0cf3e303b0", "qwen/Qwen3-ASR-0.6B", "KARAOKE_AI_ASR_MODEL", 1_876_091_704),
     ModelSpec("aligner", "Qwen3 Forced Aligner", "Qwen/Qwen3-ForcedAligner-0.6B", "c7cbfc2048c462b0d63a45797104fc9db3ad62b7", "qwen/Qwen3-ForcedAligner-0.6B", "KARAOKE_AI_ALIGNER_MODEL", 1_840_072_459),
     ModelSpec("ctc_ru", "Russian CTC aligner", "jonatasgrosman/wav2vec2-large-xlsr-53-russian", "2329100508896c6d9b157019803ab5601e6f3406", "ctc/wav2vec2-large-xlsr-53-russian", "KARAOKE_AI_CTC_RU_MODEL", 1_265_908_849, ignore_patterns=("language_model/**", "flax_model.msgpack")),
     ModelSpec("ctc_uk", "Ukrainian CTC aligner", "Yehor/wav2vec2-xls-r-300m-uk-with-small-lm", "e3ced4def0d70be3aab0f2db598a59961fe9ab3b", "ctc/wav2vec2-xls-r-300m-uk", "KARAOKE_AI_CTC_UK_MODEL", 1_261_978_306, ignore_patterns=("language_model/**", "flax_model.msgpack")),

@@ -92,10 +92,25 @@ class KaraokePipeline:
             getattr(engine, "close", lambda: None)()
         release_torch_memory()
 
-    def _release_analysis_engines(self) -> None:
-        self._release_engines(
-            self.engines.pitch, self.engines.transcriber, self.engines.aligner
-        )
+    @staticmethod
+    def _park_engines(*engines: object) -> None:
+        # Keeping several neural networks resident in system RAM is useful on
+        # workstations, but on 16 GB machines it pushes Windows into paging and
+        # can make the mouse and unrelated applications stutter.  Prefer a
+        # clean unload unless the machine has comfortable total *and* currently
+        # available memory headroom.
+        keep_warm = False
+        try:
+            import psutil
+
+            memory = psutil.virtual_memory()
+            keep_warm = memory.total >= 32 * 1024**3 and memory.available >= 10 * 1024**3
+        except Exception:
+            pass
+        for engine in engines:
+            action = getattr(engine, "park", None) if keep_warm else None
+            (action or getattr(engine, "close", lambda: None))()
+        release_torch_memory()
 
     @staticmethod
     def _notify(request: PipelineRequest, stage: str, progress: float, detail: str) -> None:
@@ -168,9 +183,12 @@ class KaraokePipeline:
         reports: list[StageReport] = []
         warnings: list[str] = []
         profile = resolve_processing_profile(request.processing_mode, get_runtime_plan())
-        # A previous job may have retained an analysis model. The separator
-        # needs the GPU first, so start every full run from a known VRAM state.
-        self._release_analysis_engines()
+        # Keep expensive model weights warm in system RAM between jobs while
+        # returning their CUDA memory to the separator. Reloading Qwen's
+        # checkpoint shards from disk added tens of seconds to every song.
+        self._park_engines(
+            self.engines.pitch, self.engines.transcriber, self.engines.aligner
+        )
 
         with (
             tempfile.TemporaryDirectory(prefix=".ai-clean-", dir=output) as temporary,
@@ -219,20 +237,21 @@ class KaraokePipeline:
             try:
                 pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
             finally:
-                self._release_engines(self.engines.pitch)
+                self._park_engines(self.engines.pitch)
             self._stage(reports, "pitch", self.engines.pitch.name, pitch_started, role="pitch")
             music = music_future.result()
             self._stage(reports, "music", "librosa", music_started)
 
-            self._notify(request, "lyrics", 70, "Поиск и синхронизация текста")
+            self._notify(request, "transcribe", 70, "Получение и распознавание текста")
             started = time.perf_counter()
             text, direct, timed_lines = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
+            self._notify(request, "align", 84, "Синхронизация слов с голосом")
             try:
                 words = self._align(vocals, text, request.language, direct, timed_lines)
             finally:
-                self._release_engines(self.engines.transcriber, self.engines.aligner)
+                self._park_engines(self.engines.transcriber, self.engines.aligner)
             # Timed-line alignment already uses short acoustic windows anchored
             # by the provider's LRC timestamps. Re-anchoring those words against
             # global VAD can merge repeated adjacent lines and collapse one of
@@ -303,15 +322,15 @@ class KaraokePipeline:
             try:
                 pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
             finally:
-                self._release_engines(self.engines.pitch)
+                self._park_engines(self.engines.pitch)
             self._stage(reports, "pitch", self.engines.pitch.name, started, role="pitch")
 
-            self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
+            self._notify(request, "align", 70, "Синхронизация текста по vocals.flac")
             started = time.perf_counter()
             try:
                 words = self._align(vocals, text, request.language, [], timed_lines)
             finally:
-                self._release_engines(self.engines.transcriber, self.engines.aligner)
+                self._park_engines(self.engines.transcriber, self.engines.aligner)
             if not timed_lines and getattr(
                 self.engines.aligner, "needs_voice_anchoring", True
             ):
