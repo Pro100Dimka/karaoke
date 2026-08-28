@@ -155,7 +155,6 @@ export default function KaraokePerformanceStage({
           position: "absolute",
           inset: 0,
           zIndex: 9,
-          padding: "var(--space-6)",
           opacity: sceneIntroVisible ? 1 : 0,
           pointerEvents: "none",
           transform: sceneIntroVisible ? "none" : "scale(.98)",
@@ -163,25 +162,33 @@ export default function KaraokePerformanceStage({
             "opacity var(--motion-duration-slow) var(--motion-easing-standard), transform var(--motion-duration-slow) var(--motion-easing-spring)"
         }}
       >
-        <Card variant="laser" tilt={false} cardContent={{ style: { padding: "var(--space-8)" } }}>
-          <Stack align="center" gap="var(--space-3)">
-            {songId && <SongCoverArt song={{ id: songId }} sx={{ padding: "var(--space-12)" }} />}
-            <Typography variant="caption" tone="muted">
-              {t("Сейчас прозвучит")}
-            </Typography>
-            <Typography variant="h2">{sceneIntro?.title || t("Караоке")}</Typography>
-            {sceneIntro?.artist && <Typography tone="muted">{sceneIntro.artist}</Typography>}
-            <Stack direction="row" justify="center" wrap gap="var(--space-2)">
-              {[
-                sceneIntro?.genre,
-                sceneIntro?.key,
-                sceneIntro?.tempo && `${sceneIntro.tempo} BPM`,
-                sceneIntro?.difficulty
-              ]
-                .filter(Boolean)
-                .map((value) => (
-                  <Chip key={value}>{value}</Chip>
-                ))}
+        <Card variant="laser" tilt={false}>
+          <Stack direction="row">
+            {songId && <SongCoverArt song={{ id: songId }} sx={{ flex: 1 }} />}
+            <Stack align="center" justify="space-between" py="var(--space-8)" sx={{ flex: 4 }}>
+              <Typography variant="h6" tone="muted">
+                {t("Сейчас прозвучит")}
+              </Typography>
+              <Typography variant="h2">{sceneIntro?.title || t("Караоке")}</Typography>
+              {sceneIntro?.artist && (
+                <Typography variant="h5" tone="muted">
+                  {sceneIntro.artist}
+                </Typography>
+              )}
+              <Stack direction="row" justify="center" wrap gap="var(--space-2)">
+                {[
+                  sceneIntro?.genre,
+                  sceneIntro?.key,
+                  sceneIntro?.tempo && `${sceneIntro.tempo} BPM`,
+                  sceneIntro?.difficulty
+                ]
+                  .filter(Boolean)
+                  .map((value) => (
+                    <Chip key={value} size="lg">
+                      {value}
+                    </Chip>
+                  ))}
+              </Stack>
             </Stack>
           </Stack>
         </Card>

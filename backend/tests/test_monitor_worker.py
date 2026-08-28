@@ -36,12 +36,12 @@ def test_shared_wasapi_tries_aggressive_latency_before_safe_fallback():
     assert all("extra_settings" not in candidate for candidate in candidates)
 
 
-def test_low_rate_headset_tries_a_two_millisecond_block_before_safe_fallback():
+def test_low_rate_headset_keeps_a_stable_minimum_block_before_safe_fallback():
     config = {**options(), "sample_rate": 16_000, "blocksize": 64, "output_channels": 1}
     candidates = monitor_worker._stream_candidates(config)
 
-    assert candidates[0]["blocksize"] == 32
-    assert candidates[0]["latency"] == 0.002
+    assert candidates[0]["blocksize"] == 64
+    assert candidates[0]["latency"] == 0.004
     assert any(candidate["blocksize"] == 64 for candidate in candidates)
 
 

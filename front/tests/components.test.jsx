@@ -207,12 +207,23 @@ describe("AudioPlayer and error boundary", () => {
     expect(await toggleAudioPlayback(playing)).toBe(false);
     expect(playing.pause).toHaveBeenCalledOnce();
     expect(await toggleAudioPlayback({ paused: true, play: vi.fn().mockResolvedValue() })).toBe(true);
-    expect(
-      await toggleAudioPlayback({
-        paused: true,
-        play: vi.fn().mockRejectedValue(new Error("blocked"))
-      })
-    ).toBe(false);
+    const blocked = {
+      paused: true,
+      pause: vi.fn(),
+      load: vi.fn(),
+      play: vi.fn().mockRejectedValue(new Error("blocked"))
+    };
+    expect(await toggleAudioPlayback(blocked)).toBe(false);
+    expect(blocked.play).toHaveBeenCalledTimes(2);
+    expect(blocked.load).toHaveBeenCalledOnce();
+    const recovered = {
+      paused: true,
+      pause: vi.fn(),
+      load: vi.fn(),
+      play: vi.fn().mockRejectedValueOnce(new Error("device switched")).mockResolvedValueOnce()
+    };
+    expect(await toggleAudioPlayback(recovered)).toBe(true);
+    expect(recovered.load).toHaveBeenCalledOnce();
   });
   test("handles playback, media events, seeking and volume", async () => {
     const { unmount } = render(

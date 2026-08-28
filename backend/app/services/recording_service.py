@@ -341,8 +341,14 @@ def _capture_attempts(
     blocksize: int,
     monitoring_enabled: bool,
 ) -> list[tuple[int | None, int | None, int, int, bool, str]]:
+    # This duplex callback processes and writes the microphone while also
+    # feeding live monitoring. At Bluetooth HFP rates, 128 frames is only 8ms
+    # but gives Python enough scheduling headroom to avoid audible underflows.
+    stable_blocksize = (
+        max(128, blocksize) if monitoring_enabled and sample_rate <= 24_000 else blocksize
+    )
     attempts = [
-        (device_id, output_device_id, sample_rate, blocksize, monitoring_enabled, "low"),
+        (device_id, output_device_id, sample_rate, stable_blocksize, monitoring_enabled, "low"),
         (device_id, None, sample_rate, 0, False, "high"),
     ]
     with contextlib.suppress(Exception):

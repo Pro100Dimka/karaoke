@@ -44,6 +44,7 @@ const createProps = (overrides = {}) => {
     syncSecondaryMedia: vi.fn(),
     setCurrentTime: vi.fn(),
     setIsPlaying: vi.fn(),
+    releaseMonitoring: vi.fn().mockResolvedValue(null),
     setRecordingError: vi.fn(),
     setRecordingSessionId: vi.fn(),
     setAnalysisRecordingId: vi.fn(),
@@ -243,6 +244,7 @@ describe("karaoke transport", () => {
     await expect(result.current.stop()).resolves.toBe(true);
     expect(props.syncSecondaryMedia).toHaveBeenLastCalledWith(0, true);
     expect(props.setIsPlaying).toHaveBeenLastCalledWith(false);
+    expect(props.releaseMonitoring).toHaveBeenCalledOnce();
     calledWith([api.stopRecording, ["existing"]], [props.setAnalysisRecordingId, ["recording"]], [props.setRecordingSessionId, [null]]);
     props.onlineRoom.syncCommand.mockClear();
     await result.current.returnToLibrary();

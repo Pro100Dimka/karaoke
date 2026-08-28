@@ -77,13 +77,7 @@ export default memo(
         }}
       >
         <Stack direction="row">
-          <Stack sx={{ flex: 1 }}>
-            <SongCoverArt
-              cardIndex={cardIndex}
-              song={song}
-              sx={{ flex: 1, borderRadius: "var(--shape-lg)" }}
-            />
-          </Stack>
+          <SongCoverArt cardIndex={cardIndex} song={song} />
           <Stack
             gap="var(--space-2)"
             justify="space-between"

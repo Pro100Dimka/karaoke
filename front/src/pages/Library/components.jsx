@@ -22,7 +22,7 @@ export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
   const version = `${song?.updated_at ?? ""}:${song?.status ?? ""}:${song?.__roomLocal ?? ""}`;
   const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, version);
   return (
-    <Stack align="center" justify="center" sx={{ height: "100%" }}>
+    <Stack align="center" justify="center" sx={{ flex: 1, ...sx }}>
       {hasCover ? (
         <Box
           as="img"

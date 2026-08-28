@@ -158,6 +158,24 @@ export default function Karaoke({ onOpenAppSettings }) {
     monitorInputDeviceId
   } = microphoneSettings;
   const { updateMicrophone } = microphoneSettings;
+  const monitoringEnabledRef = useRef(monitoringEnabled);
+  monitoringEnabledRef.current = monitoringEnabled;
+  const releaseMonitoring = useCallback(async () => {
+    if (!monitoringEnabledRef.current) return null;
+    const updated = await api.stopDirectMonitoring();
+    monitoringEnabledRef.current = false;
+    setMonitoringEnabled(false);
+    globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
+    return updated;
+  }, [setMonitoringEnabled]);
+  useEffect(
+    () => () => {
+      // Back, window navigation and error exits must also release the native
+      // output device so Library recordings can play immediately.
+      if (monitoringEnabledRef.current) api.releaseDirectMonitoring();
+    },
+    []
+  );
   useAudioOutputRouting({
     audioDriver,
     audioSettings,
@@ -243,6 +261,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setCurrentTime,
     setIsPlaying: playback.setPlaying,
     playback,
+    releaseMonitoring,
     setRecordingError,
     setRecordingSessionId,
     silenceMelodyGuide,

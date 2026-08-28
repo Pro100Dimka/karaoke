@@ -97,6 +97,7 @@ export default function useKaraokeTransport({
   setCurrentTime,
   setIsPlaying,
   playback,
+  releaseMonitoring,
   setRecordingError,
   setRecordingSessionId,
   setAnalysisRecordingId
@@ -367,10 +368,18 @@ export default function useKaraokeTransport({
       if (error) {
         setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
         clearSession(id, false);
-        return true;
+      } else {
+        if (recording?.id) setAnalysisRecordingId(recording.id);
+        clearSession(id);
       }
-      if (recording?.id) setAnalysisRecordingId(recording.id);
-      clearSession(id);
+    }
+    try {
+      // The backend restores direct monitoring when recording closes. Release
+      // it again before opening the result player: Bluetooth cannot reliably
+      // keep its Hands-Free microphone profile and play normal media at once.
+      await Promise.resolve(releaseMonitoring?.());
+    } catch (error) {
+      setRecordingError(formatError("Не удалось отключить прослушивание микрофона: {0}", error));
     }
     return true;
   };
