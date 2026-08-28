@@ -229,6 +229,54 @@ def test_job_registry_start_cancel_release_and_cleanup(monkeypatch):
     assert "bad" not in pipeline_service._active_jobs
 
 
+def test_regular_processing_routes_karaoke_files_to_symbolic_worker(monkeypatch, tmp_path):
+    symbolic = Mock()
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _load_job_paths=Mock(return_value=(str(tmp_path / "source.kar"), tmp_path)),
+        _reject_full_process_if_source_retired=Mock(return_value=False),
+        _run_symbolic_job=symbolic,
+    )
+
+    pipeline_service._run_job("song", "quality")
+
+    symbolic.assert_called_once_with("song", str(tmp_path / "source.kar"), tmp_path)
+
+
+def test_symbolic_worker_publishes_ready_artifacts_as_a_normal_song(monkeypatch, tmp_path):
+    source = tmp_path / "source.kar"
+    source.write_bytes(b"midi")
+    capture = Mock()
+    prepare = Mock(return_value={"status": "ready", "stems_status": "ready", "warnings": []})
+    finalize = Mock()
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _acquire_processing_slot=Mock(return_value=True),
+        _release_processing_slot=Mock(),
+        _update_progress=Mock(),
+        _begin_runtime_progress=Mock(),
+        _end_runtime_progress=Mock(),
+        _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())),
+        _stop_progress_heartbeat=Mock(),
+        _create_progress_capture=Mock(return_value=capture),
+        _create_ai_progress_callback=Mock(return_value=Mock()),
+        _configure_ai_runtime=Mock(),
+        _load_original_filename=Mock(return_value="Artist - Song.kar"),
+        _finalize_processed_job=finalize,
+    )
+    monkeypatch.setattr(pipeline_service.model_install_service, "ensure_ready_sync", Mock())
+    monkeypatch.setattr(pipeline_service.kar_dataset_service, "prepare_kar_file", prepare)
+
+    pipeline_service._run_symbolic_job("song", str(source), tmp_path)
+
+    assert prepare.call_args.kwargs["target_dir"] == tmp_path
+    assert prepare.call_args.kwargs["original_filename"] == "Artist - Song.kar"
+    finalize.assert_called_once_with("song", tmp_path, retain_source=True)
+    capture.close.assert_called_once_with()
+
+
 def test_cancel_all_active_processing_cancels_only_alive_jobs(monkeypatch):
     alive_a, alive_b = Mock(is_alive=Mock(return_value=True)), Mock(is_alive=Mock(return_value=True))
     dead = Mock(is_alive=Mock(return_value=False))

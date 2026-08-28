@@ -1,8 +1,10 @@
 @layer ui.components {
   .ui-typography {
-    margin: 0;
-    min-width: 0;
+    margin: 0vw;
+    min-width: 0vw;
+
     color: var(--ui-text);
+
     font-family: var(--typography-font-family,
         Inter,
         system-ui,
@@ -10,67 +12,80 @@
         BlinkMacSystemFont,
         "Segoe UI",
         sans-serif);
+
     text-align: var(--typography-align, inherit);
   }
 
   .ui-typography[data-variant="h1"] {
-    font-size: var(--typography-h1-size, clamp(2.5rem, 4vw, 4.5rem));
+    font-size: var(--typography-h1-size,
+        clamp(2.083333vw, 4vw, 3.75vw));
+
     font-weight: var(--typography-h1-weight, 900);
-    line-height: var(--typography-h1-line-height, 0.95);
+    line-height: var(--typography-h1-line-height, 3.5625vw);
   }
 
   .ui-typography[data-variant="h2"] {
-    font-size: var(--typography-h2-size, clamp(2rem, 3vw, 3.25rem));
+    font-size: var(--typography-h2-size,
+        clamp(1.666667vw, 3vw, 2.708333vw));
+
     font-weight: var(--typography-h2-weight, 800);
-    line-height: var(--typography-h2-line-height, 1);
+    line-height: var(--typography-h2-line-height, 2.708333vw);
   }
 
   .ui-typography[data-variant="h3"] {
-    font-size: var(--typography-h3-size, clamp(1.5rem, 2vw, 2rem));
+    font-size: var(--typography-h3-size,
+        clamp(1.25vw, 2vw, 1.666667vw));
+
     font-weight: var(--typography-h3-weight, 750);
-    line-height: var(--typography-h3-line-height, 1.1);
+    line-height: var(--typography-h3-line-height, 1.833333vw);
   }
 
   .ui-typography[data-variant="h4"] {
-    font-size: var(--typography-h4-size, clamp(1.25rem, 1.5vw, 1.5rem));
+    font-size: var(--typography-h4-size,
+        clamp(1.041667vw, 1.5vw, 1.25vw));
+
     font-weight: var(--typography-h4-weight, 750);
-    line-height: var(--typography-h4-line-height, 1.1);
+    line-height: var(--typography-h4-line-height, 1.375vw);
   }
 
   .ui-typography[data-variant="h5"] {
-    font-size: var(--typography-h5-size, clamp(1rem, 1.25vw, 1.25rem));
+    font-size: var(--typography-h5-size,
+        clamp(0.833333vw, 1.25vw, 1.041667vw));
+
     font-weight: var(--typography-h5-weight, 750);
-    line-height: var(--typography-h5-line-height, 1.1);
+    line-height: var(--typography-h5-line-height, 1.145833vw);
   }
 
   .ui-typography[data-variant="h6"] {
-    font-size: var(--typography-h6-size, clamp(0.875rem, 1vw, 1rem));
+    font-size: var(--typography-h6-size,
+        clamp(0.729167vw, 1vw, 0.833333vw));
+
     font-weight: var(--typography-h6-weight, 750);
-    line-height: var(--typography-h6-line-height, 1.1);
+    line-height: var(--typography-h6-line-height, 0.916667vw);
   }
 
   .ui-typography[data-variant="body1"] {
-    font-size: var(--typography-body1-size, 1rem);
+    font-size: var(--typography-body1-size, 0.833333vw);
     font-weight: var(--typography-body1-weight, 400);
-    line-height: var(--typography-body1-line-height, 1.5);
+    line-height: var(--typography-body1-line-height, 1.25vw);
   }
 
   .ui-typography[data-variant="body2"] {
-    font-size: var(--typography-body2-size, .875rem);
+    font-size: var(--typography-body2-size, 0.729167vw);
     font-weight: var(--typography-body2-weight, 400);
-    line-height: var(--typography-body2-line-height, 1.45);
+    line-height: var(--typography-body2-line-height, 1.057292vw);
   }
 
   .ui-typography[data-variant="caption"] {
-    font-size: var(--typography-caption-size, .75rem);
+    font-size: var(--typography-caption-size, 0.625vw);
     font-weight: var(--typography-caption-weight, 600);
-    line-height: var(--typography-caption-line-height, 1.4);
+    line-height: var(--typography-caption-line-height, 0.875vw);
   }
 
   .ui-typography[data-variant="caption2"] {
-    font-size: var(--typography-caption2-size, .625rem);
+    font-size: var(--typography-caption2-size, 0.520833vw);
     font-weight: var(--typography-caption2-weight, 500);
-    line-height: var(--typography-caption2-line-height, 1.2);
+    line-height: var(--typography-caption2-line-height, 0.625vw);
   }
 
   .ui-typography[data-tone="secondary"] {

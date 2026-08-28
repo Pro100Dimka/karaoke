@@ -86,6 +86,29 @@ class KaraokePipeline:
             self.engines.aligner,
         )
 
+    def separate_stems(
+        self,
+        source_path: str | Path,
+        vocals_path: str | Path,
+        instrumental_path: str | Path,
+        *,
+        processing_mode: str = "fast",
+    ) -> None:
+        """Split one reference track without running the karaoke pipeline.
+
+        Training imports only need the two raw stems.  In particular, do not
+        run vocal cleanup, transcription, pitch extraction or alignment here.
+        Keeping the separator worker alive also avoids loading the model again
+        for every item in a large KAR/MID/KFN batch.
+        """
+        profile = resolve_processing_profile(processing_mode, get_runtime_plan())
+        self.engines.separator.separate(
+            Path(source_path),
+            Path(vocals_path),
+            Path(instrumental_path),
+            profile=profile,
+        )
+
     @staticmethod
     def _release_engines(*engines: object) -> None:
         for engine in engines:

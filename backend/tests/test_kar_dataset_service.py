@@ -33,7 +33,7 @@ def build_kar(path):
     return path
 
 
-def build_kfn(path, midi_payload=None):
+def build_kfn(path, midi_payload=None, audio_payload=None):
     songini = (
         b"[General]\nTitle=KFN Song\nArtist=KFN Artist\n"
         b"[Eff1]\nID=2\nSync0=50,100\nTextCount=1\nText0=Hello world\n"
@@ -41,6 +41,8 @@ def build_kfn(path, midi_payload=None):
     entries = [("Song.ini", 1, songini)]
     if midi_payload is not None:
         entries.append(("melody.kar", 2, midi_payload))
+    if audio_payload is not None:
+        entries.append(("original.mp3", 2, audio_payload))
     header = bytearray(b"KFNB")
     for tag, value in ((b"TITL", b"KFN Song"), (b"ARTS", b"KFN Artist"), (b"FLID", bytes(16))):
         header.extend(tag + b"\x02" + struct.pack("<I", len(value)) + value)
@@ -153,6 +155,24 @@ def test_prepares_reviewable_dataset_without_network_or_ai(tmp_path):
     assert Path(duplicate["dataset_dir"]).name == "Artist Test Song (2)"
 
 
+def test_prepares_kar_directly_inside_an_existing_song_directory(tmp_path):
+    source = build_kar(tmp_path / "upload.kar")
+    target = tmp_path / "karaoke_songs" / "Artist Test Song"
+    target.mkdir(parents=True)
+
+    result = kar_dataset_service.prepare_kar_file(
+        source,
+        original_filename="Artist - Test Song.kar",
+        output_root=target.parent,
+        target_dir=target,
+        download_audio=False,
+    )
+
+    assert Path(result["dataset_dir"]) == target.resolve()
+    assert (target / "source.kar").read_bytes() == source.read_bytes()
+    assert (target / "lyricsSync.json").is_file()
+
+
 def test_prepares_karaoke_mid_into_the_same_dataset_contract(tmp_path):
     source = build_kar(tmp_path / "song.mid")
     midi = mido.MidiFile(source, charset="cp1251")
@@ -254,6 +274,42 @@ def test_prepares_legacy_zip_kfn_with_the_same_logic(tmp_path):
     assert result["note_count"] == 2
 
 
+def test_kfn_embedded_original_is_split_into_training_stems(monkeypatch, tmp_path):
+    midi = build_kar(tmp_path / "embedded.kar").read_bytes()
+    source = build_kfn(tmp_path / "song.kfn", midi, b"embedded audio")
+
+    def write_audio(_entry, target):
+        (target / "original.flac").write_bytes(b"original")
+        return True
+
+    def separate(target):
+        (target / "vocals.flac").write_bytes(b"vocals")
+        (target / "instrumental.flac").write_bytes(b"instrumental")
+        return True
+
+    monkeypatch.setattr(kfn_dataset_service, "_write_embedded_audio", write_audio)
+    monkeypatch.setattr(kar_dataset_service, "_prepare_fast_stems", separate)
+    monkeypatch.setattr(
+        kar_dataset_service.metadata_enrichment_service,
+        "prepare_training_media",
+        lambda *_args, **_kwargs: {
+            "cover_status": "ready",
+            "video_status": "ready",
+            "video_id": "video-id",
+            "warnings": [],
+        },
+    )
+
+    result = kfn_dataset_service.prepare_kfn_file(source, output_root=tmp_path / "dataset")
+    output = Path(result["dataset_dir"])
+
+    assert result["status"] == "ready"
+    assert result["stems_status"] == "ready"
+    assert (output / "original.flac").read_bytes() == b"original"
+    assert (output / "vocals.flac").read_bytes() == b"vocals"
+    assert (output / "instrumental.flac").read_bytes() == b"instrumental"
+
+
 def test_skips_kfn_without_ready_midi_notes_without_creating_dataset(tmp_path):
     source = build_kfn(tmp_path / "song.kfn")
 
@@ -290,14 +346,30 @@ def test_original_audio_bpm_scales_kar_before_creating_lyrics(monkeypatch, tmp_p
             }
         }
 
+    def separate(output):
+        (output / "vocals.flac").write_bytes(b"vocals")
+        (output / "instrumental.flac").write_bytes(b"instrumental")
+        return True
+
     monkeypatch.setattr(kar_dataset_service, "_download_audio", download)
+    monkeypatch.setattr(kar_dataset_service, "_prepare_fast_stems", separate)
+    monkeypatch.setattr(
+        kar_dataset_service.metadata_enrichment_service,
+        "prepare_training_media",
+        lambda *_args, **_kwargs: {
+            "cover_status": "ready",
+            "video_status": "ready",
+            "video_id": "video-id",
+            "warnings": [],
+        },
+    )
     result = kar_dataset_service.prepare_kar_file(source, output_root=tmp_path / "dataset")
     output = Path(result["dataset_dir"])
     reference = json.loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
 
     assert result["status"] == "ready"
     assert result["preparation_mode"] == "kar-with-original-audio-bpm"
-    assert result["stems_status"] == "deferred"
+    assert result["stems_status"] == "ready"
     assert reference["bpm"] == 100
     assert reference["words"][0]["start"] == pytest.approx(0.6)
     assert reference["words"][0]["notes"][0]["start"] == pytest.approx(0.6)
@@ -305,7 +377,72 @@ def test_original_audio_bpm_scales_kar_before_creating_lyrics(monkeypatch, tmp_p
     assert result["alignment"]["status"] == "audio-bpm-applied"
     assert result["alignment"]["offset_seconds"] == 0
     assert not (output / "lyricsSync.kar.raw.json").exists()
-    assert not (output / "vocals.flac").exists()
+    assert (output / "vocals.flac").read_bytes() == b"vocals"
+    assert (output / "instrumental.flac").read_bytes() == b"instrumental"
+
+
+def test_fast_stems_are_staged_before_becoming_dataset_files(monkeypatch, tmp_path):
+    target = tmp_path / "song"
+    target.mkdir()
+    (target / "original.flac").write_bytes(b"original")
+
+    def separate(source, vocals, instrumental):
+        assert source == target / "original.flac"
+        assert vocals.parent.name == ".stems-processing"
+        vocals.write_bytes(b"vocals")
+        instrumental.write_bytes(b"instrumental")
+
+    monkeypatch.setattr(kar_dataset_service.ai_bridge, "separate_training_stems", separate)
+
+    assert kar_dataset_service._prepare_fast_stems(target) is True
+    assert (target / "vocals.flac").read_bytes() == b"vocals"
+    assert (target / "instrumental.flac").read_bytes() == b"instrumental"
+    assert not (target / ".stems-processing").exists()
+
+
+def test_stem_failure_preserves_downloaded_original_and_marks_dataset(monkeypatch, tmp_path):
+    source = build_kar(tmp_path / "song.kar")
+
+    def download(_document, output):
+        (output / "original.flac").write_bytes(b"audio")
+        return {
+            "midi_audio_match": {
+                "score": 0.9,
+                "kar_bpm": 120,
+                "audio_bpm": 120,
+                "detected_audio_bpm": 120,
+                "time_scale": 1,
+                "offset_seconds": 0,
+                "pitch_shift_semitones": 0,
+                "audio_duration": 2,
+                "compared_notes": 50,
+            }
+        }
+
+    monkeypatch.setattr(kar_dataset_service, "_download_audio", download)
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_prepare_fast_stems",
+        lambda _target: (_ for _ in ()).throw(RuntimeError("separator failed")),
+    )
+    monkeypatch.setattr(
+        kar_dataset_service.metadata_enrichment_service,
+        "prepare_training_media",
+        lambda *_args, **_kwargs: {
+            "cover_status": "fallback",
+            "video_status": "fallback",
+            "video_id": None,
+            "warnings": [],
+        },
+    )
+
+    result = kar_dataset_service.prepare_kar_file(source, output_root=tmp_path / "dataset")
+    output = Path(result["dataset_dir"])
+
+    assert result["status"] == "ready"
+    assert result["stems_status"] == "error"
+    assert (output / "original.flac").read_bytes() == b"audio"
+    assert any("separator failed" in warning for warning in result["warnings"])
 
 
 def test_audio_search_prefers_original_and_rejects_karaoke():

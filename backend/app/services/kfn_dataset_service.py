@@ -272,6 +272,41 @@ def _header_text(container: KfnContainer, tag: str) -> str:
     return _decode(value) if isinstance(value, bytes) else ""
 
 
+def _container_identity(
+    container: KfnContainer,
+    parser: configparser.ConfigParser,
+    original_filename: str,
+) -> tuple[str, str]:
+    general = parser["General"] if parser.has_section("General") else {}
+    filename_artist, filename_title = song_service.parse_filename_identity(original_filename)
+    title = kar_dataset_service._clean_text(
+        general.get("Title", "") or _header_text(container, "TITL") or filename_title
+    )
+    artist = kar_dataset_service._clean_text(
+        general.get("Artist", "") or _header_text(container, "ARTS") or filename_artist
+    )
+    return artist, title
+
+
+def inspect_kfn_identity(
+    path: str | Path,
+    *,
+    original_filename: str | None = None,
+) -> tuple[str, str]:
+    container = parse_kfn_container(Path(path))
+    songini_entry = next(
+        (entry for entry in container.entries if entry.kind == 1 or entry.name.casefold() == "song.ini"),
+        None,
+    )
+    if songini_entry is None:
+        raise ValueError("В KFN отсутствует Song.ini")
+    return _container_identity(
+        container,
+        _parse_ini(songini_entry.payload),
+        original_filename or Path(path).name,
+    )
+
+
 def _write_embedded_audio(entry: KfnEntry, target: Path) -> bool:
     suffix = Path(entry.name).suffix.casefold()
     if suffix not in _AUDIO_SUFFIXES:
@@ -313,8 +348,14 @@ def prepare_kfn_file(
     *,
     original_filename: str | None = None,
     output_root: str | Path = kar_dataset_service.DATASET_DIR,
+    target_dir: str | Path | None = None,
+    progress: kar_dataset_service.DatasetProgress | None = None,
+    cancelled: kar_dataset_service.CancelCallback | None = None,
 ) -> dict[str, Any]:
     source = Path(path)
+    kar_dataset_service._notify_dataset(
+        progress, cancelled, "karaoke_parse", 2, "Читаем контейнер KFN"
+    )
     container = parse_kfn_container(source)
     songini_entry = next(
         (entry for entry in container.entries if entry.kind == 1 or entry.name.casefold() == "song.ini"),
@@ -335,15 +376,10 @@ def prepare_kfn_file(
     if midi_entry is None:
         raise KfnSkipped("KFN пропущен: контейнер не содержит готовую MIDI-разметку нот")
 
-    general = parser["General"] if parser.has_section("General") else {}
-    filename_artist, filename_title = song_service.parse_filename_identity(
-        original_filename or source.name
-    )
-    title = kar_dataset_service._clean_text(
-        general.get("Title", "") or _header_text(container, "TITL") or filename_title
-    )
-    artist = kar_dataset_service._clean_text(
-        general.get("Artist", "") or _header_text(container, "ARTS") or filename_artist
+    artist, title = _container_identity(
+        container,
+        parser,
+        original_filename or source.name,
     )
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
@@ -364,9 +400,20 @@ def prepare_kfn_file(
         melody_track=melody_track,
         raw_lyrics=[],
     )
-    target = kar_dataset_service._unique_dataset_dir(root, document)
+    owns_target = target_dir is None
+    target = (
+        kar_dataset_service._unique_dataset_dir(root, document)
+        if owns_target
+        else Path(target_dir)
+    )
+    target.mkdir(parents=True, exist_ok=True)
     try:
-        shutil.copy2(source, target / "source.kfn")
+        symbolic_source = target / "source.kfn"
+        if source.resolve() != symbolic_source.resolve():
+            shutil.copy2(source, symbolic_source)
+        kar_dataset_service._notify_dataset(
+            progress, cancelled, "karaoke_parse", 8, "Разметка KFN прочитана"
+        )
         with source.open("rb") as source_stream:
             digest = hashlib.file_digest(source_stream, "sha256").hexdigest()
         reference = validate_lyrics_document(
@@ -385,6 +432,42 @@ def prepare_kfn_file(
             None,
         )
         audio_ready = bool(audio_entry and _write_embedded_audio(audio_entry, target))
+        warnings = [] if audio_ready else ["В KFN не найдена пригодная встроенная аудиодорожка"]
+        stems_error: str | None = None
+        stems_ready = False
+        if audio_ready:
+            try:
+                kar_dataset_service._notify_dataset(
+                    progress, cancelled, "separate", 36, "Разделяем голос и минусовку"
+                )
+                stems_ready = kar_dataset_service._prepare_fast_stems(target)
+                kar_dataset_service._notify_dataset(
+                    progress, cancelled, "separate", 68, "Голос и минусовка готовы"
+                )
+            except Exception as exc:
+                stems_error = str(exc)
+                warnings.append(f"Не удалось разделить оригинал на голос и минус: {exc}")
+                (target / "vocals.flac").unlink(missing_ok=True)
+                (target / "instrumental.flac").unlink(missing_ok=True)
+        media: dict[str, object] = {
+            "cover_status": "fallback",
+            "video_status": "fallback",
+            "video_id": None,
+            "warnings": [],
+        }
+        if audio_ready:
+            kar_dataset_service._notify_dataset(
+                progress, cancelled, "karaoke_media", 70, "Подготавливаем обложку и клип"
+            )
+            media = kar_dataset_service._prepare_visual_assets(
+                target,
+                title,
+                artist,
+            )
+            warnings.extend(str(item) for item in media.get("warnings", []))
+            kar_dataset_service._notify_dataset(
+                progress, cancelled, "karaoke_media", 97, "Визуальные файлы готовы"
+            )
         comparison = {
             "status": "kfn-embedded-reference",
             "time_scale": 1.0,
@@ -398,7 +481,7 @@ def prepare_kfn_file(
             "dataset_version": 2,
             "status": "ready" if audio_ready else "review",
             "preparation_mode": "kfn-embedded-reference",
-            "stems_status": "deferred",
+            "stems_status": "ready" if stems_ready else "error" if stems_error else "deferred",
             "title": title,
             "artist": artist,
             "bpm": bpm,
@@ -412,12 +495,17 @@ def prepare_kfn_file(
             "melody_track": melody_track,
             "container_variant": container.variant,
             "audio_source": {"kind": "kfn-embedded"} if audio_ready else None,
+            "media": {key: value for key, value in media.items() if key != "warnings"},
             "alignment": comparison,
-            "warnings": [] if audio_ready else ["В KFN не найдена пригодная встроенная аудиодорожка"],
+            "warnings": warnings,
             "files": sorted(item.name for item in target.iterdir() if item.is_file()),
         }
         write_json(target / "metadata.json", metadata)
+        kar_dataset_service._notify_dataset(
+            progress, cancelled, "complete", 100, "Песня готова к караоке"
+        )
         return {**metadata, "dataset_dir": str(target.resolve())}
     except Exception:
-        shutil.rmtree(target, ignore_errors=True)
+        if owns_target:
+            shutil.rmtree(target, ignore_errors=True)
         raise

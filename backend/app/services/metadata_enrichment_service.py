@@ -15,7 +15,7 @@ import urllib.request
 from collections import Counter
 from pathlib import Path
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import select
 
 import config
@@ -400,6 +400,85 @@ def _download_youtube_video(video_id: str, output_dir: Path) -> bool:
     finally:
         for stale in output_dir.glob(".clip-download.*"):
             stale.unlink(missing_ok=True)
+
+
+def _download_square_cover(url: str, output_dir: Path) -> bool:
+    """Save a consistent local cover from a verified song/video thumbnail."""
+    if not url:
+        return False
+    destination = output_dir / "cover.jpg"
+    temporary = output_dir / ".cover-preparing.jpg"
+    temporary.unlink(missing_ok=True)
+    try:
+        raw = _request(url, timeout=8)
+        with Image.open(io.BytesIO(raw)) as source:
+            image = ImageOps.exif_transpose(source).convert("RGB")
+            if image.width < 160 or image.height < 90:
+                return False
+            side = min(1200, image.width, image.height)
+            image = ImageOps.fit(
+                image,
+                (side, side),
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.5),
+            )
+            image.save(temporary, "JPEG", quality=90, optimize=True, progressive=True)
+        if temporary.stat().st_size < 8_000:
+            return False
+        os.replace(temporary, destination)
+        return True
+    except (OSError, UnidentifiedImageError, ValueError):
+        return False
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def prepare_training_media(
+    title: str,
+    artist: str | None,
+    output_dir: Path,
+    *,
+    cover_url: str | None = None,
+) -> dict[str, object]:
+    """Create the same local visual assets used by a processed karaoke song."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    warnings: list[str] = []
+    video_id: str | None = None
+    try:
+        video_id = _youtube_video_id(title, artist)
+    except Exception as exc:
+        warnings.append(f"Не удалось найти клип: {exc}")
+
+    cover_ready = any(
+        (output_dir / f"cover{suffix}").is_file()
+        for suffix in (".jpg", ".png", ".webp")
+    )
+    if not cover_ready:
+        thumbnail = cover_url or (
+            f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg" if video_id else ""
+        )
+        cover_ready = _download_square_cover(thumbnail, output_dir)
+        if not cover_ready and video_id:
+            cover_ready = _download_square_cover(
+                f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+                output_dir,
+            )
+        if not cover_ready:
+            warnings.append("Не удалось получить обложку песни")
+
+    video_ready = (output_dir / LOCAL_VIDEO_NAME).is_file()
+    if not video_ready and video_id:
+        video_ready = _download_youtube_video(video_id, output_dir)
+    if not video_ready:
+        warnings.append(
+            "Подходящий движущийся клип не найден; караоке использует стандартное видео"
+        )
+    return {
+        "cover_status": "ready" if cover_ready else "fallback",
+        "video_status": "ready" if video_ready else "fallback",
+        "video_id": video_id,
+        "warnings": warnings,
+    }
 
 
 def enrich_song(song_id: str) -> None:

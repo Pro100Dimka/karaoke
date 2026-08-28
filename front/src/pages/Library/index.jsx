@@ -24,14 +24,13 @@ export default function Library() {
       }}
     >
       <LibraryParallaxBackground />
-      {!state.processing.active && !state.karDataset.pending && <QuantumFieldBackdrop />}
+      {!state.processing.active && <QuantumFieldBackdrop />}
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
           songCount={state.totalCount}
           readyCount={state.readyCount}
           canManageLibrary={state.canManageLibrary}
           importing={fileImport.importing}
-          karDataset={state.karDataset}
           onFileChosen={fileImport.importFile}
           fileInputRef={state.fileInputRef}
           onAdd={fileImport.openFilePicker}

@@ -30,6 +30,8 @@ from app.services import (
     ai_bridge,
     app_settings_service,
     cache_service,
+    kar_dataset_service,
+    kfn_dataset_service,
     metadata_enrichment_service,
     model_install_service,
     revision_cache,
@@ -157,6 +159,9 @@ _AI_STAGE_PLAN = {
     "notes": (98.0, 8, "Строим вокальные ноты"),
     "validate": (99.7, 3, "Проверяем результат"),
     "complete": (100.0, 1, "Завершаем обработку"),
+    "karaoke_parse": (6.0, 3, "Читаем слова и ноты караоке-файла"),
+    "karaoke_audio": (34.0, 45, "Ищем и проверяем оригинальную песню"),
+    "karaoke_media": (97.0, 90, "Подготавливаем обложку и клип"),
 }
 
 
@@ -741,10 +746,16 @@ def _invoke_ai_pipeline(
     )
 
 
-def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
+def _finalize_processed_job(
+    song_id: str,
+    out_dir: Path,
+    *,
+    retain_source: bool = False,
+) -> None:
     try:
         if not _is_cancelled(song_id):
-            with song_service.library_write_lock(): _finalize_success(song_id, out_dir)
+            with song_service.library_write_lock():
+                _finalize_success(song_id, out_dir, retain_source=retain_source)
             metadata_enrichment_service.enqueue(song_id)
     except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
         _update_progress(
@@ -779,11 +790,96 @@ def _log_processing_finished(song_id: str, started_at: float) -> None:
     logger.info("Song processing finished: song_id=%s elapsed_sec=%.1f", song_id, time.monotonic() - started_at)
 
 
+def _run_symbolic_job(song_id: str, source_path: str, out_dir: Path) -> None:
+    capture: _ProgressCapture | None = None
+    heartbeat_stop: threading.Event | None = None
+    heartbeat_thread: threading.Thread | None = None
+    slot_acquired = False
+    succeeded = False
+    started_at = time.monotonic()
+    try:
+        slot_acquired = _acquire_processing_slot(song_id)
+        if not slot_acquired:
+            return
+        _log_processing_started(song_id, "karaoke-file", False)
+        _update_progress(
+            song_id,
+            status=models.SongStatus.PROCESSING,
+            percent=0.0,
+            step_label="Подготавливаем karaoke-файл",
+        )
+        _begin_runtime_progress(song_id)
+        heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
+        capture = _create_progress_capture(song_id, out_dir)
+        progress = _create_ai_progress_callback(song_id, capture)
+        _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
+        model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
+        _configure_ai_runtime()
+        source = Path(source_path)
+        prepare = (
+            kfn_dataset_service.prepare_kfn_file
+            if source.suffix.casefold() == ".kfn"
+            else kar_dataset_service.prepare_kar_file
+        )
+        result = prepare(
+            source,
+            original_filename=_load_original_filename(song_id),
+            output_root=out_dir.parent,
+            target_dir=out_dir,
+            progress=progress,
+            cancelled=lambda: _is_cancelled(song_id),
+        )
+        if result.get("status") != "ready" or result.get("stems_status") != "ready":
+            details = "; ".join(str(item) for item in result.get("warnings", []) if item)
+            raise ValueError(details or "Не удалось получить оригинал, голос и минусовку")
+        succeeded = True
+    except ProcessingCancelled:
+        _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
+        return
+    except Exception as exc:  # noqa: BLE001 - background worker boundary
+        if _is_cancelled(song_id):
+            _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
+            return
+        _write_pipeline_error(song_id, capture, exc)
+        _update_progress(
+            song_id,
+            status=models.SongStatus.ERROR,
+            error_message=_format_processing_error(exc),
+        )
+        return
+    finally:
+        cleanup_succeeded = False
+        try:
+            if capture is not None:
+                capture.close()
+            _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
+            _end_runtime_progress(song_id)
+            cleanup_succeeded = True
+        finally:
+            if slot_acquired and (not succeeded or not cleanup_succeeded):
+                _release_processing_slot(song_id)
+
+    try:
+        _finalize_processed_job(song_id, out_dir, retain_source=True)
+    finally:
+        if slot_acquired:
+            _release_processing_slot(song_id)
+    _log_processing_finished(song_id, started_at)
+
+
+def _load_original_filename(song_id: str) -> str:
+    with _song_session(song_id) as (_db, song):
+        return str(getattr(song, "original_filename", "") or Path(song.source_path).name) if song else "song"
+
+
 def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
     if _reject_full_process_if_source_retired(song_id, reuse_vocals=reuse_vocals): return
     source_path, out_dir = paths
+    if not reuse_vocals and Path(source_path).suffix.casefold() in config.ALLOWED_KARAOKE_EXTENSIONS:
+        _run_symbolic_job(song_id, source_path, out_dir)
+        return
     searchable_title = _load_searchable_title(song_id)
     lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
 
@@ -962,7 +1058,7 @@ def _validate_artifact_audio(path: Path) -> None:
         raise ValueError(f"{path.name} has no usable audio duration")
 
 
-def _finalize_success(song_id: str, out_dir: Path) -> None:
+def _finalize_success(song_id: str, out_dir: Path, *, retain_source: bool = False) -> None:
     retired_source: Path | None = None
     for name in ("instrumental.flac", "vocals.flac"):
         _validate_artifact_audio(out_dir / name)
@@ -973,12 +1069,15 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         _persist_confirmed_identity(song, out_dir)
         _apply_generated_metadata(song, out_dir)
         instrumental = (out_dir / "instrumental.flac").resolve()
+        if (out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME).is_file():
+            song.video_url = metadata_enrichment_service.LOCAL_VIDEO_URL
         source_value = getattr(song, "source_path", None)
         if source_value and instrumental.is_file():
             source = song_service.resolve_source_path(song).resolve()
             if source.parent == out_dir.resolve() and source.name.startswith("source."):
                 song.source_path = str(instrumental)
-                retired_source = source
+                if not retain_source:
+                    retired_source = source
         song.status = models.SongStatus.DONE
         song.optimized = False
         song.progress_percent = 100.0

@@ -37,6 +37,24 @@ def test_reprocess_song_uses_existing_vocals(monkeypatch, tmp_path):
     service.reprocess_song.assert_called_once_with(tmp_path, language="uk")
 
 
+def test_training_stems_use_the_fast_separator_only(monkeypatch, tmp_path):
+    service = Mock()
+    monkeypatch.setattr(bridge, "get_ai_service", lambda: service)
+
+    bridge.separate_training_stems(
+        tmp_path / "original.flac",
+        tmp_path / "vocals.flac",
+        tmp_path / "instrumental.flac",
+    )
+
+    service.separate_stems.assert_called_once_with(
+        tmp_path / "original.flac",
+        tmp_path / "vocals.flac",
+        tmp_path / "instrumental.flac",
+        processing_mode="fast",
+    )
+
+
 @pytest.mark.parametrize(
     "frame,expected",
     [

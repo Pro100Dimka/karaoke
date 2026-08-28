@@ -243,6 +243,9 @@ def test_song_input_sanitizes_name_and_validates_extension():
     assert song_service._song_input(
         "Title (Sefon.Pro)", "Artist - Title (Sefon.Pro).mp3"
     )[0] == "Title"
+    assert song_service._song_input("", "Artist - Song.KAR")[2] == ".kar"
+    assert song_service._song_input("", "Artist - Song.mid")[2] == ".mid"
+    assert song_service._song_input("", "Artist - Song.kfn")[2] == ".kfn"
     raises(ValueError, lambda: song_service._song_input('Song', 'song.exe'), match='формат')
     raises(ValueError, lambda: song_service._song_input('Song', 'song'), match='расширения')
 

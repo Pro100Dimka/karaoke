@@ -34,6 +34,22 @@ class AICoreService:
         with self._lock:
             return stabilize_pitch(self.pipeline.engines.pitch.estimate(audio_path))
 
+    def separate_stems(
+        self,
+        source_path,
+        vocals_path,
+        instrumental_path,
+        *,
+        processing_mode="fast",
+    ) -> None:
+        with self._lock:
+            self.pipeline.separate_stems(
+                source_path,
+                vocals_path,
+                instrumental_path,
+                processing_mode=processing_mode,
+            )
+
     def close(self):
         # Closing releases shared model resources (see pipeline.close()), so
         # it must never run while a job is mid-flight -- acquiring every

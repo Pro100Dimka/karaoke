@@ -136,9 +136,11 @@ async def add_song(
     db: Session = Depends(get_db),
 ):
     config.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    filename = file.filename or "song"
+    suffix = Path(filename).suffix.casefold() or ".tmp"
     with tempfile.NamedTemporaryFile(
         prefix=".song-upload-",
-        suffix=".tmp",
+        suffix=suffix,
         dir=config.UPLOAD_TEMP_DIR,
         delete=False,
     ) as temporary:
@@ -151,12 +153,28 @@ async def add_song(
             chunk_size=config.UPLOAD_CHUNK_SIZE,
             too_large_message="Audio file is too large",
         )
+        resolved_title, resolved_artist = title or "", artist
+        if suffix in config.ALLOWED_KARAOKE_EXTENSIONS:
+            if suffix in kar_dataset_service.SUPPORTED_KARAOKE_MIDI_SUFFIXES:
+                document = kar_dataset_service.parse_kar(
+                    temporary_path,
+                    original_filename=filename,
+                )
+                detected_artist, detected_title = document.artist, document.title
+            else:
+                detected_artist, detected_title = kfn_dataset_service.inspect_kfn_identity(
+                    temporary_path,
+                    original_filename=filename,
+                )
+            resolved_title = resolved_title or detected_title
+            if not (resolved_artist or "").strip():
+                resolved_artist = detected_artist
         return song_service.create_song_from_path(
             db,
-            title or "",
-            file.filename or "song",
+            resolved_title,
+            filename,
             temporary_path,
-            artist,
+            resolved_artist,
         )
     except HTTPException:
         raise
@@ -187,12 +205,30 @@ async def inspect_song_identity(file: UploadFile = File(...)):
             chunk_size=config.UPLOAD_CHUNK_SIZE,
             too_large_message="Audio file is too large",
         )
-        artist, title = song_service._read_source_identity(
-            temporary_path,
-            file.filename or "song",
-            "",
+        filename = file.filename or "song"
+        suffix = Path(filename).suffix.casefold()
+        if suffix in kar_dataset_service.SUPPORTED_KARAOKE_MIDI_SUFFIXES:
+            document = kar_dataset_service.parse_kar(
+                temporary_path,
+                original_filename=filename,
+            )
+            artist, title = document.artist, document.title
+        elif suffix == ".kfn":
+            artist, title = kfn_dataset_service.inspect_kfn_identity(
+                temporary_path,
+                original_filename=filename,
+            )
+        else:
+            artist, title = song_service._read_source_identity(
+                temporary_path,
+                filename,
+                "",
+            )
+        cover = (
+            None
+            if suffix in config.ALLOWED_KARAOKE_EXTENSIONS
+            else song_service.read_embedded_cover(temporary_path)
         )
-        cover = song_service.read_embedded_cover(temporary_path)
         cover_data_url = None
         if cover is not None:
             payload, extension = cover

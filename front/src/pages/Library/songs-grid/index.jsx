@@ -1,104 +1,68 @@
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
-import { Box, Grid } from "../../../theme/ui";
-import LibraryResults from "./results";
+import { Box, Card, Grid, Stack, Typography } from "../../../theme/ui";
 import LibrarySongCard from "./song-card";
 
-function SongGrid({ songs, transferStatuses, ...handlers }) {
-  if (songs.length > 45)
+export default function LibrarySongsGrid({ state: s, fileImport: f, processing, recordings }) {
+  const { filteredSongs: songs, songsError: error, songActions: a } = s;
+  const statuses = [...(s.transferStatuses?.values?.() || [])];
+  const card = {
+    canManageLibrary: s.canManageLibrary,
+    onOpenKaraoke: s.openKaraoke,
+    onOpenProcessing: processing.track,
+    onOpenRecordings: recordings.setSong,
+    onOpenSettings: s.setSettingsSongId,
+    onDelete: a.deleteSong,
+    onOpenFolder: a.openSongFolder,
+    onProcess: a.processSong,
+    onReprocess: a.reprocessSong
+  };
+  const drop = useDropzone({
+    accept: {
+      "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"],
+      "application/octet-stream": [".kar", ".mid", ".kfn"]
+    },
+    disabled: f.importing || !s.canManageLibrary,
+    multiple: true,
+    noClick: true,
+    noKeyboard: true,
+    onDropAccepted: f.importFile
+  });
+  if (!songs.length || error)
     return (
-      <VirtualSongGrid songs={songs} transferStatuses={transferStatuses} handlers={handlers} />
+      <Stack align="center" justify="center" sx={{ minHeight: "30vw" }}>
+        <Card
+          variant="laser"
+          sx={{ textAlign: "center" }}
+          cardContent={{ style: { padding: "var(--space-16)" } }}
+        >
+          <Typography
+            variant="h4"
+            {...(error ? { role: "alert", tone: "danger" } : { tone: "muted" })}
+          >
+            {error
+              ? `${tr("Не удалось загрузить список:")} ${error.message || error}`
+              : tr("Пока нет ни одной песни — добавьте первую")}
+          </Typography>
+        </Card>
+      </Stack>
     );
   return (
-    <Grid columns={3} gap="var(--space-6)" align="start">
-      {songs.map((song, cardIndex) => (
-        <LibrarySongCard
-          key={song.id}
-          cardIndex={cardIndex}
-          song={song}
-          transferStatus={[...(transferStatuses?.values?.() || [])].find(
-            ({ songId }) => songId === song.id
-          )}
-          {...handlers}
-        />
-      ))}
-    </Grid>
-  );
-}
-
-export default function LibrarySongsGrid({ state, fileImport, processing, recordings }) {
-  return (
-    <LibraryResults
-      error={state.songsError}
-      onFileChosen={fileImport.importFile}
-      importing={fileImport.importing}
-      canManageLibrary={state.canManageLibrary}
-      songs={state.filteredSongs}
-      errorText={`${tr("Не удалось загрузить список:")} ${state.songsError?.message || state.songsError || ""}`}
+    <Box
+      {...drop.getRootProps()}
+      aria-label={tr("Зона добавления песен")}
+      data-drop-active={drop.isDragActive || undefined}
     >
-      <SongGrid
-        songs={state.filteredSongs}
-        canManageLibrary={state.canManageLibrary}
-        transferStatuses={state.transferStatuses}
-        onOpenKaraoke={state.openKaraoke}
-        onOpenProcessing={processing.track}
-        onOpenRecordings={recordings.setSong}
-        onOpenSettings={state.setSettingsSongId}
-        onDelete={state.songActions.deleteSong}
-        onOpenFolder={state.songActions.openSongFolder}
-        onProcess={state.songActions.processSong}
-        onReprocess={state.songActions.reprocessSong}
-      />
-    </LibraryResults>
-  );
-}
-function VirtualSongGrid({ songs, transferStatuses, handlers }) {
-  const host = useRef(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  const rows = useMemo(
-    () =>
-      Array.from({ length: Math.ceil(songs.length / 3) }, (_, index) =>
-        songs.slice(index * 3, index * 3 + 3)
-      ),
-    [songs]
-  );
-  useLayoutEffect(() => setScrollMargin(host.current?.offsetTop ?? 0), []);
-  const virtualizer = useWindowVirtualizer({
-    count: rows.length,
-    estimateSize: () => 220,
-    overscan: 2,
-    scrollMargin
-  });
-  return (
-    <Box ref={host} sx={{ position: "relative", blockSize: `${virtualizer.getTotalSize()}px` }}>
-      {virtualizer.getVirtualItems().map((virtualRow) => (
-        <Box
-          ref={virtualizer.measureElement}
-          data-index={virtualRow.index}
-          key={virtualRow.key}
-          sx={{
-            position: "absolute",
-            insetBlockStart: 0,
-            insetInline: 0,
-            transform: `translateY(${virtualRow.start - scrollMargin}px)`
-          }}
-        >
-          <Grid columns={3} gap="var(--space-6)" align="start">
-            {rows[virtualRow.index].map((song, index) => (
-              <LibrarySongCard
-                key={song.id}
-                cardIndex={virtualRow.index * 3 + index}
-                song={song}
-                transferStatus={[...(transferStatuses?.values?.() || [])].find(
-                  ({ songId }) => songId === song.id
-                )}
-                {...handlers}
-              />
-            ))}
-          </Grid>
-        </Box>
-      ))}
+      <Grid columns={3} gap="var(--space-6)" align="start">
+        {songs.map((song, cardIndex) => (
+          <LibrarySongCard
+            key={song.id}
+            {...card}
+            {...{ song, cardIndex }}
+            transferStatus={statuses.find((x) => x.songId === song.id)}
+          />
+        ))}
+      </Grid>
     </Box>
   );
 }

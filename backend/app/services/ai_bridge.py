@@ -52,6 +52,20 @@ def release_ai_resources() -> None:
     reset_ai_service()
 
 
+def separate_training_stems(
+    source_path: str | Path,
+    vocals_path: str | Path,
+    instrumental_path: str | Path,
+) -> None:
+    """Create unprocessed training stems using the fastest separator profile."""
+    get_ai_service().separate_stems(
+        source_path,
+        vocals_path,
+        instrumental_path,
+        processing_mode="fast",
+    )
+
+
 def max_concurrent_jobs() -> int:
     return get_ai_service().config.max_concurrent_jobs
 

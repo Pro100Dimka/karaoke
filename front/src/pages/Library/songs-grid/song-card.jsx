@@ -1,5 +1,5 @@
 import { Ellipsis } from "lucide-react";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
@@ -13,64 +13,49 @@ import {
   Stack,
   Typography
 } from "../../../theme/ui";
-import * as platform from "../../../utils/platform";
+import { apiToken } from "../../../utils/platform";
 import { getSongActions, SongCoverArt } from "../components";
 import { formatSongKey, getSongCardState } from "../utils";
 
-const statusTone = { done: "success", error: "danger", processing: "primary", queued: "default" };
-const statusText = {
-  done: tr("Готово"),
-  error: tr("Ошибка"),
-  processing: tr("Обрабатывается"),
-  queued: tr("В очереди"),
-  cancelling: tr("Отменяется"),
-  cancelled: tr("Отменено"),
-  pending: tr("Ожидает обработки")
+const statuses = {
+  done: ["success", "Готово"],
+  error: ["danger", "Ошибка"],
+  processing: ["primary", "Обрабатывается"],
+  queued: ["default", "В очереди"],
+  cancelling: ["default", "Отменяется"],
+  cancelled: ["default", "Отменено"],
+  pending: ["default", "Ожидает обработки"]
 };
 
-const LibrarySongCard = memo(
-  ({ cardIndex = 0, song, transferStatus, onOpenKaraoke, onOpenProcessing, ...handlers }) => {
-    const [menuOpen, setMenuOpen] = useState(false);
-    const menuButtonRef = useRef(null);
-    const token = platform.apiToken();
-    const waveformFetchParams = useMemo(
-      () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
-      [token]
-    );
+export default memo(
+  ({
+    cardIndex = 0,
+    song,
+    transferStatus: transfer,
+    onOpenKaraoke,
+    onOpenProcessing,
+    ...handlers
+  }) => {
+    const [open, setOpen] = useState(false);
+    const anchor = useRef(null);
     const { status, isReady, isWorking } = getSongCardState(song);
-    const metadata = [
-      formatSongKey(song.key_override),
-      song.tempo_override && `${song.tempo_override} BPM`,
-      song.difficulty_override
-    ]
-      .filter(Boolean)
-      .join(" · ");
+    const retry = ["error", "cancelled"].includes(transfer?.stage);
     const activate = () => isReady && onOpenKaraoke(song);
-    // A peer-to-peer song transfer has no resume support -- if it's
-    // interrupted (the sender disconnected, or a stale request was
-    // superseded), the only way forward is a fresh attempt, not a stuck
-    // progress bar the user might mistake for still-running.
-    const transferInterrupted =
-      transferStatus && ["error", "cancelled"].includes(transferStatus.stage);
-    const actions = getSongActions({ ...handlers, activate, isReady, isWorking, song });
-    const primaryCount = isReady || !handlers.canManageLibrary ? Math.min(2, actions.length) : 1;
-    const primaryActions = actions.slice(0, primaryCount);
-    const overflowActions = actions.slice(primaryCount);
-    const actionButton = ([Icon, label, variant, onClick, disabled], closeMenu = false) => (
+    const actions = getSongActions({ ...handlers, song, isReady, isWorking, activate });
+    const split = isReady || !handlers.canManageLibrary ? 2 : 1;
+    const token = apiToken();
+    const action = ([Icon, label, variant, onClick, disabled], close) => (
       <IconButton
         key={label}
-        icon={Icon}
-        variant={variant}
-        label={label}
-        title={label}
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (closeMenu) setMenuOpen(false);
+        {...{ icon: Icon, label, title: label, variant, disabled }}
+        onClick={(e) => {
+          e.stopPropagation();
+          close && setOpen(false);
           onClick?.();
         }}
       />
     );
+    const [tone = "default", text = status] = statuses[status] || [];
     return (
       <Card
         variant="laser"
@@ -84,11 +69,10 @@ const LibrarySongCard = memo(
         cardPanel={{
           style: {
             background: `
-              radial-gradient(ellipse at 28% 14%, color-mix(in srgb, var(--ui-primary-hover) 8%, transparent), transparent 42%),
-              linear-gradient(108deg,
-                color-mix(in srgb, var(--ui-bg-deep) 88%, transparent),
-                color-mix(in srgb, var(--ui-surface) 92%, transparent) 58%,
-                color-mix(in srgb, var(--ui-bg-deep) 94%, transparent))`
+            radial-gradient(ellipse at 28% 14%, color-mix(in srgb, var(--ui-primary-hover) 8%, transparent), transparent 42%),
+            linear-gradient(108deg, color-mix(in srgb, var(--ui-bg-deep) 88%, transparent),
+            color-mix(in srgb, var(--ui-surface) 92%, transparent) 58%,
+            color-mix(in srgb, var(--ui-bg-deep) 94%, transparent))`
           }
         }}
       >
@@ -97,7 +81,7 @@ const LibrarySongCard = memo(
             <SongCoverArt
               cardIndex={cardIndex}
               song={song}
-              sx={{ borderRadius: "var(--shape-lg)" }}
+              sx={{ flex: 1, borderRadius: "var(--shape-lg)" }}
             />
           </Stack>
           <Stack
@@ -106,96 +90,86 @@ const LibrarySongCard = memo(
             sx={{ flex: 4, padding: "var(--space-4)" }}
           >
             <Stack direction="row" justify="space-between" align="start" gap="var(--space-3)">
-              <Stack gap="var(--space-2)" sx={{ minWidth: 0 }}>
-                <Typography variant="h3">
-                  <strong>{song.title}</strong>
-                </Typography>
+              <Stack gap="var(--space-2)">
+                <Typography variant="h4">{song.title}</Typography>
                 <Typography variant="h5" tone="muted" sx={{ fontWeight: "normal" }}>
                   {song.artist || tr("Исполнитель не указан")}
                 </Typography>
               </Stack>
-              <Chip tone={statusTone[status] ?? "default"}>{tr(statusText[status] ?? status)}</Chip>
+              <Chip tone={tone}>{tr(text)}</Chip>
             </Stack>
             <Stack direction="row" align="center" justify="space-between" wrap gap="var(--space-3)">
-              {isWorking || transferStatus ? (
-                <Box sx={{ flex: 1 }}>
-                  <Button
-                    variant="outlined"
-                    sx={{ background: "unset", border: "unset", boxShadow: "unset" }}
-                    fullWidth
-                    onClick={
-                      isWorking
-                        ? () => onOpenProcessing(song)
-                        : transferInterrupted
-                          ? activate
-                          : undefined
-                    }
-                  >
-                    {transferInterrupted ? (
-                      <Typography variant="body2" tone="danger">
-                        {tr("Передача прервана — нажмите, чтобы повторить")}
-                      </Typography>
-                    ) : (
-                      <Stack gap="var(--space-1)" sx={{ width: "100%" }}>
-                        {transferStatus && (
-                          <Typography variant="body2" tone="muted">
-                            {song.__roomLocal
-                              ? tr("Ожидаем, пока другие участники получат песню")
-                              : tr("Песня скачивается…")}
-                          </Typography>
-                        )}
-                        <ProcessingSignal
-                          progress={transferStatus?.percent ?? song.progress_percent}
-                          url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
-                          fetchParams={waveformFetchParams}
-                          compact
-                        />
-                      </Stack>
-                    )}
-                  </Button>
-                </Box>
+              {isWorking || transfer ? (
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  sx={{ flex: 1, background: "unset", border: "unset", boxShadow: "unset" }}
+                  onClick={isWorking ? () => onOpenProcessing(song) : retry ? activate : undefined}
+                >
+                  {retry ? (
+                    <Typography variant="body2" tone="danger">
+                      {tr("Передача прервана — нажмите, чтобы повторить")}
+                    </Typography>
+                  ) : (
+                    <Stack gap="var(--space-1)" sx={{ width: "100%" }}>
+                      {transfer && (
+                        <Typography variant="body2" tone="muted">
+                          {tr(
+                            song.__roomLocal
+                              ? "Ожидаем, пока другие участники получат песню"
+                              : "Песня скачивается…"
+                          )}
+                        </Typography>
+                      )}
+                      <ProcessingSignal
+                        compact
+                        progress={transfer?.percent ?? song.progress_percent}
+                        url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
+                        fetchParams={token ? { headers: { "X-ADVoice-Token": token } } : undefined}
+                      />
+                    </Stack>
+                  )}
+                </Button>
               ) : (
                 <Typography variant="body2" tone="muted">
-                  {metadata}
+                  {[
+                    formatSongKey(song.key_override),
+                    song.tempo_override && `${song.tempo_override} BPM`,
+                    song.difficulty_override
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Typography>
               )}
-              <Stack
-                direction="row"
-                justify="flex-end"
-                align="center"
-                gap="var(--space-2)"
-                sx={{ width: "auto" }}
-              >
-                {primaryActions.map((action) => actionButton(action))}
-                {overflowActions.length > 0 && (
+
+              <Stack direction="row" align="center" gap="var(--space-2)" sx={{ width: "auto" }}>
+                {actions.slice(0, split).map((x) => action(x))}
+                {actions.length > split && (
                   <Box sx={{ position: "relative" }}>
                     <IconButton
-                      ref={menuButtonRef}
+                      ref={anchor}
                       icon={Ellipsis}
                       variant="contained"
                       label={tr("Другие действия")}
-                      title={tr("Другие действия")}
                       aria-haspopup="menu"
-                      aria-expanded={menuOpen}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setMenuOpen((open) => !open);
+                      aria-expanded={open}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpen(!open);
                       }}
                     />
                     <Popover
-                      open={menuOpen}
-                      anchorRef={menuButtonRef}
+                      open={open}
+                      anchorRef={anchor}
                       placement="bottom-end"
-                      onClose={() => setMenuOpen(false)}
-                      aria-label={tr("Другие действия с песней {0}", { 0: song.title })}
                       role="menu"
-                      style={{
-                        minWidth: "auto"
-                      }}
+                      onClose={() => setOpen(false)}
+                      aria-label={tr("Другие действия с песней {0}", { 0: song.title })}
+                      style={{ minWidth: "auto" }}
                     >
-                      <Stack direction="column" align="center" gap="var(--space-1)">
-                        {overflowActions.map((action) => actionButton(action, true))}
+                      <Stack align="center" gap="var(--space-1)">
+                        {actions.slice(split).map((x) => action(x, true))}
                       </Stack>
                     </Popover>
                   </Box>
@@ -208,4 +182,3 @@ const LibrarySongCard = memo(
     );
   }
 );
-export default LibrarySongCard;

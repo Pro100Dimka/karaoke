@@ -315,7 +315,7 @@ def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch,
     process = Mock()
     monkeypatch.setattr(pipeline_service.ai_bridge, "process_song", process)
     patch_attrs(monkeypatch, pipeline_service, _stop_progress_heartbeat=Mock(), _end_runtime_progress=Mock())
-    finalize = Mock(side_effect=lambda *_args: events.append("finalize"))
+    finalize = Mock(side_effect=lambda *_args, **_kwargs: events.append("finalize"))
     monkeypatch.setattr(pipeline_service, "_finalize_success", finalize)
     with caplog.at_level("INFO", logger=pipeline_service.logger.name):
         pipeline_service._run_job("song")
@@ -323,7 +323,7 @@ def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch,
     messages = [record.getMessage() for record in caplog.records]
     assert any("Song processing started: song_id=song" in message for message in messages)
     assert any("Song processing finished: song_id=song" in message for message in messages)
-    finalize.assert_called_once_with("song", tmp_path)
+    finalize.assert_called_once_with("song", tmp_path, retain_source=False)
     assert events[:2] == ["finalize", "release"]
     capture.close.assert_called_once()
 

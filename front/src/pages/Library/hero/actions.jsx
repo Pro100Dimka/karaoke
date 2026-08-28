@@ -1,6 +1,5 @@
 import {
   CircleCheck,
-  BrainCircuit,
   Headphones,
   Music2,
   Plus,
@@ -41,7 +40,6 @@ export default function LibraryActions({
   filterOptions = { genres: [], keys: [] },
   filters = defaultLibraryFilters,
   importing,
-  karDataset,
   onAdd,
   onFileChosen,
   onOpenRoom,
@@ -56,7 +54,10 @@ export default function LibraryActions({
   useEffect(() => setDraft(filters), [filters]);
 
   const dropzone = useDropzone({
-    accept: { "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"] },
+    accept: {
+      "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"],
+      "application/octet-stream": [".kar", ".mid", ".kfn"]
+    },
     disabled: importing || !canManageLibrary,
     multiple: true,
     noClick: true,
@@ -73,6 +74,7 @@ export default function LibraryActions({
       direction="row"
       gap="var(--space-4)"
       align="center"
+      justify="end"
       wrap
       sx={{ position: "relative", width: "50%" }}
       {...dropzone.getRootProps()}
@@ -116,45 +118,16 @@ export default function LibraryActions({
             </Button>
           )}
           {canManageLibrary && (
-            <>
-              <Button
-                size="lg"
-                variant="contained"
-                startIcon={<Plus />}
-                fullWidth
-                disabled={importing || karDataset?.pending}
-                onClick={onAdd}
-              >
-                {tr("Добавить песню")}
-              </Button>
-              {karDataset && (
-                <>
-                  <Button
-                    size="lg"
-                    variant="outlined"
-                    startIcon={<BrainCircuit />}
-                    fullWidth
-                    disabled={importing || karDataset.pending}
-                    title={tr("Подготовить данные из файлов .kar, .mid и .kfn")}
-                    onClick={karDataset.openFilePicker}
-                  >
-                    {tr(
-                      karDataset.pending
-                        ? "Подготовка .kar/.mid/.kfn…"
-                        : "Обучить на .kar/.mid/.kfn"
-                    )}
-                  </Button>
-                  <input
-                    ref={karDataset.inputRef}
-                    type="file"
-                    accept=".kar,.mid,.kfn"
-                    multiple
-                    hidden
-                    onChange={karDataset.importFiles}
-                  />
-                </>
-              )}
-            </>
+            <Button
+              size="lg"
+              variant="contained"
+              startIcon={<Plus />}
+              fullWidth
+              disabled={importing}
+              onClick={onAdd}
+            >
+              {tr("Добавить песню")}
+            </Button>
           )}
           <input {...dropzone.getInputProps()} ref={fileInputRef} />
         </Stack>

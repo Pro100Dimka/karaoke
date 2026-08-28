@@ -348,10 +348,10 @@ def make_unique_slug(db: Session, base_slug: str) -> str:
 def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
     safe_original_name = Path(original_filename).name.strip() or "song"
     extension = Path(safe_original_name).suffix.lower()
-    if extension not in config.ALLOWED_AUDIO_EXTENSIONS:
+    if extension not in config.ALLOWED_SONG_UPLOAD_EXTENSIONS:
         raise ValueError(
             f"Неподдерживаемый формат файла: {extension or '(нет расширения)'}. "
-            f"Разрешено: {', '.join(sorted(config.ALLOWED_AUDIO_EXTENSIONS))}"
+            f"Разрешено: {', '.join(sorted(config.ALLOWED_SONG_UPLOAD_EXTENSIONS))}"
         )
     fallback_title = _clean_identity(Path(safe_original_name).stem) or "song"
     clean_title = _clean_identity(title.strip()) or fallback_title
@@ -458,7 +458,8 @@ def create_song_from_path(
 ) -> models.Song:
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0: raise ValueError("Audio file is empty")
-    _check_duration_limit(temporary_source)
+    if extension in config.ALLOWED_AUDIO_EXTENSIONS:
+        _check_duration_limit(temporary_source)
 
     detected_artist, detected_title = _read_source_identity(
         temporary_source, safe_name, clean_title)

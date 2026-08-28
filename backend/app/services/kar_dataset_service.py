@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import re
 import shutil
 import subprocess
 from bisect import bisect_right
+from collections.abc import Callable
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -18,7 +20,7 @@ import numpy as np
 
 import config
 from AI.lyrics_document import validate_lyrics_document
-from app.services import song_service
+from app.services import ai_bridge, metadata_enrichment_service, song_service
 from app.utils.json_files import write_json
 
 try:
@@ -30,10 +32,25 @@ except ImportError:  # pragma: no cover - lightweight API-only installations
 DATASET_DIR = config.DATA_DIR / "kar-training-dataset"
 MAX_KAR_BYTES = 8 * 1024 * 1024
 SUPPORTED_KARAOKE_MIDI_SUFFIXES = {".kar", ".mid"}
+DatasetProgress = Callable[[str, float, str], None]
+CancelCallback = Callable[[], bool]
 
 
 class MidiSkipped(ValueError):
     """A valid MIDI file that does not contain reliable karaoke markup."""
+
+
+def _notify_dataset(
+    progress: DatasetProgress | None,
+    cancelled: CancelCallback | None,
+    stage: str,
+    percent: float,
+    detail: str,
+) -> None:
+    if callable(cancelled) and cancelled():
+        raise RuntimeError("Подготовка песни отменена")
+    if callable(progress):
+        progress(stage, percent, detail)
 
 
 _REJECTED_AUDIO_HINTS = (
@@ -935,6 +952,7 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
         "duration": float(info.get("duration") or selected.get("duration") or 0),
         "midi_audio_match": match,
         "preview_title": str(preview_info.get("title") or ""),
+        "thumbnail_url": str(info.get("thumbnail") or selected.get("thumbnail") or ""),
     }
 
 
@@ -954,6 +972,58 @@ def _lyrics_payload(document: KarDocument, source_kind: str = "kar") -> dict[str
             "source": source_kind,
         }
     )
+
+
+def _prepare_fast_stems(target: Path) -> bool:
+    """Atomically create raw vocal/backing stems for a training example."""
+    original = target / "original.flac"
+    if not original.is_file():
+        return False
+    processing = target / ".stems-processing"
+    shutil.rmtree(processing, ignore_errors=True)
+    processing.mkdir(parents=True)
+    temporary_vocals = processing / "vocals.flac"
+    temporary_instrumental = processing / "instrumental.flac"
+    try:
+        ai_bridge.separate_training_stems(
+            original,
+            temporary_vocals,
+            temporary_instrumental,
+        )
+        if not all(
+            path.is_file() and path.stat().st_size > 0
+            for path in (temporary_vocals, temporary_instrumental)
+        ):
+            raise RuntimeError("Разделитель не создал обе аудиодорожки")
+        os.replace(temporary_vocals, target / "vocals.flac")
+        os.replace(temporary_instrumental, target / "instrumental.flac")
+        return True
+    finally:
+        shutil.rmtree(processing, ignore_errors=True)
+
+
+def _prepare_visual_assets(
+    target: Path,
+    title: str,
+    artist: str | None,
+    *,
+    cover_url: str = "",
+) -> dict[str, object]:
+    """Prepare optional media without ever invalidating audio training data."""
+    try:
+        return metadata_enrichment_service.prepare_training_media(
+            title,
+            artist,
+            target,
+            cover_url=cover_url,
+        )
+    except Exception as exc:
+        return {
+            "cover_status": "fallback",
+            "video_status": "fallback",
+            "video_id": None,
+            "warnings": [f"Не удалось подготовить визуальные файлы: {exc}"],
+        }
 
 
 def _unique_dataset_dir(root: Path, document: KarDocument) -> Path:
@@ -977,9 +1047,13 @@ def prepare_kar_file(
     original_filename: str | None = None,
     output_root: str | Path = DATASET_DIR,
     download_audio: bool = True,
+    target_dir: str | Path | None = None,
+    progress: DatasetProgress | None = None,
+    cancelled: CancelCallback | None = None,
 ) -> dict[str, Any]:
     source = Path(path)
     source_kind = "mid" if source.suffix.casefold() == ".mid" else "kar"
+    _notify_dataset(progress, cancelled, "karaoke_parse", 2, "Читаем слова и ноты")
     try:
         document = parse_kar(source, original_filename=original_filename)
     except ValueError as exc:
@@ -994,9 +1068,13 @@ def prepare_kar_file(
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
-    target = _unique_dataset_dir(root, document)
+    target = Path(target_dir) if target_dir is not None else _unique_dataset_dir(root, document)
+    target.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
-    shutil.copy2(source, target / f"source.{source_kind}")
+    symbolic_source = target / f"source.{source_kind}"
+    if source.resolve() != symbolic_source.resolve():
+        shutil.copy2(source, symbolic_source)
+    _notify_dataset(progress, cancelled, "karaoke_parse", 6, "Разметка караоке прочитана")
     reference = _lyrics_payload(document, source_kind)
     audio_source: dict[str, Any] | None = None
     comparison: dict[str, Any] = {
@@ -1007,6 +1085,7 @@ def prepare_kar_file(
     }
     try:
         if download_audio:
+            _notify_dataset(progress, cancelled, "karaoke_audio", 8, "Ищем оригинальную песню")
             audio_source = _download_audio(document, target)
             match = audio_source["midi_audio_match"]
             document = parse_kar(
@@ -1020,12 +1099,40 @@ def prepare_kar_file(
                 **match,
                 "status": "audio-bpm-applied",
             }
+            _notify_dataset(progress, cancelled, "karaoke_audio", 34, "Оригинальная песня получена")
     except Exception as exc:
         warnings.append(str(exc))
         (target / "original.flac").unlink(missing_ok=True)
         shutil.rmtree(target / ".download", ignore_errors=True)
         shutil.rmtree(target / ".processing", ignore_errors=True)
         (target / "kar-lyrics.txt").unlink(missing_ok=True)
+    stems_error: str | None = None
+    if (target / "original.flac").is_file():
+        try:
+            _notify_dataset(progress, cancelled, "separate", 36, "Разделяем голос и минусовку")
+            _prepare_fast_stems(target)
+            _notify_dataset(progress, cancelled, "separate", 68, "Голос и минусовка готовы")
+        except Exception as exc:
+            stems_error = str(exc)
+            warnings.append(f"Не удалось разделить оригинал на голос и минус: {exc}")
+            (target / "vocals.flac").unlink(missing_ok=True)
+            (target / "instrumental.flac").unlink(missing_ok=True)
+    media: dict[str, object] = {
+        "cover_status": "fallback",
+        "video_status": "fallback",
+        "video_id": None,
+        "warnings": [],
+    }
+    if (target / "original.flac").is_file():
+        _notify_dataset(progress, cancelled, "karaoke_media", 70, "Подготавливаем обложку и клип")
+        media = _prepare_visual_assets(
+            target,
+            document.title,
+            document.artist,
+            cover_url=str((audio_source or {}).get("thumbnail_url") or ""),
+        )
+        warnings.extend(str(item) for item in media.get("warnings", []))
+        _notify_dataset(progress, cancelled, "karaoke_media", 97, "Визуальные файлы готовы")
     write_json(target / "lyricsSync.json", reference)
     write_json(target / "comparison.json", comparison)
     note_count = sum(len(word.get("notes", [])) for word in reference["words"])
@@ -1037,7 +1144,7 @@ def prepare_kar_file(
         "preparation_mode": (
             f"{source_kind}-with-original-audio-bpm" if audio_source else f"{source_kind}-reference"
         ),
-        "stems_status": "ready" if stems_ready else "deferred",
+        "stems_status": "ready" if stems_ready else "error" if stems_error else "deferred",
         "title": document.title,
         "artist": document.artist,
         "bpm": reference["bpm"],
@@ -1050,9 +1157,11 @@ def prepare_kar_file(
         "lyric_track": document.lyric_track,
         "melody_track": document.melody_track,
         "audio_source": audio_source,
+        "media": {key: value for key, value in media.items() if key != "warnings"},
         "alignment": comparison,
         "warnings": warnings,
         "files": sorted(path.name for path in target.iterdir() if path.is_file()),
     }
     write_json(target / "metadata.json", metadata)
+    _notify_dataset(progress, cancelled, "complete", 100, "Песня готова к караоке")
     return {**metadata, "dataset_dir": str(target.resolve())}

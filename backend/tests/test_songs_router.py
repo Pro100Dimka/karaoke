@@ -145,6 +145,24 @@ def test_song_identity_preview_uses_the_same_metadata_parser_as_database(monkeyp
     assert not detect.call_args.args[0].exists()
 
 
+def test_song_identity_reads_kar_metadata_instead_of_audio_tags(monkeypatch, tmp_path):
+    monkeypatch.setattr(songs.config, "UPLOAD_TEMP_DIR", tmp_path)
+    monkeypatch.setattr(songs, "save_upload_limited", AsyncMock())
+    document = SimpleNamespace(artist="Ария", title="Беспечный ангел")
+    parse = Mock(return_value=document)
+    monkeypatch.setattr(songs.kar_dataset_service, "parse_kar", parse)
+    audio_identity = Mock()
+    monkeypatch.setattr(songs.song_service, "_read_source_identity", audio_identity)
+
+    result = asyncio.run(songs.inspect_song_identity(upload_file(filename="song.kar")))
+
+    assert result.title == "Беспечный ангел"
+    assert result.artist == "Ария"
+    assert result.cover_data_url is None
+    parse.assert_called_once()
+    audio_identity.assert_not_called()
+
+
 def test_listing_get_patch_remove_and_package(monkeypatch, tmp_path):
     database, current = Mock(), domain_song()
     patch_attrs(monkeypatch, songs.song_service, list_songs=Mock(return_value=[current]), update_song=Mock(return_value=current), delete_song=Mock())

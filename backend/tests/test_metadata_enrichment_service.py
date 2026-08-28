@@ -64,6 +64,34 @@ def test_youtube_download_has_a_format_fallback_and_quiet_logger(monkeypatch, tm
     assert isinstance(captured["logger"], metadata._YtDlpLogger)
 
 
+def test_training_media_creates_cover_and_validated_local_clip(monkeypatch, tmp_path):
+    patch_attrs(
+        monkeypatch,
+        metadata,
+        _youtube_video_id=Mock(return_value="DAaLa3vF8sU"),
+        _download_square_cover=Mock(return_value=True),
+        _download_youtube_video=Mock(return_value=True),
+    )
+
+    result = metadata.prepare_training_media(
+        "Song",
+        "Artist",
+        tmp_path,
+        cover_url="https://example.test/cover.jpg",
+    )
+
+    assert result == {
+        "cover_status": "ready",
+        "video_status": "ready",
+        "video_id": "DAaLa3vF8sU",
+        "warnings": [],
+    }
+    metadata._download_square_cover.assert_called_once_with(
+        "https://example.test/cover.jpg", tmp_path
+    )
+    metadata._download_youtube_video.assert_called_once_with("DAaLa3vF8sU", tmp_path)
+
+
 def test_enrichment_persists_missing_metadata(monkeypatch):
     song = SimpleNamespace(
         id="song",

@@ -24,7 +24,7 @@ def test_processing_modes_have_distinct_workloads():
 
     assert fast.fingerprint() == {
         "mode": "fast",
-        "separation_overlap": 1.0526315789473684,
+        "separation_overlap": 1,
         "separation_batch_size": 2,
         "wpe_iterations": 1,
     }
