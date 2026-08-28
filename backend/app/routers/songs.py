@@ -521,6 +521,17 @@ def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song", "diagnostic"}: raise HTTPException(status_code=404, detail="Unknown audio track")
     output_dir = song_service.resolve_output_dir(song)
     candidate = song_service.resolve_source_path(song) if track == "song" else song_artifacts.resolve_audio_artifact(output_dir, track)
+    # During KAR/MID/KFN processing the database source still points at the
+    # symbolic file. WaveSurfer cannot decode MIDI/KFN, but the preparation
+    # job writes the matched recording to original.flac well before the rest
+    # of the pipeline is complete. Expose that real audio as soon as it exists
+    # so the processing modal renders the song's waveform instead of its
+    # synthetic fallback shape.
+    if track == "song" and (
+        candidate is None or candidate.suffix.lower() not in config.ALLOWED_AUDIO_EXTENSIONS
+    ):
+        original = output_dir / "original.flac"
+        if original.is_file(): candidate = original
     if candidate is not None and candidate.is_file() and candidate.suffix.lower() in config.ALLOWED_AUDIO_EXTENSIONS:
         media_type = {".flac": "audio/flac", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".aac": "audio/aac"}.get(
             candidate.suffix.lower(), "application/octet-stream"

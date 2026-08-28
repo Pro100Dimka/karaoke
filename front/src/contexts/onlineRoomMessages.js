@@ -392,7 +392,11 @@ export function createOnlineRoomMessageHandler(options) {
         syncHandlers[command.type](command, message);
         return;
       }
-      if (!senderIsHost(message)) return;
+      // The server admits karaoke-player commands only from an actual room
+      // participant and validates their fields. This deliberately lets a
+      // guest use the shared transport instead of playing locally and then
+      // being snapped back by the host's next heartbeat.
+      if (!senderIsHost(message) && command.type !== "karaoke-player") return;
       publishRoomCommand(command, "sync", message.sentAt);
     },
     "connection-closed": () => {

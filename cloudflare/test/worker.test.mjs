@@ -412,6 +412,29 @@ test("a guest cannot broadcast host-only state like library filters or karaoke p
   assert.equal(target.messages.length, 0);
 });
 
+test("a guest can operate the validated shared karaoke transport", async () => {
+  const guest = new FakeSocket({ id: "guest", role: "guest" });
+  const host = new FakeSocket({ id: "host", role: "host" });
+  const peer = new FakeSocket({ id: "peer", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [guest, host, peer] });
+  const state = {
+    type: "karaoke-player",
+    action: "play",
+    songId: "song",
+    position: 12.5,
+    commandId: "guest-play",
+    executeAt: Date.now() + 450,
+  };
+
+  await room.webSocketMessage(guest, JSON.stringify({ type: "sync", state }));
+
+  assert.equal(guest.closed, null);
+  assert.deepEqual(room.playbackState.state, state);
+  assert.deepEqual(host.messages.at(-1).state, state);
+  assert.deepEqual(peer.messages.at(-1).state, state);
+  assert.equal(guest.messages.length, 0);
+});
+
 test("remembers the host's last karaoke-player state and hands it to the next joiner", async () => {
   const host = new FakeSocket({ id: "host", role: "host" });
   const room = new KaraokeRoom({

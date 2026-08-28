@@ -10,7 +10,33 @@ import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transpo
 const UNKNOWN_ERROR = "неизвестная ошибка";
 const MISSING_RECORDING_ID = "Backend не вернул идентификатор записи";
 const PENDING_RECORDING_KEY = "karaoke-pending-recording-session";
+const ROOM_PLAY_LEAD_MS = 450;
+const MASTER_PLAY_TIMEOUT_MS = 4_000;
 const finalizingRecordings = new Map();
+const wait = (milliseconds) =>
+  new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, milliseconds)));
+const startMasterMedia = async (media) => {
+  const started = Promise.resolve(media.play());
+  let timer;
+  try {
+    await Promise.race([
+      started,
+      new Promise((_, reject) => {
+        timer = globalThis.setTimeout(
+          () => reject(new Error("Master media playback timed out")),
+          MASTER_PLAY_TIMEOUT_MS
+        );
+      })
+    ]);
+  } catch (error) {
+    // Some Electron/Chromium builds leave play() pending even after the media
+    // has actually entered playback. Treat an observably playing element as
+    // success, but never leave the state machine stuck in `starting`.
+    if (media.paused !== false) throw error;
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+};
 const pendingRecordingIds = () => {
   const value = readJsonStorage(PENDING_RECORDING_KEY, {});
   return [...new Set([...(Array.isArray(value.ids) ? value.ids : []), value.id].filter(Boolean))];
@@ -128,20 +154,22 @@ export default function useKaraokeTransport({
     if (!error) clearSession(id);
   };
 
-  const broadcast = (action, position) => {
+  const broadcast = (action, position, executeAt = null) => {
     if (onlineRoom?.room)
-      onlineRoom.syncCommand(createPlayerSyncCommand(action, song.id, position));
+      onlineRoom.syncCommand(createPlayerSyncCommand(action, song.id, position, executeAt));
   };
+  const roomSyncCommand = onlineRoom?.syncCommand;
+  const roomClockNow = onlineRoom?.roomClockNow;
 
   useEffect(() => {
     if (!onlineRoom?.room?.host || !isPlaying || !song?.id) return undefined;
     const timer = globalThis.setInterval(() => {
       const position = instrumentalRef.current?.currentTime;
       if (Number.isFinite(position))
-        onlineRoom.syncCommand(createPlayerSyncCommand("sync", song.id, position));
+        roomSyncCommand(createPlayerSyncCommand("sync", song.id, position));
     }, 1000);
     return () => globalThis.clearInterval(timer);
-  }, [instrumentalRef, isPlaying, onlineRoom?.room?.host, song?.id]);
+  }, [instrumentalRef, isPlaying, onlineRoom?.room?.host, roomSyncCommand, song?.id]);
 
   const pauseMedia = () => {
     instrumentalRef.current?.pause();
@@ -254,6 +282,12 @@ export default function useKaraokeTransport({
 
     lifecycle.start();
 
+    const scheduledAt =
+      shouldBroadcast && onlineRoom?.room && typeof onlineRoom.roomClockNow === "function"
+        ? onlineRoom.roomClockNow() + ROOM_PLAY_LEAD_MS
+        : null;
+    if (scheduledAt != null) broadcast("play", instrumental.currentTime, scheduledAt);
+
     const melodyStart = Promise.resolve()
       .then(startMelodyGuide)
       .catch(() => {});
@@ -264,7 +298,8 @@ export default function useKaraokeTransport({
 
     const recordingStart = runRecording(operation);
     try {
-      const master = Promise.resolve(instrumental.play());
+      if (scheduledAt != null) await wait(scheduledAt - onlineRoom.roomClockNow());
+      const master = startMasterMedia(instrumental);
       const secondary = [
         vocals && Promise.resolve(vocals.play()),
         videoRef.current && Promise.resolve(videoRef.current.play()),
@@ -297,6 +332,7 @@ export default function useKaraokeTransport({
       if (activeSession) await discardSession(activeSession);
       lifecycle.fail();
       setRecordingError(translateSaved("Не удалось запустить воспроизведение"));
+      if (scheduledAt != null) broadcast("pause", instrumental.currentTime);
       return false;
     }
 
@@ -305,7 +341,7 @@ export default function useKaraokeTransport({
       return stopVersionRef.current === stopVersion;
     }
     lifecycle.played();
-    if (shouldBroadcast) broadcast("play", instrumental.currentTime);
+    if (shouldBroadcast && scheduledAt == null) broadcast("play", instrumental.currentTime);
     return true;
   };
 
@@ -388,13 +424,19 @@ export default function useKaraokeTransport({
     const position = Number(roomCommand.position);
     const sentAt = Number(roomCommand.__serverSentAt);
     const receivedAt = Number(roomCommand.__receivedServerAt);
+    const executeAt = Number(roomCommand.executeAt);
+    const serverNow = typeof roomClockNow === "function" ? Number(roomClockNow()) : receivedAt;
     const deliverySeconds =
       ["play", "sync"].includes(roomCommand.action) &&
       Number.isFinite(sentAt) &&
       Number.isFinite(receivedAt)
         ? Math.max(0, (receivedAt - sentAt) / 1000)
         : 0;
-    const targetPosition = position + deliverySeconds;
+    const scheduleLateness =
+      roomCommand.action === "play" && Number.isFinite(executeAt) && Number.isFinite(serverNow)
+        ? Math.max(0, (serverNow - executeAt) / 1000)
+        : deliverySeconds;
+    const targetPosition = position + scheduleLateness;
     if (
       Number.isFinite(targetPosition) &&
       (roomCommand.action !== "sync" ||
@@ -407,12 +449,24 @@ export default function useKaraokeTransport({
       stop: () => stopRef.current({ broadcast: false })
     };
     const action = Object.hasOwn(actions, roomCommand.action) && actions[roomCommand.action];
-    Promise.resolve(action && action()).catch((error) =>
-      setRecordingError(formatError("Не удалось выполнить команду комнаты: {0}", error))
-    );
+    const runAction = () =>
+      Promise.resolve(action && action()).catch((error) =>
+        setRecordingError(formatError("Не удалось выполнить команду комнаты: {0}", error))
+      );
+    const delay =
+      roomCommand.action === "play" && Number.isFinite(executeAt) && Number.isFinite(serverNow)
+        ? Math.max(0, executeAt - serverNow)
+        : 0;
+    if (!action || delay <= 0) {
+      runAction();
+      return undefined;
+    }
+    const timer = globalThis.setTimeout(runAction, delay);
+    return () => globalThis.clearTimeout(timer);
   }, [
     instrumentalRef,
     roomCommand,
+    roomClockNow,
     seekToRef,
     setRecordingError,
     song?.id,

@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -289,6 +290,13 @@ def test_logs_and_audio_track_resolution(monkeypatch, tmp_path):
     vocals.write_bytes(b"audio")
     assert songs.get_audio_track("vocals", current).media_type == "audio/flac"
     assert songs.get_audio_track("song", current).media_type == "audio/mpeg"
+    symbolic = tmp_path / "source.kar"
+    symbolic.write_bytes(b"midi")
+    songs.song_service.resolve_source_path.return_value = symbolic
+    original = tmp_path / "original.flac"
+    original.write_bytes(b"audio")
+    response = songs.get_audio_track("song", current)
+    assert response.media_type == "audio/flac" and Path(response.path) == original
     diagnostic = tmp_path / "diagnostic.mp3"
     diagnostic.write_bytes(b"audio")
     raises(HTTPException, lambda: songs.get_audio_track("diagnostic", current))

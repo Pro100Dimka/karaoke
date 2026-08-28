@@ -31,7 +31,13 @@ def _stream_candidates(options: dict) -> list[dict]:
         "channels": (1, int(options["output_channels"])),
         "device": (int(options["input_device_id"]), int(options["output_device_id"])),
     }
-    blocks = dict.fromkeys((int(options["blocksize"]), 128, 256, 0))
+    requested_blocksize = int(options["blocksize"])
+    # Bluetooth hands-free endpoints normally run at 8/16/24 kHz. A fixed
+    # 64-frame block is 4-8 ms there, while it is only ~1.5 ms at 44.1 kHz.
+    # Try an equivalent ~2 ms power-of-two block first and automatically fall
+    # back to the user's configured/safe sizes if the driver cannot sustain it.
+    adaptive_blocksize = 32 if sample_rate <= 24_000 and requested_blocksize > 32 else requested_blocksize
+    blocks = dict.fromkeys((adaptive_blocksize, requested_blocksize, 128, 256, 0))
     candidates = []
     modes = (
         ("exclusive", "shared", "plain")

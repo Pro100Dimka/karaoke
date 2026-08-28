@@ -55,13 +55,14 @@ export function normalizePlaybackRate(speed) {
   return Number.isFinite(value) && value > 0 ? clamp(value, 0.25, 4) : 1;
 }
 
-export function createPlayerSyncCommand(action, songId, position) {
+export function createPlayerSyncCommand(action, songId, position, executeAt = null) {
   return {
     type: "karaoke-player",
     action,
     songId,
     position: Number.isFinite(Number(position)) ? Number(position) : 0,
-    commandId: generateId()
+    commandId: generateId(),
+    ...(Number.isFinite(Number(executeAt)) ? { executeAt: Number(executeAt) } : {})
   };
 }
 

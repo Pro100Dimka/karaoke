@@ -23,9 +23,19 @@ export default function useOnlineRoomCommands({
 
   const syncCommand = useCallback(
     (state) => {
-      if (roomRef.current?.host) clientRef.current?.send("sync", { state });
+      // Playback is a shared karaoke console: every connected participant is
+      // allowed to press play/pause/seek. The worker validates this narrow
+      // karaoke-player shape; all other authoritative commands remain host-only.
+      if (roomRef.current?.host || state?.type === "karaoke-player")
+        return clientRef.current?.send("sync", { state });
+      return false;
     },
     [clientRef, roomRef]
+  );
+
+  const roomClockNow = useCallback(
+    () => clientRef.current?.serverNow?.() ?? Date.now(),
+    [clientRef]
   );
 
   const openKaraoke = useCallback(
@@ -58,5 +68,5 @@ export default function useOnlineRoomCommands({
     ]
   );
 
-  return { openKaraoke, syncCommand, syncUi };
+  return { openKaraoke, roomClockNow, syncCommand, syncUi };
 }

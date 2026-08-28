@@ -164,7 +164,7 @@ describe("online room provider", () => {
       voiceError: "",
       transferStatus: null
     });
-    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(16);
+    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(17);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
@@ -252,6 +252,19 @@ describe("online room provider", () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.joinRoom("shared", "Bob"));
     expect(hook.result.current.room.role).toBe("guest");
+
+    const sharedPlay = {
+      type: "karaoke-player",
+      action: "play",
+      songId: "song",
+      position: 4,
+      commandId: "guest-play"
+    };
+    act(() => hook.result.current.syncCommand(sharedPlay));
+    expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", { state: sharedPlay });
+    mocks.clients[0].send.mockClear();
+    act(() => hook.result.current.syncCommand({ type: "open-library" }));
+    expect(mocks.clients[0].send).not.toHaveBeenCalled();
 
     act(() => hook.result.current.togglePersonMuted("guest"));
     await act(async () => Promise.resolve());

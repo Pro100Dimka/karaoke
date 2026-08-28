@@ -271,6 +271,20 @@ test("room messages update participants, UI, voice and connection state", async 
   const synced = setters.setRoomCommand.mock.calls.at(-1)[0];
   assert.equal(synced.__serverSentAt, 555_000);
   assert.equal(synced.__receivedServerAt, 555_125);
+  handler({
+    type: "sync",
+    fromId: "guest",
+    sentAt: 555_200,
+    state: {
+      type: "karaoke-player",
+      action: "play",
+      songId: "song",
+      position: 10,
+      commandId: "guest-play",
+      executeAt: 556_000
+    }
+  });
+  assert.equal(setters.setRoomCommand.mock.calls.at(-1)[0].commandId, "guest-play");
   ui = { effectsByParticipant: { old: { dry: 1 } } };
   handler({ type: "ui", fromId: "a", state: { radio: true, participantEffects: { echo: 1 } } });
   assert.equal(ui.__eventId.startsWith("ui-"), true);

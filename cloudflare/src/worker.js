@@ -319,6 +319,23 @@ export class KaraokeRoom {
         return;
       }
       if (
+        state.type === "karaoke-player" &&
+        ["play", "pause", "stop", "seek", "sync"].includes(state.action) &&
+        typeof state.songId === "string" && state.songId.length > 0 && state.songId.length <= 128 &&
+        typeof state.commandId === "string" && state.commandId.length > 0 && state.commandId.length <= 128 &&
+        Number.isFinite(state.position) && state.position >= 0 && state.position <= 24 * 60 * 60 &&
+        (state.executeAt === undefined || (Number.isFinite(state.executeAt) && Math.abs(state.executeAt - Date.now()) <= 10_000))
+      ) {
+        // Playback controls belong to the shared karaoke console rather than
+        // one participant. Relay a validated guest command to the host and all
+        // peers, and remember it for reconnecting participants exactly like a
+        // host command. Other sync message types remain host-only below.
+        const sentAt = Date.now();
+        this.playbackState = { state, sentAt };
+        this.broadcast("sync", { state, sentAt, fromId: sender.id }, sender.id);
+        return;
+      }
+      if (
         (state.type === "song-request" || state.type === "song-ready") &&
         typeof state.songId === "string" && state.songId.length <= 128 &&
         typeof state.commandId === "string" && state.commandId.length <= 128 &&

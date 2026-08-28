@@ -88,6 +88,31 @@ describe("karaoke transport", () => {
     );
     verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", expect.objectContaining({ action: "play", songId: "song" })]);
   });
+  test("schedules room playback against the shared server clock", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    try {
+      const props = createProps({
+        onlineRoom: {
+          room: { id: "room" },
+          roomClockNow: () => Date.now(),
+          syncCommand: vi.fn(),
+          roomCommand: null
+        }
+      });
+      const hook = renderHook(() => useKaraokeTransport(props));
+      const playback = hook.result.current.togglePlay();
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "play", executeAt: 1_450 })
+      );
+      expect(props.instrumentalRef.current.play).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTimeAsync(450));
+      await expect(playback).resolves.toBe(true);
+      expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   test("pauses media and an active recording", async () => {
     const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
     const { result } = renderHook(() => useKaraokeTransport(props));

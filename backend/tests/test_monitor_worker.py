@@ -36,6 +36,15 @@ def test_shared_wasapi_tries_aggressive_latency_before_safe_fallback():
     assert all("extra_settings" not in candidate for candidate in candidates)
 
 
+def test_low_rate_headset_tries_a_two_millisecond_block_before_safe_fallback():
+    config = {**options(), "sample_rate": 16_000, "blocksize": 64, "output_channels": 1}
+    candidates = monitor_worker._stream_candidates(config)
+
+    assert candidates[0]["blocksize"] == 32
+    assert candidates[0]["latency"] == 0.002
+    assert any(candidate["blocksize"] == 64 for candidate in candidates)
+
+
 def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch):
     monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.0, "echo": 0.0, "delay": 0.0})
     lines = iter(["not-json\n", "\n", '{"reverb": 0.4}\n', '{"echo": 0.2, "delay": 0.1}\n'])

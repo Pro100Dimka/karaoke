@@ -46,6 +46,7 @@ export default function Waveform({
   label,
   url,
   fetchParams,
+  retryKey = 0,
   interactive = true,
   compact = false
 }) {
@@ -108,7 +109,7 @@ export default function Waveform({
       }
       instance.current = null;
     };
-  }, [fetchParams, url]);
+  }, [fetchParams, retryKey, url]);
   useEffect(() => {
     const wavesurfer = instance.current;
     if (!wavesurfer || !real) return;

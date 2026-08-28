@@ -324,3 +324,26 @@ test("lyrics show only the current and next source lines", () => {
   expect(lineText(lines[1])).toBe("Третьястрока");
   expect(container.textContent).not.toContain("Первая");
 });
+
+test("standalone KAR punctuation stays on its source line without shifting following lyrics", () => {
+  const lyricsSync = {
+    text: "Ты - летящий вдаль\nСледующая строка",
+    words: [
+      { index: 0, text: "Ты", start: 1, end: 1.2 },
+      { index: 1, text: "-", start: 1.2, end: 1.3 },
+      { index: 2, text: "летящий", start: 1.3, end: 1.8 },
+      { index: 3, text: "вдаль", start: 1.8, end: 2.4 },
+      { index: 4, text: "Следующая", start: 3, end: 3.5 },
+      { index: 5, text: "строка", start: 3.5, end: 4 }
+    ]
+  };
+  const { container } = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />);
+  const lines = container.querySelectorAll('[data-role="lyric-line"]');
+  const texts = [...lines].map((line) =>
+    [...line.querySelectorAll(':scope > [data-role="lyric-word"]')]
+      .map(({ dataset }) => dataset.text)
+      .join(" ")
+  );
+
+  expect(texts).toEqual(["Ты - летящий вдаль", "Следующая строка"]);
+});

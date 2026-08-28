@@ -23,8 +23,18 @@ export function buildLyricLines({ text, words } = {}) {
   let offset = 0;
   const lines = text.split(/\r?\n/).flatMap((source) => {
     const count = [...source.matchAll(WORD)].length;
-    const line = words.slice(offset, offset + count);
-    offset += line.length;
+    const start = offset;
+    let matched = 0;
+    // KAR files often store a standalone dash as its own timed word (for
+    // example "Ты - летящий ..."). The canonical text contains that dash,
+    // but WORD intentionally counts only lexical tokens. Consume punctuation
+    // words without counting them so they remain on the correct line and do
+    // not shift every following line by one position.
+    while (offset < words.length && matched < count) {
+      matched += [...String(words[offset]?.text || "").matchAll(WORD)].length;
+      offset += 1;
+    }
+    const line = words.slice(start, offset);
     return line.length ? [line] : [];
   });
   return offset === words.length ? lines : timedFallback();

@@ -829,7 +829,7 @@ export function OnlineRoomProvider({ children }) {
   useEffect(() => {
     effectPeople.forEach((id) => applyParticipantEffects(id, true));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
-  const { openKaraoke, syncCommand, syncUi } = useOnlineRoomCommands({
+  const { openKaraoke, roomClockNow, syncCommand, syncUi } = useOnlineRoomCommands({
     api,
     clientRef,
     connectionTokenRef,
@@ -853,6 +853,7 @@ export function OnlineRoomProvider({ children }) {
     requestMicrophoneAccess,
     requestSongSync,
     requestParticipantEffects,
+    roomClockNow,
     room,
     roomCommand,
     roomSoundMuted,
