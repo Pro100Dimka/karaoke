@@ -30,7 +30,11 @@ import { getMicrophoneLevel } from "./utils/transport";
 
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
-  const { room: onlineRoomState, syncUi: syncRoomUi } = onlineRoom;
+  const {
+    room: onlineRoomState,
+    setLocalMonitoring: setRoomLocalMonitoring,
+    syncUi: syncRoomUi
+  } = onlineRoom;
   const onlineParticipantCount = onlineRoom.participants.length;
   const {
     isPlaying: isRadioPlaying,
@@ -158,23 +162,30 @@ export default function Karaoke({ onOpenAppSettings }) {
     monitorInputDeviceId
   } = microphoneSettings;
   const { updateMicrophone } = microphoneSettings;
+  const [roomMonitoringEnabled, setRoomMonitoringEnabled] = useState(false);
+  const effectiveMonitoringEnabled = onlineRoomState ? roomMonitoringEnabled : monitoringEnabled;
   const monitoringEnabledRef = useRef(monitoringEnabled);
   monitoringEnabledRef.current = monitoringEnabled;
   const releaseMonitoring = useCallback(async () => {
+    if (roomMonitoringEnabled) {
+      await setRoomLocalMonitoring(false);
+      setRoomMonitoringEnabled(false);
+    }
     if (!monitoringEnabledRef.current) return null;
     const updated = await api.stopDirectMonitoring();
     monitoringEnabledRef.current = false;
     setMonitoringEnabled(false);
     globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
     return updated;
-  }, [setMonitoringEnabled]);
+  }, [roomMonitoringEnabled, setMonitoringEnabled, setRoomLocalMonitoring]);
   useEffect(
     () => () => {
       // Back, window navigation and error exits must also release the native
       // output device so Library recordings can play immediately.
       if (monitoringEnabledRef.current) api.releaseDirectMonitoring();
+      setRoomLocalMonitoring(false);
     },
-    []
+    [setRoomLocalMonitoring]
   );
   useAudioOutputRouting({
     audioDriver,
@@ -366,12 +377,23 @@ export default function Karaoke({ onOpenAppSettings }) {
   const handleMonitoringChange = async (enabled) => {
     try {
       if (onlineRoomState) {
-        // The room's Web Audio monitor follows the browser's default output
-        // and can report success while the singer listens through another
-        // device selected in A&D Voice. Keep the room microphone transport,
-        // but route local monitoring through the same native backend used by
-        // solo karaoke so the configured input/output and effects are honored.
-        await onlineRoom.setLocalMonitoring(false);
+        // The room already owns a realtime, processed microphone stream.
+        // Monitoring that stream in Web Audio avoids a second capture and the
+        // large Windows/PortAudio round trip heard on ordinary USB headsets.
+        if (monitoringEnabledRef.current) {
+          const updated = await api.stopDirectMonitoring();
+          monitoringEnabledRef.current = false;
+          setMonitoringEnabled(false);
+          globalThis.dispatchEvent?.(
+            new CustomEvent("audio-settings-changed", { detail: updated })
+          );
+        }
+        const active = await setRoomLocalMonitoring(enabled, {
+          volume: microphoneVolume,
+          ...microphoneEffects
+        });
+        setRoomMonitoringEnabled(active);
+        return;
       }
       const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
       const updated = await action();
@@ -428,7 +450,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         keyShift,
         lyricsSync: displayLyricsSync,
         monitorInputDeviceId,
-        monitoringEnabled,
+        monitoringEnabled: effectiveMonitoringEnabled,
         hasSongClip: clipAvailable,
         notes: displayNotes,
         sceneBlackout,
@@ -486,7 +508,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         onClose: hideControls,
         effectPreset,
         onApplyEffectPreset: applyEffectPreset,
-        monitoringEnabled,
+        monitoringEnabled: effectiveMonitoringEnabled,
         onMonitoringChange: handleMonitoringChange,
         onSeek: seekTo
       }}

@@ -21,7 +21,7 @@ import {
 } from "./onlineVoiceTransfers";
 
 const MAX_PENDING_ICE_CANDIDATES = 256;
-const OPUS_PACKET_TIME_MS = 10;
+const OPUS_PACKET_TIME_MS = 5;
 
 export function preferLowLatencyOpus(description) {
   const sdp = description?.sdp;
@@ -115,9 +115,15 @@ export default class OnlineVoiceMesh {
       .getUserMedia({
         audio: {
           ...MICROPHONE_CAPTURE_CONSTRAINTS,
+          // A room participant's voice may be playing through speakers or
+          // open headphones. Without AEC that voice is captured again and
+          // returns after a full network round trip, which feels like a very
+          // large duet delay. `remote-only` preserves local karaoke playback
+          // where Chromium supports it; `ideal` remains non-fatal elsewhere.
+          echoCancellation: { ideal: "remote-only" },
           channelCount: 1,
           latency: { ideal: 0 },
-          sampleSize: { ideal: 24 }
+          sampleRate: { ideal: 48_000 }
         }
       })
       .then(async (stream) => {

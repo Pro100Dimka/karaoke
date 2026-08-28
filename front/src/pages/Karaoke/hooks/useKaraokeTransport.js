@@ -228,7 +228,7 @@ export default function useKaraokeTransport({
       const position = instrumentalRef.current?.currentTime;
       if (Number.isFinite(position))
         roomSyncCommand(createPlayerSyncCommand("sync", song.id, position));
-    }, 1000);
+    }, 500);
     return () => globalThis.clearInterval(timer);
   }, [instrumentalRef, isPlaying, onlineRoom?.room?.host, roomSyncCommand, song?.id]);
 
@@ -568,7 +568,7 @@ export default function useKaraokeTransport({
     if (
       Number.isFinite(targetPosition) &&
       (roomCommand.action !== "sync" ||
-        Math.abs(instrumentalRef.current.currentTime - targetPosition) > 0.08)
+        Math.abs(instrumentalRef.current.currentTime - targetPosition) > 0.04)
     )
       seekToRef.current(targetPosition, { broadcast: false });
     const actions = {

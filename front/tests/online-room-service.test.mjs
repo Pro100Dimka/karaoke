@@ -148,6 +148,33 @@ describe("online room service", () => {
     now.mockRestore();
     client.disconnect();
   });
+  test("keeps the lowest round-trip clock sample instead of adding WebSocket queue delay", async () => {
+    installSocket();
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const client = new OnlineRoomClient("ws://example.test/");
+    const connection = client.connect({ id: "ABCD" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    await connection;
+
+    now.mockReturnValue(1_100);
+    socket.onmessage({
+      data: JSON.stringify({ type: "pong", clientTime: 1_000, serverTime: 1_075 })
+    });
+    expect(client.clockOffsetMs).toBe(25);
+
+    // This sample spent much longer queued and must not pull the shared
+    // playback clock away from the cleaner first measurement.
+    now.mockReturnValue(1_400);
+    socket.onmessage({
+      data: JSON.stringify({ type: "pong", clientTime: 1_200, serverTime: 1_280 })
+    });
+    expect(client.clockOffsetMs).toBe(25);
+
+    now.mockRestore();
+    client.disconnect();
+  });
   test("getOrCreateGuestSessionId persists across calls but tolerates a missing storage", () => {
     const store = new Map();
     const fakeStorage = {

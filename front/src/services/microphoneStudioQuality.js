@@ -34,7 +34,11 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
   try {
     // Let the browser use the endpoint's native rate. 41 kHz is not a standard
     // hardware rate and makes some Windows devices resample or fail to open.
-    context = new AudioContext({ latencyHint: "interactive" });
+    // A numeric hint asks Chromium for the smallest practical realtime
+    // quantum instead of its broader generic "interactive" profile. The
+    // browser may clamp this for a particular Windows device, so this remains
+    // a safe preference rather than a hard hardware requirement.
+    context = new AudioContext({ latencyHint: 0.005 });
     source = context.createMediaStreamSource(input);
     const destination = context.createMediaStreamDestination();
     const strip = connectMicrophoneChannelStrip(context, source, destination, {

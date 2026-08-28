@@ -73,7 +73,7 @@ describe("studio microphone quality", () => {
     const rawTrack = { kind: "audio", stop: vi.fn() };
     const rawStream = { getTracks: () => [rawTrack] };
     const graph = createStudioMicrophoneGraph(rawStream);
-    expect(contextOptions).toEqual({ latencyHint: "interactive" });
+    expect(contextOptions).toEqual({ latencyHint: 0.005 });
     verify(
       [graph.stream, "toBe", destination.stream],
       [graph.getStream(), "toBe", destination.stream],

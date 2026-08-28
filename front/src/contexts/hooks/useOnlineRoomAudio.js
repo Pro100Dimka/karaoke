@@ -133,7 +133,7 @@ export default function useOnlineRoomAudio({
         return;
       }
       const effects = roomUiRef.current.effectsByParticipant?.[participantId] || {};
-      const context = new AudioContextClass({ latencyHint: "interactive" });
+      const context = new AudioContextClass({ latencyHint: 0.005 });
       const source = context.createMediaStreamSource(stream);
       const master = context.createGain();
       master.gain.value = 1;
@@ -210,7 +210,7 @@ export default function useOnlineRoomAudio({
   }, []);
 
   const setLocalMonitoring = useCallback(
-    async (enabled) => {
+    async (enabled, effects = {}) => {
       if (!enabled) {
         stopLocalMonitoring();
         return false;
@@ -227,14 +227,48 @@ export default function useOnlineRoomAudio({
       if (!AudioContextClass) return false;
       let context;
       try {
-        context = new AudioContextClass({ latencyHint: "interactive" });
+        context = new AudioContextClass({ latencyHint: 0.005 });
         const source = context.createMediaStreamSource(stream);
         const gain = context.createGain();
-        gain.gain.value = 1;
+        gain.gain.value = Math.max(0, Math.min(2, Number(effects.volume ?? 1)));
         // voice.start() returns the already processed stream from the central
         // microphone service. Applying the channel strip again would gate and
         // compress the singer twice.
         source.connect(gain);
+
+        const echo = clamp01(effects.echo);
+        const delayAmount = clamp01(effects.delay);
+        if (echo || delayAmount) {
+          const delay = context.createDelay(1);
+          const feedback = context.createGain();
+          const wet = context.createGain();
+          delay.delayTime.value = 0.06 + delayAmount * 0.34;
+          feedback.gain.value = Math.min(0.72, echo * 0.55 + delayAmount * 0.3);
+          wet.gain.value = Math.min(0.65, echo * 0.46 + delayAmount * 0.24);
+          source.connect(delay);
+          delay.connect(feedback);
+          feedback.connect(delay);
+          delay.connect(wet);
+          wet.connect(gain);
+        }
+
+        const reverb = clamp01(effects.reverb);
+        if (reverb) {
+          const convolver = context.createConvolver();
+          const wet = context.createGain();
+          const frames = Math.floor(context.sampleRate * (0.35 + reverb * 1.15));
+          const impulse = context.createBuffer(2, frames, context.sampleRate);
+          for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
+            const data = impulse.getChannelData(channel);
+            for (let index = 0; index < frames; index += 1)
+              data[index] = (Math.random() * 2 - 1) * (1 - index / frames) ** (1.5 + reverb * 2);
+          }
+          convolver.buffer = impulse;
+          wet.gain.value = Math.min(0.58, reverb * 0.48);
+          source.connect(convolver);
+          convolver.connect(wet);
+          wet.connect(gain);
+        }
         gain.connect(context.destination);
         await context.resume?.();
         if (voiceRef.current !== voice) {

@@ -4,7 +4,8 @@ export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-an
 // Keep in sync with ROOM_PROTOCOL_VERSION in cloudflare/src/worker.js -- bump
 // both together only when the message schema itself changes incompatibly.
 export const ROOM_PROTOCOL_VERSION = 1;
-const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 20_000, signal: 64 * 1024 };
+const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 3_000, signal: 64 * 1024 };
+const CLOCK_SAMPLE_LIMIT = 8;
 const bytes = (value) => new TextEncoder().encode(value).byteLength;
 const hex = (values) => [...values].map((value) => value.toString(16).padStart(2, "0")).join("");
 
@@ -100,6 +101,7 @@ export class OnlineRoomClient {
     this.pingTimer = null;
     this.clockOffsetMs = 0;
     this.clockSynchronized = false;
+    this.clockSamples = [];
   }
 
   onMessage(listener) {
@@ -142,6 +144,7 @@ export class OnlineRoomClient {
     this.disconnect();
     this.clockOffsetMs = 0;
     this.clockSynchronized = false;
+    this.clockSamples = [];
     if (typeof globalThis.WebSocket !== "function")
       return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
     const query = new URLSearchParams({
@@ -201,11 +204,22 @@ export class OnlineRoomClient {
             Number.isFinite(message.serverTime) &&
             Number.isFinite(message.clientTime)
           ) {
-            const sample = message.serverTime - (message.clientTime + Date.now()) / 2;
-            this.clockOffsetMs = this.clockSynchronized
-              ? this.clockOffsetMs * 0.75 + sample * 0.25
-              : sample;
-            this.clockSynchronized = true;
+            const receivedAt = Date.now();
+            const roundTripMs = receivedAt - message.clientTime;
+            if (roundTripMs >= 0 && roundTripMs <= LIMITS.connect) {
+              const offsetMs = message.serverTime - (message.clientTime + receivedAt) / 2;
+              this.clockSamples.push({ offsetMs, roundTripMs });
+              if (this.clockSamples.length > CLOCK_SAMPLE_LIMIT) this.clockSamples.shift();
+              // The lowest-RTT NTP sample has the smallest possible queueing
+              // error. Smoothing arbitrary samples made two clients disagree
+              // by tens of milliseconds whenever one WebSocket packet waited
+              // in a network queue -- enough to hear two singers drift apart.
+              const best = this.clockSamples.reduce((current, sample) =>
+                sample.roundTripMs < current.roundTripMs ? sample : current
+              );
+              this.clockOffsetMs = best.offsetMs;
+              this.clockSynchronized = true;
+            }
           }
           this.emit(message);
         } catch {

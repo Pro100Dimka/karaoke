@@ -27,7 +27,7 @@ afterEach(() => {
   }
 });
 describe("online voice mesh", () => {
-  test("requests ten-millisecond Opus packets without changing unrelated media sections", () => {
+  test("requests five-millisecond Opus packets without changing unrelated media sections", () => {
     const input = {
       type: "offer",
       sdp: [
@@ -43,8 +43,8 @@ describe("online voice mesh", () => {
     };
     const result = preferLowLatencyOpus(input);
     expect(result).not.toBe(input);
-    expect(result.sdp).toContain("a=ptime:10\r\na=maxptime:10");
-    expect(result.sdp).toContain("a=fmtp:111 minptime=10;usedtx=0;stereo=0;sprop-stereo=0;maxaveragebitrate=128000;cbr=1;useinbandfec=1");
+    expect(result.sdp).toContain("a=ptime:5\r\na=maxptime:5");
+    expect(result.sdp).toContain("a=fmtp:111 minptime=5;usedtx=0;stereo=0;sprop-stereo=0;maxaveragebitrate=128000;cbr=1;useinbandfec=1");
     expect(result.sdp).not.toContain("a=ptime:20");
     expect(result.sdp).toContain("m=video 9 UDP/TLS/RTP/SAVPF 96");
     expect(preferLowLatencyOpus({ type: "offer", sdp: "v=0\r\nm=video 9" })).toEqual({
@@ -73,12 +73,12 @@ describe("online voice mesh", () => {
     await mesh.start();
     expect(capture).toHaveBeenCalledWith({
       audio: {
-        echoCancellation: false,
+        echoCancellation: { ideal: "remote-only" },
         noiseSuppression: false,
         autoGainControl: false,
         channelCount: 1,
         latency: { ideal: 0 },
-        sampleSize: { ideal: 24 }
+        sampleRate: { ideal: 48_000 }
       }
     });
     expect(media.getAudioTracks()[0].contentHint).toBe("music");

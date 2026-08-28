@@ -363,13 +363,21 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(page.container.querySelector("[role=alert]").textContent).toContain("monitor failed"));
   });
-  test("uses native monitoring while an online room is active", async () => {
+  test("uses the low-latency room stream while an online room is active", async () => {
     mocks.room.room = { host: true };
+    mocks.room.setLocalMonitoring.mockResolvedValueOnce(true);
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("monitor"));
-    await waitFor(() => expect(mocks.startMonitoring).toHaveBeenCalled());
-    expect(mocks.room.setLocalMonitoring).toHaveBeenCalledWith(false);
-    expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(true);
+    await waitFor(() =>
+      expect(mocks.room.setLocalMonitoring).toHaveBeenCalledWith(true, {
+        volume: 0.5,
+        reverb: 0,
+        echo: 0,
+        delay: 0
+      })
+    );
+    expect(mocks.startMonitoring).not.toHaveBeenCalled();
+    expect(mocks.consoleProps.monitoringEnabled).toBe(true);
   });
   test("wires all console mutations and stopping monitoring", async () => {
     const page = render(<Karaoke />);
