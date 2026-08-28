@@ -148,6 +148,23 @@ def test_kar_word_keeps_syllable_events_and_drops_trailing_lyric_silence():
     }
 
 
+def test_kar_event_that_finishes_one_word_and_starts_another_keeps_valid_syllables():
+    words, _text = kar_dataset_service._word_events(
+        [
+            {"time": 1.0, "text": "при"},
+            {"time": 1.2, "text": "вет мир "},
+            {"time": 2.0, "text": "снова "},
+        ],
+        2.5,
+    )
+
+    assert words[0]["end"] == 2.0
+    assert words[0]["syllables"][-1] == {"text": "вет", "start": 1.2, "end": 2.0}
+    kar_dataset_service.validate_lyrics_document(
+        {"bpm": 120, "key": "C", "words": words, "source": "kar"}
+    )
+
+
 def test_kar_attached_note_is_clipped_to_its_owner_word():
     words = [{"text": "word", "start": 1.0, "end": 2.0, "notes": []}]
 
@@ -556,6 +573,41 @@ def test_audio_search_matches_transliterated_official_metadata():
     assert kar_dataset_service._audio_candidate_score(official, document) is not None
 
 
+def test_audio_search_accepts_full_title_from_a_label_channel_for_melody_verification():
+    document = kar_dataset_service.KarDocument(
+        title="Половинка",
+        artist="Танцы Минус",
+        bpm=88,
+        key="C",
+        duration=169,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    label_upload = {"title": "Половинка", "uploader": "Music Distributor", "duration": 171}
+
+    assert kar_dataset_service._audio_candidate_score(label_upload, document) is not None
+
+
+def test_audio_search_ignores_corrupt_trailing_midi_duration():
+    document = kar_dataset_service.KarDocument(
+        title="Батарейка",
+        artist="Жуки",
+        bpm=75,
+        key="C",
+        duration=9_008_118,
+        words=[{"text": "слово", "start": 10.0, "end": 218.0, "notes": []}],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    studio = {"title": "Жуки Батарейка", "uploader": "Жуки", "duration": 224}
+
+    assert kar_dataset_service._reliable_document_duration(document) == 218.0
+    assert kar_dataset_service._audio_candidate_score(studio, document) is not None
+
+
 def test_audio_search_uses_performer_embedded_in_midi_title_and_rejects_wrong_duration():
     document = kar_dataset_service.KarDocument(
         title='Король и шут: "Кукла колдуна"',
@@ -685,6 +737,13 @@ def test_audio_search_merges_queries_and_keeps_studio_intent():
     by_id = {entry["id"]: entry for entry in entries}
     assert by_id["abcdefghijk"]["_karaoke_search_intent"] == "studio"
     assert by_id["abcdefghijk"]["_karaoke_search_rank"] == 0
+
+
+def test_audio_search_quotes_artist_and_title_separately():
+    assert kar_dataset_service._audio_search_queries("Танцы Минус", "Половинка") == [
+        ("studio", '"Танцы Минус" "Половинка" studio version'),
+        ("official", '"Танцы Минус" "Половинка" official audio'),
+    ]
 
 
 def test_midi_audio_match_compares_note_classes_and_timing(monkeypatch, tmp_path):

@@ -204,6 +204,9 @@ export function ProcessingModal({
   if (!song) return null;
   const progress = getProcessingProgress(current, song);
   const active = isProcessingActive(state);
+  const symbolicSource = /\.(?:kar|mid|kfn)$/i.test(String(song.original_filename || ""));
+  const waveformUrl =
+    !symbolicSource || progress >= 34 ? api.getAudioTrackUrl(song.id, "song") : undefined;
   const failed = state === "error";
   const cancelled = state === "cancelled";
   const failure = failed
@@ -286,7 +289,7 @@ export function ProcessingModal({
         {!failed && !cancelled && (
           <ProcessingSignal
             progress={state === "done" ? 100 : Math.max(active ? 1 : 0, progress)}
-            url={api.getAudioTrackUrl(song.id, "song")}
+            url={waveformUrl}
             fetchParams={waveformFetchParams}
           />
         )}

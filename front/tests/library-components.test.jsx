@@ -232,6 +232,29 @@ test("processing modal covers active, complete, error and absent songs", () => {
   expect(openApplicationLog).toHaveBeenCalledOnce();
   delete globalThis.electronAPI;
 });
+test("symbolic processing waits for downloaded audio before requesting its waveform", () => {
+  const props = {
+    onCancel: vi.fn(),
+    onClose: vi.fn(),
+    onOpenKaraoke: vi.fn()
+  };
+  const view = render(
+    <ProcessingModal
+      {...props}
+      song={{ id: "kar-song", title: "KAR", status: "processing", original_filename: "song.kar" }}
+      status={{ status: "processing", progress_percent: 8 }}
+    />
+  );
+  expect(view.container.querySelector(".ui-waveform__host").style.display).toBe("none");
+  view.rerender(
+    <ProcessingModal
+      {...props}
+      song={{ id: "kar-song", title: "KAR", status: "processing", original_filename: "song.kar" }}
+      status={{ status: "processing", progress_percent: 34 }}
+    />
+  );
+  expect(view.container.querySelector(".ui-waveform__host").style.display).toBe("block");
+});
 test("processing modal carousel changes only the viewed queued song", () => {
   const select = vi.fn();
   const songs = [

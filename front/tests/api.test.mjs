@@ -273,6 +273,28 @@ describe("API domains", () => {
     fetch.mockRejectedValueOnce(Error("closed"));
     equal([await audioApi.releaseDirectMonitoring(), null]);
   });
+  test("allows the backend monitor worker to finish its Windows driver fallback", async () => {
+    vi.useFakeTimers();
+    try {
+      const { audioApi } = await importDomain("audio");
+      fetch.mockImplementationOnce((_, { signal }) => abortPromise(signal, "aborted"));
+      const requestPromise = audioApi.startDirectMonitoring();
+      let settled = false;
+      requestPromise
+        .finally(() => {
+          settled = true;
+        })
+        .catch(() => {});
+      const rejection = assert.rejects(requestPromise, ({ name }) => name === "TimeoutError");
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      assert.equal(settled, false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   test("routes recording operations and normalizes collections", async () => {
     const { recordingsApi } = await importDomain("recordings");
     for (const [args, body] of [

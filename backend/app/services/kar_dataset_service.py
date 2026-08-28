@@ -345,10 +345,15 @@ def _word_events(
     if not words:
         raise ValueError("В .kar найден текст, но не удалось выделить слова")
     for index, word in enumerate(words[:-1]):
-        word["end"] = round(
-            max(word["start"] + 0.04, min(word["end"], words[index + 1]["start"])),
-            3,
+        clipped_end = max(word["start"] + 0.04, min(word["end"], words[index + 1]["start"]))
+        # A single MIDI lyric event can finish this word and begin the next.
+        # Both pieces then share the event interval, so clipping solely to the
+        # next word's start would leave a preserved syllable outside its word.
+        syllable_end = max(
+            (float(item["end"]) for item in word.get("syllables", [])),
+            default=clipped_end,
         )
+        word["end"] = round(max(clipped_end, syllable_end), 3)
     return words, "\n".join(" ".join(line) for line in lines)
 
 
@@ -697,13 +702,26 @@ def normalize_karaoke_identity(title: str, artist: str | None) -> tuple[str, str
 
 
 def _duration_matches(document: KarDocument, duration: float) -> bool:
-    if not duration or not document.duration:
+    expected_duration = _reliable_document_duration(document)
+    if not duration or not expected_duration:
         return True
     maximum_drift = max(
         _MAX_AUDIO_DURATION_DRIFT_SECONDS,
-        document.duration * _MAX_AUDIO_DURATION_DRIFT_RATIO,
+        expected_duration * _MAX_AUDIO_DURATION_DRIFT_RATIO,
     )
-    return abs(duration - document.duration) <= maximum_drift
+    return abs(duration - expected_duration) <= maximum_drift
+
+
+def _reliable_document_duration(document: KarDocument) -> float:
+    """Ignore corrupt trailing MIDI ticks while retaining normal outros."""
+    duration = max(0.0, float(document.duration or 0))
+    lyric_end = max(
+        (float(word.get("end") or 0) for word in document.words),
+        default=0.0,
+    )
+    if lyric_end and duration > lyric_end + max(90.0, lyric_end * 0.5):
+        return lyric_end
+    return max(duration, lyric_end)
 
 
 def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> float | None:
@@ -728,10 +746,13 @@ def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> floa
     uploader_words = set(_normalized_words(entry.get("uploader") or ""))
     searchable = candidate | uploader_words
     artist_overlap = _overlap_count(artist_words, searchable)
-    if artist_words and not artist_overlap:
+    # Distributor/label channels often expose only the complete song title.
+    # Let those candidates reach the stricter MIDI-melody verification.
+    if artist_words and not artist_overlap and title_overlap < len(expected_title):
         return None
     duration = float(entry.get("duration") or 0)
-    duration_penalty = abs(duration - document.duration) if duration and document.duration else 0
+    expected_duration = _reliable_document_duration(document)
+    duration_penalty = abs(duration - expected_duration) if duration and expected_duration else 0
     if not _duration_matches(document, duration):
         return None
     uploader_overlap = _overlap_count(artist_words, uploader_words)
@@ -751,10 +772,10 @@ def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> floa
 
 
 def _audio_search_queries(artist: str, title: str) -> list[tuple[str, str]]:
-    identity = " ".join(filter(None, (artist, title)))
+    quoted_identity = " ".join(f'"{part}"' for part in (artist, title) if part)
     return [
-        ("studio", f'"{identity}" studio version'),
-        ("official", f'"{identity}" official audio'),
+        ("studio", f"{quoted_identity} studio version"),
+        ("official", f"{quoted_identity} official audio"),
     ]
 
 
@@ -1323,5 +1344,6 @@ def prepare_kar_file(
         "files": sorted(path.name for path in target.iterdir() if path.is_file()),
     }
     write_json(target / "metadata.json", metadata)
-    _notify_dataset(progress, cancelled, "complete", 100, "Песня готова к караоке")
+    if metadata["status"] == "ready" and metadata["stems_status"] == "ready":
+        _notify_dataset(progress, cancelled, "complete", 100, "Песня готова к караоке")
     return {**metadata, "dataset_dir": str(target.resolve())}
