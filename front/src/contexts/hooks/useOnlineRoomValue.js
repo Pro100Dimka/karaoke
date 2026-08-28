@@ -4,6 +4,8 @@ export default function useOnlineRoomValue(state) {
   const {
     createRoom,
     effectPeople,
+    estimateRemoteVoiceLatency,
+    getRemoteVoiceStreams,
     setEffectsLocked,
     joinRoom,
     leaveRoom,
@@ -39,6 +41,8 @@ export default function useOnlineRoomValue(state) {
       participantVolumes,
       mutedPeople,
       effectPeople,
+      estimateRemoteVoiceLatency,
+      getRemoteVoiceStreams,
       setEffectsLocked,
       microphoneMuted,
       roomSoundMuted,
@@ -67,6 +71,8 @@ export default function useOnlineRoomValue(state) {
     [
       createRoom,
       effectPeople,
+      estimateRemoteVoiceLatency,
+      getRemoteVoiceStreams,
       setEffectsLocked,
       joinRoom,
       leaveRoom,

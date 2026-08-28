@@ -205,7 +205,6 @@ def configure_runtime_cache_environment() -> None:
         "TMP": root / "temp",
         "HF_HOME": root / "huggingface",
         "HUGGINGFACE_HUB_CACHE": root / "huggingface" / "hub",
-        "TRANSFORMERS_CACHE": root / "huggingface" / "transformers",
         "TORCH_HOME": root / "torch",
         "XDG_CACHE_HOME": root,
         "NUMBA_CACHE_DIR": root / "numba",

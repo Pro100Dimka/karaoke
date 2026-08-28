@@ -35,7 +35,10 @@ const OnlineRoomContext = createContext(null);
 // this context and re-renders on those ticks.
 const OnlineRoomSpeakingContext = createContext({ localSpeakingLevel: 0, speakingLevels: {} });
 const OFF = false;
-const SONG_SYNC_REQUEST_TIMEOUT_MS = 15_000;
+// Exporting/importing a song package is disk-bound on slower PCs. Detailed
+// transfer progress and stall detection already guard the data channel, so a
+// 15-second control timeout only converted healthy work into false failures.
+const SONG_SYNC_REQUEST_TIMEOUT_MS = 2 * 60_000;
 const ROOM_TRANSFER_BROADCAST_INTERVAL_MS = 500;
 const TERMINAL_TRANSFER_STAGES = new Set(["complete", "error", "cancelled"]);
 const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
@@ -161,6 +164,7 @@ export function OnlineRoomProvider({ children }) {
     applyParticipantEffects,
     applyRemoteAudioMute,
     attachRemoteStream,
+    getRemoteVoiceStreams,
     removeAllRemoteAudio,
     removeRemoteAudio,
     setParticipantVolume: applyParticipantVolume,
@@ -175,6 +179,10 @@ export function OnlineRoomProvider({ children }) {
     stopSpeakingMeter,
     voiceRef
   });
+  const estimateRemoteVoiceLatency = useCallback(
+    () => voiceRef.current?.estimateInboundLatency?.() ?? Promise.resolve(0),
+    []
+  );
   const cleanupConnection = useCallback(
     () => {
       unsubscribeRef.current?.();
@@ -871,6 +879,8 @@ export function OnlineRoomProvider({ children }) {
     togglePersonMuted,
     transferStatus,
     transferStatuses,
+    estimateRemoteVoiceLatency,
+    getRemoteVoiceStreams,
     voiceError
   });
   const speakingValue = useMemo(

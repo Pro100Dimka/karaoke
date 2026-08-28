@@ -46,6 +46,18 @@ def test_raw_error_stream_is_forwarded_to_remote():
     remote.handle.assert_called_once()
 
 
+def test_python_future_warning_from_stderr_is_not_labelled_as_error():
+    local, remote = Mock(), Mock()
+    stream = run._StreamToLogFile(local, remote, logging.ERROR, StringIO())
+
+    stream.write("transformers/hub.py:1: FutureWarning: old cache variable\n  warnings.warn(\n")
+
+    assert [call.args[0].levelno for call in remote.handle.call_args_list] == [
+        logging.WARNING,
+        logging.WARNING,
+    ]
+
+
 def test_legacy_log_cleanup_keeps_rotated_backups_of_the_active_file(tmp_path):
     log_path = tmp_path / "application.log"
     log_path.write_text("current")

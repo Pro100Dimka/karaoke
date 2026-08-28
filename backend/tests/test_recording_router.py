@@ -92,6 +92,35 @@ def test_start_recording_builds_device_specific_session(monkeypatch):
         )
 
 
+def test_room_recording_does_not_open_a_second_live_monitor(monkeypatch):
+    database, body, song, settings = Mock(), start_body(), SimpleNamespace(id="song"), audio_settings(monitoring_enabled=True)
+    body.room_mode = True
+    stop_monitoring = Mock()
+    configure = Mock()
+    start = Mock(return_value="session")
+    patch_many(
+        monkeypatch,
+        (recording.repositories, "get_song", Mock(return_value=song)),
+        (recording.audio_service, "get_settings", Mock(return_value=settings)),
+        (recording.audio_service, "stop_monitoring", stop_monitoring),
+        (recording, "_configure_recording_monitor", configure),
+        (recording.recording_service, "start_recording", start),
+    )
+    patch_attrs(
+        monkeypatch,
+        recording.audio_service,
+        preferred_input_device=Mock(return_value=3),
+        preferred_output_device=Mock(return_value=4),
+        preferred_sample_rate=Mock(return_value=44_100),
+    )
+
+    recording.start_recording(body, database)
+
+    stop_monitoring.assert_called_once_with()
+    configure.assert_not_called()
+    assert start.call_args.kwargs["monitoring_enabled"] is False
+
+
 def test_start_recording_translates_missing_song_and_audio_failure(monkeypatch):
     database, body = Mock(), start_body()
     monkeypatch.setattr(recording.repositories, "get_song", Mock(return_value=None))

@@ -15,9 +15,14 @@ def test_capture_attempts_are_unique_and_survive_device_errors(monkeypatch):
     patch_attrs(monkeypatch, recording_service.sd, query_devices=Mock(side_effect=RuntimeError('device unavailable')))
     attempts = recording_service._capture_attempts(None, None, 44_100, 0, False)
     assert attempts == [
-        (None, None, 44_100, 0, False, "low"),
         (None, None, 44_100, 0, False, "high"),
     ]
+
+
+def test_plain_recording_skips_doomed_low_latency_duplex_attempt():
+    attempts = recording_service._capture_attempts(1, 2, 44_100, 64, False)
+    assert attempts[0] == (1, None, 44_100, 0, False, "high")
+    assert all(not monitor and output is None for _, output, _, _, monitor, _ in attempts)
 
 
 def test_monitoring_uses_a_stable_duplex_block_at_every_sample_rate():

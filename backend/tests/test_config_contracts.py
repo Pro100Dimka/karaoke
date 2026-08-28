@@ -142,7 +142,6 @@ def test_runtime_caches_follow_selected_cache_folder(monkeypatch, tmp_path):
         "TMP",
         "HF_HOME",
         "HUGGINGFACE_HUB_CACHE",
-        "TRANSFORMERS_CACHE",
         "TORCH_HOME",
         "XDG_CACHE_HOME",
         "NUMBA_CACHE_DIR",

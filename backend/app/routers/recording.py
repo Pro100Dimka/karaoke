@@ -1,8 +1,9 @@
 """Запись голоса пользователя."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 import models
 import schemas
@@ -65,7 +66,14 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Нельзя начать запись во время обработки песни")
     settings = audio_service.get_settings(db)
     try:
-        keep_native_monitor = _configure_recording_monitor(settings, body)
+        if body.room_mode:
+            # The WebRTC room owns live self-monitoring. Opening a second
+            # PortAudio output path here makes consumer USB/WASAPI devices
+            # buffer twice and creates the delayed doubled voice users hear.
+            audio_service.stop_monitoring()
+            keep_native_monitor = False
+        else:
+            keep_native_monitor = _configure_recording_monitor(settings, body)
         input_device_id = audio_service.preferred_input_device(
             settings.input_device_id,
             settings.audio_driver,
@@ -85,7 +93,9 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
                 settings.audio_driver,
             ),
             gain=body.microphone_volume,
-            monitoring_enabled=settings.monitoring_enabled and not keep_native_monitor,
+            monitoring_enabled=(
+                settings.monitoring_enabled and not keep_native_monitor and not body.room_mode
+            ),
             playback_offset_sec=body.position_sec,
             playback_latency_sec=max(0, getattr(settings, "latency_ms", 50)) / 1000.0,
             blocksize=settings.buffer_size,
@@ -178,6 +188,33 @@ def get_performance_file(recording: RecordingDependency):
             media_type = "audio/mpeg" if mixed_path.suffix == ".mp3" else "audio/wav"
             return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
     return _wav_file_response(recording)
+
+
+@router.post("/{recording_id}/room-audio", response_model=schemas.RecordingOut)
+async def attach_room_audio(
+    recording: RecordingDependency,
+    db: DatabaseSession,
+    file: UploadFile = File(...),
+    start_playback_sec: float = Form(default=0),
+    latency_compensation_sec: float = Form(default=0),
+):
+    song = repositories.get_song(db, recording.song_id)
+    if song is None: raise HTTPException(status_code=404, detail="Песня для записи не найдена")
+    try:
+        await file.seek(0)
+        await run_in_threadpool(
+            recording_service.attach_room_audio,
+            recording,
+            song,
+            file.file,
+            start_playback_sec,
+            latency_compensation_sec,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail=f"Could not add room voices: {exc}") from exc
+    finally:
+        await file.close()
+    return recording
 
 
 @router.delete("/{recording_id}", status_code=204)

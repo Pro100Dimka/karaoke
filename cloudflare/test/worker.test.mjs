@@ -234,7 +234,7 @@ const logRequest = (payload) =>
     body: JSON.stringify(payload),
   });
 
-test("stores a plain-text log message under a sanitized per-user key", async () => {
+test("stores a plain-text log message in the user's single log file", async () => {
   const bucket = new FakeR2();
   const response = await handleLogUpload(
     logRequest({ user: "Studio PC", message: "something went wrong" }),
@@ -242,11 +242,11 @@ test("stores a plain-text log message under a sanitized per-user key", async () 
   );
   assert.equal(response.status, 200);
   const [key] = [...bucket.objects.keys()];
-  assert.match(key, /^Studio PC\/.+\.log$/);
-  assert.equal(bucket.objects.get(key), "something went wrong");
+  assert.equal(key, "Studio PC.json");
+  assert.equal(JSON.parse(bucket.objects.get(key)).events[0].message, "something went wrong");
 });
 
-test("stores installed-backend warning batches using the device id", async () => {
+test("appends installed-backend batches to one file per device", async () => {
   const bucket = new FakeR2();
   const response = await handleLogUpload(
     logRequest({
@@ -257,10 +257,22 @@ test("stores installed-backend warning batches using the device id", async () =>
     { LOGS: bucket }
   );
   assert.equal(response.status, 200);
-  const [key] = [...bucket.objects.keys()];
-  assert.match(key, /^pc-abcdef123456\/.+\.json$/);
-  assert.deepEqual(JSON.parse(bucket.objects.get(key)).events, [
+  await handleLogUpload(
+    logRequest({
+      device_id: "pc-abcdef123456",
+      display_name: "Renamed singer",
+      events: [{ timestamp: "2026-08-27T00:01:00Z", level: "ERROR", message: "error" }],
+      hardware: { cpu: "Test CPU" },
+    }),
+    { LOGS: bucket }
+  );
+  assert.deepEqual([...bucket.objects.keys()], ["pc-abcdef123456.json"]);
+  const stored = JSON.parse(bucket.objects.get("pc-abcdef123456.json"));
+  assert.equal(stored.display_name, "Renamed singer");
+  assert.equal(stored.hardware.cpu, "Test CPU");
+  assert.deepEqual(stored.events, [
     { timestamp: "2026-08-27T00:00:00Z", level: "WARNING", message: "warning" },
+    { timestamp: "2026-08-27T00:01:00Z", level: "ERROR", message: "error" },
   ]);
 });
 

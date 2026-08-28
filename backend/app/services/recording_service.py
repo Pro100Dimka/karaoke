@@ -330,6 +330,7 @@ class RecordingSession:
 
 _sessions: dict[str, RecordingSession] = {}
 _completed_recordings: dict[str, str] = {}
+_finalizing_recordings: dict[str, threading.Event] = {}
 _sessions_lock = threading.Lock()
 _COMPLETED_RECORDING_LIMIT = 64
 
@@ -345,10 +346,20 @@ def _capture_attempts(
     # feeding live monitoring. 128 frames remains realtime (~3 ms at 44.1 kHz)
     # and prevents progressive underflow/lag on every supported host API.
     stable_blocksize = max(128, blocksize) if monitoring_enabled else blocksize
-    attempts = [
-        (device_id, output_device_id, sample_rate, stable_blocksize, monitoring_enabled, "low"),
-        (device_id, None, sample_rate, 0, False, "high"),
-    ]
+    attempts = (
+        [
+            (device_id, output_device_id, sample_rate, stable_blocksize, True, "low"),
+            (device_id, None, sample_rate, 0, False, "high"),
+        ]
+        if monitoring_enabled
+        else [
+            # Recording without direct monitoring does not benefit from a
+            # low-latency duplex stream. Consumer WDM-KS/USB drivers often
+            # reject that mode (PaError -9999), making every start wait for a
+            # doomed attempt before the exact same high-latency input works.
+            (device_id, None, sample_rate, 0, False, "high"),
+        ]
+    )
     with contextlib.suppress(Exception):
         info = sd.query_devices(device_id, kind="input") if device_id is not None else None
         if info:
@@ -491,7 +502,19 @@ def stop_recording(session_id: str) -> models.Recording:
     with _sessions_lock:
         session = _sessions.pop(session_id, None)
         completed_id = _completed_recordings.get(session_id)
+        finalizing = _finalizing_recordings.get(session_id)
+        if session is not None:
+            finalizing = threading.Event()
+            _finalizing_recordings[session_id] = finalizing
     if session is None:
+        # Two UI lifecycle paths may ask to stop the same recording at nearly
+        # the same time. The first request owns finalization; the second waits
+        # for its result instead of returning a misleading 404 while the WAV
+        # and performance mix are still being committed.
+        if completed_id is None and finalizing is not None:
+            finalizing.wait(timeout=120.0)
+            with _sessions_lock:
+                completed_id = _completed_recordings.get(session_id)
         if completed_id is None:
             raise KeyError(f"Сессия записи {session_id} не найдена (уже остановлена?)")
         db = SessionLocal()
@@ -558,6 +581,9 @@ def stop_recording(session_id: str) -> models.Recording:
     finally:
         session.close()
         db.close()
+        with _sessions_lock:
+            event = _finalizing_recordings.pop(session_id, None)
+            if event is not None: event.set()
 
 
 def resolve_recording_path(recording: models.Recording) -> Path:
@@ -568,7 +594,7 @@ def resolve_recording_path(recording: models.Recording) -> Path:
 
 
 
-def delete_recording(db, recording: models.Recording) -> None: delete_with_files(db, recording, existing_unique_paths((resolve_recording_path(recording), *performance_mix_paths(recording))))
+def delete_recording(db, recording: models.Recording) -> None: delete_with_files(db, recording, existing_unique_paths((resolve_recording_path(recording), room_voice_path(recording), *performance_mix_paths(recording))))
 
 
 def performance_mix_path(recording: models.Recording) -> Path:
@@ -581,6 +607,11 @@ def performance_mix_paths(recording: models.Recording) -> tuple[Path, Path]:
     return performance_mix_path(recording), voice_path.with_name(
         f"{voice_path.stem}-performance.wav"
     )
+
+
+def room_voice_path(recording: models.Recording) -> Path:
+    voice_path = resolve_recording_path(recording)
+    return voice_path.with_name(f"{voice_path.stem}-room.webm")
 
 
 def _find_instrumental(song_dir: Path) -> Path | None: return song_artifacts.resolve_audio_artifact(song_dir, 'instrumental')
@@ -731,3 +762,91 @@ def _create_performance_mix(
         recording.id,
         "; ".join(failures),
     )
+
+
+def attach_room_audio(
+    recording: models.Recording,
+    song: models.Song,
+    source,
+    start_playback_sec: float = 0,
+    latency_compensation_sec: float = 0,
+) -> Path:
+    destination = room_voice_path(recording)
+    temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with temporary.open("wb") as output:
+            shutil.copyfileobj(source, output, length=1024 * 1024)
+        if temporary.stat().st_size <= 0: raise ValueError("Room voice recording is empty")
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    try:
+        playback_segments = json.loads(recording.playback_segments_json or "[]")
+    except (TypeError, ValueError):
+        playback_segments = []
+    base_mix = next((path for path in performance_mix_paths(recording) if path.is_file()), None)
+    if base_mix is None:
+        _create_performance_mix(
+            recording,
+            song,
+            float(recording.playback_offset_sec or 0),
+            1.0,
+            None,
+            playback_segments,
+        )
+        base_mix = next((path for path in performance_mix_paths(recording) if path.is_file()), None)
+    if base_mix is None: raise RuntimeError("Performance mix is unavailable")
+
+    ffmpeg = str(config.FFMPEG_EXE)
+    if not Path(ffmpeg).is_file(): ffmpeg = shutil.which(ffmpeg) or ""
+    if not ffmpeg: raise RuntimeError("FFmpeg is unavailable")
+    compensated_playback = float(start_playback_sec) - max(
+        0.0, min(0.5, float(latency_compensation_sec))
+    )
+    if playback_segments:
+        first = playback_segments[0]
+        room_start = (
+            float(first.get("start_recording_sec", 0))
+            + compensated_playback
+            - float(first.get("start_playback_sec", 0))
+        )
+    else:
+        room_start = compensated_playback - float(recording.playback_offset_sec or 0)
+    trim = max(0.0, -room_start)
+    delay_ms = max(0, round(room_start * 1000))
+    temporary_mix = base_mix.with_name(
+        f".{base_mix.stem}.{uuid.uuid4().hex}.tmp{base_mix.suffix}"
+    )
+    codec = ["-c:a", "pcm_s24le"] if base_mix.suffix.casefold() == ".wav" else [
+        "-c:a", "libmp3lame", "-b:a", "320k"
+    ]
+    command = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(base_mix),
+        "-i",
+        str(destination),
+        "-filter_complex",
+        (
+            f"[1:a]atrim=start={trim:.6f},asetpts=PTS-STARTPTS,"
+            f"adelay={delay_ms}:all=1,volume=1.350000[room];"
+            "[0:a][room]amix=inputs=2:duration=first:normalize=0,"
+            "alimiter=limit=0.95[mix]"
+        ),
+        "-map",
+        "[mix]",
+        "-t",
+        f"{recording.duration_sec or 0:.3f}",
+        *codec,
+        str(temporary_mix),
+    ]
+    try:
+        subprocess.run(command, capture_output=True, check=True, timeout=90)
+        os.replace(temporary_mix, base_mix)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"Could not mix room voices: {exc}") from exc
+    finally:
+        temporary_mix.unlink(missing_ok=True)
+    return destination

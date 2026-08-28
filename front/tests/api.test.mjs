@@ -285,11 +285,12 @@ describe("API domains", () => {
           microphone_volume: 1,
           reverb: 0,
           echo: 0,
-          delay: 0
+          delay: 0,
+          room_mode: false
         }
       ],
       [
-        ["song", 1, 0.8, 0.7, 0.1, 0.2, 0.3],
+        ["song", 1, 0.8, 0.7, 0.1, 0.2, 0.3, true],
         {
           song_id: "song",
           position_sec: 1,
@@ -297,7 +298,8 @@ describe("API domains", () => {
           microphone_volume: 0.7,
           reverb: 0.1,
           echo: 0.2,
-          delay: 0.3
+          delay: 0.3,
+          room_mode: true
         }
       ]
     ])

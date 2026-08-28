@@ -85,6 +85,16 @@ export default function useOnlineRoomAudio({
     [...remoteAudioRef.current.keys()].forEach(removeRemoteAudio);
   }, [removeRemoteAudio]);
 
+  const getRemoteVoiceStreams = useCallback(
+    () =>
+      [...remoteAudioRef.current.values()]
+        .map((audio) => audio.srcObject)
+        .filter((stream) =>
+          stream?.getAudioTracks?.().some((track) => track.readyState === "live")
+        ),
+    []
+  );
+
   const attachRemoteStream = useCallback(
     (participantId, stream, onPlayBlocked) => {
       removeRemoteAudio(participantId);
@@ -245,6 +255,7 @@ export default function useOnlineRoomAudio({
     applyParticipantEffects,
     applyRemoteAudioMute,
     attachRemoteStream,
+    getRemoteVoiceStreams,
     removeAllRemoteAudio,
     removeRemoteAudio,
     setParticipantVolume,

@@ -74,6 +74,62 @@ function finalizeRecording(id) {
 const formatError = (message, error) =>
   translateSaved(message, { 0: getErrorMessage(error, translateSaved(UNKNOWN_ERROR)) });
 
+export async function createRoomVoiceCapture(streams, startPlaybackSec = 0) {
+  const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
+  const MediaRecorderClass = globalThis.MediaRecorder;
+  const live = (Array.isArray(streams) ? streams : []).filter((stream) =>
+    stream?.getAudioTracks?.().some((track) => track.readyState === "live")
+  );
+  if (!live.length || !MediaRecorderClass) return null;
+  let context = null;
+  let destination = null;
+  let sources = [];
+  let captureStream = live[0];
+  if (live.length > 1) {
+    if (!AudioContextClass) return null;
+    context = new AudioContextClass({ latencyHint: "interactive" });
+    destination = context.createMediaStreamDestination();
+    sources = live.map((stream) => {
+      const source = context.createMediaStreamSource(stream);
+      source.connect(destination);
+      return source;
+    });
+    await context.resume?.();
+    captureStream = destination.stream;
+  }
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+  const mimeType = candidates.find((type) => MediaRecorderClass.isTypeSupported?.(type));
+  const recorder = new MediaRecorderClass(captureStream, mimeType ? { mimeType } : undefined);
+  const chunks = [];
+  recorder.addEventListener("dataavailable", ({ data }) => {
+    if (data?.size) chunks.push(data);
+  });
+  recorder.start(500);
+  return {
+    startPlaybackSec: Math.max(0, Number(startPlaybackSec) || 0),
+    pause: () => recorder.state === "recording" && recorder.pause(),
+    resume: () => recorder.state === "paused" && recorder.resume(),
+    stop: () =>
+      new Promise((resolve) => {
+        const finish = async () => {
+          sources.forEach((source) => source.disconnect?.());
+          destination?.stream.getTracks?.().forEach((track) => track.stop());
+          await Promise.resolve(context?.close?.()).catch(() => {});
+          resolve(
+            chunks.length
+              ? new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" })
+              : null
+          );
+        };
+        if (recorder.state === "inactive") finish();
+        else {
+          recorder.addEventListener("stop", finish, { once: true });
+          recorder.stop();
+        }
+      })
+  };
+}
+
 export default function useKaraokeTransport({
   song,
   onlineRoom,
@@ -114,6 +170,7 @@ export default function useKaraokeTransport({
   const operationRef = useRef(Symbol("karaoke-operation"));
   const sessionRef = useRef(recordingSessionId);
   const pendingRecordingStartRef = useRef(null);
+  const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);
 
   const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
@@ -131,6 +188,9 @@ export default function useKaraokeTransport({
     });
     return () => {
       beginOperation();
+      const roomCapture = roomCaptureRef.current;
+      roomCaptureRef.current = null;
+      roomCapture?.stop?.().catch?.(() => {});
       const pendingStart = pendingRecordingStartRef.current;
       if (pendingStart && pendingStart.songId === song?.id) pendingStart.settle = "stop";
       const id = sessionRef.current;
@@ -180,6 +240,30 @@ export default function useKaraokeTransport({
     silenceMelodyGuide();
   };
 
+  const startOrResumeRoomCapture = async (position) => {
+    if (!onlineRoom?.room) return null;
+    if (roomCaptureRef.current) {
+      roomCaptureRef.current.resume();
+      return roomCaptureRef.current;
+    }
+    const capture = await createRoomVoiceCapture(
+      onlineRoom.getRemoteVoiceStreams?.() || [],
+      position
+    ).catch(() => null);
+    roomCaptureRef.current = capture;
+    return capture;
+  };
+
+  const stopRoomCapture = () => {
+    const capture = roomCaptureRef.current;
+    roomCaptureRef.current = null;
+    if (!capture) return Promise.resolve(null);
+    return Promise.resolve(capture.stop()).then((blob) => ({
+      blob,
+      startPlaybackSec: capture.startPlaybackSec
+    }));
+  };
+
   const startRecording = async () => {
     const { recording_session_id: id } =
       (await api.startRecording(
@@ -189,7 +273,8 @@ export default function useKaraokeTransport({
         microphoneVolume,
         microphoneEffects.reverb,
         microphoneEffects.echo,
-        microphoneEffects.delay
+        microphoneEffects.delay,
+        Boolean(onlineRoom?.room)
       )) || {};
     if (!id) throw new Error(translateSaved(MISSING_RECORDING_ID));
     rememberPending(id);
@@ -270,6 +355,7 @@ export default function useKaraokeTransport({
       if (!sessionRef.current && pendingStart && pendingStart.songId === song.id)
         pendingStart.settle = "pause";
       pauseMedia();
+      roomCaptureRef.current?.pause();
       // setCurrentTime is throttled during playback (see useKaraokeMediaSync),
       // so the last published value can be briefly behind the exact moment
       // playback actually stopped -- resync it here rather than leaving the
@@ -300,6 +386,7 @@ export default function useKaraokeTransport({
     const recordingStart = runRecording(operation);
     try {
       if (scheduledAt != null) await wait(scheduledAt - onlineRoom.roomClockNow());
+      await startOrResumeRoomCapture(instrumental.currentTime);
       const master = startMasterMedia(instrumental);
       const secondary = [
         vocals && Promise.resolve(vocals.play()),
@@ -329,6 +416,7 @@ export default function useKaraokeTransport({
       const pendingStart = pendingRecordingStartRef.current;
       if (pendingStart && pendingStart.songId === song.id) pendingStart.settle = "stop";
       pauseMedia();
+      await stopRoomCapture().catch(() => null);
       const activeSession = sessionRef.current;
       if (activeSession) await discardSession(activeSession);
       lifecycle.fail();
@@ -356,6 +444,7 @@ export default function useKaraokeTransport({
     if (!sessionRef.current && pendingStart && pendingStart.songId === song.id)
       pendingStart.settle = "stop";
     pauseMedia();
+    const roomAudio = stopRoomCapture();
     instrumental.currentTime = 0;
     syncSecondaryMedia(0, true);
     lifecycle.stopped();
@@ -369,7 +458,30 @@ export default function useKaraokeTransport({
         setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
         clearSession(id, false);
       } else {
-        if (recording?.id) setAnalysisRecordingId(recording.id);
+        if (recording?.id) {
+          const captured = await roomAudio.catch(() => null);
+          if (captured?.blob?.size) {
+            try {
+              const compensation = await Promise.resolve(
+                onlineRoom?.estimateRemoteVoiceLatency?.()
+              ).catch(() => 0);
+              await api.attachRoomAudio(
+                recording.id,
+                captured.blob,
+                captured.startPlaybackSec,
+                compensation
+              );
+            } catch (error) {
+              setRecordingError(
+                formatError(
+                  "Запись сохранена, но голос второго участника добавить не удалось: {0}",
+                  error
+                )
+              );
+            }
+          }
+          setAnalysisRecordingId(recording.id);
+        }
         clearSession(id);
       }
     }

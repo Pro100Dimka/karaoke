@@ -7,10 +7,12 @@ const api = vi.hoisted(() => ({
   pauseRecording: vi.fn(),
   resumeRecording: vi.fn(),
   syncRecording: vi.fn(),
-  stopRecording: vi.fn()
+  stopRecording: vi.fn(),
+  attachRoomAudio: vi.fn()
 }));
 vi.mock("../src/api/client", () => ({ api }));
 let useKaraokeTransport;
+let createRoomVoiceCapture;
 const media = () => ({
   currentTime: 4,
   duration: 100,
@@ -53,7 +55,7 @@ const createProps = (overrides = {}) => {
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({ default: useKaraokeTransport } = await import("../src/pages/Karaoke/hooks/useKaraokeTransport"));
+  ({ default: useKaraokeTransport, createRoomVoiceCapture } = await import("../src/pages/Karaoke/hooks/useKaraokeTransport"));
   localStorage.clear();
   Object.values(api).forEach((mock) => mock.mockReset());
   api.startRecording.mockResolvedValue({ recording_session_id: "session" });
@@ -61,8 +63,74 @@ beforeEach(async () => {
   api.resumeRecording.mockResolvedValue({});
   api.syncRecording.mockResolvedValue({ status: "synchronized" });
   api.stopRecording.mockResolvedValue({ id: "recording" });
+  api.attachRoomAudio.mockResolvedValue({ id: "recording" });
+});
+afterEach(() => {
+  delete globalThis.MediaRecorder;
+  delete globalThis.AudioContext;
 });
 describe("karaoke transport", () => {
+  test("captures remote room voices and attaches them to the saved performance", async () => {
+    class Recorder extends EventTarget {
+      static isTypeSupported = () => true;
+      constructor(_stream, options) {
+        super();
+        this.mimeType = options.mimeType;
+        this.state = "inactive";
+      }
+      start() {
+        this.state = "recording";
+      }
+      pause() {
+        this.state = "paused";
+      }
+      resume() {
+        this.state = "recording";
+      }
+      stop() {
+        this.dispatchEvent(new MessageEvent("dataavailable", { data: new Blob(["duet"]) }));
+        this.state = "inactive";
+        this.dispatchEvent(new Event("stop"));
+      }
+    }
+    const outputTrack = { stop: vi.fn() };
+    class Context {
+      createMediaStreamDestination() {
+        return { stream: { getTracks: () => [outputTrack] } };
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn(), disconnect: vi.fn() };
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+    }
+    globalThis.MediaRecorder = Recorder;
+    globalThis.AudioContext = Context;
+    const remote = { getAudioTracks: () => [{ readyState: "live" }] };
+    const capture = await createRoomVoiceCapture([remote], 4);
+    expect(capture.startPlaybackSec).toBe(4);
+    capture.pause();
+    capture.resume();
+    expect((await capture.stop()).size).toBeGreaterThan(0);
+
+    const props = createProps({
+      onlineRoom: {
+        room: { id: "room" },
+        syncCommand: vi.fn(),
+        roomCommand: null,
+        getRemoteVoiceStreams: () => [remote],
+        estimateRemoteVoiceLatency: () => Promise.resolve(0.08)
+      }
+    });
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await hook.result.current.togglePlay({ broadcast: false, forcePlaying: true });
+    await hook.result.current.stop({ broadcast: false });
+    expect(api.attachRoomAudio).toHaveBeenCalledWith("recording", expect.any(Blob), 4, 0.08);
+  });
   test("does not clean up a nonexistent recording session", async () => {
     const hook = renderHook(() => useKaraokeTransport(createProps()));
     hook.unmount();

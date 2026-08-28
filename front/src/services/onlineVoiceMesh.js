@@ -46,11 +46,14 @@ export function preferLowLatencyOpus(description) {
       .split(";")
       .map((value) => value.trim())
       .filter(Boolean)
-      .filter((value) => !/^minptime=/i.test(value));
-    filtered[fmtpIndex] = `${prefix} minptime=${OPUS_PACKET_TIME_MS};${values.join(";")}`.replace(
-      /;$/,
-      ""
-    );
+      .filter(
+        (value) => !/^(?:minptime|usedtx|stereo|sprop-stereo|maxaveragebitrate|cbr)=/i.test(value)
+      );
+    filtered[fmtpIndex] =
+      `${prefix} minptime=${OPUS_PACKET_TIME_MS};usedtx=0;stereo=0;sprop-stereo=0;maxaveragebitrate=128000;cbr=1;${values.join(";")}`.replace(
+        /;$/,
+        ""
+      );
   }
   filtered.unshift(`a=maxptime:${OPUS_PACKET_TIME_MS}`);
   filtered.unshift(`a=ptime:${OPUS_PACKET_TIME_MS}`);
@@ -184,7 +187,10 @@ export default class OnlineVoiceMesh {
     const current = this.peers.get(participantId);
     if (current) return current;
     const peer = new globalThis.RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }]
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      iceCandidatePoolSize: 4
     });
     if (this.stream) {
       this.stream.getTracks().forEach((track) => {
@@ -274,13 +280,46 @@ export default class OnlineVoiceMesh {
           const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
           parameters.encodings = encodings.map((encoding) => ({
             ...encoding,
-            maxBitrate: 256_000,
+            maxBitrate: 128_000,
+            priority: "high",
             networkPriority: "high"
           }));
           parameters.degradationPreference = "maintain-framerate";
           await sender.setParameters(parameters);
         })
     );
+  }
+
+  async estimateInboundLatency() {
+    const estimates = await Promise.all(
+      [...this.peers.values()].map(async (peer) => {
+        if (typeof peer.getStats !== "function") return 0;
+        try {
+          const stats = await peer.getStats();
+          let audioDelay = 0;
+          let roundTrip = 0;
+          stats.forEach((report) => {
+            if (report.type === "inbound-rtp" && report.kind === "audio") {
+              const emitted = Number(report.jitterBufferEmittedCount);
+              const total = Number(report.jitterBufferDelay);
+              const buffered = emitted > 0 && Number.isFinite(total) ? total / emitted : 0;
+              audioDelay = Math.max(audioDelay, buffered, Number(report.jitter) || 0);
+            }
+            if (
+              report.type === "candidate-pair" &&
+              (report.selected || report.nominated) &&
+              report.state === "succeeded"
+            ) {
+              roundTrip = Math.max(roundTrip, Number(report.currentRoundTripTime) || 0);
+            }
+          });
+          return Math.max(0, Math.min(0.5, audioDelay + roundTrip / 2));
+        } catch {
+          return 0;
+        }
+      })
+    );
+    return estimates.length ? Math.max(...estimates) : 0;
   }
 
   async invite(participantId) {

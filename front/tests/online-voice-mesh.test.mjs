@@ -44,7 +44,7 @@ describe("online voice mesh", () => {
     const result = preferLowLatencyOpus(input);
     expect(result).not.toBe(input);
     expect(result.sdp).toContain("a=ptime:10\r\na=maxptime:10");
-    expect(result.sdp).toContain("a=fmtp:111 minptime=10;useinbandfec=1");
+    expect(result.sdp).toContain("a=fmtp:111 minptime=10;usedtx=0;stereo=0;sprop-stereo=0;maxaveragebitrate=128000;cbr=1;useinbandfec=1");
     expect(result.sdp).not.toContain("a=ptime:20");
     expect(result.sdp).toContain("m=video 9 UDP/TLS/RTP/SAVPF 96");
     expect(preferLowLatencyOpus({ type: "offer", sdp: "v=0\r\nm=video 9" })).toEqual({
@@ -83,7 +83,12 @@ describe("online voice mesh", () => {
     });
     expect(media.getAudioTracks()[0].contentHint).toBe("music");
     const peer = mesh.createPeer("p".repeat(128));
-    expect(peer.configuration).toEqual({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+    expect(peer.configuration).toEqual({
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      iceCandidatePoolSize: 4
+    });
     for (const participantId of [null, 1, {}, "", "p".repeat(129)]) {
       expect(() => mesh.createPeer(participantId)).toThrow("Некорректный идентификатор участника");
     }
@@ -100,7 +105,7 @@ describe("online voice mesh", () => {
     const noSetter = { track: track(), getParameters: vi.fn() };
     await mesh.optimizeAudioSenders({ getSenders: () => [configured, noAudio, noSetter] });
     expect(configured.setParameters).toHaveBeenCalledWith({
-      encodings: [{ active: true, maxBitrate: 256_000, networkPriority: "high" }],
+      encodings: [{ active: true, maxBitrate: 128_000, priority: "high", networkPriority: "high" }],
       degradationPreference: "maintain-framerate"
     });
     expect(noAudio.getParameters).not.toHaveBeenCalled();
@@ -141,7 +146,7 @@ describe("online voice mesh", () => {
     const sender = lateJoiner.getSenders()[0];
     await vi.waitFor(() => expect(sender.setParameters).toHaveBeenCalled());
     expect(sender.setParameters).toHaveBeenCalledWith({
-      encodings: [{ maxBitrate: 256_000, networkPriority: "high" }],
+      encodings: [{ maxBitrate: 128_000, priority: "high", networkPriority: "high" }],
       degradationPreference: "maintain-framerate"
     });
   });
@@ -819,7 +824,7 @@ describe("online voice mesh", () => {
     const sender = { track: track(), getParameters: () => ({}), setParameters: vi.fn() };
     await mesh.optimizeAudioSenders({ getSenders: () => [sender] });
     expect(sender.setParameters).toHaveBeenCalledWith({
-      encodings: [{ maxBitrate: 256_000, networkPriority: "high" }],
+      encodings: [{ maxBitrate: 128_000, priority: "high", networkPriority: "high" }],
       degradationPreference: "maintain-framerate"
     });
   });
@@ -1398,7 +1403,8 @@ describe("online voice mesh", () => {
     };
     await expect(mesh.optimizeAudioSenders({ getSenders: () => [configured, rejected, {}] })).resolves.toBeUndefined();
     expect(configured.setParameters.mock.calls[0][0].encodings[0]).toMatchObject({
-      maxBitrate: 256_000,
+      maxBitrate: 128_000,
+      priority: "high",
       networkPriority: "high"
     });
   });

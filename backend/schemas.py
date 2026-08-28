@@ -248,6 +248,7 @@ class RecordingStartRequest(BaseModel):
     reverb: float = Field(default=0, ge=0, le=1)
     echo: float = Field(default=0, ge=0, le=1)
     delay: float = Field(default=0, ge=0, le=1)
+    room_mode: bool = False
 
 
 class RecordingStartOut(BaseModel):

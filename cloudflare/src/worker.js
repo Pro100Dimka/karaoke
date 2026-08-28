@@ -7,6 +7,7 @@ const RATE_LIMIT = 80;
 const MAX_SIGNAL_BYTES = 64 * 1024;
 const MAX_STATE_BYTES = 128 * 1024;
 const MAX_LOG_BYTES = 32 * 1024;
+const MAX_DEVICE_LOG_EVENTS = 10_000;
 const LOG_RATE_WINDOW_MS = 60_000;
 const LOG_RATE_LIMIT = 30;
 const MAX_ROOM_SONGS = 500;
@@ -484,20 +485,33 @@ export async function handleLogUpload(request, env) {
   const hardware = payload?.hardware && typeof payload.hardware === "object" ? payload.hardware : null;
   if (!legacyMessage && !events.length && !hardware) return json({ error: "Empty log batch" }, 400);
   const user = sanitizeLogUser(payload?.device_id || payload?.user);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const batch = legacyMessage
-    ? legacyMessage.slice(0, MAX_LOG_BYTES)
-    : JSON.stringify({
-        device_id: String(payload.device_id || "").slice(0, 80),
-        display_name: String(payload.display_name || "").slice(0, 80),
-        events,
-        ...(hardware ? { hardware } : {}),
-      });
-  const extension = legacyMessage ? "log" : "json";
-  const key = `${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.${extension}`;
-  await env.LOGS.put(key, batch, {
+  const key = `${user}.json`;
+  const stored = await env.LOGS.get(key);
+  let previous = {};
+  if (stored) {
+    try {
+      previous = JSON.parse(await stored.text());
+    } catch {
+      previous = {};
+    }
+  }
+  const incomingEvents = legacyMessage
+    ? [{ timestamp: new Date().toISOString(), level: "ERROR", message: legacyMessage.slice(0, 16_000) }]
+    : events;
+  const mergedEvents = [
+    ...(Array.isArray(previous.events) ? previous.events : []),
+    ...incomingEvents,
+  ].slice(-MAX_DEVICE_LOG_EVENTS);
+  const document = {
+    device_id: String(payload.device_id || previous.device_id || user).slice(0, 80),
+    display_name: String(payload.display_name || previous.display_name || "").slice(0, 80),
+    updated_at: new Date().toISOString(),
+    events: mergedEvents,
+    ...((hardware || previous.hardware) ? { hardware: hardware || previous.hardware } : {}),
+  };
+  await env.LOGS.put(key, JSON.stringify(document), {
     httpMetadata: {
-      contentType: legacyMessage ? "text/plain; charset=utf-8" : "application/json; charset=utf-8",
+      contentType: "application/json; charset=utf-8",
     },
   });
   return json({ ok: true });

@@ -164,7 +164,7 @@ describe("online room provider", () => {
       voiceError: "",
       transferStatus: null
     });
-    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(17);
+    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(19);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
@@ -1166,7 +1166,7 @@ describe("online room provider", () => {
       syncResult = hook.result.current.requestSongSync("song-1", "peer");
     });
     await waitFor(() => expect(channel.send).toHaveBeenCalled());
-    expect(voice.waitForDataChannel).toHaveBeenCalledWith("peer", 15_000, 0);
+    expect(voice.waitForDataChannel).toHaveBeenCalledWith("peer", 120_000, 0);
     const sent = JSON.parse(channel.send.mock.calls[0][0]);
     expect(sent.type).toBe("song-sync-request");
     expect(sent.songId).toBe("song-1");

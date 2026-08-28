@@ -88,7 +88,16 @@ class _StreamToLogFile:
         self._original.write(message)
         for line in message.splitlines():
             if line.strip():
-                record = logging.LogRecord("stdout", self._level, "", 0, line, (), None)
+                # Python libraries emit deprecation notices through stderr.
+                # They are warnings, not application failures; keep them in
+                # diagnostics without falsely labelling them as ERROR.
+                level = (
+                    logging.WARNING
+                    if self._level >= logging.ERROR
+                    and ("Warning:" in line or line.lstrip().startswith("warnings.warn("))
+                    else self._level
+                )
+                record = logging.LogRecord("stdout", level, "", 0, line, (), None)
                 self._file_handler.handle(record)
                 if record.levelno >= logging.WARNING: self._remote_handler.handle(record)
         return len(message)

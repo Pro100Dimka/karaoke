@@ -1,6 +1,8 @@
 import builtins
 import importlib
+import io
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
@@ -397,6 +399,30 @@ def test_stop_recording_returns_recently_completed_recording(monkeypatch):
     database.close.assert_called_once_with()
 
 
+def test_stop_recording_waits_for_concurrent_finalization(monkeypatch):
+    saved = models.Recording(id="recording", song_id="song", filename="take.wav", path="take.wav", duration_sec=3, sample_rate=48_000)
+    database, event = Mock(), Mock()
+    completed = {}
+
+    def finish_first_request(*, timeout):
+        assert timeout == 120.0
+        completed["active"] = "recording"
+        return True
+
+    event.wait.side_effect = finish_first_request
+    patch_many(
+        monkeypatch,
+        (recording_service, "_sessions", {}),
+        (recording_service, "_completed_recordings", completed),
+        (recording_service, "_finalizing_recordings", {"active": event}),
+        (recording_service, "SessionLocal", Mock(return_value=database)),
+        (recording_service.repositories, "get_recording", Mock(return_value=saved)),
+    )
+
+    assert recording_service.stop_recording("active") is saved
+    event.wait.assert_called_once_with(timeout=120.0)
+
+
 def test_create_performance_mix_runs_ffmpeg_and_cleans_failure(monkeypatch, tmp_path):
     executable = tmp_path / "ffmpeg.exe"
     executable.write_bytes(b"binary")
@@ -478,6 +504,51 @@ def test_create_performance_mix_skips_missing_instrumental(monkeypatch, tmp_path
         1,
     )
     run.assert_not_called()
+
+
+def test_attach_room_audio_preserves_existing_mix_and_adds_remote_voice(monkeypatch, tmp_path):
+    executable = tmp_path / "ffmpeg.exe"
+    executable.write_bytes(b"binary")
+    voice = tmp_path / "take.wav"
+    voice.write_bytes(b"local")
+    mix = tmp_path / "take-performance.mp3"
+    mix.write_bytes(b"local-effects-and-music")
+    current = models.Recording(
+        id="recording",
+        song_id="song",
+        filename="take.wav",
+        path=str(voice),
+        duration_sec=4,
+        sample_rate=48_000,
+        playback_offset_sec=0,
+        playback_segments_json=(
+            '[{"start_recording_sec":0.1,"start_playback_sec":0.2,"end_recording_sec":4}]'
+        ),
+    )
+    current_song = make_song(output_dir=str(tmp_path))
+    patch_attrs(
+        monkeypatch,
+        recording_service.config,
+        FFMPEG_EXE=str(executable),
+        SONG_OUTPUT_DIR=tmp_path,
+    )
+    monkeypatch.setattr(recording_service, "resolve_recording_path", Mock(return_value=voice))
+    commands = []
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"duet")
+
+    monkeypatch.setattr(recording_service.subprocess, "run", run)
+    destination = recording_service.attach_room_audio(
+        current, current_song, io.BytesIO(b"remote-opus"), 0.2, 0.05
+    )
+
+    assert destination.read_bytes() == b"remote-opus"
+    assert mix.read_bytes() == b"duet"
+    filter_graph = commands[0][commands[0].index("-filter_complex") + 1]
+    assert "[0:a][room]amix=inputs=2" in filter_graph
+    assert "adelay=50:all=1" in filter_graph
 
 
 def test_audio_backend_import_failure_degrades_without_crashing(monkeypatch):
