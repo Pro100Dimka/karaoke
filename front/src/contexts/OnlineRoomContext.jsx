@@ -25,7 +25,13 @@ import { createCommandId } from "./onlineRoomActions";
 import { playParticipantJoinedSound, playParticipantLeftSound } from "./onlineRoomAudio";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 
-const OnlineRoomContext = createContext(null);
+// Keep one context identity across Vite Fast Refresh. Recreating the context
+// while a room is active leaves already-mounted providers on the old object,
+// consumers receive null, the error boundary remounts the app and WebSocket
+// cleanup makes it look as if karaoke playback kicked the user from the room.
+const hotData = import.meta.hot?.data;
+const OnlineRoomContext = hotData?.onlineRoomContext || createContext(null);
+if (hotData) hotData.onlineRoomContext = OnlineRoomContext;
 // Speaking levels update on a ~70ms meter tick while anyone's mic is live,
 // which is far more often than the rest of the room state changes. Keeping
 // them out of the main context value means a room-wide voice call doesn't
@@ -46,14 +52,21 @@ const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
   reverb: 1,
   echo: 1,
   delay: 1,
-  noise_suppression: 1
+  noise_suppression: 1,
+  octave: 1
 });
 export const normalizeParticipantEffects = (settings = {}) =>
   Object.fromEntries(
     Object.entries(PARTICIPANT_EFFECT_LIMITS).map(([name, maximum]) => {
       const fallback = name === "volume" ? 1 : name === "noise_suppression" ? 0.35 : 0;
       const value = Number(settings?.[name]);
-      return [name, Math.max(0, Math.min(maximum, Number.isFinite(value) ? value : fallback))];
+      return [
+        name,
+        Math.max(
+          name === "octave" ? -1 : 0,
+          Math.min(maximum, Number.isFinite(value) ? value : fallback)
+        )
+      ];
     })
   );
 export const shouldBroadcastRoomTransferProgress = (

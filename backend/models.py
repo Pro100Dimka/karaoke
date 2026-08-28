@@ -138,6 +138,7 @@ class AudioSettings(Base):
     echo: Mapped[float] = mapped_column(Float, default=0.0)
     delay: Mapped[float] = mapped_column(Float, default=0.0)
     noise_suppression: Mapped[float] = mapped_column(Float, default=0.35)
+    octave: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )

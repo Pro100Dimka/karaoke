@@ -125,7 +125,8 @@ describe("microphone settings", () => {
       reverb: 0.2,
       echo: 0.3,
       delay: 0.4,
-      noise_suppression: 0.35
+      noise_suppression: 0.35,
+      octave: 0
     });
     act(() => window.dispatchEvent(new CustomEvent("audio-preferences-changed", { detail: { monitorInputDeviceId: "mic" } })));
     expect(hook.result.current.monitorInputDeviceId).toBe("mic");
@@ -157,7 +158,7 @@ describe("microphone settings", () => {
       "toMatchObject",
       {
         microphoneVolume: 1,
-        microphoneEffects: { reverb: 0, echo: 0, delay: 0, noise_suppression: 0.35 },
+        microphoneEffects: { reverb: 0, echo: 0, delay: 0, noise_suppression: 0.35, octave: 0 },
         audioDriver: "auto",
         directOutputDeviceId: "",
         monitoringEnabled: false,

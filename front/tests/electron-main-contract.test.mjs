@@ -18,3 +18,7 @@ test("backend restart attempts reset only after a stable run", () => {
   expect(beforeStableTimer).not.toMatch(/backendRestartAttempts\s*=\s*0\s*;/);
   expect(main).toMatch(/setTimeout\(\(\) => \{[\s\S]*?backendProcess === childProcess[\s\S]*?backendRestartAttempts = 0;/s);
 });
+test("desktop audio uses one render quantum for realtime room playback", () => {
+  const main = fs.readFileSync("electron/main.cjs", "utf8");
+  expect(main).toContain('app.commandLine.appendSwitch("audio-buffer-size", "128")');
+});

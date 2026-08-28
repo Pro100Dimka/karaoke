@@ -19,7 +19,7 @@ export function connectMicrophoneChannelStrip(
   context,
   source,
   destination,
-  { noiseSuppression = 0.35 } = {}
+  { noiseSuppression = 0.35, realtime = false } = {}
 ) {
   const highpass = assign(context.createBiquadFilter(), { frequency: 70 });
   highpass.type = "highpass";
@@ -46,10 +46,20 @@ export function connectMicrophoneChannelStrip(
   });
   const makeup = assign(context.createGain(), { gain: 1.04 });
   const limiter = context.createWaveShaper();
-  Object.assign(limiter, { curve: buildSoftLimiterCurve(), oversample: "2x" });
-  [highpass, analyser, noiseGate, presence, compressor, makeup, limiter, destination]
-    .filter(Boolean)
-    .reduce((node, next) => node.connect(next), source);
+  Object.assign(limiter, {
+    curve: buildSoftLimiterCurve(),
+    // Oversampling is useful for an offline/final recording, but it adds
+    // filtering delay to the live duet path. The realtime graph keeps the
+    // limiter and all user-facing processing without that extra buffer.
+    oversample: realtime ? "none" : "2x"
+  });
+  // DynamicsCompressorNode has a fixed look-ahead delay. In a live room the
+  // soft limiter already protects peaks, so bypass only that redundant node;
+  // high-pass, noise gate, tone, gain and limiter remain active.
+  const chain = realtime
+    ? [highpass, analyser, noiseGate, presence, makeup, limiter, destination]
+    : [highpass, analyser, noiseGate, presence, compressor, makeup, limiter, destination];
+  chain.filter(Boolean).reduce((node, next) => node.connect(next), source);
   let suppression = clamp01(noiseSuppression);
   let lastVoiceAt = 0;
   let timer = null;

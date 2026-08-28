@@ -95,6 +95,48 @@ class StudioMicrophoneProcessor:
         return np.clip(y, -_LIMITER_CEILING, _LIMITER_CEILING).astype(np.float32, copy=False)
 
 
+class RealtimePitchShifter:
+    """Streaming pitch shift with a true zero-latency neutral bypass."""
+
+    def __init__(self, sample_rate: float):
+        self._buffer_len = max(1024, int(round(max(8_000.0, float(sample_rate)) * 0.032)))
+        self._buffer = np.zeros(self._buffer_len, dtype=np.float32)
+        self._write_pos = 0
+        self._phase = 0.0
+        self._previous_octave = 0.0
+
+    def process(self, samples: np.ndarray, octave: float) -> np.ndarray:
+        octave = max(-1.0, min(1.0, float(octave)))
+        source = np.asarray(samples, dtype=np.float32)
+        if abs(octave) < 0.005:
+            if abs(self._previous_octave) >= 0.005:
+                self._buffer.fill(0.0)
+                self._phase = 0.0
+            self._previous_octave = octave
+            return source
+
+        ratio = 2.0**octave
+        output = np.empty_like(source)
+        length = self._buffer_len
+        for index, sample in enumerate(source):
+            self._buffer[self._write_pos] = sample
+            phase_a = (self._phase + 1.0) % 1.0
+            phase_b = (phase_a + 0.5) % 1.0
+            read_a = (self._write_pos - 1.0 - phase_a * (length - 2.0)) % length
+            read_b = (self._write_pos - 1.0 - phase_b * (length - 2.0)) % length
+            a0, b0 = int(read_a), int(read_b)
+            frac_a, frac_b = read_a - a0, read_b - b0
+            sample_a = self._buffer[a0] * (1.0 - frac_a) + self._buffer[(a0 + 1) % length] * frac_a
+            sample_b = self._buffer[b0] * (1.0 - frac_b) + self._buffer[(b0 + 1) % length] * frac_b
+            weight_a = 0.5 - 0.5 * math.cos(2.0 * math.pi * phase_a)
+            weight_b = 0.5 - 0.5 * math.cos(2.0 * math.pi * phase_b)
+            output[index] = (sample_a * weight_a + sample_b * weight_b) / max(1e-6, weight_a + weight_b)
+            self._phase = (self._phase + (1.0 - ratio) / length + 1.0) % 1.0
+            self._write_pos = (self._write_pos + 1) % length
+        self._previous_octave = octave
+        return output
+
+
 class MonitorEffectsChain:
 
     _SLOT_COUNT = 6

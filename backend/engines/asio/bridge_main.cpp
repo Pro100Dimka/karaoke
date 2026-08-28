@@ -42,6 +42,7 @@ struct Options {
   double echo = 0.0;
   double delay = 0.0;
   double noise_suppression = 0.35;
+  double octave = 0.0;
   bool list = false;
 };
 
@@ -60,6 +61,7 @@ struct Engine {
   float echo = 0.0F;
   float delay = 0.0F;
   float noise_suppression = 0.35F;
+  float octave = 0.0F;
   float previous_input = 0.0F;
   float highpass_state = 0.0F;
   float noise_floor = 0.003F;
@@ -70,7 +72,10 @@ struct Engine {
   std::vector<float> echo_line;
   std::vector<float> delay_line;
   std::vector<float> monitor_scratch;
+  std::vector<float> pitch_line;
   size_t effect_cursor = 0;
+  size_t pitch_cursor = 0;
+  double pitch_phase = 0.0;
   bool output_ready = false;
   bool buffers_created = false;
 } g_engine;
@@ -103,6 +108,7 @@ std::optional<Options> parse_options(int argc, char** argv) {
     else if (key == "--delay" && index + 1 < argc) options.delay = std::stod(argv[++index]);
     else if (key == "--noise-suppression" && index + 1 < argc)
       options.noise_suppression = std::stod(argv[++index]);
+    else if (key == "--octave" && index + 1 < argc) options.octave = std::stod(argv[++index]);
     else return std::nullopt;
   }
   return options;
@@ -184,6 +190,32 @@ bool effects_enabled() {
   return true;
 }
 
+float process_pitch(float sample) {
+  if (std::abs(g_engine.octave) < 0.005F || g_engine.pitch_line.empty()) return sample;
+  auto& line = g_engine.pitch_line;
+  const size_t length = line.size();
+  line[g_engine.pitch_cursor] = sample;
+  const double phase_a = std::fmod(g_engine.pitch_phase + 1.0, 1.0);
+  const double phase_b = std::fmod(phase_a + 0.5, 1.0);
+  const auto read = [&](double phase) {
+    double position = static_cast<double>(g_engine.pitch_cursor) - 1.0 -
+                      phase * static_cast<double>(length - 2);
+    while (position < 0.0) position += static_cast<double>(length);
+    const size_t left = static_cast<size_t>(position) % length;
+    const size_t right = (left + 1) % length;
+    const float fraction = static_cast<float>(position - std::floor(position));
+    return line[left] * (1.0F - fraction) + line[right] * fraction;
+  };
+  const float weight_a = static_cast<float>(
+    0.5 - 0.5 * std::cos(2.0 * 3.141592653589793 * phase_a));
+  const float shifted = read(phase_a) * weight_a + read(phase_b) * (1.0F - weight_a);
+  const double ratio = std::pow(2.0, static_cast<double>(g_engine.octave));
+  g_engine.pitch_phase = std::fmod(
+    g_engine.pitch_phase + (1.0 - ratio) / static_cast<double>(length) + 1.0, 1.0);
+  g_engine.pitch_cursor = (g_engine.pitch_cursor + 1) % length;
+  return shifted;
+}
+
 float process_effects(float sample) {
   const float input = sample * g_engine.gain;
   const float highpass_coefficient = std::exp(-2.0F * 3.14159265F * 70.0F / g_engine.sample_rate);
@@ -203,7 +235,8 @@ float process_effects(float sample) {
   const float target_gate = 1.0F + (suppressed - 1.0F) * g_engine.noise_suppression;
   const float gate_speed = target_gate > g_engine.gate_gain ? 0.08F : 0.02F;
   g_engine.gate_gain += (target_gate - g_engine.gate_gain) * gate_speed;
-  const float dry = std::tanh(highpass * g_engine.gate_gain * 1.12F) / std::tanh(1.12F);
+  const float dry = process_pitch(
+    std::tanh(highpass * g_engine.gate_gain * 1.12F) / std::tanh(1.12F));
   const size_t cursor = g_engine.effect_cursor % g_engine.reverb_line_a.size();
   const auto read_delay = [cursor](const std::vector<float>& line, size_t samples) {
     const size_t offset = std::min(samples, line.size() - 1);
@@ -346,6 +379,7 @@ bool create_buffers(const Options& options) {
   g_engine.delay = static_cast<float>(std::clamp(options.delay, 0.0, 1.0));
   g_engine.noise_suppression = static_cast<float>(
     std::clamp(options.noise_suppression, 0.0, 1.0));
+  g_engine.octave = static_cast<float>(std::clamp(options.octave, -1.0, 1.0));
   ASIOSampleRate rate = 44100.0;
   ASIOGetSampleRate(&rate);
   g_engine.sample_rate = static_cast<float>(std::max(1.0, rate));
@@ -355,7 +389,11 @@ bool create_buffers(const Options& options) {
   g_engine.echo_line.assign(effect_size, 0.0F);
   g_engine.delay_line.assign(effect_size, 0.0F);
   g_engine.monitor_scratch.assign(static_cast<size_t>(g_engine.buffer_size), 0.0F);
+  g_engine.pitch_line.assign(
+    static_cast<size_t>(std::max(1024.0, rate * 0.032)), 0.0F);
   g_engine.effect_cursor = 0;
+  g_engine.pitch_cursor = 0;
+  g_engine.pitch_phase = 0.0;
   for (long index = 0; index < g_engine.input_count; ++index) {
     g_engine.buffers[index].isInput = ASIOTrue;
     g_engine.buffers[index].channelNum = options.input_channel + index;

@@ -70,6 +70,7 @@ class RecordingSession:
             name: clamp01(float((effects or {}).get(name, 0.0)))
             for name in ("reverb", "echo", "delay")
         }
+        self.effects["octave"] = max(-1.0, min(1.0, float((effects or {}).get("octave", 0.0))))
         self.playback_latency_sec = max(0.0, min(1.0, float(playback_latency_sec)))
         self.playback_offset_sec = max(0.0, float(playback_offset_sec)) - self.playback_latency_sec
         self._max_frames = int(round(sample_rate * config.MAX_RECORDING_DURATION_SECONDS))
@@ -618,6 +619,15 @@ def _find_instrumental(song_dir: Path) -> Path | None: return song_artifacts.res
 
 
 def _effect_filter(name: str, amount: float, source: str, target: str) -> str | None:
+    if name == "octave":
+        octave = max(-1.0, min(1.0, float(amount)))
+        if abs(octave) < 0.005:
+            return None
+        ratio = 2.0**octave
+        return (
+            f"[{source}]aresample=48000,asetrate={48000 * ratio:.3f},"
+            f"aresample=48000,atempo={1.0 / ratio:.6f}[{target}]"
+        )
     amount = clamp01(float(amount))
     if amount < 0.01: return None
     if name == "reverb":

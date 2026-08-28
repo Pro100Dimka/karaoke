@@ -274,7 +274,8 @@ export default function useKaraokeTransport({
         microphoneEffects.reverb,
         microphoneEffects.echo,
         microphoneEffects.delay,
-        Boolean(onlineRoom?.room)
+        Boolean(onlineRoom?.room),
+        microphoneEffects.octave
       )) || {};
     if (!id) throw new Error(translateSaved(MISSING_RECORDING_ID));
     rememberPending(id);

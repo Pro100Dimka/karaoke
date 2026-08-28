@@ -39,7 +39,7 @@ def test_session_initialization_clamps_levels_and_selects_stream(monkeypatch):
         playback_offset_sec=-2,
         effects={"reverb": 3, "echo": -1, "delay": 0.5},
     )
-    assert ((session.gain, session.music_gain, session.playback_offset_sec, session.effects) == (4, 0, 0, {'reverb': 1, 'echo': 0, 'delay': 0.5})) and (session._stream is stream)
+    assert ((session.gain, session.music_gain, session.playback_offset_sec, session.effects) == (4, 0, 0, {'reverb': 1, 'echo': 0, 'delay': 0.5, 'octave': 0})) and (session._stream is stream)
 
     duplex = Mock()
     patch_attrs(monkeypatch, recording_service.sd, query_devices=Mock(return_value={'max_output_channels': 2}), Stream=Mock(return_value=duplex))

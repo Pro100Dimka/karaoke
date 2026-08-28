@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from app.services.microphone_quality import MonitorEffectsChain, StudioMicrophoneProcessor
+from app.services.microphone_quality import MonitorEffectsChain, RealtimePitchShifter, StudioMicrophoneProcessor
 
 
 def _reference_hp_tone_stage(buffers, sample_rate, channels):
@@ -148,3 +148,24 @@ def test_monitor_effect_amounts_are_continuous_and_disabled_slots_forget_stale_a
         np.zeros(4000, dtype=np.float32), reverb=0.0, echo=1.0, delay=0.0
     )
     assert np.count_nonzero(restarted) == 0
+
+
+def test_pitch_shifter_neutral_value_is_an_exact_zero_latency_bypass():
+    shifter = RealtimePitchShifter(48_000)
+    samples = np.linspace(-0.5, 0.5, 128, dtype=np.float32)
+
+    result = shifter.process(samples, 0)
+
+    assert result is samples
+    assert np.array_equal(result, samples)
+
+
+def test_pitch_shifter_accepts_both_octave_directions_and_keeps_block_shape():
+    source = np.sin(np.linspace(0, 16 * np.pi, 4096)).astype(np.float32)
+    high = RealtimePitchShifter(48_000).process(source, 1)
+    low = RealtimePitchShifter(48_000).process(source, -1)
+
+    assert high.shape == source.shape
+    assert low.shape == source.shape
+    assert np.isfinite(high).all()
+    assert np.isfinite(low).all()

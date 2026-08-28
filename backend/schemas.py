@@ -248,6 +248,7 @@ class RecordingStartRequest(BaseModel):
     reverb: float = Field(default=0, ge=0, le=1)
     echo: float = Field(default=0, ge=0, le=1)
     delay: float = Field(default=0, ge=0, le=1)
+    octave: float = Field(default=0, ge=-1, le=1)
     room_mode: bool = False
 
 
@@ -400,6 +401,7 @@ class AudioSettingsOut(ORMModel):
     echo: float
     delay: float
     noise_suppression: float
+    octave: float
 
 
 class AudioSettingsUpdate(BaseModel):
@@ -416,6 +418,7 @@ class AudioSettingsUpdate(BaseModel):
     echo: float | None = Field(default=None, ge=0, le=1)
     delay: float | None = Field(default=None, ge=0, le=1)
     noise_suppression: float | None = Field(default=None, ge=0, le=1)
+    octave: float | None = Field(default=None, ge=-1, le=1)
 
 
 class SignalQualityOut(BaseModel):

@@ -126,7 +126,7 @@ describe("online room participants", () => {
         roomSoundMuted={false}
         isLocallyMuted
         effectsEnabled
-        effectSettings={{ volume: 1.2, reverb: 0.2, echo: 0.3, delay: 0.4, noise_suppression: 0.5 }}
+        effectSettings={{ volume: 1.2, reverb: 0.2, echo: 0.3, delay: 0.4, noise_suppression: 0.5, octave: 0 }}
         onSetParticipantEffects={setEffects}
         onTogglePersonMuted={toggleMuted}
         onTogglePersonEffects={toggleEffects}
@@ -134,13 +134,17 @@ describe("online room participants", () => {
     );
     fireEvent.click(screen.getByLabelText(/room.person.effects.disable/));
     fireEvent.mouseEnter(screen.getByLabelText(/room.person.effects.disable/).parentElement);
-    expect(document.querySelectorAll(".karaoke-effect-dial")).toHaveLength(5);
+    expect(document.querySelectorAll(".karaoke-effect-dial")).toHaveLength(6);
     const reverb = screen.getByRole("slider", { name: "Реверб" });
     fireEvent.change(reverb, { target: { value: "0.7" } });
     fireEvent.pointerUp(reverb);
+    const octave = screen.getByRole("slider", { name: "Октава голоса" });
+    fireEvent.change(octave, { target: { value: "0.5" } });
+    fireEvent.pointerUp(octave);
     fireEvent.click(screen.getByLabelText(/room.person.enable/));
     calledWith([toggleEffects, ["guest"]], [toggleMuted, ["guest"]]);
     expect(setEffects).toHaveBeenCalledWith("guest", expect.objectContaining({ reverb: 0.7 }));
+    expect(setEffects).toHaveBeenCalledWith("guest", expect.objectContaining({ octave: 0.5 }));
     expect(document.querySelector("[data-speaking]")).toBeNull();
   });
 });

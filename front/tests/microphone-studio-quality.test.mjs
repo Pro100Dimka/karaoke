@@ -82,7 +82,7 @@ describe("studio microphone quality", () => {
     const rawTrack = { kind: "audio", stop: vi.fn() };
     const rawStream = { getTracks: () => [rawTrack] };
     const graph = createStudioMicrophoneGraph(rawStream);
-    expect(contextOptions).toEqual({ latencyHint: 0.005 });
+    expect(contextOptions).toEqual({ latencyHint: 0 });
     verify(
       [graph.stream, "toBe", destination.stream],
       [graph.getStream(), "toBe", destination.stream],
@@ -96,9 +96,10 @@ describe("studio microphone quality", () => {
     const monitorGain = created.gains.at(-1);
     expect(monitorGain.gain.value).toBe(0.7);
     expect(monitorGain.connections).toContain(output);
-    expect(created.shapers[0].connections).toContain(monitorGain);
+    const finalOutput = created.gains.find((node) => node.connections.includes(monitorGain));
+    expect(finalOutput).toBeDefined();
     expect(graph.setMonitoring(false)).toBe(false);
-    expect(created.shapers[0].disconnections).toContain(monitorGain);
+    expect(finalOutput.disconnections).toContain(monitorGain);
     await graph.close();
     expect(rawTrack.stop).toHaveBeenCalledOnce();
     expect(processedTrack.stop).toHaveBeenCalledOnce();

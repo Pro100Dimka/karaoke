@@ -13,7 +13,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     reverb: 0,
     echo: 0,
     delay: 0,
-    noise_suppression: 0.35
+    noise_suppression: 0.35,
+    octave: 0
   }));
   const [audioDriver, setAudioDriver] = useState("auto");
   const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");

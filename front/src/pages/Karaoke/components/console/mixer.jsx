@@ -73,6 +73,20 @@ export default function MixerPanel({
           );
         })}
       </Grid>
+      <Stack direction="row" justify="center">
+        <RotaryKnob
+          label={t("Октава голоса")}
+          min={-1}
+          max={1}
+          step={0.1}
+          defaultValue={0}
+          value={microphoneEffects.octave ?? 0}
+          displayFactor={100}
+          accent="secondary"
+          size="md"
+          onChange={(value) => onEffectChange("octave", value)}
+        />
+      </Stack>
     </Stack>
   );
 }

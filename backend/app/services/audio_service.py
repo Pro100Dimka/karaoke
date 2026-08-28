@@ -52,8 +52,10 @@ _MONITOR_RESTART_FIELDS = frozenset(
 # updates live over stdin (see _send_live_update) instead of a full stream
 # restart. The ASIO bridge is a separate native binary with no live-update
 # channel, so it still needs a restart to pick up new effect values.
-_ASIO_ONLY_RESTART_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression"})
-_LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression"})
+_ASIO_ONLY_RESTART_FIELDS = frozenset(
+    {"reverb", "echo", "delay", "noise_suppression", "octave"}
+)
+_LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression", "octave"})
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 _monitor_effects_disabled = False
 _MONITOR_START_TIMEOUT_SECONDS = 12.0
@@ -508,7 +510,7 @@ def stop_monitoring() -> None:
 def _send_live_update(payload: dict) -> None:
     if _monitor_effects_disabled:
         payload = {
-            key: (0.0 if key in {"reverb", "echo", "delay"} else value)
+            key: (0.0 if key in {"reverb", "echo", "delay", "octave"} else value)
             for key, value in payload.items()
         }
     with _monitor_lock:
@@ -577,6 +579,9 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         "blocksize": settings.buffer_size,
         "gain": gain,
         **effects,
+        "octave": 0.0 if _monitor_effects_disabled else max(
+            -1.0, min(1.0, float(getattr(settings, "octave", 0.0) or 0.0))
+        ),
         "noise_suppression": clamp01(
             settings.noise_suppression if settings.noise_suppression is not None else 0.35
         ),
@@ -612,6 +617,10 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         str(
             clamp01(settings.noise_suppression if settings.noise_suppression is not None else 0.35)
         ),
+        "--octave",
+        str(0.0 if _monitor_effects_disabled else max(
+            -1.0, min(1.0, float(getattr(settings, "octave", 0.0) or 0.0))
+        )),
     ]
     _launch_monitor_process(command, cwd=bridge.parent)
 

@@ -39,18 +39,23 @@ def _configure_recording_monitor(settings, body: schemas.RecordingStartRequest) 
         return True
 
     transient_values = {
-        name: getattr(settings, name)
-        for name in ("monitoring_enabled", "volume", "reverb", "echo", "delay")
+        name: (hasattr(settings, name), getattr(settings, name, 0.0))
+        for name in ("monitoring_enabled", "volume", "reverb", "echo", "delay", "octave")
     }
     settings.monitoring_enabled = True
     settings.volume = body.microphone_volume
     settings.reverb = body.reverb
     settings.echo = body.echo
     settings.delay = body.delay
+    settings.octave = body.octave
     try:
         audio_service.configure_monitoring(settings)
     finally:
-        for name, value in transient_values.items(): setattr(settings, name, value)
+        for name, (existed, value) in transient_values.items():
+            if existed:
+                setattr(settings, name, value)
+            else:
+                delattr(settings, name)
     return True
 
 
@@ -100,7 +105,12 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
             playback_latency_sec=max(0, getattr(settings, "latency_ms", 50)) / 1000.0,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
-            effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},
+            effects={
+                "reverb": body.reverb,
+                "echo": body.echo,
+                "delay": body.delay,
+                "octave": body.octave,
+            },
             noise_suppression=(
                 0.35
                 if getattr(settings, "noise_suppression", None) is None

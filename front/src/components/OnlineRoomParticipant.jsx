@@ -40,7 +40,8 @@ export default function OnlineRoomParticipant({
     reverb: 0,
     echo: 0,
     delay: 0,
-    noise_suppression: 0.35
+    noise_suppression: 0.35,
+    octave: 0
   });
   const openVolume = () => {
     clearTimeout(closeTimerRef.current);
@@ -105,7 +106,8 @@ export default function OnlineRoomParticipant({
     ["reverb", t("Реверб"), 1, 0, "secondary"],
     ["echo", t("Эхо"), 1, 0, "primary"],
     ["delay", t("Дилей"), 1, 0, "secondary"],
-    ["noise_suppression", t("Шумоподавление"), 1, 0.35, "primary"]
+    ["noise_suppression", t("Шумоподавление"), 1, 0.35, "primary"],
+    ["octave", t("Октава голоса"), 1, 0, "secondary", -1, 0.1]
   ];
   const commitEffect = (name, value) => {
     const next = { ...effectDraft, [name]: value };
@@ -252,25 +254,27 @@ export default function OnlineRoomParticipant({
                     </Typography>
                   )}
                   <Stack direction="row" justify="center" gap="var(--space-3)" wrap>
-                    {effectFields.map(([name, label, maximum, defaultValue, accent]) => (
-                      <RotaryKnob
-                        key={name}
-                        label={label}
-                        min={0}
-                        max={maximum}
-                        step={0.05}
-                        defaultValue={defaultValue}
-                        value={effectDraft[name] ?? defaultValue}
-                        displayFactor={100}
-                        accent={accent}
-                        size="md"
-                        disabled={effectsLocked}
-                        onChange={(value) =>
-                          setEffectDraft((current) => ({ ...current, [name]: value }))
-                        }
-                        onCommit={(value) => commitEffect(name, value)}
-                      />
-                    ))}
+                    {effectFields.map(
+                      ([name, label, maximum, defaultValue, accent, minimum = 0, step = 0.05]) => (
+                        <RotaryKnob
+                          key={name}
+                          label={label}
+                          min={minimum}
+                          max={maximum}
+                          step={step}
+                          defaultValue={defaultValue}
+                          value={effectDraft[name] ?? defaultValue}
+                          displayFactor={100}
+                          accent={accent}
+                          size="md"
+                          disabled={effectsLocked}
+                          onChange={(value) =>
+                            setEffectDraft((current) => ({ ...current, [name]: value }))
+                          }
+                          onCommit={(value) => commitEffect(name, value)}
+                        />
+                      )
+                    )}
                   </Stack>
                 </Stack>
               </Popover>

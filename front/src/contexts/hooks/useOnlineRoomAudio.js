@@ -133,7 +133,7 @@ export default function useOnlineRoomAudio({
         return;
       }
       const effects = roomUiRef.current.effectsByParticipant?.[participantId] || {};
-      const context = new AudioContextClass({ latencyHint: 0.005 });
+      const context = new AudioContextClass({ latencyHint: 0 });
       const source = context.createMediaStreamSource(stream);
       const master = context.createGain();
       master.gain.value = 1;
@@ -240,7 +240,7 @@ export default function useOnlineRoomAudio({
       if (!AudioContextClass) return false;
       let context;
       try {
-        context = new AudioContextClass({ latencyHint: 0.005 });
+        context = new AudioContextClass({ latencyHint: 0 });
         const source = context.createMediaStreamSource(stream);
         const gain = context.createGain();
         gain.gain.value = Math.max(0, Math.min(2, Number(effects.volume ?? 1)));

@@ -131,6 +131,14 @@ def test_effect_filters_are_bounded(name, amount, fragment):
     assert (fragment in result) if fragment else result is None
 
 
+def test_octave_filter_preserves_duration_for_both_directions():
+    octave_up = recording_service._effect_filter("octave", 1, "in", "out")
+    octave_down = recording_service._effect_filter("octave", -1, "in", "out")
+
+    assert "asetrate=96000.000" in octave_up and "atempo=0.500000" in octave_up
+    assert "asetrate=24000.000" in octave_down and "atempo=2.000000" in octave_down
+
+
 def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_path):
     current = recording(tmp_path / "take.wav")
     command = recording_service._performance_mix_command(

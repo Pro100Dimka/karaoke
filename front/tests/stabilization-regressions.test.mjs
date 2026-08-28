@@ -35,12 +35,12 @@ test("room output mute never toggles the outgoing WebRTC microphone", () => {
   const body = context.slice(start, end);
   verify([body, "not.toContain", "setMicrophoneMuted("], [body, "toContain", "applyRemoteAudioMute()"]);
 });
-test("room self-monitor keeps WebRTC transport but uses the configured native output", () => {
+test("room self-monitor keeps WebRTC transport and releases its realtime graph", () => {
   const audio = read("src/contexts/hooks/useOnlineRoomAudio.js");
   verify([audio, "toContain", "const stream = await voice.start()"], [audio, "toContain", "context.createMediaStreamSource(stream)"]);
   const karaoke = read("src/pages/Karaoke/index.jsx");
   verify(
-    [karaoke, "toContain", "onlineRoom.setLocalMonitoring(false)"],
+    [karaoke, "toContain", "setRoomLocalMonitoring(false)"],
     [karaoke, "toContain", "api.startDirectMonitoring"],
     [karaoke, "toContain", "api.stopDirectMonitoring"]
   );

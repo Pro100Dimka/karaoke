@@ -78,6 +78,7 @@ _AUDIO_COLUMN_MIGRATIONS = {
     "noise_suppression": (
         "ALTER TABLE audio_settings ADD COLUMN noise_suppression FLOAT DEFAULT 0.35"
     ),
+    "octave": "ALTER TABLE audio_settings ADD COLUMN octave FLOAT DEFAULT 0",
 }
 
 
@@ -128,6 +129,8 @@ def _repair_corrupted_audio_settings(connection) -> None:
                 "SELECT id, volume, sensitivity, latency_ms, audio_driver, buffer_size, "
                 "monitoring_enabled, reverb, echo, delay, "
                 + ("noise_suppression" if "noise_suppression" in columns else "0.35 AS noise_suppression")
+                + ", "
+                + ("octave" if "octave" in columns else "0 AS octave")
                 + " FROM audio_settings"
             )
         )
@@ -157,6 +160,7 @@ def _repair_corrupted_audio_settings(connection) -> None:
             and in_range(row["echo"], 0.0, 1.0)
             and in_range(row["delay"], 0.0, 1.0)
             and in_range(row["noise_suppression"], 0.0, 1.0)
+            and in_range(row["octave"], -1.0, 1.0)
         )
         if not valid: corrupted_ids.append(int(row["id"]))
 

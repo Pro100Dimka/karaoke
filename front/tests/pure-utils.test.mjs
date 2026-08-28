@@ -237,7 +237,8 @@ test("microphone settings clamp malformed values and preserve noise suppression"
     reverb: 1,
     echo: 0,
     delay: 0.5,
-    noise_suppression: 0.35
+    noise_suppression: 0.35,
+    octave: 0
   });
   expect(normalizeAudioRuntimeSettings({ volume: 4, monitoring_enabled: "false", buffer_size: 0 })).toMatchObject({
     volume: 2,

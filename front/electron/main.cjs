@@ -48,6 +48,11 @@ const { findMatchingSongFolder } = require("./song-folders.cjs");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+// Chromium otherwise chooses a conservative Windows render buffer on many
+// consumer USB headsets. 128 frames is one Web Audio render quantum (about
+// 2.7 ms at 48 kHz) and keeps the room path interactive without relying on a
+// professional ASIO device.
+app.commandLine.appendSwitch("audio-buffer-size", "128");
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "karaoke-media",

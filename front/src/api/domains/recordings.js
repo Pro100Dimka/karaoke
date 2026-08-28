@@ -11,7 +11,8 @@ export const recordingsApi = {
     reverb = 0,
     echo = 0,
     delay = 0,
-    roomMode = false
+    roomMode = false,
+    octave = 0
   ) =>
     request("/recording/start", {
       method: "POST",
@@ -23,6 +24,7 @@ export const recordingsApi = {
         reverb,
         echo,
         delay,
+        octave,
         room_mode: roomMode
       })
     }),

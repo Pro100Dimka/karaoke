@@ -137,7 +137,8 @@ export default class OnlineVoiceMesh {
         // room call actually starts with whatever the user last saved.
         const persistedSettings = await api.getAudioSettings().catch(() => null);
         this.microphoneGraph = createStudioMicrophoneGraph(stream, {
-          noiseSuppression: persistedSettings?.noise_suppression
+          noiseSuppression: persistedSettings?.noise_suppression,
+          octave: persistedSettings?.octave
         });
         const outgoingStream = this.microphoneGraph.stream || stream;
         this.stream = outgoingStream;

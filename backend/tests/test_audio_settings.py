@@ -228,8 +228,9 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "gain": 4,
         "reverb": 0.0,
         "echo": 0.0,
-            "delay": 0.0,
-            "noise_suppression": 0.35,
+                "delay": 0.0,
+                "octave": 0.0,
+                "noise_suppression": 0.35,
             "wasapi_exclusive": False,
     }
 
@@ -267,7 +268,7 @@ def test_asio_monitor_validates_bridge_driver_and_clamps_command(monkeypatch, tm
         )
     )
     command = launch.call_args.args[0]
-    assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (launch.call_args.kwargs == {'cwd': tmp_path})
+    assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0') and (launch.call_args.kwargs == {'cwd': tmp_path})
 
 
 def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):

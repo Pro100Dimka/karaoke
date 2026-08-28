@@ -98,6 +98,21 @@ describe("microphoneChannelStrip", () => {
       );
     }
   });
+  test("realtime mode removes compressor look-ahead and limiter oversampling", () => {
+    const created = { filters: [], compressors: [], gains: [], shapers: [] };
+    const source = new Node();
+    const destination = new Node();
+    const nodes = connectMicrophoneChannelStrip(createContext(created), source, destination, {
+      realtime: true
+    });
+    same(
+      [nodes.limiter.oversample, "none"],
+      [nodes.presence.target, nodes.makeup],
+      [nodes.makeup.target, nodes.limiter],
+      [nodes.limiter.target, destination]
+    );
+    expect(nodes.compressor.target).toBeUndefined();
+  });
   test("noise gate follows the signal envelope instead of reshaping individual samples", () => {
     vi.useFakeTimers();
     const created = { filters: [], compressors: [], gains: [], shapers: [], analysers: [] };

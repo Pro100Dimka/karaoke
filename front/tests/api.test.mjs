@@ -308,6 +308,7 @@ describe("API domains", () => {
           reverb: 0,
           echo: 0,
           delay: 0,
+          octave: 0,
           room_mode: false
         }
       ],
@@ -321,6 +322,7 @@ describe("API domains", () => {
           reverb: 0.1,
           echo: 0.2,
           delay: 0.3,
+          octave: 0,
           room_mode: true
         }
       ]

@@ -1,3 +1,5 @@
+import roomJoinLeaveSound from "../assets/sounds/room-join-leave.mp3";
+
 const setAudioParam = (parameter, value, time) => {
   if (typeof parameter?.setValueAtTime === "function") parameter.setValueAtTime(value, time);
   else if (parameter) parameter.value = value;
@@ -9,7 +11,7 @@ const bendAudioParam = (parameter, value, time) => {
   else if (parameter) parameter.value = value;
 };
 
-function playRoomGuitarBend(direction) {
+function playSynthesizedRoomSound(direction) {
   const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AudioContext || typeof AudioContext.prototype?.createOscillator !== "function") return false;
   let context;
@@ -31,9 +33,16 @@ function playRoomGuitarBend(direction) {
       filter.connect(context.destination);
     } else gain.connect(context.destination);
 
-    const notes = direction === "leave"
-      ? [[783.99, 659.25, 0], [587.33, 440, 0.11]]
-      : [[493.88, 659.25, 0], [659.25, 987.77, 0.11]];
+    const notes =
+      direction === "leave"
+        ? [
+            [783.99, 659.25, 0],
+            [587.33, 440, 0.11]
+          ]
+        : [
+            [493.88, 659.25, 0],
+            [659.25, 987.77, 0.11]
+          ];
     const wave = context.createPeriodicWave?.(
       new Float32Array(7),
       new Float32Array([0, 1, 0.52, 0.31, 0.17, 0.09, 0.04])
@@ -64,5 +73,29 @@ function playRoomGuitarBend(direction) {
   }
 }
 
-export const playParticipantJoinedSound = () => playRoomGuitarBend("join");
-export const playParticipantLeftSound = () => playRoomGuitarBend("leave");
+function playRoomSound(direction) {
+  if (typeof globalThis.Audio !== "function") return playSynthesizedRoomSound(direction);
+  try {
+    const audio = new globalThis.Audio(roomJoinLeaveSound);
+    audio.preload = "auto";
+    audio.volume = 0.18;
+    audio.playbackRate = 1;
+    const release = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.src = "";
+    };
+    audio.onended = release;
+    audio.onerror = release;
+    Promise.resolve(audio.play()).catch(() => {
+      release();
+      playSynthesizedRoomSound(direction);
+    });
+    return true;
+  } catch {
+    return playSynthesizedRoomSound(direction);
+  }
+}
+
+export const playParticipantJoinedSound = () => playRoomSound("join");
+export const playParticipantLeftSound = () => playRoomSound("leave");

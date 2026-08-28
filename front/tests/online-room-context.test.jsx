@@ -555,7 +555,7 @@ describe("online room provider", () => {
     await waitFor(() => expect(contexts).toHaveLength(1));
     expect(hook.result.current.effectPeople.has("guest")).toBe(true);
     const [context] = contexts;
-    expect(context.options).toEqual({ latencyHint: 0.005 });
+    expect(context.options).toEqual({ latencyHint: 0 });
     expect(context.resume).toHaveBeenCalledTimes(1);
     expect(context.gains).toHaveLength(4);
     expect(context.delays).toHaveLength(1);
@@ -634,7 +634,7 @@ describe("online room provider", () => {
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
     expect(contexts).toHaveLength(1);
-    expect(contexts[0].options).toEqual({ latencyHint: 0.005 });
+    expect(contexts[0].options).toEqual({ latencyHint: 0 });
     expect(contexts[0].master.gain.value).toBe(1);
     expect(document.querySelector("audio").muted).toBe(true);
     act(() => hook.result.current.togglePersonEffects("guest"));
@@ -753,7 +753,9 @@ describe("online room provider", () => {
   });
 
   test("reports voice playback failures and isolates rejected audio graph promises", async () => {
-    HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("autoplay blocked"));
+    HTMLMediaElement.prototype.play.mockImplementation(function play() {
+      return this.dataset.onlineRoomParticipant ? Promise.reject(new Error("autoplay blocked")) : Promise.resolve();
+    });
     const contexts = [];
     globalThis.AudioContext = class {
       constructor() {
