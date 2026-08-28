@@ -82,6 +82,74 @@ describe("online voice mesh", () => {
     expect(setMonitoring).toHaveBeenLastCalledWith(false);
   });
 
+  test("switches each peer between synchronized dry and effected sender tracks", async () => {
+    const mesh = makeMesh();
+    const dryTrack = track("dry");
+    const wetTrack = track("wet");
+    mesh.stream = stream([dryTrack]);
+    mesh.effectsStream = stream([wetTrack]);
+    const peer = mesh.createPeer("guest");
+    const sender = peer.getSenders()[0];
+    sender.replaceTrack = vi.fn(async (nextTrack) => {
+      sender.track = nextTrack;
+    });
+
+    await expect(mesh.accept("guest", { effectsEnabled: true })).resolves.toBe(true);
+    expect(sender.replaceTrack).toHaveBeenLastCalledWith(wetTrack);
+    expect(mesh.peerEffectsEnabled.get("guest")).toBe(true);
+    await expect(mesh.accept("guest", { effectsEnabled: false })).resolves.toBe(true);
+    expect(sender.replaceTrack).toHaveBeenLastCalledWith(dryTrack);
+    expect(mesh.peerEffectsEnabled.get("guest")).toBe(false);
+
+    mesh.setMicrophoneMuted(true);
+    expect(dryTrack.enabled).toBe(false);
+    expect(wetTrack.enabled).toBe(false);
+  });
+
+  test("reports network and receiver buffering separately for duet latency diagnostics", async () => {
+    const mesh = makeMesh();
+    const peer = mesh.createPeer("guest");
+    peer.getStats = vi.fn().mockResolvedValue(
+      new Map([
+        [
+          "inbound",
+          {
+            type: "inbound-rtp",
+            kind: "audio",
+            jitter: 0.004,
+            jitterBufferDelay: 0.3,
+            jitterBufferMinimumDelay: 0.2,
+            jitterBufferEmittedCount: 10,
+            packetsLost: 2,
+            concealedSamples: 48
+          }
+        ],
+        [
+          "pair",
+          {
+            type: "candidate-pair",
+            selected: true,
+            state: "succeeded",
+            currentRoundTripTime: 0.04
+          }
+        ]
+      ])
+    );
+    await expect(mesh.getInboundLatencyDiagnostics()).resolves.toEqual([
+      {
+        participantId: "guest",
+        jitterMs: 4,
+        jitterBufferMs: 30,
+        minimumPlayoutMs: 20,
+        networkOneWayMs: 20,
+        estimatedTotalMs: 50,
+        packetsLost: 2,
+        concealedSamples: 48
+      }
+    ]);
+    await expect(mesh.estimateInboundLatency()).resolves.toBeCloseTo(0.05);
+  });
+
   test("uses the exact capture, peer and sender quality contracts", async () => {
     const media = stream([track("voice"), { ...track("video"), kind: "video" }]);
     const capture = vi.fn().mockResolvedValue(media);

@@ -494,112 +494,27 @@ describe("online room provider", () => {
     expect(mocks.importSongPackage).not.toHaveBeenCalled();
   });
 
-  test("can render and remove participant effects without leaking audio graphs", async () => {
-    vi.spyOn(Math, "random").mockReturnValue(0.75);
-    const contexts = [];
-    globalThis.AudioContext = class {
-      constructor(options) {
-        this.options = options;
-        this.sampleRate = 100;
-        this.destination = {};
-        this.resume = vi.fn().mockResolvedValue(undefined);
-        this.close = vi.fn().mockResolvedValue(undefined);
-        this.source = { connect: vi.fn() };
-        this.gains = [];
-        this.delays = [];
-        this.convolvers = [];
-        this.buffers = [];
-        contexts.push(this);
-      }
-      createMediaStreamSource = () => this.source;
-      createGain = () => {
-        const node = { gain: { value: 0 }, connect: vi.fn() };
-        this.gains.push(node);
-        return node;
-      };
-      createDelay = (maximum) => {
-        const node = { maximum, delayTime: { value: 0 }, connect: vi.fn() };
-        this.delays.push(node);
-        return node;
-      };
-      createConvolver = () => {
-        const node = { buffer: null, connect: vi.fn() };
-        this.convolvers.push(node);
-        return node;
-      };
-      createBuffer = (channels, frames, sampleRate) => {
-        const data = Array.from({ length: channels }, () => new Float32Array(frames));
-        const buffer = {
-          channels,
-          frames,
-          sampleRate,
-          numberOfChannels: channels,
-          data,
-          getChannelData: (channel) => data[channel]
-        };
-        this.buffers.push(buffer);
-        return buffer;
-      };
-    };
+  test("switches participant effects at the sender without a receive-side audio graph", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
     const voice = mocks.voices[0];
     await act(async () => voice.onRemoteStream("guest", stream()));
-    const providerControls = mocks.createOnlineRoomMessageHandler.mock.calls[0][0];
-    act(() =>
-      providerControls.setRoomUi({
-        effectsByParticipant: { guest: { echo: 0.5, delay: 0.4, reverb: 0.6 } }
-      })
-    );
     act(() => hook.result.current.togglePersonEffects("guest"));
-    await waitFor(() => expect(contexts).toHaveLength(1));
     expect(hook.result.current.effectPeople.has("guest")).toBe(true);
-    const [context] = contexts;
-    expect(context.options).toEqual({ latencyHint: 0 });
-    expect(context.resume).toHaveBeenCalledTimes(1);
-    expect(context.gains).toHaveLength(4);
-    expect(context.delays).toHaveLength(1);
-    expect(context.delays[0].maximum).toBe(1);
-    expect(context.delays[0].delayTime.value).toBeCloseTo(0.196);
-    expect(context.gains[1].gain.value).toBeCloseTo(0.395);
-    expect(context.gains[2].gain.value).toBeCloseTo(0.326);
-    expect(context.gains[3].gain.value).toBeCloseTo(0.288);
-    expect(context.buffers[0]).toMatchObject({ channels: 2, frames: 104, sampleRate: 100 });
-    expect(context.buffers[0].data[0][0]).toBeCloseTo(0.5);
-    expect(context.buffers[0].data[0][52]).toBeCloseTo(0.5 * 0.5 ** 2.7);
-    expect(context.buffers[0].data[1][103]).toBeCloseTo(0.5 * (1 - 103 / 104) ** 2.7);
-    expect(context.convolvers[0].buffer).toBe(context.buffers[0]);
-    expect(context.source.connect).toHaveBeenCalledWith(context.gains[0]);
-    expect(context.source.connect).toHaveBeenCalledWith(context.delays[0]);
-    expect(context.source.connect).toHaveBeenCalledWith(context.convolvers[0]);
-    expect(context.delays[0].connect).toHaveBeenCalledWith(context.gains[1]);
-    expect(context.delays[0].connect).toHaveBeenCalledWith(context.gains[2]);
-    expect(context.gains[1].connect).toHaveBeenCalledWith(context.delays[0]);
-    expect(context.convolvers[0].connect).toHaveBeenCalledWith(context.gains[3]);
-    expect(context.gains[0].connect).toHaveBeenCalledWith(context.destination);
-    expect(context.gains[0].gain.value).toBe(1);
     const audio = document.querySelector("audio");
-    expect(audio.muted).toBe(true);
-    act(() => hook.result.current.setRoomSoundMuted(true));
-    expect(context.gains[0].gain.value).toBe(0);
-    act(() => hook.result.current.setRoomSoundMuted(false));
-
-    act(() =>
-      providerControls.setRoomUi({
-        effectsByParticipant: { guest: { echo: 2, delay: -1, reverb: "invalid" } }
-      })
-    );
-    await waitFor(() => expect(contexts).toHaveLength(2));
-    expect(context.close).toHaveBeenCalledTimes(1);
-    expect(contexts[1].delays[0].delayTime.value).toBeCloseTo(0.06);
-    expect(contexts[1].gains[1].gain.value).toBeCloseTo(0.55);
-    expect(contexts[1].gains[2].gain.value).toBeCloseTo(0.46);
-    expect(contexts[1].convolvers).toHaveLength(0);
+    expect(audio.muted).toBe(false);
+    expect(mocks.clients[0].send).toHaveBeenLastCalledWith("signal", {
+      targetId: "guest",
+      signal: { effectsEnabled: true }
+    });
 
     act(() => hook.result.current.togglePersonEffects("guest"));
-    await waitFor(() => expect(contexts[1].close).toHaveBeenCalledTimes(1));
     expect(hook.result.current.effectPeople.has("guest")).toBe(false);
     expect(audio.muted).toBe(false);
+    expect(mocks.clients[0].send).toHaveBeenLastCalledWith("signal", {
+      targetId: "guest",
+      signal: { effectsEnabled: false }
+    });
   });
 
   test("falls back cleanly when participant effects are unsupported", async () => {
@@ -615,35 +530,19 @@ describe("online room provider", () => {
     expect(document.querySelector("audio").muted).toBe(false);
   });
 
-  test("supports the webkit audio fallback and optional graph methods", async () => {
-    const contexts = [];
-    globalThis.webkitAudioContext = class {
-      constructor(options) {
-        this.options = options;
-        this.destination = {};
-        this.master = { gain: { value: 0 }, connect: vi.fn() };
-        this.source = { connect: vi.fn() };
-        contexts.push(this);
-      }
-      createMediaStreamSource = () => this.source;
-      createGain = () => this.master;
-    };
+  test("does not require a receive-side WebAudio implementation for participant effects", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
     await act(async () => mocks.voices[0].onRemoteStream("guest", stream()));
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
-    expect(contexts).toHaveLength(1);
-    expect(contexts[0].options).toEqual({ latencyHint: 0 });
-    expect(contexts[0].master.gain.value).toBe(1);
-    expect(document.querySelector("audio").muted).toBe(true);
+    expect(document.querySelector("audio").muted).toBe(false);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
     expect(document.querySelector("audio").muted).toBe(false);
     await act(async () => mocks.voices[0].onRemoteStream("guest-2", stream()));
     act(() => hook.result.current.togglePersonEffects("guest-2"));
     await act(async () => Promise.resolve());
-    expect(contexts).toHaveLength(2);
     expect(() => mocks.voices[0].onPeerClosed("guest-2")).not.toThrow();
   });
 
@@ -756,7 +655,6 @@ describe("online room provider", () => {
     HTMLMediaElement.prototype.play.mockImplementation(function play() {
       return this.dataset.onlineRoomParticipant ? Promise.reject(new Error("autoplay blocked")) : Promise.resolve();
     });
-    const contexts = [];
     globalThis.AudioContext = class {
       constructor() {
         this.destination = {};
@@ -765,7 +663,6 @@ describe("online room provider", () => {
         this.master = { gain: { value: 1 }, connect: vi.fn() };
         this.resume = vi.fn().mockRejectedValue(new Error("resume"));
         this.close = vi.fn().mockRejectedValue(new Error("close"));
-        contexts.push(this);
       }
       createMediaStreamSource = () => this.source;
       createGain = () => (this.master.connect.mock.calls.length ? { gain: { value: 0 }, connect: vi.fn() } : this.master);
@@ -782,7 +679,7 @@ describe("online room provider", () => {
     expect(document.querySelector("audio").muted).toBe(false);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
-    expect(contexts[0].close).toHaveBeenCalled();
+    expect(document.querySelector("audio").muted).toBe(false);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
     act(() => mocks.voices[0].onPeerClosed("guest"));

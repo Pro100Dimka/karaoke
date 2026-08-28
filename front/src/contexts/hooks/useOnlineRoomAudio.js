@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { clamp01 as clampUnit } from "../../utils/math";
 
 const clamp01 = (value) => clampUnit(Number(value) || 0);
@@ -8,6 +8,14 @@ const closeContext = (context) => {
     result?.catch?.(() => {});
   } catch {
     // Closing an already-closed Web Audio context is harmless.
+  }
+};
+const routeMediaOutput = (target, deviceId) => {
+  if (typeof target?.setSinkId !== "function") return null;
+  try {
+    return Promise.resolve(target.setSinkId(deviceId || "")).catch(() => false);
+  } catch {
+    return Promise.resolve(false);
   }
 };
 
@@ -24,6 +32,21 @@ export default function useOnlineRoomAudio({
   const remoteEffectsRef = useRef(new Map());
   const remoteEffectVersionsRef = useRef(new Map());
   const localMonitorRef = useRef(null);
+  const outputDeviceIdRef = useRef("");
+
+  const applyOutputRoute = useCallback((deviceId) => {
+    const normalized = typeof deviceId === "string" ? deviceId : "";
+    outputDeviceIdRef.current = normalized;
+    remoteAudioRef.current.forEach((audio) => routeMediaOutput(audio, normalized));
+    remoteEffectsRef.current.forEach(({ context }) => routeMediaOutput(context, normalized));
+    routeMediaOutput(localMonitorRef.current?.context, normalized);
+  }, []);
+
+  useEffect(() => {
+    const route = (event) => applyOutputRoute(event.detail?.deviceId);
+    globalThis.addEventListener?.("audio-output-route-changed", route);
+    return () => globalThis.removeEventListener?.("audio-output-route-changed", route);
+  }, [applyOutputRoute]);
 
   const applyRemoteAudioMute = useCallback(() => {
     for (const [participantId, audio] of remoteAudioRef.current) {
@@ -108,7 +131,10 @@ export default function useOnlineRoomAudio({
       remoteAudioRef.current.set(participantId, audio);
       startSpeakingMeter(participantId, stream);
       applyRemoteAudioMute();
-      audio.play().catch(() => onPlayBlocked?.());
+      const routed = routeMediaOutput(audio, outputDeviceIdRef.current);
+      const play = () => audio.play().catch(() => onPlayBlocked?.());
+      if (routed) routed.finally(play);
+      else play();
       return audio;
     },
     [applyRemoteAudioMute, removeRemoteAudio, startSpeakingMeter]
@@ -134,6 +160,7 @@ export default function useOnlineRoomAudio({
       }
       const effects = roomUiRef.current.effectsByParticipant?.[participantId] || {};
       const context = new AudioContextClass({ latencyHint: 0 });
+      routeMediaOutput(context, outputDeviceIdRef.current);
       const source = context.createMediaStreamSource(stream);
       const master = context.createGain();
       master.gain.value = 1;
@@ -241,6 +268,7 @@ export default function useOnlineRoomAudio({
       let context;
       try {
         context = new AudioContextClass({ latencyHint: 0 });
+        await routeMediaOutput(context, outputDeviceIdRef.current);
         const source = context.createMediaStreamSource(stream);
         const gain = context.createGain();
         gain.gain.value = Math.max(0, Math.min(2, Number(effects.volume ?? 1)));

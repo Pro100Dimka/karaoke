@@ -2,6 +2,11 @@ import { useEffect } from "react";
 import { api } from "../../../api/client";
 import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 
+const publishRoomOutputRoute = (deviceId) =>
+  globalThis.dispatchEvent?.(
+    new CustomEvent("audio-output-route-changed", { detail: { deviceId: deviceId || "" } })
+  );
+
 export default function useAudioOutputRouting(options) {
   const {
     audioDriver,
@@ -39,19 +44,28 @@ export default function useAudioOutputRouting(options) {
       directOutputDeviceId == null ||
       directOutputDeviceId === "" ||
       typeof enumerateDevices !== "function"
-    )
+    ) {
+      publishRoomOutputRoute("");
       return undefined;
+    }
     const selected = Array.from(directOutputDevices ?? []).find(
       (device) => String(device.index) === String(directOutputDeviceId)
     );
-    if (!selected) return undefined;
+    if (!selected) {
+      publishRoomOutputRoute("");
+      return undefined;
+    }
     let active = true;
     Promise.resolve(enumerateDevices.call(globalThis.navigator.mediaDevices))
       .then((entries) => {
         if (!active) return;
         const output = findMatchingBrowserOutput(entries, selected);
         // Stryker disable next-line ConditionalExpression: equivalent catch fallback.
-        if (!output) return;
+        if (!output) {
+          publishRoomOutputRoute("");
+          return;
+        }
+        publishRoomOutputRoute(output.deviceId);
         [instrumentalRef.current, vocalsRef.current, videoRef.current]
           .filter(Boolean)
           .forEach((media) => {

@@ -225,6 +225,8 @@ describe("microphone settings", () => {
 const mediaRef = (setSinkId = vi.fn().mockResolvedValue(undefined)) => ({ current: { setSinkId } });
 describe("audio output routing", () => {
   test("selects an ASIO output and routes browser media to the matching sink", async () => {
+    const roomRoute = vi.fn();
+    window.addEventListener("audio-output-route-changed", roomRoute);
     const setDirectOutputDeviceId = vi.fn();
     const updateMicrophone = vi.fn().mockRejectedValue(new Error("backend"));
     const instrumentalRef = mediaRef(vi.fn().mockRejectedValue(new Error("sink")));
@@ -253,6 +255,8 @@ describe("audio output routing", () => {
     hook.rerender({ ...options, directOutputDeviceId: 2 });
     await waitFor(() => expect(instrumentalRef.current.setSinkId).toHaveBeenCalledWith("browser-output"));
     calledWith([vocalsRef.current.setSinkId, ["browser-output"]], [videoRef.current.setSinkId, ["browser-output"]]);
+    expect(roomRoute).toHaveBeenCalledWith(expect.objectContaining({ detail: { deviceId: "browser-output" } }));
+    window.removeEventListener("audio-output-route-changed", roomRoute);
   });
   test("selects an ASIO output only when it is needed and available", () => {
     const setDirectOutputDeviceId = vi.fn();

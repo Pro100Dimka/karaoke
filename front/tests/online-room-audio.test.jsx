@@ -84,6 +84,22 @@ test("removeRemoteAudio forgets the participant's effect-version entry", () => {
   deleteSpy.mockRestore();
 });
 
+test("routes an attached remote voice to the selected room output", async () => {
+  const { result } = renderHook(() => useOnlineRoomAudio(makeHookProps()));
+  act(() => {
+    result.current.attachRemoteStream("peer", { getTracks: () => [] }, vi.fn());
+  });
+  const audio = document.querySelector("[data-online-room-participant='peer']");
+  audio.setSinkId = vi.fn().mockResolvedValue(undefined);
+
+  act(() => {
+    window.dispatchEvent(new CustomEvent("audio-output-route-changed", { detail: { deviceId: "studio-output" } }));
+  });
+  await act(async () => Promise.resolve());
+
+  expect(audio.setSinkId).toHaveBeenCalledWith("studio-output");
+});
+
 test("a pending effect activation is discarded, not attached, once the participant is removed mid-flight", async () => {
   const { result } = renderHook(() => useOnlineRoomAudio(makeHookProps()));
   act(() => {

@@ -19,8 +19,11 @@ globalThis.addEventListener?.("audio-settings-changed", ({ detail }) => {
 function rawGraph(stream) {
   return {
     stream,
+    effectsStream: stream,
     rawStream: stream,
     getStream: () => stream,
+    getEffectsStream: () => stream,
+    setEffects: () => false,
     setMonitoring: () => false,
     close: async () => stop(stream)
   };
@@ -42,14 +45,23 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
     context = new AudioContext({ latencyHint: 0 });
     source = context.createMediaStreamSource(input);
     const destination = context.createMediaStreamDestination();
+    const effectsDestination = context.createMediaStreamDestination();
     const processedBus = context.createGain();
     const finalOutput = context.createGain();
+    const effectsMix = context.createGain();
     const strip = connectMicrophoneChannelStrip(context, source, processedBus, {
       noiseSuppression: options.noiseSuppression ?? noiseSuppression,
       realtime: true
     });
+    const clamp = (value, maximum = 1) => Math.max(0, Math.min(maximum, Number(value) || 0));
     processedBus.connect(finalOutput);
+    finalOutput.gain.value = clamp(options.volume ?? 1, 2);
     finalOutput.connect(destination);
+    // Keep an immediate dry path in the effects stream. Reverb/echo are mixed
+    // alongside it, never inserted before it, so enabling studio effects does
+    // not move the singer's consonants later in time.
+    finalOutput.connect(effectsMix);
+    effectsMix.connect(effectsDestination);
     let pitchNode = null;
     let pitchModulePromise = null;
     let pitchVersion = 0;
@@ -97,27 +109,27 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       return octave;
     };
     setPitchShift(options.octave).catch(() => {});
-    let monitor = null;
-    const stopMonitoring = () => {
-      if (!monitor) return false;
-      try {
-        finalOutput.disconnect(monitor.gain);
-      } catch {
-        // The monitor can already be detached while the context is closing.
-      }
-      monitor.nodes.forEach(disconnect);
-      monitor = null;
-      return false;
+    let effectConnections = [];
+    let effectNodes = [];
+    const clearEffects = () => {
+      effectConnections.forEach(([from, to]) => {
+        try {
+          from.disconnect(to);
+        } catch {
+          // A previous effect graph can already be detached.
+        }
+      });
+      effectConnections = [];
+      effectNodes.forEach(disconnect);
+      effectNodes = [];
     };
-    const setMonitoring = (enabled, effects = {}) => {
-      stopMonitoring();
-      if (!enabled) return false;
-      const clamp = (value, maximum = 1) => Math.max(0, Math.min(maximum, Number(value) || 0));
-      const gain = context.createGain();
-      const nodes = [gain];
-      gain.gain.value = clamp(effects.volume ?? 1, 2);
-      finalOutput.connect(gain);
-
+    const connectEffect = (from, to) => {
+      from.connect(to);
+      effectConnections.push([from, to]);
+    };
+    const setEffects = (effects = {}) => {
+      clearEffects();
+      finalOutput.gain.value = clamp(effects.volume ?? finalOutput.gain.value ?? 1, 2);
       const echo = clamp(effects.echo);
       const delayAmount = clamp(effects.delay);
       if (echo || delayAmount) {
@@ -127,12 +139,12 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
         delay.delayTime.value = 0.06 + delayAmount * 0.34;
         feedback.gain.value = Math.min(0.72, echo * 0.55 + delayAmount * 0.3);
         wet.gain.value = Math.min(0.65, echo * 0.46 + delayAmount * 0.24);
-        finalOutput.connect(delay);
-        delay.connect(feedback);
-        feedback.connect(delay);
-        delay.connect(wet);
-        wet.connect(gain);
-        nodes.push(delay, feedback, wet);
+        connectEffect(finalOutput, delay);
+        connectEffect(delay, feedback);
+        connectEffect(feedback, delay);
+        connectEffect(delay, wet);
+        connectEffect(wet, effectsMix);
+        effectNodes.push(delay, feedback, wet);
       }
 
       const reverb = clamp(effects.reverb);
@@ -148,11 +160,34 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
         }
         convolver.buffer = impulse;
         wet.gain.value = Math.min(0.58, reverb * 0.48);
-        finalOutput.connect(convolver);
-        convolver.connect(wet);
-        wet.connect(gain);
-        nodes.push(convolver, wet);
+        connectEffect(finalOutput, convolver);
+        connectEffect(convolver, wet);
+        connectEffect(wet, effectsMix);
+        effectNodes.push(convolver, wet);
       }
+      return true;
+    };
+    setEffects(options);
+    let monitor = null;
+    const stopMonitoring = () => {
+      if (!monitor) return false;
+      try {
+        effectsMix.disconnect(monitor.gain);
+      } catch {
+        // The monitor can already be detached while the context is closing.
+      }
+      monitor.nodes.forEach(disconnect);
+      monitor = null;
+      return false;
+    };
+    const setMonitoring = (enabled, effects = {}) => {
+      stopMonitoring();
+      if (!enabled) return false;
+      const gain = context.createGain();
+      const nodes = [gain];
+      gain.gain.value = 1;
+      setEffects(effects);
+      effectsMix.connect(gain);
       gain.connect(context.destination);
       monitor = { gain, nodes };
       return true;
@@ -160,21 +195,29 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
     const sync = ({ detail }) => {
       if (detail?.noise_suppression != null) strip.setNoiseSuppression(detail.noise_suppression);
       if (detail?.octave != null) setPitchShift(detail.octave).catch(() => {});
+      if (["volume", "reverb", "echo", "delay"].some((name) => detail?.[name] != null))
+        setEffects(detail);
     };
     globalThis.addEventListener?.("audio-settings-changed", sync);
     destination.stream.getAudioTracks?.().forEach((track) => {
       track.contentHint = "music";
     });
+    effectsDestination.stream.getAudioTracks?.().forEach((track) => {
+      track.contentHint = "music";
+    });
     context.resume?.().catch(() => {});
     return {
       stream: destination.stream,
+      effectsStream: effectsDestination.stream,
       rawStream,
       context,
       setNoiseSuppression: strip.setNoiseSuppression,
       setPitchShift,
+      setEffects,
       setMonitoring,
-      getStream: ({ disabledEffects = false } = {}) =>
-        disabledEffects ? input : destination.stream,
+      getStream: ({ disabledEffects = false, effectsEnabled = false } = {}) =>
+        disabledEffects ? input : effectsEnabled ? effectsDestination.stream : destination.stream,
+      getEffectsStream: () => effectsDestination.stream,
       async replaceInput(stream) {
         const next = context.createMediaStreamSource(stream);
         next.connect(strip.highpass);
@@ -186,14 +229,17 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       async close() {
         globalThis.removeEventListener?.("audio-settings-changed", sync);
         stopMonitoring();
+        clearEffects();
         strip.close?.();
         pitchVersion += 1;
         disconnect(pitchNode);
         disconnect(processedBus);
         disconnect(finalOutput);
+        disconnect(effectsMix);
         disconnect(source);
         stop(input);
         stop(destination.stream);
+        stop(effectsDestination.stream);
         if (context.state !== "closed") await closeAudioContext(context);
       }
     };

@@ -78,6 +78,8 @@ export default class OnlineVoiceMesh {
     this.pendingTransferCredits = new Map();
     this.outboundTransfers = new Map();
     this.stream = null;
+    this.effectsStream = null;
+    this.peerEffectsEnabled = new Map();
     this.microphoneGraph = null;
     this.startPromise = null;
     this.lifecycleVersion = 0;
@@ -138,24 +140,23 @@ export default class OnlineVoiceMesh {
         const persistedSettings = await api.getAudioSettings().catch(() => null);
         this.microphoneGraph = createStudioMicrophoneGraph(stream, {
           noiseSuppression: persistedSettings?.noise_suppression,
-          octave: persistedSettings?.octave
+          octave: persistedSettings?.octave,
+          volume: persistedSettings?.volume,
+          reverb: persistedSettings?.reverb,
+          echo: persistedSettings?.echo,
+          delay: persistedSettings?.delay
         });
         const outgoingStream = this.microphoneGraph.stream || stream;
         this.stream = outgoingStream;
+        this.effectsStream = this.microphoneGraph.effectsStream || outgoingStream;
         outgoingStream.getAudioTracks().forEach((track) => {
           track.contentHint = "music";
         });
+        this.effectsStream.getAudioTracks().forEach((track) => {
+          track.contentHint = "music";
+        });
         for (const [participantId, peer] of this.peers) {
-          const existingTrackIds = new Set(
-            // Stryker disable next-line MethodExpression: track IDs are non-empty.
-            peer
-              .getSenders()
-              .map((sender) => sender.track?.id)
-              .filter(Boolean)
-          );
-          outgoingStream.getTracks().forEach((track) => {
-            if (!existingTrackIds.has(track.id)) peer.addTrack(track, stream);
-          });
+          await this.syncPeerAudioTrack(participantId, peer);
           await this.optimizeAudioSenders(peer);
           this.pendingInvites.add(participantId);
         }
@@ -183,6 +184,41 @@ export default class OnlineVoiceMesh {
     return this.microphoneGraph?.rawStream || this.stream;
   }
 
+  getOutgoingStream(participantId) {
+    return this.peerEffectsEnabled.get(participantId) && this.effectsStream
+      ? this.effectsStream
+      : this.stream;
+  }
+
+  async syncPeerAudioTrack(participantId, peer = this.peers.get(participantId)) {
+    const selectedStream = this.getOutgoingStream(participantId);
+    const selectedTracks = selectedStream?.getAudioTracks?.() || [];
+    if (!peer || !selectedTracks.length) return false;
+    const senders = peer.getSenders?.().filter((item) => item.track?.kind === "audio") || [];
+    if (selectedTracks.length === 1 && senders.length === 1) {
+      const [selectedTrack] = selectedTracks;
+      const [sender] = senders;
+      if (sender.track === selectedTrack) return true;
+      if (typeof sender.replaceTrack === "function") {
+        await sender.replaceTrack(selectedTrack);
+        return true;
+      }
+    }
+    const existingIds = new Set(senders.map((sender) => sender.track?.id).filter(Boolean));
+    let changed = false;
+    selectedTracks.forEach((track) => {
+      if (existingIds.has(track.id)) return;
+      peer.addTrack(track, selectedStream);
+      changed = true;
+    });
+    return changed;
+  }
+
+  async setPeerEffectsEnabled(participantId, enabled) {
+    this.peerEffectsEnabled.set(participantId, Boolean(enabled));
+    return this.syncPeerAudioTrack(participantId);
+  }
+
   async setLocalMonitoring(enabled, effects = {}) {
     if (!enabled) return this.microphoneGraph?.setMonitoring?.(false) ?? false;
     await this.start();
@@ -204,9 +240,10 @@ export default class OnlineVoiceMesh {
       rtcpMuxPolicy: "require",
       iceCandidatePoolSize: 4
     });
-    if (this.stream) {
-      this.stream.getTracks().forEach((track) => {
-        peer.addTrack(track, this.stream);
+    const outgoingStream = this.getOutgoingStream(participantId);
+    if (outgoingStream) {
+      outgoingStream.getTracks().forEach((track) => {
+        peer.addTrack(track, outgoingStream);
       });
       // The microphone was already running when this peer joined, so unlike
       // the peers start() itself walks and optimizes when the mic first
@@ -302,20 +339,41 @@ export default class OnlineVoiceMesh {
     );
   }
 
-  async estimateInboundLatency() {
-    const estimates = await Promise.all(
-      [...this.peers.values()].map(async (peer) => {
-        if (typeof peer.getStats !== "function") return 0;
+  async getInboundLatencyDiagnostics() {
+    return Promise.all(
+      [...this.peers.entries()].map(async ([participantId, peer]) => {
+        const empty = {
+          participantId,
+          jitterMs: 0,
+          jitterBufferMs: 0,
+          minimumPlayoutMs: 0,
+          networkOneWayMs: 0,
+          estimatedTotalMs: 0,
+          packetsLost: 0,
+          concealedSamples: 0
+        };
+        if (typeof peer.getStats !== "function") return empty;
         try {
           const stats = await peer.getStats();
-          let audioDelay = 0;
+          const result = { ...empty };
           let roundTrip = 0;
           stats.forEach((report) => {
             if (report.type === "inbound-rtp" && report.kind === "audio") {
               const emitted = Number(report.jitterBufferEmittedCount);
               const total = Number(report.jitterBufferDelay);
               const buffered = emitted > 0 && Number.isFinite(total) ? total / emitted : 0;
-              audioDelay = Math.max(audioDelay, buffered, Number(report.jitter) || 0);
+              const minimumTotal = Number(report.jitterBufferMinimumDelay);
+              result.jitterBufferMs = Math.max(result.jitterBufferMs, buffered * 1000);
+              result.minimumPlayoutMs = Math.max(
+                result.minimumPlayoutMs,
+                emitted > 0 && Number.isFinite(minimumTotal) ? (minimumTotal / emitted) * 1000 : 0
+              );
+              result.jitterMs = Math.max(result.jitterMs, (Number(report.jitter) || 0) * 1000);
+              result.packetsLost = Math.max(result.packetsLost, Number(report.packetsLost) || 0);
+              result.concealedSamples = Math.max(
+                result.concealedSamples,
+                Number(report.concealedSamples) || 0
+              );
             }
             if (
               report.type === "candidate-pair" &&
@@ -325,12 +383,23 @@ export default class OnlineVoiceMesh {
               roundTrip = Math.max(roundTrip, Number(report.currentRoundTripTime) || 0);
             }
           });
-          return Math.max(0, Math.min(0.5, audioDelay + roundTrip / 2));
+          result.networkOneWayMs = (roundTrip * 1000) / 2;
+          result.estimatedTotalMs = Math.max(
+            0,
+            Math.min(500, Math.max(result.jitterBufferMs, result.jitterMs) + result.networkOneWayMs)
+          );
+          return result;
         } catch {
-          return 0;
+          return empty;
         }
       })
     );
+  }
+
+  async estimateInboundLatency() {
+    const diagnostics = await this.getInboundLatencyDiagnostics();
+    if (diagnostics.length) console.info("WebRTC singing latency", diagnostics);
+    const estimates = diagnostics.map(({ estimatedTotalMs }) => estimatedTotalMs / 1000);
     return estimates.length ? Math.max(...estimates) : 0;
   }
 
@@ -382,6 +451,10 @@ export default class OnlineVoiceMesh {
       Array.isArray(signal)
     ) {
       return false;
+    }
+    if (typeof signal.effectsEnabled === "boolean") {
+      await this.setPeerEffectsEnabled(fromId, signal.effectsEnabled);
+      return true;
     }
     const peerVersion = this.peerVersions.get(fromId) || 0;
     const previousSignal = this.signalPromises.get(fromId) || Promise.resolve();
@@ -441,7 +514,11 @@ export default class OnlineVoiceMesh {
   }
 
   setMicrophoneMuted(muted) {
-    this.stream?.getAudioTracks?.().forEach((track) => {
+    const tracks = new Set([
+      ...(this.stream?.getAudioTracks?.() || []),
+      ...(this.effectsStream?.getAudioTracks?.() || [])
+    ]);
+    tracks.forEach((track) => {
       track.enabled = !muted;
     });
   }
@@ -492,6 +569,7 @@ export default class OnlineVoiceMesh {
     this.pendingInvites.delete(participantId);
     this.invitePromises.delete(participantId);
     this.signalPromises.delete(participantId);
+    this.peerEffectsEnabled.delete(participantId);
     const channel = this.channels.get(participantId);
     // No partial-transfer resume exists once the peer connection drops -- a
     // retry always restarts the file from the beginning, so the message
@@ -542,10 +620,12 @@ export default class OnlineVoiceMesh {
       this.microphoneGraph = null;
     } else this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
+    this.effectsStream = null;
     this.startPromise = null;
     this.pendingInvites.clear();
     this.invitePromises.clear();
     this.signalPromises.clear();
+    this.peerEffectsEnabled.clear();
     for (const timer of this.disconnectTimers.values()) {
       globalThis.clearTimeout(timer);
     }

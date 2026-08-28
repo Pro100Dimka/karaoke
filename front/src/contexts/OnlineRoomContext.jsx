@@ -839,7 +839,15 @@ export function OnlineRoomProvider({ children }) {
         const enabled = !next.has(id);
         if (enabled) next.add(id);
         else next.delete(id);
-        if (!enabled) queueMicrotask(() => applyParticipantEffects(id, false));
+        // Ask that singer's sender to select its already-running wet or dry
+        // track for this listener. Processing a received MediaStream through
+        // another AudioContext added an avoidable render quantum and made
+        // duets audibly late on consumer USB devices.
+        clientRef.current?.send("signal", {
+          targetId: id,
+          signal: { effectsEnabled: enabled }
+        });
+        queueMicrotask(() => applyParticipantEffects(id, false));
         return next;
       });
     },
@@ -851,7 +859,9 @@ export function OnlineRoomProvider({ children }) {
     roomUiRef.current = roomUi;
   }, [roomUi]);
   useEffect(() => {
-    effectPeople.forEach((id) => applyParticipantEffects(id, true));
+    // Tear down receive-side graphs left by an older renderer/hot reload.
+    // Effects now run once on the sender and arrive as a normal WebRTC track.
+    effectPeople.forEach((id) => applyParticipantEffects(id, false));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
   const { openKaraoke, roomClockNow, syncCommand, syncUi } = useOnlineRoomCommands({
     api,

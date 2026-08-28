@@ -33,9 +33,10 @@ describe("studio microphone quality", () => {
     // src/services/microphoneChannelStrip.js) instead of two independently
     // hand-tuned graphs.
     const processedTrack = { kind: "audio", contentHint: "", stop: vi.fn() };
-    const destination = {
-      stream: { getAudioTracks: () => [processedTrack], getTracks: () => [processedTrack] }
-    };
+    const effectsTrack = { kind: "audio", contentHint: "", stop: vi.fn() };
+    const destinations = [processedTrack, effectsTrack].map((mediaTrack) => ({
+      stream: { getAudioTracks: () => [mediaTrack], getTracks: () => [mediaTrack] }
+    }));
     const created = { filters: [], compressors: [], gains: [], shapers: [] };
     const output = new Node();
     let contextOptions;
@@ -69,7 +70,7 @@ describe("studio microphone quality", () => {
         return node;
       }
       createMediaStreamDestination() {
-        return destination;
+        return destinations.shift();
       }
       resume() {
         return Promise.resolve();
@@ -84,8 +85,10 @@ describe("studio microphone quality", () => {
     const graph = createStudioMicrophoneGraph(rawStream);
     expect(contextOptions).toEqual({ latencyHint: 0 });
     verify(
-      [graph.stream, "toBe", destination.stream],
-      [graph.getStream(), "toBe", destination.stream],
+      [graph.stream.getAudioTracks()[0], "toBe", processedTrack],
+      [graph.getStream(), "toBe", graph.stream],
+      [graph.effectsStream.getAudioTracks()[0], "toBe", effectsTrack],
+      [graph.getStream({ effectsEnabled: true }), "toBe", graph.effectsStream],
       [graph.getStream({ disabledEffects: true }), "toBe", rawStream],
       [created.filters.map((node) => node.type), "toEqual", ["highpass", "highshelf"]],
       [created.compressors, "toHaveLength", 1],
@@ -94,7 +97,7 @@ describe("studio microphone quality", () => {
     );
     expect(graph.setMonitoring(true, { volume: 0.7 })).toBe(true);
     const monitorGain = created.gains.at(-1);
-    expect(monitorGain.gain.value).toBe(0.7);
+    expect(monitorGain.gain.value).toBe(1);
     expect(monitorGain.connections).toContain(output);
     const finalOutput = created.gains.find((node) => node.connections.includes(monitorGain));
     expect(finalOutput).toBeDefined();
@@ -103,6 +106,7 @@ describe("studio microphone quality", () => {
     await graph.close();
     expect(rawTrack.stop).toHaveBeenCalledOnce();
     expect(processedTrack.stop).toHaveBeenCalledOnce();
+    expect(effectsTrack.stop).toHaveBeenCalledOnce();
   });
   test("degrades to the raw stream without leaking capture when WebAudio is unavailable", async () => {
     const track = { stop: vi.fn() };
