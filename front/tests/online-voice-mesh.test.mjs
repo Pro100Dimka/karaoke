@@ -61,6 +61,26 @@ describe("online voice mesh", () => {
     mesh.microphoneGraph = { rawStream };
     expect(mesh.getMeterStream()).toBe(rawStream);
   });
+  test("monitors inside the existing microphone graph without another capture", async () => {
+    const mesh = makeMesh();
+    const live = stream([track("live", "live")]);
+    const setMonitoring = vi.fn((enabled) => Boolean(enabled));
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { mediaDevices: { getUserMedia: vi.fn() } }
+    });
+    mesh.stream = live;
+    mesh.microphoneGraph = { rawStream: live, setMonitoring };
+    await expect(mesh.setLocalMonitoring(true, { volume: 0.8, reverb: 0.2, echo: 0.1, delay: 0 })).resolves.toBe(true);
+    expect(setMonitoring).toHaveBeenCalledWith(true, {
+      volume: 0.8,
+      reverb: 0.2,
+      echo: 0.1,
+      delay: 0
+    });
+    await expect(mesh.setLocalMonitoring(false)).resolves.toBe(false);
+    expect(setMonitoring).toHaveBeenLastCalledWith(false);
+  });
 
   test("uses the exact capture, peer and sender quality contracts", async () => {
     const media = stream([track("voice"), { ...track("video"), kind: "video" }]);
@@ -73,7 +93,7 @@ describe("online voice mesh", () => {
     await mesh.start();
     expect(capture).toHaveBeenCalledWith({
       audio: {
-        echoCancellation: { ideal: "remote-only" },
+        echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
         channelCount: 1,

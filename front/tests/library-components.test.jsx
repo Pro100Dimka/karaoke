@@ -2,6 +2,12 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
+import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
+import LibraryActions from "../src/pages/Library/hero/actions.jsx";
+import LibraryHero from "../src/pages/Library/hero/index.jsx";
+import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
+import LibrarySongsGrid, { selectSongTransferStatus } from "../src/pages/Library/songs-grid/index.jsx";
+import { getProcessingSongs } from "../src/pages/Library/utils.js";
 import { called, same, verify } from "./helpers/assertions.mjs";
 
 const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: false }));
@@ -36,12 +42,6 @@ vi.mock("../src/api/client", () => ({
     getAudioTrackUrl: (id, track) => `song/${id}/${track}`
   }
 }));
-import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
-import LibraryActions from "../src/pages/Library/hero/actions.jsx";
-import LibraryHero from "../src/pages/Library/hero/index.jsx";
-import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
-import LibrarySongsGrid, { selectSongTransferStatus } from "../src/pages/Library/songs-grid/index.jsx";
-import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
   mocks.noSettings = false;
@@ -64,7 +64,7 @@ test("library actions cover search, room, adding and file selection", async () =
     />
   );
   fireEvent.change(view.getByRole("textbox", { name: "Поиск" }), { target: { value: "song" } });
-  fireEvent.click(view.getByRole("button", { name: /Петь вместе|Співати разом/ }));
+  fireEvent.click(view.getByRole("button", { name: /Пить вместе|Співати разом/ }));
   fireEvent.click(view.getByRole("button", { name: /Добавить песню|Додати пісню/ }));
   fireEvent.change(view.container.querySelector('input[type=file][accept*=".mp3"]'), {
     target: { files: [new File(["audio"], "song.mp3", { type: "audio/mpeg" })] }

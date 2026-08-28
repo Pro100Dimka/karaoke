@@ -21,6 +21,7 @@ function rawGraph(stream) {
     stream,
     rawStream: stream,
     getStream: () => stream,
+    setMonitoring: () => false,
     close: async () => stop(stream)
   };
 }
@@ -44,6 +45,66 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
     const strip = connectMicrophoneChannelStrip(context, source, destination, {
       noiseSuppression: options.noiseSuppression ?? noiseSuppression
     });
+    let monitor = null;
+    const stopMonitoring = () => {
+      if (!monitor) return false;
+      try {
+        strip.limiter.disconnect(monitor.gain);
+      } catch {
+        // The monitor can already be detached while the context is closing.
+      }
+      monitor.nodes.forEach(disconnect);
+      monitor = null;
+      return false;
+    };
+    const setMonitoring = (enabled, effects = {}) => {
+      stopMonitoring();
+      if (!enabled) return false;
+      const clamp = (value, maximum = 1) => Math.max(0, Math.min(maximum, Number(value) || 0));
+      const gain = context.createGain();
+      const nodes = [gain];
+      gain.gain.value = clamp(effects.volume ?? 1, 2);
+      strip.limiter.connect(gain);
+
+      const echo = clamp(effects.echo);
+      const delayAmount = clamp(effects.delay);
+      if (echo || delayAmount) {
+        const delay = context.createDelay(1);
+        const feedback = context.createGain();
+        const wet = context.createGain();
+        delay.delayTime.value = 0.06 + delayAmount * 0.34;
+        feedback.gain.value = Math.min(0.72, echo * 0.55 + delayAmount * 0.3);
+        wet.gain.value = Math.min(0.65, echo * 0.46 + delayAmount * 0.24);
+        strip.limiter.connect(delay);
+        delay.connect(feedback);
+        feedback.connect(delay);
+        delay.connect(wet);
+        wet.connect(gain);
+        nodes.push(delay, feedback, wet);
+      }
+
+      const reverb = clamp(effects.reverb);
+      if (reverb) {
+        const convolver = context.createConvolver();
+        const wet = context.createGain();
+        const frames = Math.floor(context.sampleRate * (0.35 + reverb * 1.15));
+        const impulse = context.createBuffer(2, frames, context.sampleRate);
+        for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
+          const data = impulse.getChannelData(channel);
+          for (let index = 0; index < frames; index += 1)
+            data[index] = (Math.random() * 2 - 1) * (1 - index / frames) ** (1.5 + reverb * 2);
+        }
+        convolver.buffer = impulse;
+        wet.gain.value = Math.min(0.58, reverb * 0.48);
+        strip.limiter.connect(convolver);
+        convolver.connect(wet);
+        wet.connect(gain);
+        nodes.push(convolver, wet);
+      }
+      gain.connect(context.destination);
+      monitor = { gain, nodes };
+      return true;
+    };
     const sync = ({ detail }) => {
       if (detail?.noise_suppression != null) strip.setNoiseSuppression(detail.noise_suppression);
     };
@@ -57,6 +118,7 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       rawStream,
       context,
       setNoiseSuppression: strip.setNoiseSuppression,
+      setMonitoring,
       getStream: ({ disabledEffects = false } = {}) =>
         disabledEffects ? input : destination.stream,
       async replaceInput(stream) {
@@ -69,6 +131,7 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       },
       async close() {
         globalThis.removeEventListener?.("audio-settings-changed", sync);
+        stopMonitoring();
         strip.close?.();
         disconnect(source);
         stop(input);

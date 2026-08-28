@@ -8,15 +8,20 @@ class Param {
 }
 class Node {
   constructor() {
+    this.connections = [];
+    this.disconnections = [];
     ["frequency", "Q", "gain", "threshold", "knee", "ratio", "attack", "release"].forEach((name) => {
       this[name] = new Param();
     });
   }
   connect(target) {
     this.target = target;
+    this.connections.push(target);
     return target;
   }
-  disconnect() {}
+  disconnect(target) {
+    this.disconnections.push(target);
+  }
 }
 describe("studio microphone quality", () => {
   afterEach(() => {
@@ -31,12 +36,14 @@ describe("studio microphone quality", () => {
     const destination = {
       stream: { getAudioTracks: () => [processedTrack], getTracks: () => [processedTrack] }
     };
-    const created = { filters: [], compressors: [], shapers: [] };
+    const created = { filters: [], compressors: [], gains: [], shapers: [] };
+    const output = new Node();
     let contextOptions;
     globalThis.AudioContext = class {
       constructor(options) {
         contextOptions = options;
         this.state = "running";
+        this.destination = output;
       }
       createMediaStreamSource() {
         return new Node();
@@ -52,7 +59,9 @@ describe("studio microphone quality", () => {
         return node;
       }
       createGain() {
-        return new Node();
+        const node = new Node();
+        created.gains.push(node);
+        return node;
       }
       createWaveShaper() {
         const node = new Node();
@@ -83,6 +92,13 @@ describe("studio microphone quality", () => {
       [created.shapers, "toHaveLength", 1],
       [processedTrack.contentHint, "toBe", "music"]
     );
+    expect(graph.setMonitoring(true, { volume: 0.7 })).toBe(true);
+    const monitorGain = created.gains.at(-1);
+    expect(monitorGain.gain.value).toBe(0.7);
+    expect(monitorGain.connections).toContain(output);
+    expect(created.shapers[0].connections).toContain(monitorGain);
+    expect(graph.setMonitoring(false)).toBe(false);
+    expect(created.shapers[0].disconnections).toContain(monitorGain);
     await graph.close();
     expect(rawTrack.stop).toHaveBeenCalledOnce();
     expect(processedTrack.stop).toHaveBeenCalledOnce();
@@ -92,6 +108,7 @@ describe("studio microphone quality", () => {
     const rawStream = { getTracks: () => [track] };
     const graph = createStudioMicrophoneGraph(rawStream);
     expect(graph.stream).toBe(rawStream);
+    expect(graph.setMonitoring(true)).toBe(false);
     await graph.close();
     expect(track.stop).toHaveBeenCalledOnce();
   });

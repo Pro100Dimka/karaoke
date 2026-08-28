@@ -200,6 +200,10 @@ export default function useOnlineRoomAudio({
     const monitor = localMonitorRef.current;
     localMonitorRef.current = null;
     if (!monitor) return;
+    if (monitor.direct) {
+      monitor.voice.setLocalMonitoring(false);
+      return;
+    }
     try {
       monitor.source.disconnect();
       monitor.gain.disconnect();
@@ -218,6 +222,15 @@ export default function useOnlineRoomAudio({
       if (localMonitorRef.current) return true;
       const voice = voiceRef.current;
       if (!voice) return false;
+      if (typeof voice.setLocalMonitoring === "function") {
+        const active = await voice.setLocalMonitoring(true, effects);
+        if (voiceRef.current !== voice) {
+          voice.setLocalMonitoring(false);
+          return false;
+        }
+        if (active) localMonitorRef.current = { voice, direct: true };
+        return Boolean(active);
+      }
       const stream = await voice.start();
       if (voiceRef.current !== voice) {
         stream.getTracks().forEach((track) => track.stop());

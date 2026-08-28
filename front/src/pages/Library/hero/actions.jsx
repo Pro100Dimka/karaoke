@@ -82,7 +82,7 @@ export default function LibraryActions({
   ];
 
   const buttons = [
-    [!roomActive, UsersRound, "Петь вместе", "outlined", onOpenRoom],
+    [!roomActive, UsersRound, "Пить вместе", "outlined", onOpenRoom],
     [can, Plus, "Добавить песню", undefined, onAdd, importing]
   ];
 

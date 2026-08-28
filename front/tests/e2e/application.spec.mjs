@@ -55,7 +55,7 @@ test("room creation reaches a usable dock even without microphone access", async
   await page.routeWebSocket(/karaoke-studio-online/, () => {});
   await page.goto("/");
   await closeProcessingModal(page);
-  await page.getByRole("button", { name: /Співати разом|Петь вместе/ }).click();
+  await page.getByRole("button", { name: /Співати разом|Пить вместе/ }).click();
   const modal = page.getByRole("dialog", { name: /Спільне виконання|Совместное исполнение/ });
   await expect(modal).toBeVisible();
   await modal.getByRole("button", { name: /Створити кімнату|Создать комнату/ }).click();

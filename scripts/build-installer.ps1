@@ -1131,7 +1131,11 @@ function Remove-DirectoryWithRobocopyFallback([string]$Path) {
     }
 }
 
-function Remove-Directory([string]$Path) {
+function Remove-Directory {
+    param(
+        [string]$Path,
+        [switch]$AllowLockedRemainder
+    )
     if ([string]::IsNullOrWhiteSpace($Path)) {
         throw "Refusing to remove an empty path."
     }
@@ -1199,6 +1203,11 @@ function Remove-Directory([string]$Path) {
         foreach ($item in $lockedItems) {
             Write-Host "  $item"
         }
+    }
+
+    if ($AllowLockedRemainder) {
+        Write-Warning "Locked stale build files were left in place. The clean build will use fresh output paths."
+        return
     }
 
     throw "Could not remove directory: $fullPath"
@@ -1620,7 +1629,10 @@ function Prepare-Output {
         Write-Host ""
 
         Remove-Directory $Release
-        Remove-Directory $Build
+        # Old Electron test/run directories can be held briefly by Windows,
+        # antivirus or an already closing renderer. They do not overlap the
+        # clean build's fresh output paths and must not abort the whole release.
+        Remove-Directory $Build -AllowLockedRemainder
 
         Set-ElectronOutputPath (Join-Path $ElectronRoot "win-unpacked")
         Set-InstallerOutputPath (Join-Path $InstallerRoot "current")

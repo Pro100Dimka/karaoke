@@ -75,6 +75,13 @@ test("installer run changes keep every generated report in the current run", () 
     /\[IO\.Directory\]::CreateDirectory\(\$outputDirectory\)/
   ]);
 });
+test("clean builds tolerate locked stale Electron runs", () => {
+  matches(installerBuilder, [
+    /\[switch\]\$AllowLockedRemainder/,
+    /Remove-Directory \$Build -AllowLockedRemainder/,
+    /Locked stale build files were left in place/
+  ]);
+});
 test("installer window toggles native fullscreen through the trusted IPC boundary", () => {
   matches(electronMain, [
     /handleTrustedIpc\("window:toggleFullscreen"/,

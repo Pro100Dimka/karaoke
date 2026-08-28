@@ -115,12 +115,11 @@ export default class OnlineVoiceMesh {
       .getUserMedia({
         audio: {
           ...MICROPHONE_CAPTURE_CONSTRAINTS,
-          // A room participant's voice may be playing through speakers or
-          // open headphones. Without AEC that voice is captured again and
-          // returns after a full network round trip, which feels like a very
-          // large duet delay. `remote-only` preserves local karaoke playback
-          // where Chromium supports it; `ideal` remains non-fatal elsewhere.
-          echoCancellation: { ideal: "remote-only" },
+          // Browser AEC adds a capture look-ahead/buffer that is audible in
+          // realtime self-monitoring on consumer USB headsets. The studio
+          // graph already provides our own noise gate and dynamics, so keep
+          // Chromium's latency-heavy voice processing out of the duet path.
+          echoCancellation: false,
           channelCount: 1,
           latency: { ideal: 0 },
           sampleRate: { ideal: 48_000 }
@@ -181,6 +180,12 @@ export default class OnlineVoiceMesh {
 
   getMeterStream() {
     return this.microphoneGraph?.rawStream || this.stream;
+  }
+
+  async setLocalMonitoring(enabled, effects = {}) {
+    if (!enabled) return this.microphoneGraph?.setMonitoring?.(false) ?? false;
+    await this.start();
+    return this.microphoneGraph?.setMonitoring?.(true, effects) ?? false;
   }
 
   createPeer(participantId) {
