@@ -283,13 +283,13 @@ describe("online room provider", () => {
     act(() => hook.result.current.setRoomSoundMuted(false));
     expect(mocks.restoreApplicationAudio).toHaveBeenCalledTimes(restoreCalls);
     act(() => hook.result.current.setRoomSoundMuted(true));
-    expect(mocks.muteApplicationAudio).toHaveBeenCalledWith(document);
+    expect(mocks.muteApplicationAudio).not.toHaveBeenCalled();
     expect(hook.result.current.roomSoundMuted).toBe(true);
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
     act(() => hook.result.current.setRoomSoundMuted(true));
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
     act(() => hook.result.current.setRoomSoundMuted(false));
-    expect(mocks.restoreApplicationAudio).toHaveBeenCalledTimes(restoreCalls + 1);
+    expect(mocks.restoreApplicationAudio).toHaveBeenCalledTimes(restoreCalls + 2);
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
 
     const controls = mocks.createOnlineRoomMessageHandler.mock.calls[0][0];

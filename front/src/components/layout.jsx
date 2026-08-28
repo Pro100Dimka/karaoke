@@ -78,7 +78,6 @@ function FloatingControls({ openSettings }) {
             onPointerEnter={showRadioVolume}
             onPointerLeave={hideRadioVolumeSoon}
             aria-label={t("radio.volume")}
-            style={{ padding: "var(--space-3)" }}
           >
             <Slider
               min={0}

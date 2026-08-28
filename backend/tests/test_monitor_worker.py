@@ -29,20 +29,20 @@ def test_emit_and_stop_update_process_contract(monkeypatch, capsys):
 def test_shared_wasapi_tries_aggressive_latency_before_safe_fallback():
     candidates = monitor_worker._stream_candidates(options())
 
-    assert candidates[0]["blocksize"] == 64
-    assert candidates[0]["latency"] == 0.002
-    assert candidates[1]["blocksize"] == 64
+    assert candidates[0]["blocksize"] == 128
+    assert candidates[0]["latency"] == 128 / 48_000
+    assert candidates[1]["blocksize"] == 128
     assert candidates[1]["latency"] == "low"
     assert all("extra_settings" not in candidate for candidate in candidates)
 
 
-def test_low_rate_headset_keeps_a_stable_minimum_block_before_safe_fallback():
+def test_low_rate_device_keeps_a_stable_minimum_block_before_safe_fallback():
     config = {**options(), "sample_rate": 16_000, "blocksize": 64, "output_channels": 1}
     candidates = monitor_worker._stream_candidates(config)
 
-    assert candidates[0]["blocksize"] == 64
-    assert candidates[0]["latency"] == 0.004
-    assert any(candidate["blocksize"] == 64 for candidate in candidates)
+    assert candidates[0]["blocksize"] == 128
+    assert candidates[0]["latency"] == 0.008
+    assert any(candidate["blocksize"] == 128 for candidate in candidates)
 
 
 def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch):

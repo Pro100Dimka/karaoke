@@ -20,10 +20,12 @@ def test_capture_attempts_are_unique_and_survive_device_errors(monkeypatch):
     ]
 
 
-def test_bluetooth_rate_monitoring_uses_a_stable_duplex_block():
+def test_monitoring_uses_a_stable_duplex_block_at_every_sample_rate():
     attempts = recording_service._capture_attempts(1, 2, 16_000, 64, True)
+    standard_rate_attempts = recording_service._capture_attempts(1, 2, 48_000, 32, True)
 
     assert attempts[0] == (1, 2, 16_000, 128, True, "low")
+    assert standard_rate_attempts[0] == (1, 2, 48_000, 128, True, "low")
 
 
 def test_backend_status_and_session_controls(monkeypatch):

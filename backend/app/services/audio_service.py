@@ -717,18 +717,37 @@ def check_signal_quality(
         if monitoring_expected:
             return dict(_monitor_signal)
 
-    sample_rate = 44100
+    resolved_device = device_id
+    rates: list[int] = []
     try:
-        recording = sd.rec(
-            int(duration_sec * sample_rate),
-            samplerate=sample_rate,
-            channels=1,
-            device=device_id,
-            dtype="float32",
+        resolved_device = _resolved_device_index(device_id, "input")
+        default_rate = int(
+            round(float(sd.query_devices(resolved_device).get("default_samplerate", 0) or 0))
         )
-        sd.wait()
-    except Exception as exc:  # Audio drivers raise implementation-specific errors.
-        raise RuntimeError(f"Could not read microphone signal: {exc}") from exc
+        if default_rate > 0:
+            rates.append(default_rate)
+    except Exception:
+        # The capture attempts below still produce the useful backend-specific
+        # error if the selected device disappeared between settings and polling.
+        pass
+    rates.extend((44_100, 48_000, 16_000))
+    last_error: Exception | None = None
+    recording = None
+    for sample_rate in dict.fromkeys(rates):
+        try:
+            recording = sd.rec(
+                int(duration_sec * sample_rate),
+                samplerate=sample_rate,
+                channels=1,
+                device=resolved_device,
+                dtype="float32",
+            )
+            sd.wait()
+            break
+        except Exception as exc:  # PortAudio errors depend on the Windows host API.
+            last_error = exc
+    if recording is None:
+        raise RuntimeError(f"Could not read microphone signal: {last_error}") from last_error
     samples = np.clip(recording.flatten() * max(0.0, min(4.0, gain)), -1.0, 1.0)
 
     rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0

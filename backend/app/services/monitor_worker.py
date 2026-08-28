@@ -32,12 +32,11 @@ def _stream_candidates(options: dict) -> list[dict]:
         "device": (int(options["input_device_id"]), int(options["output_device_id"])),
     }
     requested_blocksize = int(options["blocksize"])
-    # A 32-frame block at a Bluetooth hands-free rate of 16 kHz invokes the
-    # Python DSP callback 500 times per second. That saves only ~2 ms against
-    # a radio link whose latency is much larger, while making scheduler stalls
-    # and output underflows considerably more likely. Keep 64 as the minimum
-    # realtime block and retain the automatic stability fallbacks.
-    stable_blocksize = max(64, requested_blocksize) if sample_rate <= 24_000 else requested_blocksize
+    # Effects and noise suppression run in Python on every callback. Tiny
+    # 32/64-frame blocks can starve even a normal 44.1/48 kHz device and make
+    # monitoring fall progressively behind. 128 frames is still only ~3 ms at
+    # those rates and is a much safer realtime floor for every host API.
+    stable_blocksize = max(128, requested_blocksize)
     blocks = dict.fromkeys((stable_blocksize, 128, 256, 0))
     candidates = []
     modes = (

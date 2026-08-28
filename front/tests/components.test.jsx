@@ -224,6 +224,7 @@ describe("AudioPlayer and error boundary", () => {
     };
     expect(await toggleAudioPlayback(recovered)).toBe(true);
     expect(recovered.load).toHaveBeenCalledOnce();
+    expect(recovered.muted).toBe(false);
   });
   test("handles playback, media events, seeking and volume", async () => {
     const { unmount } = render(

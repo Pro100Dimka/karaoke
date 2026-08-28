@@ -127,7 +127,9 @@ export function OnlineRoomProvider({ children }) {
         )
       )
     : null;
-  const { muteApplicationAudio, restoreApplicationAudio } = useApplicationAudioMute(roomSoundMuted);
+  // Room sound controls remote participants only. Muting every <audio> element
+  // here also silences recordings, previews and radio players across the app.
+  const { restoreApplicationAudio } = useApplicationAudioMute(false);
   const {
     localSpeakingLevel,
     speakingLevels,
@@ -317,15 +319,16 @@ export function OnlineRoomProvider({ children }) {
       if (next === roomSoundMutedRef.current) return;
       roomSoundMutedRef.current = next;
       setRoomSoundMutedState(next);
-      if (next) muteApplicationAudio(document);
-      else restoreApplicationAudio();
+      // Recover elements that an older app version may have left muted, then
+      // let the room-audio layer apply the state only to participant streams.
+      restoreApplicationAudio();
       // Room-output mute is local playback state only. Never disable the
       // outgoing microphone track: otherwise every participant loses this
       // user's voice and unmuting can race with WebRTC track state.
       applyRemoteAudioMute();
     },
     // Stryker disable next-line ArrayDeclaration: all callback dependencies are stable.
-    [applyRemoteAudioMute, muteApplicationAudio, restoreApplicationAudio]
+    [applyRemoteAudioMute, restoreApplicationAudio]
   );
   const resetRoomState = useCallback(
     () => {

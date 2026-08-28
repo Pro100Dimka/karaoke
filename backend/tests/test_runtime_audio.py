@@ -70,8 +70,8 @@ def test_wasapi_candidates_end_with_host_neutral_fallback():
     )
 
     assert (
-        candidates[0]["blocksize"] == 64
-        and candidates[0]["latency"] == 0.002
+        candidates[0]["blocksize"] == 128
+        and candidates[0]["latency"] == 128 / 48_000
         and "extra_settings" in candidates[0]
         and candidates[-1]["latency"] == "low"
         and "extra_settings" not in candidates[-1]
@@ -83,4 +83,4 @@ def test_recording_falls_back_from_duplex_to_plain_microphone(monkeypatch):
     patch_attrs(monkeypatch, recording_service.sd, query_devices=lambda *_args, **_kwargs: {'default_samplerate': 48000})
     attempts = recording_service._capture_attempts(7, 9, 44_100, 64, True)
 
-    assert ((attempts[0], attempts[1]) == ((7, 9, 44100, 64, True, 'low'), (7, None, 44100, 0, False, 'high'))) and ((7, None, 48000, 0, False, 'high') in attempts) and (attempts[-1][0] is None)
+    assert ((attempts[0], attempts[1]) == ((7, 9, 44100, 128, True, 'low'), (7, None, 44100, 0, False, 'high'))) and ((7, None, 48000, 0, False, 'high') in attempts) and (attempts[-1][0] is None)

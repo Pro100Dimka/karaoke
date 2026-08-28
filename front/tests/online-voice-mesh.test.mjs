@@ -52,7 +52,6 @@ describe("online voice mesh", () => {
         autoGainControl: false,
         channelCount: 1,
         latency: { ideal: 0 },
-        sampleRate: { ideal: 41_000 },
         sampleSize: { ideal: 24 }
       }
     });

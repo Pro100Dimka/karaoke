@@ -294,6 +294,27 @@ def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):
     assert audio_service.check_signal_quality(None)["rms_db"] == -120
 
 
+def test_signal_quality_uses_selected_device_native_sample_rate(monkeypatch):
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    monkeypatch.setattr(audio_service, "_monitor_process", None)
+    devices = [{"max_input_channels": 1, "default_samplerate": 16_000}]
+    monkeypatch.setattr(audio_service.sd, "query_devices", Mock(return_value=devices))
+    monkeypatch.setattr(audio_service.sd, "default", Mock(device=(0, 0)))
+
+    def record(_frames, *, samplerate, **_kwargs):
+        if samplerate != 16_000:
+            raise RuntimeError("Invalid sample rate")
+        return np.array([[0.25], [-0.25]], dtype=np.float32)
+
+    monkeypatch.setattr(audio_service.sd, "rec", Mock(side_effect=record))
+    monkeypatch.setattr(audio_service.sd, "wait", Mock())
+
+    quality = audio_service.check_signal_quality(0, duration_sec=0.1)
+
+    assert not quality["silent"]
+    assert audio_service.sd.rec.call_args.kwargs["samplerate"] == 16_000
+
+
 def test_audio_backend_import_failure_is_soft(monkeypatch):
     original_import = builtins.__import__
 

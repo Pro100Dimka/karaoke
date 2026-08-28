@@ -32,7 +32,9 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
   let source;
   let input = rawStream;
   try {
-    context = new AudioContext({ latencyHint: "interactive", sampleRate: 41_000 });
+    // Let the browser use the endpoint's native rate. 41 kHz is not a standard
+    // hardware rate and makes some Windows devices resample or fail to open.
+    context = new AudioContext({ latencyHint: "interactive" });
     source = context.createMediaStreamSource(input);
     const destination = context.createMediaStreamDestination();
     const strip = connectMicrophoneChannelStrip(context, source, destination, {
