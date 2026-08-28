@@ -64,6 +64,17 @@ export default memo(
         role={isReady ? "button" : undefined}
         tabIndex={isReady ? 0 : undefined}
         aria-label={isReady ? tr("Открыть {0} в караоке", { 0: song.title }) : undefined}
+        onClick={isReady ? activate : undefined}
+        onKeyDown={
+          isReady
+            ? (event) => {
+                if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key))
+                  return;
+                event.preventDefault();
+                activate();
+              }
+            : undefined
+        }
         sx={{ contentVisibility: "auto" }}
         style={{ "--card-sheen": "transparent", "--card-sheen-soft": "transparent" }}
         cardPanel={{
@@ -98,7 +109,11 @@ export default memo(
                   variant="outlined"
                   fullWidth
                   sx={{ flex: 1, background: "unset", border: "unset", boxShadow: "unset" }}
-                  onClick={isWorking ? () => onOpenProcessing(song) : retry ? activate : undefined}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (isWorking) onOpenProcessing(song);
+                    else if (retry) activate();
+                  }}
                 >
                   {retry ? (
                     <Typography variant="body2" tone="danger">

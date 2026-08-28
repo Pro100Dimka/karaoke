@@ -58,11 +58,23 @@ _LOW_QUALITY_VIDEO_HINTS = (
     "audio only", "official audio", "lyric", "lyrics", "karaoke", "visualizer",
     "static image", "still image", "slowed", "nightcore", "8d audio", "cover version",
     "reaction", "tutorial", "instrumental", "full album", "topic - auto-generated",
-    "текст песни", "слова песни", "караоке", "аудио", "обложка",
+    "live", "concert", "fan clip", "fan-made", "fanmade", "ai generated", "ai-generated",
+    "tribute", "текст песни", "слова песни", "караоке", "аудио", "обложка",
+    "концерт", "концертн", "живое выступление", "фан-клип", "фан клип", "нейро", "нейросет",
+    "кавер", "трибьют",
 )
-_GOOD_VIDEO_HINTS = ("official music video", "official video", "music video", "премьера клипа", "клип")
+_GOOD_VIDEO_HINT_SCORES = (
+    ("official music video", 60),
+    ("official video", 55),
+    ("официальный клип", 55),
+    ("премьера клипа", 40),
+    ("music video", 35),
+    ("анимационный клип", 30),
+    ("клип", 20),
+)
 LOCAL_VIDEO_URL = "local:clip"
 LOCAL_VIDEO_NAME = "clip.mp4"
+LOCAL_VIDEO_SOURCE_NAME = "clip.source.json"
 _active: set[str] = set()
 _validated_video_urls: set[str] = set()
 _lock = threading.Lock()
@@ -113,7 +125,12 @@ def _candidate_score(
     artist: str | None,
 ) -> int | None:
     normalized = " ".join(candidate_title.casefold().split())
-    if any(hint in normalized for hint in _LOW_QUALITY_VIDEO_HINTS): return None
+    expected_normalized = " ".join(title.casefold().split())
+    if any(
+        hint in normalized and hint not in expected_normalized
+        for hint in _LOW_QUALITY_VIDEO_HINTS
+    ):
+        return None
     title_words = _words(title)
     candidate_words = _words(candidate_title)
     if title_words and len(title_words & candidate_words) < max(1, (len(title_words) + 1) // 2):
@@ -123,7 +140,10 @@ def _candidate_score(
     searchable_artist = candidate_words | author_words
     if artist_words and not artist_words & searchable_artist: return None
     score = 10 * len(title_words & candidate_words) + 6 * len(artist_words & searchable_artist)
-    score += next((30 for hint in _GOOD_VIDEO_HINTS if hint in normalized), 0)
+    score += next(
+        (weight for hint, weight in _GOOD_VIDEO_HINT_SCORES if hint in normalized),
+        0,
+    )
     return score
 
 
@@ -320,13 +340,22 @@ def _detected_crop(path: Path, width: int, height: int, duration: float) -> str:
     return f"crop={crop_width}:{crop_height}:{x}:{y}"
 
 
-def _normalize_video(source: Path, destination: Path) -> bool:
+def _normalize_video(
+    source: Path,
+    destination: Path,
+    *,
+    expected_duration: float | None = None,
+) -> bool:
     info = _video_info(source)
     if not info:
         return False
     width, height, duration = info
     if width < 1280 or height < 720 or duration < 30 or not _video_has_motion(source, duration):
         return False
+    if expected_duration and expected_duration > 0:
+        maximum_drift = max(8.0, expected_duration * 0.05)
+        if abs(duration - expected_duration) > maximum_drift:
+            return False
     crop = _detected_crop(source, width, height, duration)
     target_width, target_height = (1920, 1080) if height >= 1080 else (1280, 720)
     temporary = destination.with_name(f".{destination.stem}-normalizing{destination.suffix}")
@@ -339,7 +368,7 @@ def _normalize_video(source: Path, destination: Path) -> bool:
         result = _ffmpeg_output(
             [
                 "-y", "-i", str(source), "-map", "0:v:0", "-an", "-sn", "-dn",
-                "-vf", filter_chain, "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                "-vf", filter_chain, "-c:v", "libx264", "-preset", "fast", "-crf", "18",
                 "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporary),
             ],
             timeout=max(180, min(1800, int(duration * 4))),
@@ -354,16 +383,24 @@ def _normalize_video(source: Path, destination: Path) -> bool:
         temporary.unlink(missing_ok=True)
 
 
-def _download_youtube_video(video_id: str, output_dir: Path) -> bool:
+def _download_youtube_video(
+    video_id: str,
+    output_dir: Path,
+    *,
+    expected_duration: float | None = None,
+) -> bool:
     if YoutubeDL is None:
         logger.info("Music video download skipped: yt-dlp is not installed")
         return False
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / LOCAL_VIDEO_NAME
+    source_metadata = output_dir / LOCAL_VIDEO_SOURCE_NAME
     for stale in output_dir.glob(".clip-download.*"):
         stale.unlink(missing_ok=True)
     options = {
         "format": (
+            "bestvideo[vcodec^=avc1][ext=mp4][height>=1080]/"
+            "best[vcodec^=avc1][ext=mp4][height>=1080]/"
             "bestvideo[vcodec^=avc1][ext=mp4][height>=720]/"
             "best[vcodec^=avc1][ext=mp4][height>=720]/"
             "bestvideo[ext=mp4][height>=720]/best[ext=mp4][height>=720]/"
@@ -389,13 +426,23 @@ def _download_youtube_video(video_id: str, output_dir: Path) -> bool:
             if path.is_file() and path.suffix not in {".part", ".ytdl"}
         ]
         source = max(candidates, key=lambda path: path.stat().st_size) if candidates else None
-        if result != 0 or source is None or not _normalize_video(source, destination):
+        if result != 0 or source is None or not _normalize_video(
+            source,
+            destination,
+            expected_duration=expected_duration,
+        ):
             destination.unlink(missing_ok=True)
+            source_metadata.unlink(missing_ok=True)
             return False
+        source_metadata.write_text(
+            json.dumps({"video_id": video_id}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         return True
     except Exception as exc:  # Network extraction is optional and must never break processing.
         logger.info("Music video download failed for %s: %s", video_id, exc)
         destination.unlink(missing_ok=True)
+        source_metadata.unlink(missing_ok=True)
         return False
     finally:
         for stale in output_dir.glob(".clip-download.*"):
@@ -439,6 +486,7 @@ def prepare_training_media(
     output_dir: Path,
     *,
     cover_url: str | None = None,
+    expected_duration: float | None = None,
 ) -> dict[str, object]:
     """Create the same local visual assets used by a processed karaoke song."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -468,7 +516,11 @@ def prepare_training_media(
 
     video_ready = (output_dir / LOCAL_VIDEO_NAME).is_file()
     if not video_ready and video_id:
-        video_ready = _download_youtube_video(video_id, output_dir)
+        video_ready = _download_youtube_video(
+            video_id,
+            output_dir,
+            expected_duration=expected_duration,
+        )
     if not video_ready:
         warnings.append(
             "Подходящий движущийся клип не найден; караоке использует стандартное видео"
@@ -489,15 +541,26 @@ def enrich_song(song_id: str) -> None:
         genre = None
         video_id = None
         video_changed = False
+        stale_local_clip_locked = False
         try:
             if not song.genre: genre = _itunes_genre(song.title, song.artist)
         except Exception as exc:  # Network metadata is optional.
             logger.info("Genre lookup skipped for %s: %s", song_id, exc)
         try:
             output_dir = song_service.resolve_output_dir(song)
-            if song.video_url == LOCAL_VIDEO_URL and not resolve_local_video(song):
-                song.video_url = None
-                video_changed = True
+            if song.video_url == LOCAL_VIDEO_URL:
+                local_clip = resolve_local_video(song)
+                source_file = output_dir / LOCAL_VIDEO_SOURCE_NAME
+                if local_clip is None or not source_file.is_file():
+                    if local_clip is not None:
+                        try:
+                            local_clip.unlink(missing_ok=True)
+                        except OSError as exc:
+                            stale_local_clip_locked = True
+                            logger.info("Stale local clip is still in use for %s: %s", song_id, exc)
+                    source_file.unlink(missing_ok=True)
+                    song.video_url = None
+                    video_changed = True
             existing_id = _youtube_id_from_url(song.video_url)
             if existing_id and song.video_url not in _validated_video_urls:
                 quality = _youtube_video_is_acceptable(existing_id, song.title, song.artist)
@@ -508,13 +571,25 @@ def enrich_song(song_id: str) -> None:
                     video_changed = True
             if existing_id and song.video_url:
                 video_id = existing_id
-            elif not song.video_url:
+            elif not song.video_url and not stale_local_clip_locked:
                 video_id = _youtube_video_id(song.title, song.artist)
         except Exception as exc:  # Network metadata is optional.
             logger.info("Music video lookup skipped for %s: %s", song_id, exc)
         if genre and not song.genre: song.genre = genre
         if video_id:
-            downloaded = _download_youtube_video(video_id, output_dir)
+            expected_duration = None
+            try:
+                metadata_path = output_dir / "metadata.json"
+                if metadata_path.is_file():
+                    metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+                    expected_duration = float(metadata_payload.get("duration") or 0) or None
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                expected_duration = None
+            downloaded = _download_youtube_video(
+                video_id,
+                output_dir,
+                expected_duration=expected_duration,
+            )
             next_video_url = LOCAL_VIDEO_URL if downloaded else None
             if song.video_url != next_video_url:
                 song.video_url = next_video_url

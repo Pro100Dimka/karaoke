@@ -32,6 +32,7 @@ except ImportError:  # pragma: no cover - lightweight API-only installations
 DATASET_DIR = config.DATA_DIR / "kar-training-dataset"
 MAX_KAR_BYTES = 8 * 1024 * 1024
 SUPPORTED_KARAOKE_MIDI_SUFFIXES = {".kar", ".mid"}
+WORD_NOTE_TRAILING_SILENCE_SECONDS = 0.18
 DatasetProgress = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 
@@ -58,6 +59,10 @@ _REJECTED_AUDIO_HINTS = (
     "lyrics",
     "lyric video",
     "instrumental",
+    "isolated vocal",
+    "isolated vocals",
+    "acapella",
+    "a cappella",
     "cover version",
     "cover by",
     "tribute",
@@ -67,6 +72,9 @@ _REJECTED_AUDIO_HINTS = (
     "nightcore",
     "8d audio",
     "караоке",
+    "минус",
+    "изолированный вокал",
+    "только вокал",
     "текст песни",
     "кавер",
     "demo",
@@ -87,6 +95,10 @@ _MIN_MELODY_MATCH_SCORE = 0.45
 # differences are exposed to the user as a manual offset instead of silently
 # corrupting the reference labels.
 _MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS = 1.0
+_AUDIO_SEARCH_INTENT_BONUS = {
+    "studio": 24.0,
+    "official": 8.0,
+}
 _CYRILLIC_TRANSLITERATION = str.maketrans(
     {
         "а": "a",
@@ -266,22 +278,25 @@ def _word_events(
     current_text = ""
     current_start = 0.0
     current_end = 0.0
+    current_syllables: list[dict[str, Any]] = []
 
     def flush() -> None:
-        nonlocal current_text, current_start, current_end
+        nonlocal current_text, current_start, current_end, current_syllables
         text = current_text.strip()
         if text:
             end = max(current_start + 0.04, current_end)
-            words.append(
-                {
-                    "text": text,
-                    "start": round(current_start, 3),
-                    "end": round(end, 3),
-                    "notes": [],
-                }
-            )
+            word = {
+                "text": text,
+                "start": round(current_start, 3),
+                "end": round(end, 3),
+                "notes": [],
+            }
+            if len(current_syllables) > 1:
+                word["syllables"] = [dict(syllable) for syllable in current_syllables]
+            words.append(word)
             line_words.append(text)
         current_text = ""
+        current_syllables = []
 
     def finish_line() -> None:
         flush()
@@ -313,6 +328,17 @@ def _word_events(
                     current_start = start
                 current_text += part
                 current_end = end
+                rounded_start, rounded_end = round(start, 3), round(max(start + 0.001, end), 3)
+                if (
+                    current_syllables
+                    and current_syllables[-1]["start"] == rounded_start
+                    and current_syllables[-1]["end"] == rounded_end
+                ):
+                    current_syllables[-1]["text"] += part
+                else:
+                    current_syllables.append(
+                        {"text": part, "start": rounded_start, "end": rounded_end}
+                    )
             if raw.endswith((" ", "\t")):
                 flush()
     finish_line()
@@ -440,15 +466,48 @@ def _attach_notes(words: list[dict[str, Any]], notes: list[dict[str, Any]]) -> i
         overlap, owner = max(owners, default=(0.0, -1))
         if owner < 0 or overlap <= 0:
             continue
-        words[owner]["notes"].append(
+        word = words[owner]
+        clipped_start = max(float(word["start"]), float(note["start"]))
+        clipped_end = min(float(word["end"]), float(note["end"]))
+        if round(clipped_end, 3) <= round(clipped_start, 3):
+            continue
+        word["notes"].append(
             {
                 "note": int(note["note"]),
-                "start": round(float(note["start"]), 3),
-                "end": round(float(note["end"]), 3),
+                "start": round(clipped_start, 3),
+                "end": round(clipped_end, 3),
             }
         )
         count += 1
     return count
+
+
+def _tighten_word_ends_to_notes(words: list[dict[str, Any]]) -> None:
+    """Remove lyric-event silence after the final attached note of each word."""
+    for word in words:
+        notes = word.get("notes", [])
+        if not notes:
+            continue
+        old_end = float(word["end"])
+        note_end = max(float(note["end"]) for note in notes)
+        if old_end - note_end <= WORD_NOTE_TRAILING_SILENCE_SECONDS:
+            continue
+        syllables = word.get("syllables", [])
+        if syllables and note_end <= float(syllables[-1]["start"]):
+            # Conflicting MIDI tracks: do not collapse a visible syllable to a
+            # zero-length interval merely because the selected note ended early.
+            continue
+        new_end = round(max(float(word["start"]) + 0.04, note_end), 3)
+        word["end"] = new_end
+        if syllables:
+            syllables[-1]["end"] = new_end
+        clipped = []
+        for note in notes:
+            start = max(float(word["start"]), float(note["start"]))
+            end = min(new_end, float(note["end"]))
+            if round(end, 3) > round(start, 3):
+                clipped.append({**note, "start": round(start, 3), "end": round(end, 3)})
+        word["notes"] = clipped
 
 
 def _monophonize_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -516,6 +575,7 @@ def parse_kar(
     )
     title = title or filename_title
     artist = artist or filename_artist or ""
+    title, artist = normalize_karaoke_identity(title, artist)
     lyric_track, lyric_events = _lyrics_by_track(tracks, convert)
     track_duration = max((convert(track[-1][0]) for track in tracks if track), default=0.0)
     words, text = _word_events(lyric_events, track_duration)
@@ -537,6 +597,7 @@ def parse_kar(
         if sustained:
             last["end"] = round(max(last["end"], max(sustained)), 3)
     _attach_notes(words, notes)
+    _tighten_word_ends_to_notes(words)
     duration = max(
         track_duration,
         words[-1]["end"],
@@ -592,11 +653,47 @@ def _audio_search_identity(document: KarDocument) -> tuple[str, str]:
     selected unrelated solo/demo recordings. In that layout the title itself
     is the more reliable source of both values.
     """
-    prefix, separator, suffix = document.title.partition(":")
-    cleaned_suffix = suffix.strip().strip("\"'«»“”„ ")
-    if separator and prefix.strip() and cleaned_suffix:
-        return prefix.strip(), cleaned_suffix
-    return document.artist.strip(), document.title.strip()
+    title, artist = normalize_karaoke_identity(document.title, document.artist)
+    return artist, title
+
+
+def _looks_like_person_credits(value: str) -> bool:
+    """Recognize composer/author credits that are commonly stored as artist."""
+    cleaned = " ".join(str(value or "").split())
+    if not cleaned:
+        return False
+    has_initials = bool(re.search(r"(?:^|\s)[A-ZА-ЯЁ]\.(?:\s|,|$)", cleaned))
+    multiple_names = bool(re.search(r"[,;/&]", cleaned))
+    return has_initials or multiple_names
+
+
+def normalize_karaoke_identity(title: str, artist: str | None) -> tuple[str, str]:
+    """Return canonical ``(title, performer)`` from inconsistent karaoke tags."""
+    clean_title = _clean_text(title)
+    clean_artist = _clean_text(artist or "")
+    match = re.match(r"^(.+?)\s*[:：]\s*(.+)$", clean_title)
+    if not match:
+        return clean_title, clean_artist
+    embedded_artist = _clean_text(match.group(1)).strip("\"'«»“”„ ")
+    raw_song = match.group(2).strip()
+    embedded_title = _clean_text(raw_song).strip("\"'«»“”„ ")
+    quoted_song = bool(raw_song[:1] in "\"'«“„" and raw_song[-1:] in "\"'»”")
+    artist_matches_prefix = bool(
+        clean_artist
+        and set(_normalized_words(clean_artist)) & set(_normalized_words(embedded_artist))
+    )
+    if (
+        embedded_artist
+        and embedded_title
+        and (
+            quoted_song
+            or not clean_artist
+            or _looks_like_person_credits(clean_artist)
+            or artist_matches_prefix
+        )
+    ):
+        return embedded_title, embedded_artist
+    return clean_title, clean_artist
 
 
 def _duration_matches(document: KarDocument, duration: float) -> bool:
@@ -611,7 +708,14 @@ def _duration_matches(document: KarDocument, duration: float) -> bool:
 
 def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> float | None:
     title = str(entry.get("title") or "")
-    normalized = title.casefold()
+    # Flat search results often hide the only evidence that a recording is
+    # live in the album/description fields. Score the expanded metadata too
+    # once yt-dlp has fetched it, instead of trusting the visible title alone.
+    metadata_text = " ".join(
+        str(entry.get(field) or "")
+        for field in ("title", "album", "description", "playlist_title")
+    )
+    normalized = metadata_text.casefold()
     if any(hint in normalized for hint in _REJECTED_AUDIO_HINTS):
         return None
     expected_artist, expected_song = _audio_search_identity(document)
@@ -632,13 +736,50 @@ def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> floa
         return None
     uploader_overlap = _overlap_count(artist_words, uploader_words)
     official = 8 if any(hint in normalized for hint in ("official", "audio", "music video")) else 0
+    search_intent = str(entry.get("_karaoke_search_intent") or "")
+    search_rank = max(0, int(entry.get("_karaoke_search_rank") or 0))
+    intent_bonus = _AUDIO_SEARCH_INTENT_BONUS.get(search_intent, 0.0)
     return (
         title_overlap * 20
         + artist_overlap * 12
         + uploader_overlap * 14
         + official
+        + intent_bonus
+        - min(search_rank, 12) * 0.35
         - duration_penalty / 3
     )
+
+
+def _audio_search_queries(artist: str, title: str) -> list[tuple[str, str]]:
+    identity = " ".join(filter(None, (artist, title)))
+    return [
+        ("studio", f'"{identity}" studio version'),
+        ("official", f'"{identity}" official audio'),
+    ]
+
+
+def _merge_audio_search_entries(results: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any]]:
+    """Deduplicate searches while retaining the strongest search intent."""
+    merged: dict[str, dict[str, Any]] = {}
+    for intent, result in results:
+        entries = result.get("entries", []) if isinstance(result, dict) else []
+        for rank, raw_entry in enumerate(entries):
+            if not isinstance(raw_entry, dict):
+                continue
+            entry = dict(raw_entry)
+            key = str(entry.get("id") or _candidate_url(entry) or "")
+            if not key:
+                continue
+            entry["_karaoke_search_intent"] = intent
+            entry["_karaoke_search_rank"] = rank
+            previous = merged.get(key)
+            if previous is None or _AUDIO_SEARCH_INTENT_BONUS.get(
+                intent, 0
+            ) > _AUDIO_SEARCH_INTENT_BONUS.get(
+                str(previous.get("_karaoke_search_intent") or ""), 0
+            ):
+                merged[key] = entry
+    return list(merged.values())
 
 
 def _candidate_url(entry: dict[str, Any]) -> str | None:
@@ -824,7 +965,7 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     if YoutubeDL is None:
         raise RuntimeError("yt-dlp не установлен")
     expected_artist, expected_title = _audio_search_identity(document)
-    query = " ".join(filter(None, (expected_artist, expected_title, "official audio")))
+    queries = _audio_search_queries(expected_artist, expected_title)
     search_options = {
         "quiet": True,
         "no_warnings": True,
@@ -835,8 +976,11 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
         "retries": 2,
     }
     with YoutubeDL(search_options) as downloader:
-        result = downloader.extract_info(f"ytsearch8:{query}", download=False)
-    entries = result.get("entries", []) if isinstance(result, dict) else []
+        search_results = [
+            (intent, downloader.extract_info(f"ytsearch10:{query}", download=False))
+            for intent, query in queries
+        ]
+    entries = _merge_audio_search_entries(search_results)
     ranked = [
         (score, entry)
         for entry in entries
@@ -853,8 +997,16 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     ):
         try:
             preview, preview_info = _download_preview(entry, temporary, index)
+            preview_info = {
+                **preview_info,
+                "_karaoke_search_intent": entry.get("_karaoke_search_intent"),
+                "_karaoke_search_rank": entry.get("_karaoke_search_rank"),
+            }
+            expanded_score = _audio_candidate_score(preview_info, document)
+            if expanded_score is None:
+                continue
             match = _midi_audio_match(document, preview)
-            matches.append((_metadata_score, entry, preview_info, match))
+            matches.append((expanded_score, entry, preview_info, match))
         except Exception:
             continue
         finally:
@@ -927,9 +1079,12 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     # final mapping must come from the complete downloaded original recording.
     match = _midi_audio_match(document, target)
     final_entry = {
+        **info,
         "title": info.get("title") or selected.get("title"),
         "uploader": info.get("uploader") or selected.get("uploader"),
         "duration": info.get("duration") or selected.get("duration"),
+        "_karaoke_search_intent": selected.get("_karaoke_search_intent"),
+        "_karaoke_search_rank": selected.get("_karaoke_search_rank"),
     }
     if _audio_candidate_score(final_entry, document) is None:
         target.unlink(missing_ok=True)
@@ -945,7 +1100,8 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
         )
     shutil.rmtree(temporary, ignore_errors=True)
     return {
-        "query": query,
+        "query": queries[0][1],
+        "search_queries": [query for _intent, query in queries],
         "url": str(info.get("webpage_url") or webpage),
         "title": str(info.get("title") or selected.get("title") or ""),
         "uploader": str(info.get("uploader") or selected.get("uploader") or ""),
@@ -1008,6 +1164,7 @@ def _prepare_visual_assets(
     artist: str | None,
     *,
     cover_url: str = "",
+    expected_duration: float | None = None,
 ) -> dict[str, object]:
     """Prepare optional media without ever invalidating audio training data."""
     try:
@@ -1016,6 +1173,7 @@ def _prepare_visual_assets(
             artist,
             target,
             cover_url=cover_url,
+            expected_duration=expected_duration,
         )
     except Exception as exc:
         return {
@@ -1125,11 +1283,13 @@ def prepare_kar_file(
     }
     if (target / "original.flac").is_file():
         _notify_dataset(progress, cancelled, "karaoke_media", 70, "Подготавливаем обложку и клип")
+        media_artist, media_title = _audio_search_identity(document)
         media = _prepare_visual_assets(
             target,
-            document.title,
-            document.artist,
+            media_title,
+            media_artist,
             cover_url=str((audio_source or {}).get("thumbnail_url") or ""),
+            expected_duration=float((audio_source or {}).get("duration") or 0) or None,
         )
         warnings.extend(str(item) for item in media.get("warnings", []))
         _notify_dataset(progress, cancelled, "karaoke_media", 97, "Визуальные файлы готовы")

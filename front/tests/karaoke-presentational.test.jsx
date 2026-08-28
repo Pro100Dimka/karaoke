@@ -48,9 +48,7 @@ test("karaoke media preserves direct Electron URLs through StrictMode cleanup", 
       <KaraokeMedia {...props} song={song} />
     </StrictMode>
   );
-  const { container, rerender, unmount } = render(
-    view({ id: "electron-song", title: "Title" })
-  );
+  const { container, rerender, unmount } = render(view({ id: "electron-song", title: "Title" }));
   expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
     "electron-song/instrumental",
     "electron-song/vocals"
@@ -294,6 +292,33 @@ test("lyrics keep a readable constant pace across the exact acoustic note envelo
   expect(fill()).toBe(100);
 });
 
+test("KAR lyrics fill every preserved syllable on its own timing", () => {
+  const word = {
+    index: 0,
+    text: "привет",
+    start: 0,
+    end: 1,
+    notes: [{ note: 60, start: 0, end: 1 }],
+    syllables: [
+      { text: "при", start: 0, end: 0.2 },
+      { text: "вет", start: 0.2, end: 1 }
+    ]
+  };
+  const view = render(<KaraokeLyrics lyricsSync={{ text: "привет", words: [word] }} currentTime={0.1} />);
+  const fills = () =>
+    [...view.container.querySelectorAll('[data-role="lyric-syllable"]')].map((node) =>
+      Number.parseFloat(node.style.getPropertyValue("--character-fill"))
+    );
+
+  expect(view.container.querySelectorAll('[data-role="lyric-syllable"]')).toHaveLength(2);
+  expect(view.container.querySelector('[data-role="lyric-word-fill"]')).toBeNull();
+  expect(fills()).toEqual([50, 0]);
+
+  view.rerender(<KaraokeLyrics lyricsSync={{ text: "привет", words: [word] }} currentTime={0.6} />);
+  expect(fills()[0]).toBe(100);
+  expect(fills()[1]).toBeCloseTo(50, 10);
+});
+
 test("lyrics show only the current and next source lines", () => {
   const lyricsSync = {
     text: "Первая строка\n.\nВторая строка\nТретья строка",
@@ -340,9 +365,7 @@ test("standalone KAR punctuation stays on its source line without shifting follo
   const { container } = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />);
   const lines = container.querySelectorAll('[data-role="lyric-line"]');
   const texts = [...lines].map((line) =>
-    [...line.querySelectorAll(':scope > [data-role="lyric-word"]')]
-      .map(({ dataset }) => dataset.text)
-      .join(" ")
+    [...line.querySelectorAll(':scope > [data-role="lyric-word"]')].map(({ dataset }) => dataset.text).join(" ")
   );
 
   expect(texts).toEqual(["Ты - летящий вдаль", "Следующая строка"]);

@@ -25,6 +25,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const media = useRef(null);
   const rememberedVolume = useRef(1);
   const token = platform.apiToken();
+  const [playbackSource, setPlaybackSource] = useState(src);
   const waveformFetchParams = useMemo(
     () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
     [token]
@@ -40,16 +41,35 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const update = (value) => setState((current) => ({ ...current, ...value }));
 
   useEffect(() => {
+    if (!token || !src || /^(?:blob:|data:)/i.test(src)) {
+      setPlaybackSource(src);
+      return undefined;
+    }
+    let active = true;
+    let objectUrl = "";
+    setPlaybackSource("");
+    fetch(src, { headers: { "X-ADVoice-Token": token } })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPlaybackSource(objectUrl);
+      })
+      .catch(() => active && setPlaybackSource(src));
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src, token]);
+
+  useEffect(() => {
     const audio = media.current;
     return () => {
       if (!audio) return;
       audio.pause();
-      audio.removeAttribute("src");
-      try {
-        audio.load();
-      } catch {
-        // Detached embedded media implementations may not expose load().
-      }
     };
   }, []);
 
@@ -64,7 +84,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
       }
     }
     setState((current) => ({ ...current, duration: fallback, playing: false, position: 0 }));
-  }, [fallback, src]);
+  }, [fallback, playbackSource]);
 
   useEffect(() => {
     if (!state.playing) return undefined;
@@ -103,7 +123,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
       <audio
         ref={media}
         preload="metadata"
-        src={src}
+        src={playbackSource || undefined}
         onLoadedMetadata={(event) =>
           update({ duration: normalizeAudioDuration(event.currentTarget.duration) || fallback })
         }

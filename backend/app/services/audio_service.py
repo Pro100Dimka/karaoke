@@ -285,7 +285,14 @@ def _monitor_sample_rate(input_device_id: int, output_device_id: int) -> float:
     output_info = sd.query_devices(output_device_id)
     input_default = int(round(float(input_info.get("default_samplerate", 0) or 0)))
     output_default = int(round(float(output_info.get("default_samplerate", 0) or 0)))
-    candidates = dict.fromkeys((48_000, input_default, output_default, 44_100))
+    # Staying at the endpoints' shared native rate avoids an additional
+    # Windows resampler and its buffer. Prefer a common native rate; when the
+    # endpoints differ, the render endpoint's mix format is the next best
+    # choice, followed by the capture format and standard fallbacks.
+    common_default = input_default if input_default == output_default else 0
+    candidates = dict.fromkeys(
+        (common_default, output_default, input_default, 48_000, 44_100)
+    )
     check_input = getattr(sd, "check_input_settings", None)
     check_output = getattr(sd, "check_output_settings", None)
     if callable(check_input) and callable(check_output):

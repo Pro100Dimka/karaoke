@@ -779,7 +779,23 @@ def _publish_imported_package(
     manifest: dict[str, object], existing: models.Song | None, source_member: zipfile.ZipInfo,
     *, song_id: str, title: str, slug: str, final_source_name: str, output_dir: Path,
 ) -> models.Song:
-    staging_root, backup_dir, journal_path, published, db_committed = Path(tempfile.mkdtemp(prefix='song-import-', dir=config.CACHE_DIR)), output_dir.with_name(f'.{output_dir.name}.room-backup-{uuid4().hex}') if existing else None, _import_journal_path(output_dir), False, False
+    # The final publish is an atomic directory rename. Windows cannot perform
+    # that rename across volumes (WinError 17), so the fully validated tree
+    # must be staged beside its destination rather than in the global cache,
+    # which may live on another drive.
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_root = Path(
+        tempfile.mkdtemp(
+            prefix=f".{output_dir.name}.room-import-",
+            dir=output_dir.parent,
+        )
+    )
+    backup_dir = (
+        output_dir.with_name(f".{output_dir.name}.room-backup-{uuid4().hex}")
+        if existing
+        else None
+    )
+    journal_path, published, db_committed = _import_journal_path(output_dir), False, False
     journal = {
         "operation": "room-import",
         "song_id": song_id,

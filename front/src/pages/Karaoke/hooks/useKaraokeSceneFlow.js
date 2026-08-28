@@ -37,6 +37,7 @@ export default function useKaraokeSceneFlow({
   isPlaying,
   isRadioPlaying,
   navigate,
+  returnToLibrary,
   setRecordingActive,
   showControls,
   songId,
@@ -198,9 +199,10 @@ export default function useKaraokeSceneFlow({
     const analysisId = analysisRecordingIdRef.current;
     setGlobalRouteBlackout(true);
     await waitForScene(40);
-    navigateToLibraryFromBlackout(analysisId);
+    if (returnToLibrary) await returnToLibrary({ alreadyStopped: true, analysisId });
+    else navigateToLibraryFromBlackout(analysisId);
     return true;
-  }, [analysisRecordingIdRef, hideControls, navigateToLibraryFromBlackout, stop]);
+  }, [analysisRecordingIdRef, hideControls, navigateToLibraryFromBlackout, returnToLibrary, stop]);
 
   useEffect(() => {
     if (!autoStartRequested || !songId || autoStartedSongRef.current === songId) return undefined;

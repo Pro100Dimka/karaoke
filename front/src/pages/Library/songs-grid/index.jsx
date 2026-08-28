@@ -3,6 +3,28 @@ import { translateSaved as tr } from "../../../i18n/runtime";
 import { Box, Card, Grid, Stack, Typography } from "../../../theme/ui";
 import LibrarySongCard from "./song-card";
 
+export function selectSongTransferStatus(statuses, songId) {
+  const matching = statuses.filter((status) => status?.songId === songId);
+  const error = matching.find((status) => status.stage === "error");
+  if (error) return error;
+
+  // The host keeps a synthetic `room` status for the ready-participant count,
+  // while every actual file transfer has its own participant status. During a
+  // transfer the synthetic entry remains at 0 until the recipient is fully
+  // ready, so choosing the first matching Map value made the card look frozen
+  // even though the participant row showed real progress. Completed recipients
+  // are removed from the Map, therefore the slowest remaining real transfer is
+  // the useful room-wide progress to show on the song card.
+  const participantStatuses = matching.filter(
+    (status) => status.participantId && status.participantId !== "room"
+  );
+  if (participantStatuses.length)
+    return participantStatuses.reduce((slowest, status) =>
+      Number(status.percent) < Number(slowest.percent) ? status : slowest
+    );
+  return matching.at(-1);
+}
+
 export default function LibrarySongsGrid({ state: s, fileImport: f, processing, recordings }) {
   const { filteredSongs: songs, songsError: error, songActions: a } = s;
   const statuses = [...(s.transferStatuses?.values?.() || [])];
@@ -59,7 +81,7 @@ export default function LibrarySongsGrid({ state: s, fileImport: f, processing, 
             key={song.id}
             {...card}
             {...{ song, cardIndex }}
-            transferStatus={statuses.find((x) => x.songId === song.id)}
+            transferStatus={selectSongTransferStatus(statuses, song.id)}
           />
         ))}
       </Grid>

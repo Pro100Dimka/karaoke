@@ -3,12 +3,13 @@ import { translateSaved as t } from "../../../i18n/runtime";
 import Box from "../../ui/Box";
 import Stack from "../../ui/Stack";
 import Typography from "../../ui/Typography";
-import { buildLyricLines, lyricLineIndex, lyricWordFill } from "./timeline";
+import { buildLyricLines, lyricLineIndex, lyricSyllableFill, lyricWordFill } from "./timeline";
 
 function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying = false }) {
   const lines = useMemo(() => buildLyricLines(lyricsSync), [lyricsSync]);
   const [first, setFirst] = useState(() => lyricLineIndex(lines, Number(currentTime) || 0));
   const wordRefs = useRef(new Map());
+  const syllableRefs = useRef(new Map());
   const update = useCallback(
     (time) => {
       const next = lyricLineIndex(lines, time);
@@ -17,6 +18,11 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
         const [lineIndex, wordIndex] = key.split(":").map(Number);
         const word = lines[lineIndex]?.[wordIndex];
         if (word) node.style.setProperty("--character-fill", lyricWordFill(word, time));
+      });
+      syllableRefs.current.forEach((node, key) => {
+        const [lineIndex, wordIndex, syllableIndex] = key.split(":").map(Number);
+        const syllable = lines[lineIndex]?.[wordIndex]?.syllables?.[syllableIndex];
+        if (syllable) node.style.setProperty("--character-fill", lyricSyllableFill(syllable, time));
       });
     },
     [lines]
@@ -86,49 +92,107 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
                 "0 .08em .12em color-mix(in srgb, var(--color-bg-deep) 78%, transparent), 0 .24em .65em color-mix(in srgb, var(--color-bg-deep) 44%, transparent)"
             }}
           >
-            {words.map((word, wordIndex) => (
-              <Box
-                as="span"
-                key={`${word.index}-${wordIndex}`}
-                ref={(node) => {
-                  const key = `${lineIndex}:${wordIndex}`;
-                  if (node) wordRefs.current.set(key, node);
-                  else wordRefs.current.delete(key);
-                }}
-                data-role="lyric-word"
-                data-text={word.text}
-                data-start={word.start}
-                data-end={word.end}
-                style={{ "--character-fill": lyricWordFill(word, Number(currentTimeRef?.current ?? currentTime) || 0) }}
-                sx={{
-                  marginInlineEnd: "var(--space-2)",
-                  position: "relative",
-                  display: "inline-block",
-                  color: lineOffset ? "var(--color-text-muted)" : "var(--color-text)",
-                  WebkitTextFillColor: lineOffset
-                    ? "var(--color-text-muted)"
-                    : "var(--color-text)"
-                }}
-              >
-                {word.text}
+            {words.map((word, wordIndex) => {
+              const syllables =
+                Array.isArray(word.syllables) &&
+                word.syllables.length > 1 &&
+                word.syllables.map(({ text }) => text).join("") === word.text
+                  ? word.syllables
+                  : null;
+              return (
                 <Box
                   as="span"
-                  aria-hidden="true"
-                  data-role="lyric-word-fill"
+                  key={`${word.index}-${wordIndex}`}
+                  ref={(node) => {
+                    const key = `${lineIndex}:${wordIndex}`;
+                    if (node) wordRefs.current.set(key, node);
+                    else wordRefs.current.delete(key);
+                  }}
+                  data-role="lyric-word"
+                  data-text={word.text}
+                  data-start={word.start}
+                  data-end={word.end}
+                  style={{
+                    "--character-fill": lyricWordFill(
+                      word,
+                      Number(currentTimeRef?.current ?? currentTime) || 0
+                    )
+                  }}
                   sx={{
-                    position: "absolute",
-                    inset: 0,
-                    color: "var(--color-primary-hover)",
-                    WebkitTextFillColor: "var(--color-primary-hover)",
-                    clipPath: "inset(0 calc(100% - var(--character-fill)) 0 0)",
-                    pointerEvents: "none",
-                    willChange: "clip-path"
+                    marginInlineEnd: "var(--space-2)",
+                    position: "relative",
+                    display: "inline-block",
+                    color: lineOffset ? "var(--color-text-muted)" : "var(--color-text)",
+                    WebkitTextFillColor: lineOffset
+                      ? "var(--color-text-muted)"
+                      : "var(--color-text)"
                   }}
                 >
-                  {word.text}
+                  {syllables ? (
+                    syllables.map((syllable, syllableIndex) => (
+                      <Box
+                        as="span"
+                        key={`${syllable.start}-${syllableIndex}`}
+                        ref={(node) => {
+                          const key = `${lineIndex}:${wordIndex}:${syllableIndex}`;
+                          if (node) syllableRefs.current.set(key, node);
+                          else syllableRefs.current.delete(key);
+                        }}
+                        data-role="lyric-syllable"
+                        data-text={syllable.text}
+                        data-start={syllable.start}
+                        data-end={syllable.end}
+                        style={{
+                          "--character-fill": lyricSyllableFill(
+                            syllable,
+                            Number(currentTimeRef?.current ?? currentTime) || 0
+                          )
+                        }}
+                        sx={{ position: "relative", display: "inline-block" }}
+                      >
+                        {syllable.text}
+                        <Box
+                          as="span"
+                          aria-hidden="true"
+                          data-role="lyric-syllable-fill"
+                          sx={{
+                            position: "absolute",
+                            inset: 0,
+                            color: "var(--color-primary-hover)",
+                            WebkitTextFillColor: "var(--color-primary-hover)",
+                            clipPath: "inset(0 calc(100% - var(--character-fill)) 0 0)",
+                            pointerEvents: "none",
+                            willChange: "clip-path"
+                          }}
+                        >
+                          {syllable.text}
+                        </Box>
+                      </Box>
+                    ))
+                  ) : (
+                    <>
+                      {word.text}
+                      <Box
+                        as="span"
+                        aria-hidden="true"
+                        data-role="lyric-word-fill"
+                        sx={{
+                          position: "absolute",
+                          inset: 0,
+                          color: "var(--color-primary-hover)",
+                          WebkitTextFillColor: "var(--color-primary-hover)",
+                          clipPath: "inset(0 calc(100% - var(--character-fill)) 0 0)",
+                          pointerEvents: "none",
+                          willChange: "clip-path"
+                        }}
+                      >
+                        {word.text}
+                      </Box>
+                    </>
+                  )}
                 </Box>
-              </Box>
-            ))}
+              );
+            })}
           </Typography>
         );
       })}

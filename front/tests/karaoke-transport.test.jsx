@@ -103,9 +103,7 @@ describe("karaoke transport", () => {
       });
       const hook = renderHook(() => useKaraokeTransport(props));
       const playback = hook.result.current.togglePlay();
-      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "play", executeAt: 1_450 })
-      );
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(expect.objectContaining({ action: "play", executeAt: 1_450 }));
       expect(props.instrumentalRef.current.play).not.toHaveBeenCalled();
       await act(async () => vi.advanceTimersByTimeAsync(450));
       await expect(playback).resolves.toBe(true);
@@ -270,6 +268,17 @@ describe("karaoke transport", () => {
       "toHaveBeenCalledWith",
       expect.objectContaining({ type: "karaoke-player", action: "stop", songId: "song", position: 0 })
     ]);
+  });
+  test("already-stopped room exit broadcasts library navigation without stopping twice", async () => {
+    const props = createProps();
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await expect(hook.result.current.returnToLibrary({ alreadyStopped: true, analysisId: "recording-room" })).resolves.toBe(true);
+    expect(props.instrumentalRef.current.pause).not.toHaveBeenCalled();
+    expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith({ type: "open-library" });
+    expect(props.navigate).toHaveBeenCalledWith("/", {
+      replace: true,
+      state: { fromKaraokeFade: true, analysisRecordingId: "recording-room" }
+    });
   });
   test("keeps a failed recording pending without blocking stop or exit", async () => {
     const props = createProps({ recordingSessionId: "existing" });

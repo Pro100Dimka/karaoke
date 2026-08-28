@@ -48,6 +48,29 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
         if not (math.isfinite(start) and math.isfinite(end)) or start < 0 or end <= start or start + 1e-6 < previous:
             raise ValueError(f"Invalid word interval {index}")
         previous = start
+        syllables = word.get("syllables")
+        if syllables is not None:
+            if not isinstance(syllables, list) or not syllables:
+                raise ValueError(f"Invalid syllables in word {index}")
+            previous_syllable_end = start
+            syllable_text = ""
+            for syllable in syllables:
+                if not isinstance(syllable, dict) or not isinstance(syllable.get("text"), str):
+                    raise ValueError(f"Invalid syllables in word {index}")
+                syllable_start = float(syllable.get("start", -1))
+                syllable_end = float(syllable.get("end", -1))
+                if (
+                    not (math.isfinite(syllable_start) and math.isfinite(syllable_end))
+                    or syllable_end <= syllable_start
+                    or syllable_start < start - 1e-6
+                    or syllable_end > end + 1e-6
+                    or syllable_start < previous_syllable_end - 1e-6
+                ):
+                    raise ValueError(f"Invalid syllable interval in word {index}")
+                previous_syllable_end = syllable_end
+                syllable_text += syllable["text"]
+            if syllable_text != word["text"]:
+                raise ValueError(f"Syllable text does not match word {index}")
         previous_note_end = -1.0
         for note in word.setdefault("notes", []):
             note_start, note_end = float(note.get("start", -1)), float(note.get("end", -1))
@@ -55,7 +78,10 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
             midi = int(raw_midi) if isinstance(raw_midi, (int, float)) and not isinstance(raw_midi, bool) and math.isfinite(raw_midi) else -1
             if (
                 not (math.isfinite(note_start) and math.isfinite(note_end))
-                or note_end <= note_start or note_end <= start or note_start >= end or not 0 <= midi <= 127
+                or note_end <= note_start
+                or note_start < start - 1e-6
+                or note_end > end + 1e-6
+                or not 0 <= midi <= 127
             ):
                 print(
                     f"[lyrics_document] word {index} {word.get('text')!r} "

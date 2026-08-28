@@ -209,6 +209,24 @@ def test_monitor_sample_rate_prefers_common_48khz_and_falls_back_to_input(monkey
     assert audio_service._monitor_sample_rate(1, 2) == 44_100.0
 
 
+def test_monitor_sample_rate_keeps_matching_consumer_devices_at_native_rate(monkeypatch):
+    devices = {
+        1: device("Razer USB Sound Card microphone", 0, inputs=1, rate=44_100),
+        2: device("Razer USB Sound Card headphones", 0, outputs=2, rate=44_100),
+    }
+    checked = []
+    patch_attrs(
+        monkeypatch,
+        audio_service.sd,
+        query_devices=lambda index: devices[index],
+        check_input_settings=lambda **kwargs: checked.append(("input", kwargs["samplerate"])),
+        check_output_settings=lambda **kwargs: checked.append(("output", kwargs["samplerate"])),
+    )
+
+    assert audio_service._monitor_sample_rate(1, 2) == 44_100.0
+    assert checked == [("input", 44_100), ("output", 44_100)]
+
+
 def test_device_lists_expose_capabilities_and_host_api(monkeypatch):
     devices = [
         device("Microphone", 0, inputs=1),

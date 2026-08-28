@@ -17,7 +17,14 @@ export function shiftLyricsSync(lyricsSync, offsetSeconds = 0) {
             start: shiftedTime(note.start, offset),
             end: shiftedTime(note.end, offset)
           }))
-        : word.notes
+        : word.notes,
+      syllables: Array.isArray(word.syllables)
+        ? word.syllables.map((syllable) => ({
+            ...syllable,
+            start: shiftedTime(syllable.start, offset),
+            end: shiftedTime(syllable.end, offset)
+          }))
+        : word.syllables
     }))
   };
 }
@@ -82,4 +89,7 @@ export function lyricsNoteFillPercent(word, currentTime) {
   const notes = mergeAdjacentLyricsNotes(word);
   const interval = notes.length ? { start: notes[0].start, end: notes.at(-1).end } : word;
   return fill(interval, currentTime);
+}
+export function lyricsSyllableFillPercent(syllable, currentTime) {
+  return fill(syllable, currentTime);
 }

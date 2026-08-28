@@ -3,6 +3,7 @@ import { FakeChannel, FakePeer, stream, track } from "./helpers/webrtc.mjs";
 
 vi.mock("../src/i18n/runtime.js", () => ({ translateSaved: (value) => value }));
 let OnlineVoiceMesh;
+let preferLowLatencyOpus;
 const makeMesh = () => new OnlineVoiceMesh({ send: vi.fn(() => true) });
 const setupChannel = (peer = "guest") => {
   const mesh = makeMesh();
@@ -12,7 +13,7 @@ const setupChannel = (peer = "guest") => {
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({ default: OnlineVoiceMesh } = await import("../src/services/onlineVoiceMesh.js"));
+  ({ default: OnlineVoiceMesh, preferLowLatencyOpus } = await import("../src/services/onlineVoiceMesh.js"));
   FakePeer.instances = [];
   globalThis.RTCPeerConnection = FakePeer;
 });
@@ -26,6 +27,31 @@ afterEach(() => {
   }
 });
 describe("online voice mesh", () => {
+  test("requests ten-millisecond Opus packets without changing unrelated media sections", () => {
+    const input = {
+      type: "offer",
+      sdp: [
+        "v=0",
+        "m=audio 9 UDP/TLS/RTP/SAVPF 111",
+        "a=rtpmap:111 opus/48000/2",
+        "a=fmtp:111 minptime=20;useinbandfec=1",
+        "a=ptime:20",
+        "m=video 9 UDP/TLS/RTP/SAVPF 96",
+        "a=rtpmap:96 VP8/90000",
+        ""
+      ].join("\r\n")
+    };
+    const result = preferLowLatencyOpus(input);
+    expect(result).not.toBe(input);
+    expect(result.sdp).toContain("a=ptime:10\r\na=maxptime:10");
+    expect(result.sdp).toContain("a=fmtp:111 minptime=10;useinbandfec=1");
+    expect(result.sdp).not.toContain("a=ptime:20");
+    expect(result.sdp).toContain("m=video 9 UDP/TLS/RTP/SAVPF 96");
+    expect(preferLowLatencyOpus({ type: "offer", sdp: "v=0\r\nm=video 9" })).toEqual({
+      type: "offer",
+      sdp: "v=0\r\nm=video 9"
+    });
+  });
   test("uses the raw microphone stream for the visual level meter", () => {
     const mesh = makeMesh();
     const processedStream = { id: "processed" };

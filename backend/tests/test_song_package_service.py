@@ -2,6 +2,7 @@ import contextlib
 import json
 import zipfile
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import Mock
 
 import soundfile as sf
@@ -122,11 +123,13 @@ def test_package_preserves_a_source_distinct_from_the_instrumental(monkeypatch, 
 
 
 def test_package_export_import_round_trip_preserves_revision(monkeypatch, tmp_path):
+    cache_root = tmp_path / "cache-volume"
+    cache_root.mkdir()
     export_output = tmp_path / "exporter-library" / "song"
     write_runtime(export_output)
     patch_attrs(
         monkeypatch, song_package_service.config,
-        CACHE_DIR=tmp_path, SONG_OUTPUT_DIR=export_output.parent, SONG_LIBRARY_ROOTS={export_output.parent},
+        CACHE_DIR=cache_root, SONG_OUTPUT_DIR=export_output.parent, SONG_LIBRARY_ROOTS={export_output.parent},
     )
     exported_song = song(export_output)
     package_path = song_package_service.build_package(exported_song)
@@ -138,6 +141,17 @@ def test_package_export_import_round_trip_preserves_revision(monkeypatch, tmp_pa
         monkeypatch, song_package_service.config,
         SONG_OUTPUT_DIR=import_root, SONG_LIBRARY_ROOTS={import_root},
     )
+    real_replace = Path.replace
+
+    def reject_cache_to_library_rename(source, target):
+        source_path, target_path = source.resolve(), Path(target).resolve()
+        if source_path.is_relative_to(cache_root.resolve()) and target_path.is_relative_to(
+            import_root.resolve()
+        ):
+            raise OSError(17, "Cannot move a file to a different disk")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", reject_cache_to_library_rename)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     db = sessionmaker(bind=engine, autoflush=False, autocommit=False)()

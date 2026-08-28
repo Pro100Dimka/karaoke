@@ -328,7 +328,10 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("stop"));
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
-    verify([mocks.navigate, "toHaveBeenCalledWith", "/", expect.objectContaining({ replace: true })]);
+    expect(mocks.transport.returnToLibrary).toHaveBeenCalledWith({
+      alreadyStopped: true,
+      analysisId: null
+    });
   });
   test("syncs participant effects while a room is active", () => {
     mocks.room.room = { host: true };

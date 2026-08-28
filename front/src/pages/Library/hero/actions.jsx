@@ -12,7 +12,6 @@ import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
   Button,
-  Card,
   IconButton,
   Popover,
   Select,
@@ -95,29 +94,27 @@ export default function LibraryActions({
       align="center"
       sx={{ width: "50%" }}
     >
-      <Card variant="laser" tilt={false} sx={{ containerType: "normal", width: "100%" }}>
-        <TextField
-          fullWidth
-          size="lg"
-          value={query}
-          onChange={setQuery}
-          placeholder={tr("Поиск песен, исполнителей, жанров…")}
-          startAdornment={<Search />}
-          endAdornment={
-            <IconButton
-              ref={anchor}
-              icon={SlidersHorizontal}
-              size="sm"
-              label={tr("Фильтры и сортировка")}
-              variant={open ? "contained" : "outline"}
-              onClick={() => {
-                !open && setDraft(filters);
-                setOpen(!open);
-              }}
-            />
-          }
-        />
-      </Card>
+      <TextField
+        fullWidth
+        size="lg"
+        value={query}
+        onChange={setQuery}
+        placeholder={tr("Поиск песен, исполнителей, жанров…")}
+        startAdornment={<Search />}
+        endAdornment={
+          <IconButton
+            ref={anchor}
+            icon={SlidersHorizontal}
+            size="sm"
+            label={tr("Фильтры и сортировка")}
+            variant={open ? "contained" : "outline"}
+            onClick={() => {
+              !open && setDraft(filters);
+              setOpen(!open);
+            }}
+          />
+        }
+      />
 
       {buttons
         .filter(([show]) => show)

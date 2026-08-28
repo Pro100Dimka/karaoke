@@ -40,7 +40,7 @@ import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.
 import LibraryActions from "../src/pages/Library/hero/actions.jsx";
 import LibraryHero from "../src/pages/Library/hero/index.jsx";
 import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
-import LibrarySongsGrid from "../src/pages/Library/songs-grid/index.jsx";
+import LibrarySongsGrid, { selectSongTransferStatus } from "../src/pages/Library/songs-grid/index.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
@@ -130,6 +130,16 @@ test("large song collections render through the window virtualizer", () => {
   );
   expect(container.querySelectorAll('[role="button"]').length).toBeGreaterThan(0);
   expect(container.querySelectorAll('[role="button"]').length).toBeLessThan(songs.length);
+});
+test("song card progress prefers the slowest real participant over the room placeholder", () => {
+  const statuses = [
+    { participantId: "room", songId: "song", stage: "waiting", percent: 0 },
+    { participantId: "guest-a", songId: "song", stage: "sending", percent: 47 },
+    { participantId: "guest-b", songId: "song", stage: "sending", percent: 22 },
+    { participantId: "guest-c", songId: "other", stage: "sending", percent: 5 }
+  ];
+  expect(selectSongTransferStatus(statuses, "song")).toEqual(statuses[2]);
+  expect(selectSongTransferStatus([...statuses, { songId: "song", stage: "error", percent: 0 }], "song").stage).toBe("error");
 });
 test("processing signal clamps progress and exposes an accessible value", () => {
   const { getByRole, rerender } = render(<ProcessingSignal progress={140} />);

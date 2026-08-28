@@ -210,6 +210,27 @@ describe("karaoke scene flow", () => {
     expect(routeEvents).toContainEqual({ visible: true });
     window.removeEventListener("app:route-blackout", listener);
   });
+  test("successful room stop returns the whole room to the library without stopping twice", async () => {
+    const returnToLibrary = vi.fn().mockResolvedValue(true);
+    const input = props({
+      analysisRecordingIdRef: { current: "recording-room" },
+      returnToLibrary
+    });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    let result;
+    await act(async () => {
+      const pending = hook.result.current.handleStop();
+      await vi.advanceTimersByTimeAsync(470);
+      result = await pending;
+    });
+    expect(result).toBe(true);
+    expect(input.stop).toHaveBeenCalledOnce();
+    expect(returnToLibrary).toHaveBeenCalledWith({
+      alreadyStopped: true,
+      analysisId: "recording-room"
+    });
+    expect(input.navigate).not.toHaveBeenCalled();
+  });
   test("direct blackout navigation normalizes an absent analysis id", () => {
     const input = props();
     const hook = renderHook(() => useKaraokeSceneFlow(input));

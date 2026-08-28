@@ -31,8 +31,10 @@ def test_shared_wasapi_tries_aggressive_latency_before_safe_fallback():
 
     assert candidates[0]["blocksize"] == 128
     assert candidates[0]["latency"] == 128 / 48_000
-    assert candidates[1]["blocksize"] == 128
-    assert candidates[1]["latency"] == "low"
+    assert candidates[1]["blocksize"] == 256
+    assert candidates[1]["latency"] == 256 / 48_000
+    assert candidates[2]["blocksize"] == 128
+    assert candidates[2]["latency"] == "low"
     assert all("extra_settings" not in candidate for candidate in candidates)
 
 
@@ -149,6 +151,22 @@ def test_callback_updates_levels_and_requests_restart_after_glitches(monkeypatch
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
     assert (monitor_worker.main() == 0) and (monitor_worker._level['rms_db'] > -20) and (monitor_worker._level['clipping'] is False) and (monitor_worker._level['silent'] is False)
     capsys.readouterr()
+
+
+def test_callback_ignores_transient_usb_glitches_but_restarts_sustained_failure(monkeypatch):
+    restart = threading.Event()
+    glitches = []
+    monkeypatch.setattr(monitor_worker.time, "monotonic", Mock(return_value=1.0))
+    callback = monitor_worker._audio_callback(1.0, restart, glitches, sample_rate=48_000)
+    input_data = np.zeros((128, 1), dtype=np.float32)
+    output = np.empty((128, 2), dtype=np.float32)
+
+    for _ in range(monitor_worker._GLITCH_RESTART_THRESHOLD - 1):
+        callback(input_data, output, 128, None, "underflow")
+    assert restart.is_set() is False
+
+    callback(input_data, output, 128, None, "underflow")
+    assert restart.is_set() is True
 
 
 def test_main_emits_level_while_running(monkeypatch, capsys):

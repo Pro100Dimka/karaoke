@@ -398,16 +398,23 @@ export default function useKaraokeTransport({
   };
 
   const skip = (delta) => seekTo(clampPlaybackPosition(currentTime + delta, duration));
-  const returnToLibrary = async () => {
-    try {
-      await stop({ broadcast: false });
-    } catch (error) {
-      setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
+  const returnToLibrary = async ({ alreadyStopped = false, analysisId = null } = {}) => {
+    if (!alreadyStopped) {
+      try {
+        await stop({ broadcast: false });
+      } catch (error) {
+        setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
+      }
     }
     if (onlineRoom?.room) {
       await Promise.resolve(onlineRoom.syncCommand({ type: "open-library" })).catch(() => {});
     }
-    navigate("/");
+    if (alreadyStopped)
+      navigate("/", {
+        replace: true,
+        state: { fromKaraokeFade: true, analysisRecordingId: analysisId || null }
+      });
+    else navigate("/");
     return true;
   };
 
@@ -455,7 +462,11 @@ export default function useKaraokeTransport({
     const actions = {
       play: () => togglePlayRef.current({ broadcast: false, forcePlaying: true }),
       pause: () => togglePlayRef.current({ broadcast: false, forcePlaying: false }),
-      stop: () => stopRef.current({ broadcast: false })
+      stop: async () => {
+        const stopped = await stopRef.current({ broadcast: false });
+        if (stopped) navigate("/", { replace: true, state: { fromKaraokeFade: true } });
+        return stopped;
+      }
     };
     const action = Object.hasOwn(actions, roomCommand.action) && actions[roomCommand.action];
     const runAction = () =>
@@ -474,6 +485,7 @@ export default function useKaraokeTransport({
     return () => globalThis.clearTimeout(timer);
   }, [
     instrumentalRef,
+    navigate,
     roomCommand,
     roomClockNow,
     seekToRef,

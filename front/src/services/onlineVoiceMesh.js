@@ -21,6 +21,43 @@ import {
 } from "./onlineVoiceTransfers";
 
 const MAX_PENDING_ICE_CANDIDATES = 256;
+const OPUS_PACKET_TIME_MS = 10;
+
+export function preferLowLatencyOpus(description) {
+  const sdp = description?.sdp;
+  if (typeof sdp !== "string" || !sdp) return description;
+  const separator = sdp.includes("\r\n") ? "\r\n" : "\n";
+  const sections = sdp.split(/(?=^m=)/m);
+  const audioIndex = sections.findIndex((section) => section.startsWith("m=audio"));
+  if (audioIndex < 0) return description;
+  const opus = sections[audioIndex].match(/^a=rtpmap:(\d+) opus\/48000(?:\/\d+)?\s*$/im);
+  if (!opus) return description;
+
+  const payload = opus[1];
+  const lines = sections[audioIndex].split(/\r?\n/);
+  const mediaLine = lines.shift();
+  const filtered = lines.filter((line) => !/^a=(?:p|maxp)time:/i.test(line));
+  const fmtpIndex = filtered.findIndex((line) =>
+    new RegExp(`^a=fmtp:${payload}(?:\\s|$)`, "i").test(line)
+  );
+  if (fmtpIndex >= 0) {
+    const [prefix, parameters = ""] = filtered[fmtpIndex].split(/\s+/, 2);
+    const values = parameters
+      .split(";")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .filter((value) => !/^minptime=/i.test(value));
+    filtered[fmtpIndex] = `${prefix} minptime=${OPUS_PACKET_TIME_MS};${values.join(";")}`.replace(
+      /;$/,
+      ""
+    );
+  }
+  filtered.unshift(`a=maxptime:${OPUS_PACKET_TIME_MS}`);
+  filtered.unshift(`a=ptime:${OPUS_PACKET_TIME_MS}`);
+  sections[audioIndex] = [mediaLine, ...filtered].join(separator);
+  return { type: description.type, sdp: sections.join("") };
+}
+
 export default class OnlineVoiceMesh {
   constructor(roomClient) {
     this.roomClient = roomClient;
@@ -264,7 +301,7 @@ export default class OnlineVoiceMesh {
         );
       }
       try {
-        const offer = await peer.createOffer();
+        const offer = preferLowLatencyOpus(await peer.createOffer());
         if (!isCurrentPeer()) return false;
         await peer.setLocalDescription(offer);
         if (!isCurrentPeer() || !peer.localDescription) return false;
@@ -336,7 +373,7 @@ export default class OnlineVoiceMesh {
           await peer.addIceCandidate(candidate);
         }
         if (signal.description.type !== "offer") return true;
-        const answer = await peer.createAnswer();
+        const answer = preferLowLatencyOpus(await peer.createAnswer());
         if (!isCurrentPeer()) return false;
         await peer.setLocalDescription(answer);
         if (!isCurrentPeer() || !peer.localDescription) return false;

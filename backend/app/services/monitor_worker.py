@@ -22,6 +22,8 @@ _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
 _live_lock = threading.Lock()
 _live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35}
+_GLITCH_WINDOW_SECONDS = 5.0
+_GLITCH_RESTART_THRESHOLD = 12
 
 
 def _stream_candidates(options: dict) -> list[dict]:
@@ -37,7 +39,7 @@ def _stream_candidates(options: dict) -> list[dict]:
     # monitoring fall progressively behind. 128 frames is still only ~3 ms at
     # those rates and is a much safer realtime floor for every host API.
     stable_blocksize = max(128, requested_blocksize)
-    blocks = dict.fromkeys((stable_blocksize, 128, 256, 0))
+    blocks = tuple(dict.fromkeys((stable_blocksize, 128, 256)))
     candidates = []
     modes = (
         ("exclusive", "shared", "plain")
@@ -45,29 +47,42 @@ def _stream_candidates(options: dict) -> list[dict]:
         else ("plain",)
     )
     for mode in modes:
+        # Keep latency deterministic for as long as the endpoint accepts it.
+        # PortAudio's generic "low" preset can map to a surprisingly large
+        # shared-mode buffer on consumer USB sound cards. Try 128 and 256
+        # frames explicitly before allowing that host-controlled fallback.
         for blocksize in blocks:
-            # Try the smallest practical latency first. Shared WASAPI may
-            # clamp this to the Windows engine period; incompatible devices
-            # immediately fall back to PortAudio's conservative low preset.
-            latencies = (
-                (max(0.002, blocksize / sample_rate), "low")
-                if blocksize > 0
-                else ("low",)
-            )
-            for latency in latencies:
-                candidate = {**base, "blocksize": blocksize, "latency": latency}
-                if mode == "exclusive":
-                    candidate["extra_settings"] = (
-                        sd.WasapiSettings(exclusive=True),
-                        sd.WasapiSettings(exclusive=True),
-                    )
-                elif mode == "shared":
-                    candidate["extra_settings"] = (
-                        sd.WasapiSettings(auto_convert=True),
-                        sd.WasapiSettings(auto_convert=True),
-                    )
-                if candidate not in candidates:
-                    candidates.append(candidate)
+            candidate = {
+                **base,
+                "blocksize": blocksize,
+                "latency": max(0.002, blocksize / sample_rate),
+            }
+            if mode == "exclusive":
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(exclusive=True),
+                    sd.WasapiSettings(exclusive=True),
+                )
+            elif mode == "shared":
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(auto_convert=True),
+                    sd.WasapiSettings(auto_convert=True),
+                )
+            if candidate not in candidates:
+                candidates.append(candidate)
+        for blocksize in (*blocks, 0):
+            candidate = {**base, "blocksize": blocksize, "latency": "low"}
+            if mode == "exclusive":
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(exclusive=True),
+                    sd.WasapiSettings(exclusive=True),
+                )
+            elif mode == "shared":
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(auto_convert=True),
+                    sd.WasapiSettings(auto_convert=True),
+                )
+            if candidate not in candidates:
+                candidates.append(candidate)
     return candidates
 
 
@@ -101,8 +116,14 @@ def _audio_callback(gain: float, restart_requested: threading.Event, glitches: l
         if status:
             now = time.monotonic()
             glitches.append(now)
-            while glitches and glitches[0] < now - 2.0: glitches.pop(0)
-            if len(glitches) >= 3: restart_requested.set()
+            while glitches and glitches[0] < now - _GLITCH_WINDOW_SECONDS:
+                glitches.pop(0)
+            # A consumer USB endpoint can report an isolated underflow while
+            # another application starts. Three such events used to push the
+            # monitor permanently onto a high-latency host fallback. Restart
+            # only for sustained failure, not harmless transients.
+            if len(glitches) >= _GLITCH_RESTART_THRESHOLD:
+                restart_requested.set()
         with _live_lock:
             reverb, echo, delay, noise_suppression = (
                 _live_params["reverb"],

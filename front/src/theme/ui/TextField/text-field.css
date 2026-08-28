@@ -19,6 +19,29 @@
     inline-size: 100%;
   }
 
+  @keyframes ui-text-field-glow-cycle {
+    0% {
+      border-color: var(--color-highlight);
+      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-highlight) 55%, transparent));
+    }
+    25% {
+      border-color: var(--color-primary-hover);
+      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-primary-hover) 55%, transparent));
+    }
+    50% {
+      border-color: var(--color-primary);
+      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-primary) 55%, transparent));
+    }
+    75% {
+      border-color: var(--color-secondary);
+      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-secondary) 55%, transparent));
+    }
+    100% {
+      border-color: var(--color-highlight);
+      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-highlight) 55%, transparent));
+    }
+  }
+
   .ui-text-field-outline {
     position: absolute;
     z-index: 0;
@@ -30,9 +53,8 @@
     border: 0.052083vw solid var(--field-border);
     border-radius: inherit;
     pointer-events: none;
-    transition:
-      border-color var(--motion-duration-fast) var(--motion-easing-standard),
-      filter var(--motion-duration-fast) var(--motion-easing-standard);
+    animation: ui-text-field-glow-cycle 8s linear infinite;
+    transition: filter var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
   .ui-text-field-outline legend {
@@ -62,12 +84,14 @@
   }
 
   .ui-text-field:focus-within .ui-text-field-outline {
+    animation: none;
     border-color: var(--color-primary);
     filter:
       drop-shadow(0vw 0vw 0.291667vw color-mix(in srgb, var(--color-primary-hover) 42%, transparent)) drop-shadow(0vw 0vw 0.833333vw color-mix(in srgb, var(--color-accent) 28%, transparent));
   }
 
   .ui-text-field[data-error] .ui-text-field-outline {
+    animation: none;
     border-color: var(--ui-danger);
   }
 
@@ -171,5 +195,11 @@
   .ui-text-field-slot>svg {
     inline-size: var(--control-icon, var(--control-icon-md));
     block-size: var(--control-icon, var(--control-icon-md));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-text-field-outline {
+      animation: none;
+    }
   }
 }

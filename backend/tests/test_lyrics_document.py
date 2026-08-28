@@ -31,6 +31,37 @@ def test_accepts_exact_word_note_contract():
     assert validate_lyrics_document(payload) is payload
 
 
+def test_accepts_ordered_syllables_that_reconstruct_the_word():
+    payload = document([{"note": 60, "start": 1.0, "end": 2.0}])
+    payload["words"][0]["syllables"] = [
+        {"text": "l", "start": 1.0, "end": 1.2},
+        {"text": "a", "start": 1.2, "end": 2.0},
+    ]
+
+    assert validate_lyrics_document(payload) is payload
+
+
+@pytest.mark.parametrize(
+    "syllables",
+    [
+        [{"text": "la", "start": 0.9, "end": 1.2}],
+        [{"text": "la", "start": 1.8, "end": 2.1}],
+        [
+            {"text": "l", "start": 1.0, "end": 1.5},
+            {"text": "a", "start": 1.4, "end": 2.0},
+        ],
+        [{"text": "wrong", "start": 1.0, "end": 2.0}],
+        [],
+    ],
+)
+def test_rejects_invalid_syllable_contract(syllables):
+    payload = document()
+    payload["words"][0]["syllables"] = syllables
+
+    with pytest.raises(ValueError, match="syllable|Syllable"):
+        validate_lyrics_document(payload)
+
+
 @pytest.mark.parametrize("bpm", [0, -60, float("nan"), float("inf"), 5, 1000, "120", None])
 def test_rejects_an_absurd_or_wrong_type_bpm(bpm):
     payload = document()

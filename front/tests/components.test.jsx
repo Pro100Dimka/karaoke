@@ -249,8 +249,14 @@ describe("AudioPlayer and error boundary", () => {
     expect(audio.currentTime).toBe(0);
     verify([document.querySelector(".performance-player").className, "toContain", "extra"]);
     unmount();
-    expect(audio.getAttribute("src")).toBeNull();
-    expect(audio.load).toHaveBeenCalled();
+    expect(audio.getAttribute("src")).toBe("one.wav");
+  });
+  test("keeps the recording source through React strict effect replay", () => {
+    const { container } = render(<AudioPlayer src="recording.wav" initialDuration={10} />, {
+      reactStrictMode: true
+    });
+
+    expect(container.querySelector("audio").getAttribute("src")).toBe("recording.wav");
   });
   test("ignores browser media property assignment failures", () => {
     render(<AudioPlayer src="one.wav" initialDuration={10} />);

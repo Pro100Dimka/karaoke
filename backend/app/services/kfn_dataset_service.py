@@ -285,6 +285,7 @@ def _container_identity(
     artist = kar_dataset_service._clean_text(
         general.get("Artist", "") or _header_text(container, "ARTS") or filename_artist
     )
+    title, artist = kar_dataset_service.normalize_karaoke_identity(title, artist)
     return artist, title
 
 
@@ -463,6 +464,7 @@ def prepare_kfn_file(
                 target,
                 title,
                 artist,
+                expected_duration=float(reference.get("duration") or 0) or None,
             )
             warnings.extend(str(item) for item in media.get("warnings", []))
             kar_dataset_service._notify_dataset(

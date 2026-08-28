@@ -118,6 +118,48 @@ def test_kar_melody_notes_are_owned_once_without_clipping(tmp_path):
     ]
 
 
+def test_kar_word_keeps_syllable_events_and_drops_trailing_lyric_silence():
+    words, _text = kar_dataset_service._word_events(
+        [
+            {"time": 1.0, "text": "\\при"},
+            {"time": 1.2, "text": "вет "},
+            {"time": 2.0, "text": "мир "},
+        ],
+        2.5,
+    )
+    kar_dataset_service._attach_notes(
+        words,
+        [
+            {"note": 60, "start": 0.8, "end": 1.55},
+            {"note": 62, "start": 2.0, "end": 2.4},
+        ],
+    )
+    kar_dataset_service._tighten_word_ends_to_notes(words)
+
+    assert words[0] == {
+        "text": "привет",
+        "start": 1.0,
+        "end": 1.55,
+        "notes": [{"note": 60, "start": 1.0, "end": 1.55}],
+        "syllables": [
+            {"text": "при", "start": 1.0, "end": 1.2},
+            {"text": "вет", "start": 1.2, "end": 1.55},
+        ],
+    }
+
+
+def test_kar_attached_note_is_clipped_to_its_owner_word():
+    words = [{"text": "word", "start": 1.0, "end": 2.0, "notes": []}]
+
+    count = kar_dataset_service._attach_notes(
+        words,
+        [{"note": 64, "start": 0.5, "end": 2.5}],
+    )
+
+    assert count == 1
+    assert words[0]["notes"] == [{"note": 64, "start": 1.0, "end": 2.0}]
+
+
 def test_composite_kar_title_keeps_credits_out_of_song_identity(tmp_path):
     source = build_kar(tmp_path / "song.kar")
     midi = mido.MidiFile(source, charset="cp1251")
@@ -128,6 +170,25 @@ def test_composite_kar_title_keeps_credits_out_of_song_identity(tmp_path):
     document = kar_dataset_service.parse_kar(source)
 
     assert (document.artist, document.title) == ("Ария", "Беспечный ангел")
+
+
+def test_performer_in_quoted_kar_title_replaces_composer_credits(tmp_path):
+    source = build_kar(tmp_path / "song.kar")
+    midi = mido.MidiFile(source, charset="cp1251")
+    midi.tracks[0][1].text = '@TКороль и Шут: "Кукла колдуна"'
+    midi.tracks[0][2].text = "@TГоршенёв М., Князев А."
+    midi.save(source)
+
+    document = kar_dataset_service.parse_kar(source)
+
+    assert (document.artist, document.title) == ("Король и Шут", "Кукла колдуна")
+
+
+def test_colon_in_a_regular_song_title_is_not_assumed_to_contain_a_performer():
+    assert kar_dataset_service.normalize_karaoke_identity(
+        "Chapter: Part One",
+        "Existing Artist",
+    ) == ("Chapter: Part One", "Existing Artist")
 
 
 def test_prepares_reviewable_dataset_without_network_or_ai(tmp_path):
@@ -552,6 +613,78 @@ def test_audio_search_prefers_artist_channel_over_third_party_official_label():
     assert kar_dataset_service._audio_candidate_score(
         artist_channel, document
     ) > kar_dataset_service._audio_candidate_score(reupload, document)
+
+
+def test_audio_search_prefers_studio_query_over_hidden_live_album():
+    document = kar_dataset_service.KarDocument(
+        title="Лесник",
+        artist="Король и Шут",
+        bpm=145,
+        key="C",
+        duration=193,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    hidden_live_release = {
+        "title": "Лесник",
+        "uploader": "thekorolishut",
+        "album": "Ели мясо мужики (Deluxe Edition)",
+        "duration": 193,
+        "_karaoke_search_intent": "official",
+        "_karaoke_search_rank": 0,
+    }
+    studio_release = {
+        "title": "Лесник",
+        "uploader": "thekorolishut",
+        "album": "Будь как дома, Путник...",
+        "duration": 192,
+        "_karaoke_search_intent": "studio",
+        "_karaoke_search_rank": 0,
+    }
+
+    assert kar_dataset_service._audio_candidate_score(
+        studio_release, document
+    ) > kar_dataset_service._audio_candidate_score(hidden_live_release, document)
+
+
+def test_audio_search_rejects_live_markers_hidden_in_expanded_metadata():
+    document = kar_dataset_service.KarDocument(
+        title="Song",
+        artist="Artist",
+        bpm=120,
+        key="C",
+        duration=180,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    candidate = {
+        "title": "Artist - Song",
+        "uploader": "Artist",
+        "album": "Greatest Hits",
+        "description": "Recorded live at the city concert hall",
+        "duration": 180,
+    }
+
+    assert kar_dataset_service._audio_candidate_score(candidate, document) is None
+
+
+def test_audio_search_merges_queries_and_keeps_studio_intent():
+    shared = {"id": "abcdefghijk", "title": "Artist - Song", "duration": 180}
+
+    entries = kar_dataset_service._merge_audio_search_entries(
+        [
+            ("official", {"entries": [shared]}),
+            ("studio", {"entries": [shared, {"id": "other-video", "title": "Other"}]}),
+        ]
+    )
+
+    by_id = {entry["id"]: entry for entry in entries}
+    assert by_id["abcdefghijk"]["_karaoke_search_intent"] == "studio"
+    assert by_id["abcdefghijk"]["_karaoke_search_rank"] == 0
 
 
 def test_midi_audio_match_compares_note_classes_and_timing(monkeypatch, tmp_path):
