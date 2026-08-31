@@ -45,6 +45,21 @@ def configure_files(monkeypatch, tmp_path):
     return settings, paths, install, ui
 
 
+def test_keyboard_lighting_defaults_and_zero_values_persist(monkeypatch, tmp_path):
+    configure_files(monkeypatch, tmp_path)
+    initial = app_settings_service.read_settings()
+    assert initial["keyboard_lighting_enabled"] is False
+    patch = {"keyboard_lighting_enabled": True, "keyboard_lighting_mode": "theme", "keyboard_lighting_brightness": 0.7}
+    app_settings_service.update_settings(patch)
+    saved = app_settings_service.read_settings()
+    assert all(saved[key] == value for key, value in patch.items())
+    app_settings_service.update_settings({"keyboard_lighting_enabled": False, "keyboard_lighting_brightness": 0})
+    saved = app_settings_service.read_settings()
+    assert saved["keyboard_lighting_enabled"] is False
+    assert saved["keyboard_lighting_brightness"] == 0
+    assert saved["keyboard_lighting_mode"] == "theme"
+
+
 def test_directory_normalization_validates_input_and_write_access(monkeypatch, tmp_path):
     raises(ValueError, lambda: app_settings_service._normalize_writable_directory(None, 'Песни'), match='выберите папку')
     raises(ValueError, lambda: app_settings_service._normalize_writable_directory(' ', 'Песни'), match='выберите папку')

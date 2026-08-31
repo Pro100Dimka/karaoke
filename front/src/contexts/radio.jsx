@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { registerLightingSource } from "../services/keyboardLighting";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import { createLevelMeter } from "../services/levelMeter";
@@ -45,6 +46,10 @@ export function RadioProvider({ children }) {
   const frequencyDataRef = useRef(null);
   const bassRef = useRef(0);
   const spectrumRef = useRef(Array(18).fill(0));
+  useEffect(() => registerLightingSource("radio", () => ({
+    active: !!audioRef.current && !audioRef.current.paused && !audioRef.current.ended,
+    level: bassRef.current
+  })), []);
   const animationRef = useRef(0);
   const volumeFadeRef = useRef(0);
   const analysisVersionRef = useRef(createVersion());

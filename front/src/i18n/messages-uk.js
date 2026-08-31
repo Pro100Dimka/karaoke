@@ -1,5 +1,18 @@
 /* Stryker disable all */
 export const ukMessages = {
+  "settings.appearance.keyboard_lighting_enabled.label": "Підсвічування клавіатури",
+  "settings.appearance.keyboard_lighting_enabled.tooltip": "Автоматично: Windows Dynamic Lighting або локальний OpenRGB з увімкненим SDK Server (порт 6742). Лише сумісні клавіатури. Windows може обмежувати керування, коли програма не на передньому плані.",
+  "settings.appearance.keyboard_lighting_mode.label": "Ефект підсвічування",
+  "settings.appearance.keyboard_lighting_mode.music": "У такт музиці",
+  "settings.appearance.keyboard_lighting_mode.theme": "Колір теми",
+  "settings.appearance.keyboard_lighting_brightness.label": "Яскравість клавіатури",
+  "settings.appearance.keyboard_lighting_status.disabled": "Підсвічування клавіатури вимкнено",
+  "settings.appearance.keyboard_lighting_status.connecting": "Пошук сумісних клавіатур…",
+  "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавіатур: {count}",
+  "settings.appearance.keyboard_lighting_status.no_devices": "Сумісних клавіатур не знайдено. Перевірте підтримку пристрою та режим Direct в OpenRGB.",
+  "settings.appearance.keyboard_lighting_status.unavailable": "Підключення підсвічування недоступне. Увімкніть SDK Server в OpenRGB (127.0.0.1:6742) або перевірте Dynamic Lighting у Windows.",
+  "settings.appearance.keyboard_lighting_status.blocked": "Windows не надала керування підсвічуванням. Поверніть вікно програми на передній план та перевірте пріоритет програм у Dynamic Lighting.",
+  "settings.appearance.keyboard_lighting_status.desktop_only": "Підсвічування доступне лише в настільній програмі.",
   "room.audio.selectedInputUnavailable": "Вибраний мікрофон недоступний у кімнаті. Перевірте вибір пристрою в налаштуваннях звуку.",
   "audio.mute": "Вимкнути звук",
   "audio.pause": "Пауза",

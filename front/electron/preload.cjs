@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   copyText: (value) => ipcRenderer.invoke("clipboard:writeText", value),
 
   setIconTheme: (theme) => ipcRenderer.invoke("window:setIconTheme", theme),
+  configureLighting: (enabled) => ipcRenderer.invoke("lighting:configure", enabled),
+  sendLightingFrame: (frame) => ipcRenderer.invoke("lighting:frame", frame),
+  getLightingStatus: () => ipcRenderer.invoke("lighting:status"),
 
   recordStartupMilestone: (name) => ipcRenderer.invoke("startup:milestone", name),
 

@@ -9,9 +9,10 @@
     "postinstall": "patch-package",
     "dev": "vite",
     "dev:web": "node scripts/start-web.mjs",
-    "dev:electron": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "dev:electron": "npm run build:lighting && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build:lighting": "node scripts/build-lighting.mjs",
     "build": "vite build",
-    "build:electron": "npm run release:check && electron-builder",
+    "build:electron": "npm run build:lighting && npm run release:check && electron-builder",
     "preview": "vite preview",
     "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern **/*OLD/**",
     "lint:fix": "npm run lint -- --fix",
@@ -135,6 +136,12 @@
       "output": "../generated/build/electron"
     },
     "win": {
+      "extraResources": [
+        {
+          "from": "../generated/build/lighting/KeyboardLighting.node",
+          "to": "lighting/KeyboardLighting.node"
+        }
+      ],
       "target": "nsis",
       "icon": "assets/icons/app.ico"
     },

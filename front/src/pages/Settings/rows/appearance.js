@@ -1,6 +1,6 @@
 import { translateSaved } from "../../../i18n/runtime";
 
-const appearanceRows = ({ settings: { radio }, tr = translateSaved }) => [
+const appearanceRows = ({ settings: { radio, lighting }, tr = translateSaved }) => [
   {
     tag: "online_name",
     label: tr("settings.appearance.online_name.label"),
@@ -62,6 +62,29 @@ const appearanceRows = ({ settings: { radio }, tr = translateSaved }) => [
     step: 0.01,
     formatValue: (value) => `${Math.round(value * 100)}%`,
     onSave: radio.setVolume
+  },
+  {
+    type: "SwitchField",
+    tag: "keyboard_lighting_enabled",
+    label: tr("settings.appearance.keyboard_lighting_enabled.label"),
+    tooltip: tr("settings.appearance.keyboard_lighting_enabled.tooltip")
+  },
+  {
+    type: "SelectField",
+    tag: "keyboard_lighting_mode",
+    label: tr("settings.appearance.keyboard_lighting_mode.label"),
+    options: ["music", "theme"].map((value) => ({ value, label: tr(`settings.appearance.keyboard_lighting_mode.${value}`) }))
+  },
+  {
+    type: "Slider",
+    tag: "keyboard_lighting_brightness",
+    label: tr("settings.appearance.keyboard_lighting_brightness.label"),
+    min: 0, max: 1, step: 0.05,
+    formatValue: (value) => `${Math.round(value * 100)}%`
+  },
+  {
+    type: "Label", md: 12, variant: "caption",
+    text: tr(`settings.appearance.keyboard_lighting_status.${lighting?.state || "disabled"}`, { count: lighting?.count || 0, provider: lighting?.provider === "windows" ? "Windows Dynamic Lighting" : "OpenRGB" })
   }
 ];
 export default appearanceRows;

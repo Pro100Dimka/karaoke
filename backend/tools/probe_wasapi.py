@@ -41,7 +41,38 @@ def summary(values):
             "p95": round(ordered[min(len(ordered) - 1, int(len(ordered) * .95))], 3)}
 
 
+def probe_native(config):
+    from app.services.native_wasapi import NativeWasapiStream, TIMING_FIELDS
+    from app.services.monitor_worker import _audio_callback
+    stats = {}
+    stream = NativeWasapiStream({"input_device_name": sd.query_devices(config["input"])["name"],
+                                 "output_device_name": sd.query_devices(config["output"])["name"],
+                                 "blocksize": config["blocksize"]}, stats)
+    try:
+        dsp = _audio_callback(2.0, stream.info.sample_rate, stats) if config.get("dsp") else None
+        def callback(source, output, frames, clock, status):
+            if dsp is not None:
+                dsp(source, output, frames, clock, status)
+            output.fill(0)  # Never play or persist microphone samples.
+        stream.start(callback)
+        started, previous = time.monotonic(), -1
+        rows = []
+        while time.monotonic() - started < config["duration"]:
+            stream.pump()
+            if time.monotonic() - started > .2 and stats["rendered_frames"] != previous and len(rows) < 10000:
+                rows.append(dict(stats))
+                previous = stats["rendered_frames"]
+        names = (*TIMING_FIELDS, "stream_latency_ms", "dsp_compute_ms", "queue_ms")
+        return {**stream.diagnostics(), "statistics": stats,
+                "timings": {name: summary([row[name] for row in rows if row.get(name) is not None]) for name in names},
+                "round_trip_latency_ms": None}
+    finally:
+        stream.close()
+
+
 def probe(config):
+    if config["kind"] == "native":
+        return probe_native(config)
     frames_seen, capture_age, render_lead = [], [], []
     glitches = 0
     started = time.monotonic()
@@ -120,6 +151,8 @@ def main():
     parser.add_argument("--case", help=argparse.SUPPRESS)
     parser.add_argument("--duration", type=float, default=1.0)
     parser.add_argument("--split-only", action="store_true")
+    parser.add_argument("--native-only", action="store_true", help="Probe only the current native shared monitor")
+    parser.add_argument("--buffer-size", type=int, choices=(64, 128, 256, 512, 1024, 2048), default=64)
     parser.add_argument("--dsp", action="store_true", help="Run normal microphone DSP, still output only silence")
     args = parser.parse_args()
     if args.case:
@@ -139,9 +172,9 @@ def main():
                       "portaudio": sd.get_portaudio_version(), "sounddevice": sd.__version__,
                       "note": "Silence output; no sample recording. Timestamps are not acoustic loopback measurements."}), flush=True)
     rate = int(output_info["default_samplerate"])
-    for mode in (("exclusive",) if args.split_only else ("shared", "exclusive")):
-        for kind in (("split",) if args.split_only else ("duplex", "input", "output")):
-            for blocksize in ((128, 256) if args.split_only else (128, 0)):
+    for mode in (("shared",) if args.native_only else ("exclusive",) if args.split_only else ("shared", "exclusive")):
+        for kind in (("native",) if args.native_only else ("split",) if args.split_only else ("duplex", "input", "output")):
+            for blocksize in ((args.buffer_size,) if args.native_only else (128, 256) if args.split_only else (128, 0)):
                 config = dict(input=input_id, output=output_id, rate=rate, mode=mode, kind=kind,
                               blocksize=blocksize, latency=128 / rate, duration=max(.3, min(args.duration, 30)), dsp=args.dsp)
                 try:

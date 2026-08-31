@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { Box } from "../../../theme/ui";
 import * as platform from "../../../utils/platform";
 import { playbackGain } from "../utils/data";
+import { AppSettingsContext } from "../../../contexts/app-settings";
+import { observeLightingMedia } from "../../../services/keyboardLighting";
 
 const noop = () => {};
 
@@ -34,8 +36,14 @@ function useTrack(songId, track) {
 }
 
 function AudioTrack({ audioRef, songId, track, volume }) {
+  const { settings } = useContext(AppSettingsContext) ?? {};
   const source = useTrack(songId, track);
   const element = useRef(null);
+  useEffect(() => {
+    if (track === "instrumental" && settings?.keyboard_lighting_enabled && settings?.keyboard_lighting_mode === "music")
+      return observeLightingMedia(element.current);
+    return undefined;
+  }, [source, track, settings?.keyboard_lighting_enabled, settings?.keyboard_lighting_mode]);
   useEffect(() => {
     const audio = element.current;
     return () => audio?.pause();

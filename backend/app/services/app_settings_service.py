@@ -36,6 +36,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "thread_count": _default_thread_count(),
     "compute_mode": "auto",
     "online_name": "",
+    "keyboard_lighting_enabled": False,
+    "keyboard_lighting_mode": "music",
+    "keyboard_lighting_brightness": 0.5,
 }
 
 UI_PREFERENCES_FILE = config.DATA_DIR / "ui-preferences.json"

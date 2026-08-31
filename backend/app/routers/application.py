@@ -23,6 +23,9 @@ class AppSettingsPatch(BaseModel):
     thread_count: int | None = Field(default=None, ge=1, le=64)
     compute_mode: Literal["auto", "cuda", "cpu"] | None = None
     online_name: str | None = Field(default=None, max_length=40)
+    keyboard_lighting_enabled: bool | None = None
+    keyboard_lighting_mode: Literal["music", "theme"] | None = None
+    keyboard_lighting_brightness: float | None = Field(default=None, ge=0, le=1)
     songs_folder: str | None = Field(default=None, max_length=4096)
     ai_folder: str | None = Field(default=None, max_length=4096)
     cache_folder: str | None = Field(default=None, max_length=4096)

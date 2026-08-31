@@ -37,6 +37,7 @@ const {
 const { findMatchingSongFolder } = require("./song-folders.cjs");
 const { readThemeBackgrounds } = require("./theme-backgrounds.cjs");
 const { createThemeIcons } = require("./theme-icons.cjs");
+const { LightingController, loadWindows } = require("./rgb/controller.cjs");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -267,6 +268,11 @@ function handleTrustedIpc(channel, handler) {
   registerTrustedIpc(ipcMain, channel, () => mainWindow?.webContents, handler);
 }
 
+const lighting = new LightingController({ windows: loadWindows(app.isPackaged ? process.resourcesPath : null) });
+handleTrustedIpc("lighting:configure", (enabled) => lighting.configure(enabled));
+handleTrustedIpc("lighting:frame", (frame) => lighting.frame(frame));
+handleTrustedIpc("lighting:status", () => lighting.status);
+
 // Synchronous (not registerTrustedIpc's invoke/handle) because preload reads
 // this once, at script load, before contextBridge exposes apiToken() to the
 // renderer -- an async round trip there would leave a window where early
@@ -429,6 +435,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  lighting.close().catch(() => {});
   isQuitting = true;
   stopBackend();
 });

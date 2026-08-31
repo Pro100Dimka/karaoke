@@ -12,6 +12,12 @@ const electronAPI = () => globalThis.electronAPI ?? globalThis.window?.electronA
 export const clipboard = copyText;
 
 export const isElectron = () => electronAPI()?.isElectron === true;
+export const configureLighting = (enabled) =>
+  electronAPI()?.configureLighting?.(enabled) ?? Promise.resolve({ state: "desktop_only", count: 0 });
+export const sendLightingFrame = (frame) =>
+  electronAPI()?.sendLightingFrame?.(frame) ?? Promise.resolve({ state: "desktop_only", count: 0 });
+export const getLightingStatus = () =>
+  electronAPI()?.getLightingStatus?.() ?? Promise.resolve({ state: "desktop_only", count: 0 });
 
 export const apiToken = () => electronAPI()?.apiToken || import.meta.env.VITE_API_TOKEN;
 

@@ -200,8 +200,8 @@ struct Engine {
         render_ready();
         UINT32 available = 0;
         check(capture->GetNextPacketSize(&available), "GetNextPacketSize");
-        // Capture first after either event. Do not wait for a second thread or
-        // batch several engine periods before handing samples to playback.
+        // Drain capture after either event, handing each completed packet to
+        // playback before processing the next queued packet.
         for (unsigned packet = 0; available && packet < 32; ++packet) {
             BYTE* data = nullptr;
             UINT32 frames = 0;

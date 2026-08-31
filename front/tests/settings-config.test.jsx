@@ -21,7 +21,7 @@ test("row arrays are directly usable by RenderFormikFields, with separate audio/
   const general = appearanceRows(context),
     audio = audioRows(context),
     ai = processingRows(context);
-  expect([general.length, ai.length]).toEqual([6, 6]);
+  expect([general.length, ai.length]).toEqual([10, 6]);
   expect(audio.map(({ tag }) => tag)).toEqual(expect.arrayContaining(["audio.buffer_size", "audio.asio_driver_name"]));
   expect(general.some(({ tag }) => tag === "radio.volume")).toBe(true);
   expect(audio.some(({ tag }) => tag === "audio.volume")).toBe(true);

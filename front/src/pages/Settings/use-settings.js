@@ -9,6 +9,7 @@ import { POLLING_INTERVALS as POLL } from "../../runtime-config";
 import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
 import { applyTheme } from "../../utils/theme";
+import { getLightingStatus } from "../../utils/platform";
 import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/utils/devices";
 
 const emit = (detail) => dispatchEvent(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
@@ -64,7 +65,7 @@ function useAppActions() {
     change: (name, value) => name === "theme" && applyTheme(value),
     save: (name, value) =>
       queue(name, async (latest) => {
-        const saved = await api.updateAppSettings({ [name]: value || null });
+        const saved = await api.updateAppSettings({ [name]: value ?? null });
         if (latest()) updateSettings((state) => ({ ...state, [name]: saved[name] }));
       })
   };
@@ -168,5 +169,6 @@ function useAudio(open) {
 }
 
 export default function useSettings(open) {
-  return { app: useAppActions(), audio: useAudio(open), radio: useRadio() };
+  const lighting = useOpenPoll(open, getLightingStatus, 1500, null);
+  return { app: useAppActions(), audio: useAudio(open), radio: useRadio(), lighting: lighting.data };
 }

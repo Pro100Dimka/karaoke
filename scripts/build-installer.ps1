@@ -650,6 +650,8 @@ function Get-BackendFingerprint {
 
 function Get-FrontendInputFingerprint {
     $inputs = @(
+        (Join-Path $Frontend "electron\rgb"),
+        (Join-Path $Frontend "scripts\build-lighting.mjs"),
         (Join-Path $Frontend "src"),
         (Join-Path $Frontend "patches"),
         (Join-Path $Frontend "index.html"),
@@ -1989,6 +1991,8 @@ function Build-Frontend {
     Push-Location $Frontend
 
     try {
+        & $script:NpmCmd run build:lighting
+        if ($LASTEXITCODE -ne 0) { throw "Keyboard lighting bridge build failed." }
         & $script:NpmCmd run build
 
         if ($LASTEXITCODE -ne 0) {
@@ -2002,6 +2006,7 @@ function Build-Frontend {
 
 function Verify-Unpacked {
     Require-File (Join-Path $Unpacked $AppExe) "Electron application"
+    Require-File (Join-Path $Unpacked "resources\lighting\KeyboardLighting.node") "Keyboard lighting bridge"
     if (Test-Path -LiteralPath $SceneVideoSource -PathType Leaf) {
         Require-File $PackagedSceneVideo "Karaoke scene video"
     }
@@ -2844,7 +2849,7 @@ function Parallel-FullBuild {
     $script:FrontendChanged = Test-StepNeeded `
         "frontend" `
         $script:FrontendFingerprint `
-        @((Join-Path $Build "frontend\dist\index.html")) `
+        @((Join-Path $Build "frontend\dist\index.html"),(Join-Path $Build "lighting\KeyboardLighting.node")) `
         -Force:$force
 
     $script:ModelsChanged = Test-StepNeeded `

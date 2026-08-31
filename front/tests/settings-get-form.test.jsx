@@ -76,14 +76,14 @@ test("theme and language save on selection; radio uses its own state/actions", a
   await user.click(screen.getByRole("button", { name: "Язык", exact: true }));
   await user.click(screen.getByRole("option", { name: "English" }));
   expect(settings.app.save).toHaveBeenCalledWith("language", "en");
-  await user.click(screen.getByRole("switch"));
+  await user.click(screen.getByRole("switch", { name: "Включить радио" }));
   expect(settings.radio.turnOn).toHaveBeenCalledOnce();
-  await user.click(screen.getByRole("switch"));
+  await user.click(screen.getByRole("switch", { name: "Включить радио" }));
   expect(settings.radio.turnOff).toHaveBeenCalledOnce();
   await user.click(screen.getByRole("button", { name: "Радиостанция" }));
   await user.click(screen.getByRole("option", { name: "Two" }));
   expect(settings.radio.setStation).toHaveBeenCalledWith("two");
-  fireEvent.change(screen.getByRole("slider"), { target: { value: "0.7" } });
+  fireEvent.change(screen.getByRole("slider", { name: "Громкость" }), { target: { value: "0.7" } });
   await waitFor(() => expect(settings.radio.setVolume).toHaveBeenCalledWith(0.7));
 });
 
@@ -139,7 +139,7 @@ test("processing validates thread count before persistence and Enter saves the d
 test("switching tabs does not leak radio volume into microphone volume", async () => {
   const settings = createSettings();
   const { rerender } = render(<SettingsPage tab="appearance" settings={settings} />);
-  fireEvent.change(screen.getByRole("slider"), { target: { value: "0.8" } });
+  fireEvent.change(screen.getByRole("slider", { name: "Громкость" }), { target: { value: "0.8" } });
   rerender(<SettingsPage tab="audio" settings={settings} />);
   expect(screen.getByRole("slider", { name: "Громкость голоса" }).value).toBe("1");
   expect(screen.queryByLabelText("Имя в сети")).toBeNull();
