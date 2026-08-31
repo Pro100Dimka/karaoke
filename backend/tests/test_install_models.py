@@ -88,3 +88,27 @@ def test_is_valid_accepts_a_complete_snapshot(tmp_path):
     )
 
     assert install_models.is_valid(tmp_path, model) is True
+
+
+def test_is_valid_verifies_the_primary_snapshot_weight(tmp_path):
+    install_models._hash_cache.clear()
+    root = tmp_path / "snapshot"
+    root.mkdir()
+    (root / "config.json").write_text("{}", encoding="utf-8")
+    weights = root / "model.safetensors"
+    weights.write_bytes(b"trusted weights")
+    model = ModelSpec(
+        key="snapshot",
+        name="Snapshot",
+        repo_id="x",
+        revision="x",
+        relative_path="snapshot",
+        env_var="X",
+        expected_bytes=8,
+        filename="model.safetensors",
+        sha256=hashlib.sha256(b"trusted weights").hexdigest(),
+    )
+
+    assert install_models.is_valid(tmp_path, model)
+    weights.write_bytes(b"corrupt")
+    assert not install_models.is_valid(tmp_path, model)
