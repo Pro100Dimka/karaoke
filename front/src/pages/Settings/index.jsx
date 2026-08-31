@@ -118,8 +118,6 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
   };
 
   const serviceKey = service && `settings.service.${service}`;
-  console.log("aaaaaaaaa");
-
   return (
     <Modal
       isOpen={isOpen}

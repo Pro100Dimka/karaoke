@@ -16,18 +16,30 @@ export default function KeyboardLighting() {
   useEffect(() => {
     if (!isElectron()) return undefined;
     let cancelled = false,
-      busy = false;
+      busy = false,
+      primaryColor = getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-primary")
+        .trim();
+    const themeObserver = new MutationObserver(() => {
+      primaryColor = getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-primary")
+        .trim();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme", "style"]
+    });
     configureLighting(enabled).catch(() => {});
-    if (!enabled) return undefined;
+    if (!enabled) {
+      themeObserver.disconnect();
+      return undefined;
+    }
     const tick = async () => {
       if (cancelled || busy) return;
       busy = true;
       try {
         const { current } = latest,
           music = readLightingMusic();
-        const color = getComputedStyle(document.documentElement)
-          .getPropertyValue("--color-primary")
-          .trim();
         const theme = current.keyboard_lighting_mode === "theme";
         const rawLevel = Math.min(1, Math.max(0, Number(music.level) || 0));
         const frame = animation.current;
@@ -39,7 +51,7 @@ export default function KeyboardLighting() {
         await sendLightingFrame({
           active: theme || music.active,
           rgb: theme
-            ? lightingColor(color, current.keyboard_lighting_brightness, 1, "theme")
+            ? lightingColor(primaryColor, current.keyboard_lighting_brightness, 1, "theme")
             : musicLightingColor(
                 current.keyboard_lighting_brightness,
                 frame.level,
@@ -56,6 +68,7 @@ export default function KeyboardLighting() {
     const stop = () => {
       cancelled = true;
       clearInterval(timer);
+      themeObserver.disconnect();
       configureLighting(false).catch(() => {});
     };
     window.addEventListener("pagehide", stop);

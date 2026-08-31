@@ -181,7 +181,7 @@ export default function KaraokePerformanceStage({
                 {[
                   sceneIntro?.genre,
                   sceneIntro?.key,
-                  sceneIntro?.tempo && `${sceneIntro.tempo} BPM`,
+                  sceneIntro?.tempo && t("common.bpm", { 0: sceneIntro.tempo }),
                   sceneIntro?.difficulty
                 ]
                   .filter(Boolean)

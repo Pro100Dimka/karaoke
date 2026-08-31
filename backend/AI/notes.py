@@ -83,6 +83,17 @@ def build_vocal_notes(
         owner = _owner(
             lyric_words, (start + end) / 2, word_boundary_tolerance, word_starts
         )
+        if owner is None and lyric_words:
+            # Long melismas and ad-libs often begin just outside the fixed word
+            # boundary. Expand only for this segment, with a bounded window, so
+            # those notes stay attached without claiming distant instrumental
+            # pitch as part of a lyric.
+            adaptive_tolerance = max(
+                float(word_boundary_tolerance), min(0.5, 2.0 * (end - start))
+            )
+            owner = _owner(
+                lyric_words, (start + end) / 2, adaptive_tolerance, word_starts
+            )
         if owner is None:
             continue
         notes.append(VocalNote(start, end, midi, word_index=owner.index))

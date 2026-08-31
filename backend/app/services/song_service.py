@@ -20,6 +20,7 @@ from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
 from app.utils.atomic_files import atomic_write_bytes, move_path
+from app.utils.windows_paths import normalize_windows_component
 
 _first_audio_tag = first_audio_tag
 
@@ -300,15 +301,8 @@ def _read_source_identity(
     return (filename_artist, filename_title) if filename_artist else (None, requested_title.strip() or filename_title)
 
 
-_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *
-                           (f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
-
-
 def _windows_safe_component(value: str, fallback: str) -> str:
-    value = unicodedata.normalize("NFC", value).rstrip(" .")
-    stem = value.split(".", 1)[0].rstrip(" .").upper()
-    if stem in _WINDOWS_RESERVED_NAMES: value = f"_{value}"
-    return value or fallback
+    return normalize_windows_component(value, fallback=fallback)
 
 
 def song_folder_name(artist: str | None, title: str, fallback: str) -> str:

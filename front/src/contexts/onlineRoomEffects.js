@@ -1,6 +1,6 @@
 const ROOM_TRANSFER_BROADCAST_INTERVAL_MS = 500;
 const TERMINAL_TRANSFER_STAGES = new Set(["complete", "error", "cancelled"]);
-const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
+export const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
   volume: 2,
   reverb: 1,
   echo: 1,

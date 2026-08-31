@@ -782,6 +782,7 @@ export const ruMessages = {
   "common.next": "Вперёд",
   "common.form.titleRequired": "Введите название",
   "common.form.bpmRange": "BPM: от 1 до 300",
+  "common.bpm": "{0} BPM",
   "common.form.result": "Результат",
   "common.form.notSubmitted": "Форма ещё не отправлена",
   "room.effects.allow": "Разрешить управление эффектами",

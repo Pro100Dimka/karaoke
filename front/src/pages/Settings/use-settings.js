@@ -65,8 +65,14 @@ function useAppActions() {
     change: (name, value) => name === "theme" && applyTheme(value),
     save: (name, value) =>
       queue(name, async (latest) => {
-        const saved = await api.updateAppSettings({ [name]: value ?? null });
-        if (latest()) updateSettings((state) => ({ ...state, [name]: saved[name] }));
+        const previous = form?.[name];
+        try {
+          const saved = await api.updateAppSettings({ [name]: value ?? null });
+          if (latest()) updateSettings((state) => ({ ...state, [name]: saved[name] }));
+        } catch (error) {
+          if (latest() && name === "theme") applyTheme(previous);
+          throw error;
+        }
       })
   };
 }

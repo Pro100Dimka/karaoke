@@ -364,8 +364,7 @@ export default function useEditorController({ document, dispatch, payload, save,
 
   useEffect(() => {
     const hotkey = (event) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)
-        return;
+      if (event.target?.closest?.("input, select, textarea, [contenteditable='true']")) return;
       const modifier = event.ctrlKey || event.metaKey;
       const { code } = event;
       if (modifier && code === "KeyS") save();

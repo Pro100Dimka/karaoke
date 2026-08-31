@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  EFFECT_LIMITS,
   handleLogUpload,
   KaraokeRoom,
   normalizeParticipantEffects,
@@ -10,6 +11,8 @@ import {
   ROOM_PROTOCOL_VERSION
 } from "../src/worker.js";
 import worker from "../src/worker.js";
+import { PARTICIPANT_EFFECT_LIMITS } from "../../front/src/contexts/onlineRoomEffects.js";
+import { ROOM_PROTOCOL_VERSION as FRONTEND_ROOM_PROTOCOL_VERSION } from "../../front/src/services/roomProtocol.js";
 
 test("health reports whether TURN credentials are configured", async () => {
   const withoutTurn = await worker.fetch(new Request("https://worker.test/health"), {});
@@ -19,6 +22,14 @@ test("health reports whether TURN credentials are configured", async () => {
   });
   assert.equal((await withoutTurn.json()).turnConfigured, false);
   assert.equal((await withTurn.json()).turnConfigured, true);
+});
+
+test("frontend and worker enforce identical participant effect limits", () => {
+  assert.deepEqual(PARTICIPANT_EFFECT_LIMITS, EFFECT_LIMITS);
+});
+
+test("frontend and worker use the same room protocol version", () => {
+  assert.equal(FRONTEND_ROOM_PROTOCOL_VERSION, ROOM_PROTOCOL_VERSION);
 });
 
 const joinRequest = (params = {}) => {
@@ -293,6 +304,15 @@ test("rejects batches without hardware, warnings or errors", async () => {
     { LOGS: new FakeR2() }
   );
   assert.equal(response.status, 400);
+});
+
+test("reports an R2 write failure as retryable JSON", async () => {
+  const response = await handleLogUpload(
+    logRequest({ user: "failing-pc", message: "error" }),
+    { LOGS: { get: async () => null, put: async () => { throw new Error("quota"); } } }
+  );
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /retry later/);
 });
 
 test("closes the room and disconnects every remaining guest when the host leaves", async () => {

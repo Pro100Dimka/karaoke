@@ -84,6 +84,30 @@ test("only the owner can resume; a vanished room is not recreated by reconnect",
   assert.equal(result.status, 403);
 });
 
+test("concurrent guest admissions cannot exceed room capacity", async () => {
+  const h = harness();
+  h.sockets.length = 0;
+  const oldPair = globalThis.WebSocketPair;
+  const oldResponse = globalThis.Response;
+  globalThis.WebSocketPair = class {
+    constructor() { this[0] = {}; this[1] = new Socket(null); }
+  };
+  globalThis.Response = class { constructor(body, options) { Object.assign(this, options); } };
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 13 }, (_, index) =>
+        h.room.fetch(new Request(
+          `https://worker.test/rooms/ROOM?v=1&role=guest&sessionId=guest-${index}`,
+          { headers: { Upgrade: "websocket" } },
+        ))
+      )
+    );
+    assert.equal(results.filter(({ status }) => status === 101).length, 12);
+    assert.equal(results.filter(({ status }) => status === 429).length, 1);
+    assert.equal(h.sockets.length, 12);
+  } finally { globalThis.WebSocketPair = oldPair; globalThis.Response = oldResponse; }
+});
+
 test("all shared controls converge; a guest cannot forge per-participant maps or roles", async () => {
   const h = harness();
   h.sockets.push(h.host);

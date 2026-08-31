@@ -143,7 +143,7 @@ export default memo(
                 <Typography variant="body2" tone="muted">
                   {[
                     formatSongKey(song.key_override),
-                    song.tempo_override && `${song.tempo_override} BPM`,
+                    song.tempo_override && tr("common.bpm", { 0: song.tempo_override }),
                     song.difficulty_override
                   ]
                     .filter(Boolean)

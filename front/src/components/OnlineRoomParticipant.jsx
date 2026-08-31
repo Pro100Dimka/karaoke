@@ -206,9 +206,6 @@ export default function OnlineRoomParticipant({
                   aria-label={t("room.person.volume", {
                     name: person.name
                   })}
-                  sx={{
-                    zIndex: 99999
-                  }}
                   onChange={(value) => onSetParticipantVolume?.(person.id, value)}
                   controlSx={{
                     inlineSize: "100%"

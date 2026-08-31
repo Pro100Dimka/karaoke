@@ -44,7 +44,7 @@ class SongOut(ORMModel, ProcessingState):
     output_dir: str | None = None
 
     key_override: str | None = None
-    tempo_override: int | None = None
+    tempo_override: float | None = None
     note_range_min: int | None = None
     note_range_max: int | None = None
     difficulty_override: str | None = None
@@ -89,7 +89,7 @@ class SongUpdate(BaseModel):
     artist: str | None = Field(default=None, max_length=255)
     genre: str | None = Field(default=None, max_length=255)
     key_override: str | None = None
-    tempo_override: int | None = Field(default=None, gt=0)
+    tempo_override: float | None = Field(default=None, gt=0)
     note_range_min: int | None = Field(default=None, ge=0, le=127)
     note_range_max: int | None = Field(default=None, ge=0, le=127)
     difficulty_override: str | None = None

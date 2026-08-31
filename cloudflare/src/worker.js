@@ -25,7 +25,7 @@ const HOST_RECONNECT_GRACE_MS = 45_000;
 // silently drop/misinterpret messages instead of failing the connection with
 // an explicit reason.
 export const ROOM_PROTOCOL_VERSION = 1;
-const EFFECT_LIMITS = Object.freeze({
+export const EFFECT_LIMITS = Object.freeze({
   volume: 2,
   reverb: 1,
   echo: 1,
@@ -132,6 +132,7 @@ export class KaraokeRoom {
     this.hostParticipant = null;
     this.hostDeadline = null;
     this.iceCredentials = new Map();
+    this.admission = Promise.resolve();
     const restore = async () => {
       if (!ctx.storage?.get) return;
       this.sharedUi = (await ctx.storage.get("sharedUi")) || {};
@@ -198,6 +199,18 @@ export class KaraokeRoom {
   async fetch(request) {
     await this.ready;
     if (this.hostDeadline && this.hostDeadline <= Date.now()) await this.alarm();
+    const previousAdmission = this.admission;
+    let releaseAdmission;
+    this.admission = new Promise((resolve) => { releaseAdmission = resolve; });
+    await previousAdmission;
+    try {
+      return await this.acceptUpgrade(request);
+    } finally {
+      releaseAdmission();
+    }
+  }
+
+  async acceptUpgrade(request) {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return json({ error: "WebSocket upgrade required" }, 426);
     }
@@ -264,7 +277,11 @@ export class KaraokeRoom {
         ? { playbackState: this.playbackState.state, playbackSentAt: this.playbackState.sentAt }
         : {}),
     });
-    this.broadcast("participant-joined", { participant: publicParticipant, resumed: Boolean(resumingHost) }, publicParticipant.id);
+    this.broadcast(
+      "participant-joined",
+      { participant: publicParticipant, resumed: Boolean(resumingHost || reclaimedId) },
+      publicParticipant.id,
+    );
     if (resumingHost) this.broadcast("host-reconnected", { participant: publicParticipant });
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -635,11 +652,15 @@ export async function handleLogUpload(request, env) {
     events: mergedEvents,
     ...((hardware || previous.hardware) ? { hardware: hardware || previous.hardware } : {}),
   };
-  await env.LOGS.put(key, JSON.stringify(document), {
-    httpMetadata: {
-      contentType: "application/json; charset=utf-8",
-    },
-  });
+  try {
+    await env.LOGS.put(key, JSON.stringify(document), {
+      httpMetadata: {
+        contentType: "application/json; charset=utf-8",
+      },
+    });
+  } catch {
+    return json({ error: "Log storage write failed; retry later" }, 503);
+  }
   return json({ ok: true });
 }
 

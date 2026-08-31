@@ -59,3 +59,15 @@ def test_stabilize_pitch_preserves_confidence_energy_and_time_on_a_smoothed_fram
 def test_stabilize_pitch_returns_frames_unchanged_when_fewer_than_three():
     frames = [frame(0.0, 100.0), frame(0.1, 200.0)]
     assert stabilize_pitch(frames) == frames
+
+
+def test_stabilize_pitch_preserves_a_legitimate_jump_below_the_threshold():
+    frames = [frame(0.0, 100.0), frame(0.1, 150.0), frame(0.2, 100.0)]
+    result = stabilize_pitch(frames, max_octave_jump=10.5)
+    assert result[1] is frames[1]
+
+
+def test_stabilize_pitch_threshold_controls_octave_error_filtering():
+    frames = [frame(0.0, 100.0), frame(0.1, 200.0), frame(0.2, 100.0)]
+    assert stabilize_pitch(frames, max_octave_jump=11.5)[1].frequency == 100.0
+    assert stabilize_pitch(frames, max_octave_jump=12.5)[1] is frames[1]

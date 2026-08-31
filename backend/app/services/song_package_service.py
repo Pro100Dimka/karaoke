@@ -8,7 +8,6 @@ import shutil
 import stat
 import subprocess
 import tempfile
-import unicodedata
 import wave
 import zipfile
 from collections.abc import Iterable, Iterator
@@ -26,6 +25,7 @@ from app.services.db_utils import commit_refresh
 from app.utils.atomic_files import atomic_write
 from app.utils.hashing import sha256_file, sha256_stream
 from app.utils.json_files import read_json, write_json
+from app.utils.windows_paths import normalize_windows_component
 from database import SessionLocal
 
 MAX_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
@@ -42,7 +42,6 @@ REVISION_RUNTIME_FIELDS = (
 )
 REVISION_ENTITY_FIELDS = ("title", "artist", "genre", "original_filename")
 REVISION_SCHEMA_VERSION = 3
-_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _SKIPPED_DIRS = {config.LOGS_DIRNAME, config.RECORDINGS_DIRNAME}
 _IMPORT_JOURNAL_PREFIX = ".room-import-journal-"
 
@@ -319,10 +318,10 @@ def _member_path(member: zipfile.ZipInfo) -> PurePosixPath:
 def _portable_destination_key(path: PurePosixPath) -> tuple[str, ...]:
     result: list[str] = []
     for raw_part in path.parts:
-        part = unicodedata.normalize("NFKC", raw_part).rstrip(" .")
-        if not part: raise ValueError("Song package contains a Windows-unsafe path")
-        stem = part.split(".", 1)[0].rstrip(" .").upper()
-        if stem in _WINDOWS_RESERVED_NAMES: raise ValueError("Song package contains a Windows reserved path")
+        try:
+            part = normalize_windows_component(raw_part, reject_reserved=True)
+        except ValueError as exc:
+            raise ValueError("Song package contains a Windows-unsafe path") from exc
         result.append(part.casefold())
     return tuple(result)
 
@@ -860,7 +859,8 @@ def import_package(db: Session, package_path: Path, *, expected_revision: str | 
         final_source_name = "instrumental.flac"
         _validate_destination_names(members, final_source_name)
         base_slug = song_service.slugify(str(manifest.get("slug") or title), "song")
-        from app.services import recording_service
+        from app.services import pipeline_service, recording_service
+        if pipeline_service.is_processing(song_id): raise ValueError("Cannot replace a song while it is being processed")
         if recording_service.has_active_recording(song_id): raise ValueError("Cannot replace a song while a recording session is active")
         with song_service.song_content_lock(song_id), song_service.library_write_lock():
             existing = _fresh_song_or_none(db, song_id)

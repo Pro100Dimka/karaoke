@@ -29,6 +29,7 @@ class LightingController {
     this.generation = 0;
     this.lastFrame = 0;
     this.lastInput = 0;
+    this.lastRetry = 0;
     this.status = { state: "disabled", count: 0 };
     this.configQueue = Promise.resolve();
     this.watchdog = setInterval(() => {

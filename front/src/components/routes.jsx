@@ -17,7 +17,7 @@ export default function AppRoutes({ onOpenAppSettings }) {
           sx={{
             position: "fixed",
             inset: 0,
-            zIndex: 900,
+            zIndex: "var(--z-overlay)",
             background: "var(--bg-image) center / cover no-repeat fixed, var(--color-bg-deep)"
           }}
         />

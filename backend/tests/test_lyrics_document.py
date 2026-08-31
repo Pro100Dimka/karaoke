@@ -223,6 +223,17 @@ def test_rejects_notes_outside_word_or_overlapping(notes):
         validate_lyrics_document(document(notes))
 
 
+def test_rejects_overlapping_notes_from_kar_sources_too():
+    payload = document([
+        {"note": 60, "start": 1.0, "end": 1.6},
+        {"note": 62, "start": 1.5, "end": 1.8},
+    ])
+    payload["source"] = "kar"
+
+    with pytest.raises(ValueError, match="Overlapping notes"):
+        validate_lyrics_document(payload)
+
+
 def test_accepts_word_without_an_acoustically_detected_note():
     assert validate_lyrics_document(document([]))["words"][0]["notes"] == []
 

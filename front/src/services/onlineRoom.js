@@ -1,4 +1,7 @@
 import { translateSaved as translate } from "../i18n/runtime";
+import { ROOM_PROTOCOL_VERSION } from "./roomProtocol";
+
+export { ROOM_PROTOCOL_VERSION } from "./roomProtocol";
 
 export const isValidSongRevision = (revision) =>
   typeof revision === "string" && revision.startsWith("sha256:");
@@ -6,7 +9,6 @@ export const isValidSongRevision = (revision) =>
 export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 // Keep in sync with ROOM_PROTOCOL_VERSION in cloudflare/src/worker.js -- bump
 // both together only when the message schema itself changes incompatibly.
-export const ROOM_PROTOCOL_VERSION = 1;
 const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 3_000, signal: 64 * 1024 };
 const CLOCK_SAMPLE_LIMIT = 8;
 const RECONNECT_WINDOW_MS = 45_000;

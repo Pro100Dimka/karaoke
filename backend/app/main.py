@@ -99,6 +99,7 @@ async def lifespan(_app: FastAPI):
         yield
     finally:
         loop.set_exception_handler(previous_exception_handler)
+        pipeline_service.cancel_all_active_processing()
         try:
             recording_service.close_all_sessions()
         finally:

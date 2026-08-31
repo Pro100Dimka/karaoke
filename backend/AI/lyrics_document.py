@@ -90,7 +90,7 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
                     flush=True,
                 )
                 raise ValueError(f"Invalid note interval in word {index}")
-            if payload.get("source") != "kar" and note_start < previous_note_end - 1e-6:
+            if note_start < previous_note_end - 1e-6:
                 raise ValueError(f"Overlapping notes in word {index}")
             previous_note_end = note_end
     return payload

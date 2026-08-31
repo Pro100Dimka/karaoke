@@ -41,7 +41,7 @@ export function OnlineRoomDock() {
           sx={{
             position: "fixed",
             inset: "auto auto var(--space-5) var(--space-5)",
-            zIndex: 20
+            zIndex: "var(--z-floating)"
           }}
         >
           <Stack gap="var(--space-3)" sx={{ padding: "var(--space-4)" }}>
@@ -132,7 +132,11 @@ export function OnlineRoomDock() {
       )}
       {collapsed && (
         <Box
-          sx={{ position: "fixed", inset: "auto auto var(--space-5) var(--space-5)", zIndex: 20 }}
+          sx={{
+            position: "fixed",
+            inset: "auto auto var(--space-5) var(--space-5)",
+            zIndex: "var(--z-floating)"
+          }}
         >
           <Button
             variant="outlined"

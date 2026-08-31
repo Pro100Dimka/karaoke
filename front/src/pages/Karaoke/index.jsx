@@ -440,7 +440,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         vocalsRef,
         onClipAvailabilityChange: setClipAvailable
       }}
-      recordingError={recordingError}
+      recordingError={recordingError || karaokePreferences.persistenceError}
       analysisRecordingId={analysisRecordingId}
       onAnalysisClose={handleAnalysisClose}
       stageActionProps={{

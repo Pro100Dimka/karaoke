@@ -771,6 +771,7 @@ export const enMessages = {
   "common.next": "Next",
   "common.form.titleRequired": "Enter a title",
   "common.form.bpmRange": "BPM: from 1 to 300",
+  "common.bpm": "{0} BPM",
   "common.form.result": "Result",
   "common.form.notSubmitted": "Form has not been submitted yet",
   "room.effects.allow": "Allow effect controls",

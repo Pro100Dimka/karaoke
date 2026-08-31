@@ -138,6 +138,9 @@ export function createVoiceMeshHandlers({
         ...(signal ? { signal } : {}),
         expectedRevision: metadata.revision
       });
+      const imported = await api.getSongRevision(metadata.songId);
+      if (imported?.revision !== metadata.revision)
+        throw new Error(translateSaved("room.importedSongVersionDoesNotMatchTheRoomVersion"));
       if (!isCurrentConnection() || librarySyncRef.current !== pending) return false;
       setTransferStatus({
         participantId,

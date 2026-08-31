@@ -29,7 +29,7 @@ test("real backend imports a processed song and opens editor and karaoke", async
   expect(editorApi.ok()).toBeTruthy();
   expect((await editorApi.json()).lyrics_sync.words[0].text).toBe("la");
 
-  await page.goto(`/editor/${song.id}`);
+  await page.goto(`/#/editor/${song.id}`);
   await expect(page.getByRole("main", { name: /Real backend E2E/ })).toBeVisible();
   await expect(page.locator('[data-role="editor-note"]')).toHaveCount(1);
 

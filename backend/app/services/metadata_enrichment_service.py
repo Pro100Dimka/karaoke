@@ -26,6 +26,7 @@ from app.services.db_utils import commit
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
+_worker_slots = threading.BoundedSemaphore(2)
 
 
 class _YtDlpLogger:
@@ -549,18 +550,19 @@ def enrich_song(song_id: str) -> None:
         try:
             output_dir = song_service.resolve_output_dir(song)
             if song.video_url == LOCAL_VIDEO_URL:
-                local_clip = resolve_local_video(song)
-                source_file = output_dir / LOCAL_VIDEO_SOURCE_NAME
-                if local_clip is None or not source_file.is_file():
-                    if local_clip is not None:
-                        try:
-                            local_clip.unlink(missing_ok=True)
-                        except OSError as exc:
-                            stale_local_clip_locked = True
-                            logger.info("Stale local clip is still in use for %s: %s", song_id, exc)
-                    source_file.unlink(missing_ok=True)
-                    song.video_url = None
-                    video_changed = True
+                with song_service.song_content_lock(song_id), song_service.library_write_lock():
+                    local_clip = resolve_local_video(song)
+                    source_file = output_dir / LOCAL_VIDEO_SOURCE_NAME
+                    if local_clip is None or not source_file.is_file():
+                        if local_clip is not None:
+                            try:
+                                local_clip.unlink(missing_ok=True)
+                            except OSError as exc:
+                                stale_local_clip_locked = True
+                                logger.info("Stale local clip is still in use for %s: %s", song_id, exc)
+                        source_file.unlink(missing_ok=True)
+                        song.video_url = None
+                        video_changed = True
             existing_id = _youtube_id_from_url(song.video_url)
             if existing_id and song.video_url not in _validated_video_urls:
                 quality = _youtube_video_is_acceptable(existing_id, song.title, song.artist)
@@ -585,11 +587,12 @@ def enrich_song(song_id: str) -> None:
                     expected_duration = float(metadata_payload.get("duration") or 0) or None
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 expected_duration = None
-            downloaded = _download_youtube_video(
-                video_id,
-                output_dir,
-                expected_duration=expected_duration,
-            )
+            with song_service.song_content_lock(song_id), song_service.library_write_lock():
+                downloaded = _download_youtube_video(
+                    video_id,
+                    output_dir,
+                    expected_duration=expected_duration,
+                )
             next_video_url = LOCAL_VIDEO_URL if downloaded else None
             if song.video_url != next_video_url:
                 song.video_url = next_video_url
@@ -607,12 +610,17 @@ def enqueue(song_id: str) -> bool:
         if song_id in _active: return False
         _active.add(song_id)
     threading.Thread(
-        target=enrich_song,
+        target=_run_enrichment,
         args=(song_id,),
         name=f"metadata-{song_id[:8]}",
         daemon=True,
     ).start()
     return True
+
+
+def _run_enrichment(song_id: str) -> None:
+    with _worker_slots:
+        enrich_song(song_id)
 
 
 def enqueue_missing(limit: int = 8) -> int:

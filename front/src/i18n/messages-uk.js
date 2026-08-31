@@ -774,6 +774,7 @@ export const ukMessages = {
   "common.next": "Далі",
   "common.form.titleRequired": "Уведіть назву",
   "common.form.bpmRange": "BPM: від 1 до 300",
+  "common.bpm": "{0} BPM",
   "common.form.result": "Результат",
   "common.form.notSubmitted": "Форму ще не надіслано",
   "room.effects.allow": "Дозволити керування ефектами",

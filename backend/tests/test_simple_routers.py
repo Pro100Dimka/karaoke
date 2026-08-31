@@ -103,8 +103,8 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
     monkeypatch.setattr(main.asyncio, "get_running_loop", Mock(return_value=loop))
     initialize, migrate, close, stop, reset_ai = Mock(), Mock(), Mock(side_effect=RuntimeError('close failed')), Mock(), Mock()
     monkeypatch.setattr(main, "init_db", initialize)
-    recover_imports, recover_optimization = Mock(), Mock()
-    patch_many(monkeypatch, (main.storage_migration, "migrate_legacy_song_storage", migrate), (main.song_package_service, "recover_import_transactions", recover_imports), (main.cache_service, "recover_optimization_transactions", recover_optimization), (main.recording_service, "close_all_sessions", close), (main.audio_service, "stop_monitoring", stop), (main.ai_service, "reset_ai_service", reset_ai))
+    recover_imports, recover_optimization, cancel_processing = Mock(), Mock(), Mock()
+    patch_many(monkeypatch, (main.storage_migration, "migrate_legacy_song_storage", migrate), (main.song_package_service, "recover_import_transactions", recover_imports), (main.cache_service, "recover_optimization_transactions", recover_optimization), (main.pipeline_service, "cancel_all_active_processing", cancel_processing), (main.recording_service, "close_all_sessions", close), (main.audio_service, "stop_monitoring", stop), (main.ai_service, "reset_ai_service", reset_ai))
 
     async def exercise():
         with pytest.raises(RuntimeError, match="close failed"):
@@ -115,6 +115,7 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
     migrate.assert_called_once_with()
     recover_imports.assert_called_once_with()
     recover_optimization.assert_called_once_with()
+    cancel_processing.assert_called_once_with()
     stop.assert_called_once_with()
     reset_ai.assert_called_once_with()
     assert loop.set_exception_handler.call_args_list[-1].args == (previous,)

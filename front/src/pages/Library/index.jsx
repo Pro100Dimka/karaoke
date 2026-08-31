@@ -51,7 +51,7 @@ export default function Library() {
         sx={{
           position: "fixed",
           inset: 0,
-          zIndex: 1000,
+          zIndex: "var(--z-overlay)",
           pointerEvents: "none",
           background: "#000",
           opacity: +state.transitioning,

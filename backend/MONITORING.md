@@ -46,19 +46,6 @@ Fallback never deliberately selects a smaller explicit buffer after sustained
 callback glitches. Automatic periodic return to a smaller buffer is intentionally
 omitted: a manual buffer choice/retry avoids unrequested interruptions while singing.
 
-## ASIO4ALL
-
-After two actual glitch fallbacks in a monitoring run and an empty ASIO enumeration,
-Settings offers an explicit link to the official download page. An empty enumeration
-can also mean the bridge is missing, so the UI says “the application did not detect”
-drivers, not that the selected hardware definitely has none.
-
-No automatic downloader, bundled installer, silent installation, or elevation was
-added. The requested integrated installer remains deferred pending redistribution
-permission/terms: https://asio4all.org/about/ restricts commercial resale/bundling.
-The user can install from https://asio4all.org/about/download-asio4all/ themselves.
-The Electron external-link allowlist accepts that exact HTTPS page only.
-
 ## Verification and remaining hardware check
 
 Automated checks cover one enumeration, fast HTTP acknowledgement with blocked

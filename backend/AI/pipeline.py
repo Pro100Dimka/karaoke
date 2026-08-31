@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 import time
@@ -29,6 +30,7 @@ from .word_voicing import anchor_words_to_voice, voice_activity_intervals
 
 ProgressCallback = callable
 CancelCallback = callable
+logger = logging.getLogger(__name__)
 
 
 def _process_rss_bytes() -> int:
@@ -112,7 +114,10 @@ class KaraokePipeline:
     @staticmethod
     def _release_engines(*engines: object) -> None:
         for engine in engines:
-            getattr(engine, "close", lambda: None)()
+            try:
+                getattr(engine, "close", lambda: None)()
+            except Exception:
+                logger.exception("Failed to close AI engine %s", type(engine).__name__)
         release_torch_memory()
 
     @staticmethod
@@ -132,7 +137,10 @@ class KaraokePipeline:
             pass
         for engine in engines:
             action = getattr(engine, "park", None) if keep_warm else None
-            (action or getattr(engine, "close", lambda: None))()
+            try:
+                (action or getattr(engine, "close", lambda: None))()
+            except Exception:
+                logger.exception("Failed to release AI engine %s", type(engine).__name__)
         release_torch_memory()
 
     @staticmethod

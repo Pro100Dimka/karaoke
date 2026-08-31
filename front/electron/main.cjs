@@ -207,7 +207,6 @@ function createWindow() {
   mainWindow.webContents.once("did-finish-load", () => recordStartupMilestone("frontend-loaded"));
   // Apply the initial window state before loading/rendering so the first
   // visible frame already occupies the full work area (no 1440x900 flash).
-  // mainWindow.maximize();
   updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
 
   const packagedIndexPath = path.join(__dirname, "..", "dist", "index.html");

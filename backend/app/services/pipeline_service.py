@@ -989,7 +989,7 @@ def _run_reprocessing(song_id: str) -> None:
     with song_service.song_content_lock(song_id):
         cache_service.recover_optimization_state(out_dir, committed=optimized)
         _clear_generated_results(out_dir)
-        _run_job(song_id, reuse_vocals=True)
+    _run_job(song_id, reuse_vocals=True)
 
 
 def _read_optional_generated_json(path: Path, default):

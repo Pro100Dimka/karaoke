@@ -23,7 +23,21 @@ def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[Pitc
     enough_voiced_neighbors = window.count(axis=1) >= 2
     stabilized = np.ma.median(window, axis=1)
     center_voiced = voiced[1:-1]
-    should_update = center_voiced & enough_voiced_neighbors
+    center_frequency = frequency[1:-1]
+    valid_frequency = center_voiced & (center_frequency > 0) & (stabilized.filled(0) > 0)
+    jump_semitones = np.zeros_like(center_frequency)
+    jump_semitones[valid_frequency] = np.abs(
+        12.0
+        * np.log2(
+            center_frequency[valid_frequency]
+            / stabilized.filled(0)[valid_frequency]
+        )
+    )
+    should_update = (
+        center_voiced
+        & enough_voiced_neighbors
+        & (jump_semitones > max(0.0, float(max_octave_jump)))
+    )
 
     result = list(frames)
     for offset in np.flatnonzero(should_update):

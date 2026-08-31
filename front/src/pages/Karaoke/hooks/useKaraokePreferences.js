@@ -3,6 +3,7 @@ import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { createStore } from "zustand/vanilla";
 import { api } from "../../../api/client";
+import { getErrorMessage } from "../../../utils/errors";
 import { loadKaraokePreferences, saveKaraokePreferences } from "../utils/preferences";
 
 const defaults = {
@@ -31,6 +32,7 @@ const preferencesOf = (state) => Object.fromEntries(keys.map((key) => [key, stat
 
 export default function useKaraokePreferences() {
   const [store] = useState(createKaraokePreferencesStore);
+  const [persistenceError, setPersistenceError] = useState(null);
   const skipNextPersistence = useRef(false);
   const state = useStore(
     store,
@@ -45,8 +47,12 @@ export default function useKaraokePreferences() {
           return;
         }
         const preferences = preferencesOf(value);
-        if (saveKaraokePreferences(preferences))
-          api.updateUiPreferences("karaoke", preferences).catch(() => {});
+        if (saveKaraokePreferences(preferences)) {
+          api.updateUiPreferences("karaoke", preferences).then(
+            () => setPersistenceError(null),
+            (error) => setPersistenceError(getErrorMessage(error))
+          );
+        }
       }),
     [store]
   );
@@ -58,5 +64,5 @@ export default function useKaraokePreferences() {
     },
     [store]
   );
-  return { ...state, previewPreference };
+  return { ...state, persistenceError, previewPreference };
 }

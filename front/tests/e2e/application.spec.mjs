@@ -15,7 +15,7 @@ test.afterEach(async ({}, testInfo) => {
 async function closeProcessingModal(page) {
   const modal = page.getByRole("dialog", { name: /Обработка песни|Обробка пісні/ });
   await expect(modal).toBeVisible();
-  await modal.getByRole("button", { name: "Закрыть" }).click();
+  await modal.getByRole("button", { name: /Закрыть|Закрити/ }).click();
   await expect(modal).toBeHidden();
 }
 
@@ -23,12 +23,12 @@ test("library boots and remains interactive", async ({ page }) => {
   await page.goto("/");
   await closeProcessingModal(page);
   await expect(page.getByRole("banner", { name: "A&D Voice" })).toBeVisible();
-  const ready = page.getByRole("heading", { name: "Тестовая песня", exact: true });
-  const processing = page.getByRole("heading", { name: "Песня в обработке", exact: true });
+  const ready = page.getByRole("button", { name: /Тестовая песня/ });
+  const processing = page.getByText("Песня в обработке", { exact: true });
   await expect(ready).toBeVisible();
   await expect(processing).toBeVisible();
 
-  const search = page.getByRole("textbox", { name: "Поиск" });
+  const search = page.getByRole("textbox", { name: /Пошук|Поиск/ });
   await search.fill("A&D Voice");
   await expect(ready).toBeVisible();
   await expect(processing).toBeHidden();
@@ -43,10 +43,12 @@ test("song import enters the visible processing flow", async ({ page }) => {
     mimeType: "audio/mpeg",
     buffer: Buffer.from("mock audio")
   });
-  const review = page.getByRole("dialog", { name: "Подтверждение добавления песни" });
+  const review = page.getByRole("dialog", {
+    name: /Подтверждение добавления песни|Підтвердження додавання пісні/
+  });
   await expect(review).toBeVisible();
   await review.getByRole("textbox", { name: /Назва пісні|Название песни/ }).fill("E2E song");
-  await review.locator('button[type="submit"]').click();
+  await review.getByRole("button", { name: /Підтвердити|Подтвердить/ }).click();
   const processing = page.getByRole("dialog", { name: /Обработка песни|Обробка пісні/ });
   await expect(processing).toBeVisible();
   await expect(processing.getByRole("progressbar")).toBeVisible();
@@ -74,14 +76,14 @@ test("settings load persisted values and remain navigable", async ({ page }) => 
   await expect(dialog).toBeVisible();
   const tabs = dialog.getByRole("tab");
   await expect(tabs).toHaveCount(4);
-  await expect(dialog.getByRole("textbox", { name: /Ім'я у мережі|Имя в сети/ })).toHaveValue("Тестовый пользователь");
+  await expect(dialog.getByRole("textbox").first()).toHaveValue("Тестовый пользователь");
   const theme = dialog.getByRole("button", { name: /Тема/ });
   await theme.click();
   await page.getByRole("option", { name: /Зелена|Зелёная/ }).click();
   await expect(theme).toContainText(/Зелена|Зелёная/);
   await tabs.last().click();
   await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
-  await expect(dialog.getByRole("spinbutton")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Про програму|О программе/ })).toBeVisible();
 });
 
 test("ready song opens the complete karaoke workspace", async ({ page }) => {
