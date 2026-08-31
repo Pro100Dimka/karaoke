@@ -533,14 +533,14 @@ def set_monitoring_enabled(
 def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None) -> None:
     global _monitor_wasapi_mode, _requested_effects_disabled
     if wasapi_mode is not None:
-        if wasapi_mode not in {"shared", "input-exclusive", "exclusive"}:
+        if wasapi_mode != "shared":
             raise RuntimeError("Unsupported WASAPI mode")
         _monitor_wasapi_mode = wasapi_mode
     snapshot = SimpleNamespace(**{
         field: getattr(settings, field, None)
         for field in _MONITOR_RESTART_FIELDS | _LIVE_UPDATE_FIELDS | {"monitoring_enabled"}
     })
-    mode = _monitor_wasapi_mode
+    mode = "shared"
     if disabled_effects is not None:
         _requested_effects_disabled = bool(disabled_effects)
     effects_disabled = _requested_effects_disabled
@@ -562,12 +562,12 @@ def monitoring_status() -> dict:
 
 
 def monitoring_mode() -> str:
-    return _monitor_wasapi_mode
+    return "shared"
 
 
 def recording_monitor_mode(device_id):
     if _AUDIO_BACKEND_AVAILABLE and "wasapi" in _host_api_name(sd.query_devices(device_id)).lower():
-        return _monitor_wasapi_mode
+        return "shared"
     return "plain"
 
 
@@ -691,7 +691,7 @@ def _configure_monitoring(settings) -> None:
         raise RuntimeError("No output device is available for microphone monitoring")
     gain = max(0.0, min(4.0, settings.volume))
     wasapi = "wasapi" in _host_api_name(input_info).casefold()
-    wasapi_mode = getattr(settings, "wasapi_mode", _monitor_wasapi_mode) if wasapi else "plain"
+    wasapi_mode = "shared" if wasapi else "plain"
     _monitor_control.publish(
         input_device=str(input_info.get("name", "")), output_device=str(output_info.get("name", "")),
         host_api=_host_api_name(input_info), requested_blocksize=settings.buffer_size,

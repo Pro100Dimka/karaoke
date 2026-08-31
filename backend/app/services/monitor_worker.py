@@ -35,8 +35,8 @@ def _stream_candidates(options: dict) -> list[dict]:
     blocksize = int(options["blocksize"])
     if blocksize <= 0:
         raise ValueError("A fixed positive monitoring buffer is required")
-    mode = options.get("wasapi_mode", "exclusive" if options.get("wasapi_exclusive") else "plain")
-    if mode not in {"exclusive", "input-exclusive", "shared", "plain"}:
+    mode = options.get("wasapi_mode", "shared")
+    if mode not in {"shared", "plain"} or options.get("wasapi_exclusive"):
         raise ValueError("Unsupported WASAPI mode")
     candidate = {
         "samplerate": rate, "blocksize": blocksize, "latency": blocksize / rate,
@@ -46,11 +46,9 @@ def _stream_candidates(options: dict) -> list[dict]:
     }
     if mode != "plain":
         candidate["extra_settings"] = (
-            sd.WasapiSettings(exclusive=mode != "shared", auto_convert=mode == "shared"),
-            sd.WasapiSettings(exclusive=mode == "exclusive", auto_convert=mode != "exclusive"),
+            sd.WasapiSettings(exclusive=False, auto_convert=True),
+            sd.WasapiSettings(exclusive=False, auto_convert=True),
         )
-    if mode == "exclusive":
-        candidate["_engine"] = "wasapi-split"
     return [candidate]
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)

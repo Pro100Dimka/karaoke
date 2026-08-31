@@ -108,13 +108,13 @@ class RecordingSession:
         self._pitch = RealtimePitchShifter(sample_rate)
         self._effects_chain = MonitorEffectsChain(sample_rate)
         extra = {}
-        if monitor_mode in {"shared", "input-exclusive", "exclusive"}:
+        if monitor_mode not in {None, "plain", "shared"}:
+            raise RuntimeError("Only shared microphone monitoring is supported")
+        if monitor_mode == "shared":
             extra["extra_settings"] = (
-                sd.WasapiSettings(exclusive=monitor_mode != "shared", auto_convert=monitor_mode == "shared"),
-                sd.WasapiSettings(exclusive=monitor_mode == "exclusive", auto_convert=monitor_mode != "exclusive"),
+                sd.WasapiSettings(exclusive=False, auto_convert=True),
+                sd.WasapiSettings(exclusive=False, auto_convert=True),
             )
-        if monitor_mode == "exclusive":
-            raise RuntimeError("Full WASAPI exclusive is monitoring-only; select shared or input-exclusive for karaoke")
         if monitoring_enabled or (monitor_owner == "recording" and monitor_mode is not None):
             output_info = (
                 sd.query_devices(output_device_id, kind="output")
