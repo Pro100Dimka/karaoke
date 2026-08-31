@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import useAsyncQueue from "../../../hooks/useAsyncQueue";
 import useMountedRef from "../../../hooks/useMountedRef";
+import { usePolling } from "../../../hooks/usePolling";
 import { translateSaved } from "../../../i18n/runtime";
 import { getAudioPreferences } from "../../../utils/audio-preferences";
 import { getErrorMessage } from "../../../utils/errors";
@@ -19,6 +20,18 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [audioDriver, setAudioDriver] = useState("auto");
   const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
+  const reportedMonitorError = useRef(null);
+  const directMonitor = usePolling(
+    () => (monitoringEnabled ? api.getDirectMonitorStatus() : Promise.resolve(null)),
+    monitoringEnabled ? 1000 : 0,
+    [monitoringEnabled]
+  );
+  useEffect(() => {
+    const status = directMonitor.data;
+    if (status?.state !== "error" || reportedMonitorError.current === status.request_id) return;
+    reportedMonitorError.current = status.request_id;
+    onError(translateSaved("Не удалось включить прослушивание: {0}", { 0: status.error }));
+  }, [directMonitor.data, onError]);
   const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
     () => getAudioPreferences().monitorInputDeviceId
   );

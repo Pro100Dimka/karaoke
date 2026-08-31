@@ -101,7 +101,10 @@ test("mock API implements the complete development contract", async () => {
   equal([(await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' })).buffer_size, 128]);
   for (const path of ["/audio/devices", "/audio/output-devices", "/audio/asio-drivers"]) deepEqual([await mockRequest(path), []]);
   equal([(await mockRequest("/audio/signal-quality")).rms_dbfs, -42]);
-  deepEqual([await mockRequest("/audio/direct-monitor/start"), { ok: true }]);
+  equal([(await mockRequest("/audio/direct-monitor/start")).monitoring_enabled, true]);
+  equal([(await mockRequest("/audio/direct-monitor/status")).state, "running"]);
+  equal([(await mockRequest("/audio/direct-monitor/stop")).monitoring_enabled, false]);
+  equal([(await mockRequest("/audio/direct-monitor/status")).state, "idle"]);
   equal([(await mockRequest("/recording/start")).recording_session_id, "mock-session-1"]);
   deepEqual(
     [await mockRequest("/recording/pause?session_id=x"), { ok: true }],

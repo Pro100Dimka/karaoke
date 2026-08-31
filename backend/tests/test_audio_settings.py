@@ -194,7 +194,7 @@ def test_set_monitoring_enabled_is_idempotent_and_transactional(monkeypatch):
 
 def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     stop, asio, worker = Mock(), Mock(), Mock()
-    patch_attrs(monkeypatch, audio_service, stop_monitoring=stop, _start_asio_monitor=asio, _start_monitor_worker=worker, _monitor_effects_disabled=False)
+    patch_attrs(monkeypatch, audio_service, _stop_monitoring_process=stop, _start_asio_monitor=asio, _start_monitor_worker=worker, _monitor_effects_disabled=False)
 
     audio_service.configure_monitoring(settings(monitoring_enabled=False))
     stop.assert_called_once_with()
@@ -206,14 +206,15 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", False)
     raises(RuntimeError, lambda: audio_service.configure_monitoring(settings(monitoring_enabled=True)), match='unavailable')
 
-    patch_attrs(monkeypatch, audio_service, _AUDIO_BACKEND_AVAILABLE=True, preferred_input_device=Mock(return_value=1), preferred_output_device=Mock(return_value=2), _resolved_device_index=lambda value, _kind: value)
+    patch_attrs(monkeypatch, audio_service, _AUDIO_BACKEND_AVAILABLE=True, preferred_input_device=Mock(return_value=1), preferred_output_device=Mock(return_value=2), _resolved_device_index=lambda value, _kind, _devices: value)
     devices = {
         1: {"hostapi": 0, "default_samplerate": 48_000, "max_input_channels": 1},
         2: {"hostapi": 0, "default_samplerate": 48_000, "max_output_channels": 2},
     }
     patch_many(
         monkeypatch,
-        (audio_service.sd, "query_devices", lambda index: devices[index]),
+        (audio_service.sd, "query_devices", lambda: devices),
+        (audio_service.sd, "query_hostapis", lambda _index: {"name": "Windows WASAPI"}),
         (audio_service.sd, "check_input_settings", lambda **_kwargs: None),
         (audio_service.sd, "check_output_settings", lambda **_kwargs: None),
     )
@@ -223,6 +224,7 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "input_device_id": 1,
         "output_device_id": 2,
         "sample_rate": 48_000.0,
+        "sample_rates": [48_000, 44_100],
         "output_channels": 2,
         "blocksize": 128,
         "gain": 4,
@@ -232,6 +234,7 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
                 "octave": 0.0,
                 "noise_suppression": 0.35,
             "wasapi_exclusive": False,
+            "wasapi_mode": "shared",
     }
 
     monkeypatch.setattr(audio_service, "_monitor_effects_disabled", True)

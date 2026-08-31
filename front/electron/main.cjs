@@ -618,7 +618,16 @@ function createWindow() {
   const packagedIndexPath = path.join(__dirname, "..", "dist", "index.html");
   const packagedIndexUrl = getPackagedRendererUrl(packagedIndexPath);
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Only this explicit help link may leave the renderer; never launch an
+    // installer, arbitrary protocol, or an untrusted URL from room metadata.
+    if (url === "https://asio4all.org/about/download-asio4all/") {
+      shell
+        .openExternal(url)
+        .catch((error) => process.stderr.write(`Could not open ASIO4ALL help: ${error.message}\n`));
+    }
+    return { action: "deny" };
+  });
   mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
     const allowed = isAllowedRendererUrl(navigationUrl, {
       isDev,

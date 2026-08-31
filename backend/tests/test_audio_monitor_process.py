@@ -75,8 +75,16 @@ def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch,
     )
     monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
     patch_attrs(monkeypatch, audio_service, _monitor_signal={'rms_db': -120.0, 'clipping': False, 'silent': True})
+    consumed, release = threading.Event(), threading.Event()
+    class LiveOutput(OutputLines):
+        def __iter__(self):
+            yield from super().__iter__()
+            consumed.set()
+            release.wait(2)
+    worker.stdout = LiveOutput(*worker.stdout)
 
     audio_service._launch_monitor_process(["worker"], cwd=tmp_path)
+    assert consumed.wait(2)
 
     creationflags = audio_service.subprocess.Popen.call_args.kwargs["creationflags"]
     assert creationflags & getattr(subprocess, "HIGH_PRIORITY_CLASS", 0) == getattr(
@@ -88,21 +96,24 @@ def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch,
         "clipping": True,
         "silent": True,
     }
+    release.set()
+    audio_service._monitor_reader.join(timeout=2)
+    assert audio_service._monitor_signal["silent"] is True
 
 
 def test_monitor_process_reports_worker_error_and_early_exit(monkeypatch, tmp_path):
     stop = Mock()
-    monkeypatch.setattr(audio_service, "stop_monitoring", stop)
+    monkeypatch.setattr(audio_service, "_stop_monitoring_process", stop)
     erroring = process('{"event":"error","message":"device busy"}\n', poll=1)
     monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=erroring))
     raises(RuntimeError, lambda: audio_service._launch_monitor_process(['worker'], cwd=tmp_path), match='device busy')
-    stop.assert_called_once_with()
+    stop.assert_called_once_with(expected_process=erroring)
 
     stop.reset_mock()
     exited = process(poll=1)
     monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=exited))
     raises(RuntimeError, lambda: audio_service._launch_monitor_process(['worker'], cwd=tmp_path), match='terminated during startup')
-    stop.assert_called_once_with()
+    stop.assert_called_once_with(expected_process=exited)
 
 
 def test_monitor_process_times_out_when_reader_never_signals(monkeypatch, tmp_path):
@@ -114,12 +125,12 @@ def test_monitor_process_times_out_when_reader_never_signals(monkeypatch, tmp_pa
     reader = Mock()
     monkeypatch.setattr(audio_service.threading, "Thread", Mock(return_value=reader))
     stop = Mock()
-    monkeypatch.setattr(audio_service, "stop_monitoring", stop)
+    monkeypatch.setattr(audio_service, "_stop_monitoring_process", stop)
 
     raises(RuntimeError, lambda: audio_service._launch_monitor_process(['worker'], cwd=tmp_path), match='Timed out')
 
     reader.start.assert_called_once_with()
-    stop.assert_called_once_with()
+    stop.assert_called_once_with(expected_process=worker)
 
 
 def test_stop_monitoring_does_not_join_current_reader(monkeypatch):

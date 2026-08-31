@@ -177,7 +177,7 @@ def test_asio_matching_rejects_empty_or_unrelated_names(monkeypatch):
     )
     monkeypatch.setattr(audio_service, "_matching_output_for_input", Mock(return_value=7))
     assert audio_service.preferred_output_device(0, "auto", 2) == 7
-    audio_service._matching_output_for_input.assert_called_once_with(3, 2)
+    audio_service._matching_output_for_input.assert_called_once_with(3, 2, None)
 
 
 def test_monitor_sample_rate_prefers_common_48khz_and_falls_back_to_input(monkeypatch):

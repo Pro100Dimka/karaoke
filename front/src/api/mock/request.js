@@ -160,7 +160,20 @@ export async function mockRequest(path, options = {}) {
     return clone(store.audioSettings);
   }
   if (Object.hasOwn(STATIC_RESPONSES, pathname)) return clone(STATIC_RESPONSES[pathname]);
-  if (pathname.startsWith("/audio/direct-monitor/")) return { ok: true };
+  if (pathname === "/audio/direct-monitor/status") {
+    return {
+      state: store.audioSettings.monitoring_enabled ? "running" : "idle",
+      mode: "shared",
+      blocksize: 128,
+      sample_rate: 48000,
+      fallback_count: 0,
+      glitch_fallback_count: 0
+    };
+  }
+  if (pathname === "/audio/direct-monitor/start" || pathname === "/audio/direct-monitor/stop") {
+    store.audioSettings.monitoring_enabled = pathname.endsWith("/start");
+    return clone(store.audioSettings);
+  }
 
   if (pathname === "/recording/start") return { recording_session_id: "mock-session-1" };
   if (pathname === "/recording/sync") return { status: "synchronized" };

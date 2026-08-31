@@ -31,6 +31,11 @@ _GLITCH_RESTART_THRESHOLD = 12
 
 
 def _stream_candidates(options: dict) -> list[dict]:
+    rates = list(dict.fromkeys([options["sample_rate"], *options.get("sample_rates", [])]))
+    if len(rates) > 1:
+        return [candidate for rate in rates for candidate in _stream_candidates({
+            **options, "sample_rate": rate, "sample_rates": []
+        })]
     sample_rate = float(options["sample_rate"])
     base = {
         "samplerate": sample_rate,
@@ -43,13 +48,15 @@ def _stream_candidates(options: dict) -> list[dict]:
     # monitoring fall progressively behind. 128 frames is still only ~3 ms at
     # those rates and is a much safer realtime floor for every host API.
     stable_blocksize = max(128, requested_blocksize)
-    blocks = tuple(dict.fromkeys((stable_blocksize, 128, 256)))
+    blocks = tuple(dict.fromkeys((stable_blocksize, min(2048, stable_blocksize * 2))))
     candidates = []
-    modes = (
-        ("exclusive", "shared", "plain")
-        if options.get("wasapi_exclusive")
-        else ("plain",)
-    )
+    requested_mode = options.get("wasapi_mode", "exclusive" if options.get("wasapi_exclusive") else "plain")
+    modes = {
+        "exclusive": ("exclusive", "input-exclusive", "shared", "plain"),
+        "input-exclusive": ("input-exclusive", "shared", "plain"),
+        "shared": ("shared", "plain"),
+        "plain": ("plain",),
+    }[requested_mode]
     for mode in modes:
         # Keep latency deterministic for as long as the endpoint accepts it.
         # PortAudio's generic "low" preset can map to a surprisingly large
@@ -58,6 +65,7 @@ def _stream_candidates(options: dict) -> list[dict]:
         for blocksize in blocks:
             candidate = {
                 **base,
+                "_mode": mode,
                 "blocksize": blocksize,
                 "latency": max(0.002, blocksize / sample_rate),
             }
@@ -65,6 +73,11 @@ def _stream_candidates(options: dict) -> list[dict]:
                 candidate["extra_settings"] = (
                     sd.WasapiSettings(exclusive=True),
                     sd.WasapiSettings(exclusive=True),
+                )
+            elif mode == "input-exclusive":
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(exclusive=True),
+                    sd.WasapiSettings(auto_convert=True),
                 )
             elif mode == "shared":
                 candidate["extra_settings"] = (
@@ -74,11 +87,16 @@ def _stream_candidates(options: dict) -> list[dict]:
             if candidate not in candidates:
                 candidates.append(candidate)
         for blocksize in (*blocks, 0):
-            candidate = {**base, "blocksize": blocksize, "latency": "low"}
+            candidate = {**base, "blocksize": blocksize, "latency": "low", "_mode": mode}
             if mode == "exclusive":
                 candidate["extra_settings"] = (
                     sd.WasapiSettings(exclusive=True),
                     sd.WasapiSettings(exclusive=True),
+                )
+            elif mode == "input-exclusive":
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(exclusive=True),
+                    sd.WasapiSettings(auto_convert=True),
                 )
             elif mode == "shared":
                 candidate["extra_settings"] = (
@@ -91,6 +109,21 @@ def _stream_candidates(options: dict) -> list[dict]:
 
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
+
+
+def _stream_diagnostics(stream, candidate, options, mode):
+    result = {
+        "blocksize": candidate.get("blocksize", 0), "sample_rate": candidate.get("samplerate", options["sample_rate"]),
+        "latency": candidate.get("latency", "low"), "mode": mode,
+        "exclusive": mode == "exclusive",
+    }
+    # PortAudio reports endpoint latency, not full mic-to-ear latency (DSP and
+    # hardware can add more). Never present the requested latency hint as measured.
+    latency = getattr(stream, "latency", None)
+    if isinstance(latency, (tuple, list)) and len(latency) == 2:
+        result.update(input_latency_ms=round(float(latency[0]) * 1000, 2),
+                      output_latency_ms=round(float(latency[1]) * 1000, 2))
+    return result
 
 
 def _stop(_signum: int, _frame: object) -> None:
@@ -173,32 +206,45 @@ def main() -> int:
     callback, stream = _audio_callback(gain, restart_requested, glitches, float(options['sample_rate'])), None
     try:
         failures: list[str] = []
+        minimum_block = 0
+        glitch_fallback = False
+        callback_rate = float(options["sample_rate"])
         candidates = _stream_candidates(options)
         for candidate_index, candidate in enumerate(candidates):
+            candidate = dict(candidate)
+            mode = candidate.pop("_mode", "plain")
+            if 0 < candidate.get("blocksize", 0) < minimum_block:
+                continue
             try:
+                candidate_rate = float(candidate.get("samplerate", callback_rate))
+                if candidate_rate != callback_rate:
+                    callback = _audio_callback(gain, restart_requested, glitches, candidate_rate)
+                    callback_rate = candidate_rate
                 stream = sd.Stream(**candidate, callback=callback)
                 stream.start()
+                diagnostics = _stream_diagnostics(stream, candidate, options, mode)
                 if failures or candidate_index:
                     _emit(
                         {
                             "event": "fallback",
-                            "message": failures[-1] if failures else "Audio glitches detected",
-                            "blocksize": candidate["blocksize"],
-                            "latency": candidate.get("latency", "low"),
-                            "exclusive": "extra_settings" in candidate,
+                            "message": "Audio glitches detected" if glitch_fallback else (failures[-1] if failures else "Driver compatibility fallback"),
+                            "cause": "glitches" if glitch_fallback else "device-open",
+                            **diagnostics,
                         }
                     )
                 _emit(
                     {
                         "event": "started",
-                        "blocksize": candidate["blocksize"],
-                        "latency": candidate.get("latency", "low"),
-                        "exclusive": "extra_settings" in candidate,
+                        **diagnostics,
                     }
                 )
                 restart_requested.clear()
                 glitches.clear()
                 while _running and not restart_requested.wait(0.1): _emit({"event": "level", **_level})
+                if _running:
+                    minimum_block = max(minimum_block, candidate.get("blocksize", 0) + 1)
+                    glitch_fallback = True
+                    failures.clear()
                 stream.abort()
                 stream.close()
                 stream = None

@@ -1,5 +1,7 @@
 """Микрофон и звук."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -33,27 +35,35 @@ def get_settings(db: Session = Depends(get_db)):
 
 @router.post("/settings", response_model=schemas.AudioSettingsOut)
 def update_settings(patch: schemas.AudioSettingsUpdate, db: Session = Depends(get_db)):
-    with http_error(RuntimeError, 503): return audio_service.update_settings(db, patch.model_dump(exclude_unset=True))
+    with http_error(RuntimeError, 503): return audio_service.update_settings(db, patch.model_dump(exclude_unset=True), background=True)
 
 
-@router.post("/direct-monitor/start", response_model=schemas.AudioSettingsOut)
+@router.post("/direct-monitor/start", response_model=schemas.AudioSettingsOut, status_code=202)
 def start_direct_monitoring(
-    db: Session = Depends(get_db), disabled_effects: bool = False
+    db: Session = Depends(get_db), disabled_effects: bool = False,
+    wasapi_mode: Literal["shared", "input-exclusive", "exclusive"] | None = None,
 ):
     with http_error(RuntimeError, 503):
         return audio_service.set_monitoring_enabled(
-            db, True, disabled_effects=disabled_effects
+            db, True, disabled_effects=disabled_effects, background=True, wasapi_mode=wasapi_mode
         )
 
 
 @router.post("/direct-monitor/stop", response_model=schemas.AudioSettingsOut)
 def stop_direct_monitoring(db: Session = Depends(get_db)):
+    # Callers may immediately open recording/WebRTC capture after this response.
+    # Do not acknowledge a release while the old process still owns the device.
     return audio_service.set_monitoring_enabled(db, False)
+
+
+@router.get("/direct-monitor/status")
+def direct_monitor_status():
+    return audio_service.monitoring_status()
 
 
 @router.post("/devices/select", response_model=schemas.AudioSettingsOut)
 def select_device(device_id: int, db: Session = Depends(get_db)):
-    return audio_service.update_settings(db, {"input_device_id": device_id})
+    return audio_service.update_settings(db, {"input_device_id": device_id}, background=True)
 
 
 @router.get("/signal-quality", response_model=schemas.SignalQualityOut)

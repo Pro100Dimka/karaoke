@@ -88,6 +88,10 @@ function useAudio(open) {
     POLLING_INTERVALS.realtimeSignal,
     null
   );
+  const monitorStatus = useConditionalPolling(open, api.getDirectMonitorStatus, 750, null);
+  const [wasapiMode, setWasapiMode] = useState("shared");
+  const needsAsioCheck = open && Number(monitorStatus.data?.glitch_fallback_count) >= 2;
+  const asio = useConditionalPolling(needsAsioCheck, api.listAsioDrivers, 0, null);
   const [local, setLocal] = useState({});
   const [busy, setBusy] = useState(false);
   const queue = useRef(Promise.resolve());
@@ -122,14 +126,16 @@ function useAudio(open) {
     return queue.current;
   };
 
-  const monitor = async () => {
+  const monitor = async (retry = false) => {
     setBusy(true);
     try {
-      const enabled = Boolean(values.monitoring_enabled);
-      await (enabled
+      const enabled = Boolean(values.monitoring_enabled) && retry !== true;
+      const saved = await (enabled
         ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({ disabledEffects: true }));
+        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode }));
       setLocal((current) => ({ ...current, monitoring_enabled: !enabled }));
+      globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: saved }));
+      await monitorStatus.refresh();
       await settings.refresh();
     } catch (error) {
       await alert(tr("Не удалось изменить прослушивание: {0}", { 0: getErrorMessage(error) }));
@@ -163,6 +169,11 @@ function useAudio(open) {
 
   return {
     values,
+    monitorStatus: monitorStatus.data,
+    monitorStatusError: monitorStatus.error,
+    wasapiMode,
+    setWasapiMode,
+    suggestAsio: needsAsioCheck && Array.isArray(asio.data) && asio.data.length === 0,
     options: {
       inputs: createInputDeviceOptions(inputs.data, values.input_device_id),
       outputs: createOutputDeviceOptions(

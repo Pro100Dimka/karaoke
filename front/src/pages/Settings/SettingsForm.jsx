@@ -2,6 +2,7 @@ import { Volume2 } from "lucide-react";
 import LiveSignalWaveform from "../../components/LiveSignalWaveform";
 import { translateSaved as tr } from "../../i18n/runtime";
 import { Button, ConfigForm, Stack, Switch, Typography } from "../../theme/ui";
+import MonitorDiagnostics from "./MonitorDiagnostics";
 import { bindField } from "./bindings";
 import { FIELDS } from "./schema";
 
@@ -42,10 +43,14 @@ const RENDERERS = {
           onChange={context.audio.monitor}
         />
         <Typography variant="caption" tone="muted">
-          {value ? tr("Включено") : tr("Выключено")}
+          {value ? tr("Запрошено включение") : tr("Выключено")}
         </Typography>
       </Stack>
-      <LiveSignalWaveform active={Boolean(value)} level={context.audio.level} />
+      <LiveSignalWaveform
+        active={context.audio.monitorStatus?.state === "running"}
+        level={context.audio.level}
+      />
+      <MonitorDiagnostics audio={context.audio} />
     </Stack>
   )
 };
