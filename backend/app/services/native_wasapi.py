@@ -1,5 +1,6 @@
 """Event-driven shared I/O. All COM calls stay on the monitor worker's thread."""
 import ctypes as ct
+import math
 from pathlib import Path
 import sys
 
@@ -14,10 +15,14 @@ class Info(ct.Structure):
     )] + [(name, ct.c_double) for name in ("input_latency_ms", "output_latency_ms")]
 
 
+TIMING_FIELDS = ("capture_delivery_ms", "program_residence_ms", "queue_residence_ms", "output_clock_lead_ms",
+                 "render_submit_ms", "render_padding_ms", "capture_processing_ms", "event_wait_ms", "pump_gap_ms")
+
+
 class Statistics(ct.Structure):
     _fields_ = [(name, ct.c_uint64) for name in (
         "captured_frames", "rendered_frames", "dropped_frames", "underruns", "discontinuities", "queued_frames"
-    )] + [("stream_latency_ms", ct.c_double)]
+    )] + [(name, ct.c_double) for name in ("stream_latency_ms", *TIMING_FIELDS)]
 
 
 Process = ct.CFUNCTYPE(ct.c_int, ct.POINTER(ct.c_float), ct.POINTER(ct.c_float), ct.c_uint32)
@@ -32,6 +37,13 @@ def load_library():
     if not path.is_file():
         raise RuntimeError("Native WASAPI library is missing; rebuild the native audio components")
     dll = ct.CDLL(str(path))
+    try:
+        version = dll.wm_abi_version
+    except AttributeError as error:
+        raise RuntimeError("Native WASAPI library is outdated; rebuild the native audio components") from error
+    version.argtypes, version.restype = [], ct.c_uint32
+    if version() != 2:
+        raise RuntimeError("Native WASAPI library version mismatch; rebuild the native audio components")
     opening = [ct.c_wchar_p, ct.c_wchar_p, ct.c_uint32, ct.POINTER(Info), ct.c_char_p, ct.c_uint32]
     dll.wm_open.argtypes, dll.wm_open.restype = opening, ct.c_void_p
     dll.wm_probe.argtypes, dll.wm_probe.restype = opening, ct.c_int
@@ -79,6 +91,8 @@ class NativeWasapiStream:
             captured_frames=self.stats.captured_frames, rendered_frames=self.stats.rendered_frames,
             stream_latency_ms=round(self.stats.stream_latency_ms, 3) if self.stats.stream_latency_ms > 0 else None,
         )
+        self.statistics.update({name: round(value, 3) if math.isfinite(value) and value >= 0 else None
+                                for name in TIMING_FIELDS for value in (getattr(self.stats, name),)})
 
     def diagnostics(self):
         return {

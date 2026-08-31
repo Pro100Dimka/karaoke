@@ -8,7 +8,9 @@ import time
 _STREAM_STATISTICS = ("callback_frames", "callback_count", "glitch_count", "queue_frames",
                       "queue_capacity_frames", "queue_underruns", "queue_dropped_frames",
                       "queue_contentions", "queue_ms", "queue_capacity_ms", "queue_underruns_after_start",
-                      "queue_wait_ms", "dsp_compute_ms", "stream_latency_ms")
+                      "queue_wait_ms", "dsp_compute_ms", "stream_latency_ms",
+                      "capture_delivery_ms", "program_residence_ms", "queue_residence_ms", "output_clock_lead_ms",
+                      "render_submit_ms", "render_padding_ms", "capture_processing_ms", "event_wait_ms", "pump_gap_ms")
 
 
 class MonitorCancelled(RuntimeError):

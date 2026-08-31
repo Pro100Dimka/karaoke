@@ -29,7 +29,16 @@ struct Statistics {
     uint64_t captured_frames = 0, rendered_frames = 0, dropped_frames = 0;
     uint64_t underruns = 0, discontinuities = 0, queued_frames = 0;
     double stream_latency_ms = -1;
+    double capture_delivery_ms = -1, program_residence_ms = -1, queue_residence_ms = -1;
+    double output_clock_lead_ms = -1, render_submit_ms = 0, render_padding_ms = 0;
+    double capture_processing_ms = 0, event_wait_ms = 0, pump_gap_ms = 0;
 };
+static double monotonic_seconds() {
+    static const double frequency = [] { LARGE_INTEGER value; QueryPerformanceFrequency(&value); return double(value.QuadPart); }();
+    LARGE_INTEGER value;
+    QueryPerformanceCounter(&value);
+    return double(value.QuadPart) / frequency;
+}
 static void check(HRESULT hr, const char* operation) {
     if (SUCCEEDED(hr)) return;
     std::ostringstream out;
@@ -151,6 +160,7 @@ struct Engine {
     Statistics stats;
     Process process = nullptr;
     HANDLE scheduling = nullptr;
+    double pump_finished = 0;
     ~Engine() { if (scheduling) AvRevertMmThreadCharacteristics(scheduling); }
     void open(const wchar_t* input_name, const wchar_t* output_name, uint32_t blocksize, Info& info, bool initialize) {
         if (!blocksize || blocksize > 8192) throw std::runtime_error("Invalid fixed processing buffer");
@@ -175,18 +185,19 @@ struct Engine {
         process = callback;
         DWORD task = 0;
         scheduling = AvSetMmThreadCharacteristicsW(L"Pro Audio", &task);
-        BYTE* data = nullptr;
-        const UINT32 prime = std::min(output.period, output.buffer);
-        check(render->GetBuffer(prime, &data), "Prime GetBuffer");
-        check(render->ReleaseBuffer(prime, AUDCLNT_BUFFERFLAGS_SILENT), "Prime ReleaseBuffer");
-        written_frames = prime;
+        // Start playback with the first real packet, not a period of silence
+        // queued ahead of the microphone. Capture alone drives startup events.
         input.start();
-        output.start();
     }
     void pump(uint32_t timeout) {
+        const double entering = monotonic_seconds();
+        stats.pump_gap_ms = pump_finished ? (entering - pump_finished) * 1000 : 0;
         HANDLE events[] = {input.event.value, output.event.value};
         if (WaitForMultipleObjects(2, events, FALSE, timeout) == WAIT_FAILED)
             throw std::runtime_error("Audio event wait failed");
+        stats.event_wait_ms = (monotonic_seconds() - entering) * 1000;
+        // A ready output block must not wait behind another capture/DSP burst.
+        render_ready();
         UINT32 available = 0;
         check(capture->GetNextPacketSize(&available), "GetNextPacketSize");
         // Capture first after either event. Do not wait for a second thread or
@@ -197,6 +208,7 @@ struct Engine {
             DWORD flags = 0;
             UINT64 captured_qpc = 0;
             check(capture->GetBuffer(&data, &frames, &flags, nullptr, &captured_qpc), "Capture GetBuffer");
+            const double received_at = monotonic_seconds();
             if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) ++stats.discontinuities;
             bool ok = true;
             for (uint32_t offset = 0; offset < frames; ) {
@@ -206,16 +218,22 @@ struct Engine {
                 if (!process(source.data(), processed.data(), count)) { ok = false; break; }
                 const double timestamp = flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR ? 0 : captured_qpc * 1e-7;
                 queue->push(processed.data(), count, timestamp > 0 ? timestamp + double(offset) / input.format->nSamplesPerSec : 0,
-                            1.0 / input.format->nSamplesPerSec);
+                            1.0 / input.format->nSamplesPerSec, received_at, monotonic_seconds());
                 offset += count;
             }
             check(capture->ReleaseBuffer(frames), "Capture ReleaseBuffer");
+            stats.capture_processing_ms = (monotonic_seconds() - received_at) * 1000;
             if (!ok) throw std::runtime_error("Microphone processing callback failed");
             stats.captured_frames += frames;
+            render_ready();
             check(capture->GetNextPacketSize(&available), "GetNextPacketSize");
         }
+        pump_finished = monotonic_seconds();
+    }
+    void render_ready() {
         UINT32 padding = 0;
         check(output.client->GetCurrentPadding(&padding), "GetCurrentPadding");
+        stats.render_padding_ms = double(padding) * 1000 / output.format->nSamplesPerSec;
         // Allocation capacity is NOT a target queue depth. Submit at most one
         // engine period instead of filling the entire Windows render buffer.
         const UINT32 target = std::min(output.period, output.buffer);
@@ -226,26 +244,46 @@ struct Engine {
         if (count) {
             double presentation = 0;
             UINT64 position = 0, qpc = 0;
-            if (clock && SUCCEEDED(clock->GetPosition(&position, &qpc)) && qpc) {
+            if (output.started && clock && clock->GetPosition(&position, &qpc) == S_OK && position && qpc) {
                 const double played = double(position) / clock_frequency;
                 // After an underrun the clock keeps advancing through silence.
                 if (!padding) written_frames = std::max(written_frames, UINT64(played * output.format->nSamplesPerSec));
                 presentation = qpc * 1e-7 + double(written_frames) / output.format->nSamplesPerSec - played;
             }
             BYTE* data = nullptr;
+            const double submit_started = monotonic_seconds();
             check(render->GetBuffer(count, &data), "Render GetBuffer");
             bool starved = false;
             double transit = 0;
-            unsigned timestamped = 0;
+            double delivery_sum = 0, received_sum = 0, processed_sum = 0;
+            unsigned timestamped = 0, delivered = 0, received = 0;
             for (UINT32 index = 0; index < count; ++index) {
                 float sample = 0;
-                double captured_at = 0;
-                if (!queue->pop(sample, &captured_at)) starved = true;
+                double captured_at = 0, received_at = 0, processed_at = 0;
+                if (!queue->pop(sample, &captured_at, &received_at, &processed_at)) starved = true;
                 output.write(data + index * output.format->nBlockAlign, sample);
+                // Program timings remain measurable even when a device does
+                // not provide valid capture timestamps or a playback clock.
+                if (received_at > 0 && processed_at >= received_at) {
+                    ++received; received_sum += received_at; processed_sum += processed_at;
+                    if (captured_at > 0 && received_at >= captured_at) {
+                        ++delivered; delivery_sum += received_at - captured_at;
+                    }
+                }
                 const double age = presentation + double(index) / output.format->nSamplesPerSec - captured_at;
-                if (captured_at > 0 && presentation > 0 && age >= 0 && age < 1) { transit += age; ++timestamped; }
+                if (captured_at > 0 && presentation > 0 && age >= 0 && age < 1) {
+                    transit += age; ++timestamped;
+                }
             }
             check(render->ReleaseBuffer(count, 0), "Render ReleaseBuffer");
+            if (!output.started) output.start();
+            const double submitted = monotonic_seconds();
+            stats.render_submit_ms = (submitted - submit_started) * 1000;
+            stats.capture_delivery_ms = delivered ? delivery_sum * 1000 / delivered : -1;
+            stats.program_residence_ms = received ? (submitted - received_sum / received) * 1000 : -1;
+            stats.queue_residence_ms = received ? (submitted - processed_sum / received) * 1000 : -1;
+            stats.output_clock_lead_ms = presentation > 0
+                ? (presentation + double(count - 1) / (2 * output.format->nSamplesPerSec) - submitted) * 1000 : -1;
             if (starved) ++stats.underruns;
             stats.rendered_frames += count;
             written_frames += count;
@@ -257,6 +295,8 @@ struct Engine {
 };
 
 #define API extern "C" __declspec(dllexport)
+// Bump when exported structures change; prevent mixed DLL/Python layouts.
+API uint32_t __cdecl wm_abi_version() { return 2; }
 API void* __cdecl wm_open(const wchar_t* input, const wchar_t* output, uint32_t blocksize, Info* info, char* error, uint32_t size) {
     try {
         auto engine = std::make_unique<Engine>();

@@ -36,11 +36,13 @@ inline void encode(uint8_t* data, unsigned bits, bool floating, float input) {
 class MonitorBuffer {
     std::vector<float> samples;
     std::vector<double> timestamps;
+    std::vector<double> received_times, processed_times;
     size_t head = 0, used = 0;
     uint64_t lost = 0;
     double ratio, phase = 0;
 public:
-    MonitorBuffer(size_t capacity, double rate_ratio) : samples(capacity), timestamps(capacity), ratio(rate_ratio) {
+    MonitorBuffer(size_t capacity, double rate_ratio) : samples(capacity), timestamps(capacity),
+        received_times(capacity), processed_times(capacity), ratio(rate_ratio) {
         if (capacity < 2 || !std::isfinite(ratio) || ratio <= 0) throw std::runtime_error("Invalid monitor queue");
     }
     size_t size() const { return used; }
@@ -54,19 +56,26 @@ public:
         return static_cast<size_t>(std::max(0.0, std::min(interpolated, advanced)));
     }
     uint64_t dropped() const { return lost; }
-    void push(const float* input, size_t count, double captured_at = 0, double step = 0) {
+    void push(const float* input, size_t count, double captured_at = 0, double step = 0,
+              double received_at = 0, double processed_at = 0) {
         for (size_t i = 0; i < count; ++i) {
             if (used == samples.size()) { head = (head + 1) % samples.size(); --used; ++lost; phase = 0; }
             const size_t index = (head + used++) % samples.size();
             samples[index] = input[i];
             timestamps[index] = captured_at > 0 ? captured_at + i * step : 0;
+            received_times[index] = received_at;
+            processed_times[index] = processed_at;
         }
     }
-    bool pop(float& output, double* captured_at = nullptr) {
+    bool pop(float& output, double* captured_at = nullptr, double* received_at = nullptr, double* processed_at = nullptr) {
         if (captured_at) *captured_at = 0;
+        if (received_at) *received_at = 0;
+        if (processed_at) *processed_at = 0;
         if (ratio == 1 && used) {
             output = samples[head];
             if (captured_at) *captured_at = timestamps[head];
+            if (received_at) *received_at = received_times[head];
+            if (processed_at) *processed_at = processed_times[head];
             head = (head + 1) % samples.size(); --used; return true;
         }
         const size_t consume = static_cast<size_t>(phase + ratio);
@@ -74,6 +83,8 @@ public:
         output = static_cast<float>(samples[head] * (1 - phase) + samples[(head + 1) % samples.size()] * phase);
         const double first = timestamps[head], second = timestamps[(head + 1) % samples.size()];
         if (captured_at && first > 0 && second > 0) *captured_at = first * (1 - phase) + second * phase;
+        if (received_at) *received_at = received_times[head] * (1 - phase) + received_times[(head + 1) % samples.size()] * phase;
+        if (processed_at) *processed_at = processed_times[head] * (1 - phase) + processed_times[(head + 1) % samples.size()] * phase;
         phase += ratio - consume;
         head = (head + consume) % samples.size();
         used -= consume;
