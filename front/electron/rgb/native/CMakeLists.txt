@@ -15,7 +15,13 @@ foreach(header node_api.h node_api_types.h js_native_api.h js_native_api_types.h
   endif()
 endforeach()
 include(${CMAKE_CURRENT_SOURCE_DIR}/dependencies.cmake)
-add_library(KeyboardLighting SHARED lighting.cpp usb_lighting.cpp)
+add_library(KeyboardLighting SHARED
+  lighting.cpp
+  usb_lighting.cpp
+  usb_lighting.h
+  vial_protocol.h
+  winbond_protocol.h
+)
 target_compile_features(KeyboardLighting PRIVATE cxx_std_17)
 target_include_directories(KeyboardLighting PRIVATE "${NODE_HEADERS}")
 target_link_libraries(KeyboardLighting PRIVATE windowsapp ole32 wooting_rgb)
