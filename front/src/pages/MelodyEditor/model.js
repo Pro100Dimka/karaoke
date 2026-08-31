@@ -43,10 +43,8 @@ const selectedNotes = (notes, ids) => {
 
 export function recombineAdjacentEqualPitchNotes(notes, epsilon = 0.01) {
   const result = [];
-
   for (const n of [...notes].sort(sort)) {
     const prev = result.at(-1);
-
     if (prev?.note === n.note && n.start - prev.end <= epsilon) {
       prev.end = Math.max(prev.end, n.end);
       prev.word_start = Math.min(prev.word_start, n.word_start);
@@ -55,31 +53,25 @@ export function recombineAdjacentEqualPitchNotes(notes, epsilon = 0.01) {
       result.push({ ...n });
     }
   }
-
   return result;
 }
 
 const contiguous = (notes, chosen) => {
   if (chosen.length < 2) return false;
-
   const ids = new Set(chosen.map((n) => n._id));
   const indexes = [...notes]
     .sort(sort)
     .map((n, i) => (ids.has(n._id) ? i : -1))
     .filter((i) => i >= 0);
-
   return indexes.at(-1) - indexes[0] + 1 === indexes.length;
 };
 
 export function mergeSelectedNotes(notes, ids) {
   const chosen = selectedNotes(notes, ids);
-
   if (!contiguous(notes, chosen)) {
     return { notes, selectedId: chosen[0]?._id || null };
   }
-
   ids = new Set(ids);
-
   const merged = {
     ...chosen[0],
     start: chosen[0].start,
@@ -88,7 +80,6 @@ export function mergeSelectedNotes(notes, ids) {
     word_start: Math.min(...chosen.map((n) => n.word_start)),
     word_end: Math.max(...chosen.map((n) => n.word_end))
   };
-
   return {
     notes: normalizeNotes([...notes.filter((n) => !ids.has(n._id)), merged]),
     selectedId: merged._id
@@ -105,14 +96,11 @@ export const deleteNotes = (notes, ids) => {
 export function adjacentNoteId(notes, ids, direction) {
   const ordered = [...notes].sort(sort);
   if (!ordered.length) return null;
-
   ids = new Set(ids);
-
   const index =
     direction > 0
       ? ordered.findIndex((n) => ids.has(n._id))
       : ordered.findLastIndex((n) => ids.has(n._id));
-
   return index < 0
     ? (direction > 0 ? ordered[0] : ordered.at(-1))._id
     : ordered[clamp(index + Math.sign(direction), 0, ordered.length - 1)]._id;
@@ -120,13 +108,10 @@ export function adjacentNoteId(notes, ids, direction) {
 
 export function constrainedMoveDelta(notes, ids, requested) {
   ids = new Set(ids);
-
   const chosen = notes.filter((n) => ids.has(n._id));
   if (!chosen.length) return 0;
-
   let min = Math.max(...chosen.map((n) => n.word_start - n.start));
   let max = Math.min(...chosen.map((n) => n.word_end - n.end));
-
   for (const current of chosen) {
     for (const n of notes) {
       if (ids.has(n._id) || n.word_index !== current.word_index) continue;
@@ -134,43 +119,28 @@ export function constrainedMoveDelta(notes, ids, requested) {
       if (n.start >= current.end) max = Math.min(max, n.start - current.end);
     }
   }
-
   return clamp(requested, min, max);
 }
 
 export function resizeBounds(notes, id, duration = 0.03) {
   const current = notes.find((n) => n._id === id);
   if (!current) return null;
-
   let minStart = current.word_start;
   let maxEnd = current.word_end;
-
   for (const n of notes) {
     if (n === current || n.word_index !== current.word_index) continue;
     if (n.end <= current.start) minStart = Math.max(minStart, n.end);
     if (n.start >= current.end) maxEnd = Math.min(maxEnd, n.start);
   }
-
-  return {
-    minStart,
-    maxStart: current.end - duration,
-    minEnd: current.start + duration,
-    maxEnd
-  };
+  return { minStart, maxStart: current.end - duration, minEnd: current.start + duration, maxEnd };
 }
 
 export const canonicalLyricProjection = (words = []) =>
-  words.map((w, index) => ({
-    index,
-    text: `${w.text || ""}`,
-    start: +w.start,
-    end: +w.end
-  }));
+  words.map((w, index) => ({ index, text: `${w.text || ""}`, start: +w.start, end: +w.end }));
 
 export function wordResizeBounds(words, index, duration, minDuration = 0.05) {
   const word = words[index];
   if (!word) return null;
-
   return {
     minStart: words[index - 1]?.start ?? 0,
     maxStart: Math.min(word.end - minDuration, words[index + 1]?.start ?? duration),
@@ -181,7 +151,6 @@ export function wordResizeBounds(words, index, duration, minDuration = 0.05) {
 
 export function notesOverlappingWords(notes, words, indexes) {
   const ranges = indexes.map((i) => words[i]).filter(Boolean);
-
   return new Set(
     notes.filter((n) => ranges.some((w) => n.end > w.start && n.start < w.end)).map((n) => n._id)
   );
@@ -190,7 +159,6 @@ export function notesOverlappingWords(notes, words, indexes) {
 export function visibleTimeRange({ scrollLeft, clientWidth }, { keyboardWidth, zoom }) {
   const pad = Math.max(480, clientWidth / 2);
   const x = scrollLeft - keyboardWidth;
-
   return [(x - pad) / zoom, (x + clientWidth + pad) / zoom];
 }
 
@@ -201,9 +169,7 @@ export function shiftWordTexts(texts, [start, end], direction) {
   if ((direction > 0 && end >= texts.length - 1) || (direction < 0 && start <= 0)) {
     return texts;
   }
-
   const next = [...texts];
-
   if (direction > 0) {
     next.copyWithin(start + 1, start, -1);
     next[start] = "";
@@ -220,12 +186,10 @@ export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowH
   const right = Math.max(x1, x2);
   const top = Math.min(y1, y2);
   const bottom = Math.max(y1, y2);
-
   return notes
     .filter((n) => {
       const x = keyboardWidth + n.start * zoom;
       const y = (maxMidi - n.note) * rowHeight;
-
       return (
         x + (n.end - n.start) * zoom >= left && x <= right && y + rowHeight >= top && y <= bottom
       );
@@ -297,13 +261,9 @@ export const serializeNotes = (notes, words = []) =>
     words.flatMap((w, word_index) => {
       const start = roundTime(Math.max(n.start, +w.start));
       const end = roundTime(Math.min(n.end, +w.end));
-
       return end > start ? [{ note: n.note, start, end, word_index }] : [];
     })
   );
 
 export const serializeWordBounds = (words) =>
-  words.map(({ start, end }) => ({
-    start: roundTime(start),
-    end: roundTime(end)
-  }));
+  words.map(({ start, end }) => ({ start: roundTime(start), end: roundTime(end) }));
