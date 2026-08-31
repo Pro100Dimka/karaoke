@@ -22,9 +22,12 @@ export default function useOnlineRoomCommands({
   const syncCommand = useCallback(
     (state) => {
       // Playback is a shared karaoke console: every connected participant is
-      // allowed to press play/pause/seek. The worker validates this narrow
-      // karaoke-player shape; all other authoritative commands remain host-only.
-      if (roomRef.current?.host || state?.type === "karaoke-player")
+      // allowed to control playback or return everyone to the library.
+      // Starting a new song still goes through the host's preparation flow.
+      if (
+        roomRef.current &&
+        (roomRef.current.host || ["karaoke-player", "open-library"].includes(state?.type))
+      )
         return clientRef.current?.send("sync", { state });
       return false;
     },

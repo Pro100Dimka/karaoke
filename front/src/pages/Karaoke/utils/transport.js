@@ -62,7 +62,9 @@ export function createPlayerSyncCommand(action, songId, position, executeAt = nu
     songId,
     position: Number.isFinite(Number(position)) ? Number(position) : 0,
     commandId: generateId(),
-    ...(Number.isFinite(Number(executeAt)) ? { executeAt: Number(executeAt) } : {})
+    // No schedule means an immediate command. Number(null) is 0, which the
+    // room server correctly rejects as an expired guest command.
+    ...(Number.isFinite(executeAt) && executeAt > 0 ? { executeAt } : {})
   };
 }
 

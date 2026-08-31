@@ -275,6 +275,7 @@ export class KaraokeRoom {
   // | Action                                    | Host | Guest         |
   // |-------------------------------------------|------|---------------|
   // | play / pause / seek / stop               | yes  | yes           |
+  // | return everyone to the library          | yes  | yes           |
   // | tempo/key/radio/search filters (ui state) | yes  | yes           |
   // | own participant audio effects             | yes  | yes           |
   // | own shared library (songs)                | yes  | yes           |
@@ -393,6 +394,17 @@ export class KaraokeRoom {
     if (message.type === "sync") {
       const state = message.state;
       if (!state || typeof state !== "object" || Array.isArray(state) || new TextEncoder().encode(JSON.stringify(state)).byteLength > MAX_STATE_BYTES) { this.reportInvalid(socket, "Room sync state is invalid or too large"); return; }
+      if (state.type === "open-library") {
+        // A shared Back button is allowed for every authenticated participant.
+        // Replace the saved song command too: reconnect must return to the
+        // library instead of resurrecting playback that everyone already left.
+        const sentAt = Date.now();
+        const libraryState = { type: "open-library" };
+        this.playbackState = { state: libraryState, sentAt };
+        await this.ctx.storage?.put?.("playbackState", this.playbackState);
+        this.broadcast("sync", { state: libraryState, sentAt, fromId: sender.id }, sender.id);
+        return;
+      }
       if (sender.role === "host") {
         // Remembered so a guest who (re)joins after this was sent -- not
         // live for it, e.g. a brief network drop -- can be caught up via

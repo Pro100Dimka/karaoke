@@ -180,6 +180,24 @@ describe("karaoke transport", () => {
       vi.useRealTimers();
     }
   });
+  test("broadcasts guest pause before a slow recording backend replies", async () => {
+    let finishPause;
+    api.pauseRecording.mockReturnValue(new Promise((resolve) => { finishPause = resolve; }));
+    const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
+    const hook = renderHook(() => useKaraokeTransport(props));
+    const pausing = hook.result.current.togglePlay();
+    try {
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "pause", position: 4 })
+      );
+      expect(props.navigate).not.toHaveBeenCalled();
+      expect(api.stopRecording).not.toHaveBeenCalled();
+    } finally {
+      finishPause({});
+      await pausing;
+      hook.unmount();
+    }
+  });
   test("pauses media and an active recording", async () => {
     const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
     const { result } = renderHook(() => useKaraokeTransport(props));
@@ -347,6 +365,22 @@ describe("karaoke transport", () => {
       replace: true,
       state: { fromKaraokeFade: true, analysisRecordingId: "recording-room" }
     });
+  });
+  test("back broadcasts library navigation before recording finalization completes", async () => {
+    let finishStop;
+    api.stopRecording.mockReturnValue(new Promise((resolve) => { finishStop = resolve; }));
+    const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
+    const hook = renderHook(() => useKaraokeTransport(props));
+    const leaving = hook.result.current.returnToLibrary();
+    try {
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith({ type: "open-library" });
+      expect(props.instrumentalRef.current.pause).toHaveBeenCalled();
+    } finally {
+      finishStop({ id: "recording" });
+      await leaving;
+      hook.unmount();
+    }
+    expect(props.navigate).toHaveBeenCalledWith("/");
   });
   test("keeps a failed recording pending without blocking stop or exit", async () => {
     const props = createProps({ recordingSessionId: "existing" });

@@ -167,8 +167,9 @@ export default function useKaraokeTransport({
       // paused timecode/lyrics highlight a fraction of a second stale.
       setCurrentTime(instrumental.currentTime);
       lifecycle.paused();
-      if (sessionRef.current) await api.pauseRecording(sessionRef.current).catch(() => {});
       if (shouldBroadcast) broadcast("pause", instrumental.currentTime);
+      // Room transport must not wait for a local recording driver/backend.
+      if (sessionRef.current) await api.pauseRecording(sessionRef.current).catch(() => {});
       return true;
     }
 
@@ -313,15 +314,17 @@ export default function useKaraokeTransport({
 
   const skip = (delta) => seekTo(clampPlaybackPosition(currentTime + delta, duration));
   const returnToLibrary = async ({ alreadyStopped = false, analysisId = null } = {}) => {
+    // Tell the room before waiting for this machine's recording/device cleanup.
+    // Navigation elsewhere unmounts karaoke and finalizes each local recording.
+    if (onlineRoom?.room) {
+      Promise.resolve(onlineRoom.syncCommand({ type: "open-library" })).catch(() => {});
+    }
     if (!alreadyStopped) {
       try {
         await stop({ broadcast: false });
       } catch (error) {
         setRecordingError(formatError("karaoke.failedToSaveEntry", error));
       }
-    }
-    if (onlineRoom?.room) {
-      await Promise.resolve(onlineRoom.syncCommand({ type: "open-library" })).catch(() => {});
     }
     if (alreadyStopped)
       navigate("/", {

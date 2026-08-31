@@ -280,6 +280,9 @@ describe("online room provider", () => {
     expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", { state: sharedPlay });
     mocks.clients[0].send.mockClear();
     act(() => hook.result.current.syncCommand({ type: "open-library" }));
+    expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", { state: { type: "open-library" } });
+    mocks.clients[0].send.mockClear();
+    act(() => hook.result.current.syncCommand({ type: "start-karaoke", songId: "song" }));
     expect(mocks.clients[0].send).not.toHaveBeenCalled();
 
     act(() => hook.result.current.togglePersonMuted("guest"));

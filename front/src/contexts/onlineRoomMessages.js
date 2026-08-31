@@ -455,7 +455,11 @@ export function createOnlineRoomMessageHandler(options) {
       // participant and validates their fields. This deliberately lets a
       // guest use the shared transport instead of playing locally and then
       // being snapped back by the host's next heartbeat.
-      if (!senderIsHost(message) && command.type !== "karaoke-player") return;
+      const sharedLibraryReturn =
+        command.type === "open-library" &&
+        participantsRef.current.some((participant) => participant.id === message.fromId);
+      if (!senderIsHost(message) && command.type !== "karaoke-player" && !sharedLibraryReturn)
+        return;
       publishRoomCommand(command, "sync", message.sentAt);
     },
     "connection-closed": () => {
