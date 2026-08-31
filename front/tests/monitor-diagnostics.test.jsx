@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import audioRows from "../src/pages/Settings/audio-rows";
+import audioRows from "../src/pages/Settings/rows/audio";
 import { RenderFormikFields, useGetForm } from "../src/theme/ui";
 
 function AudioFields({ audio }) {

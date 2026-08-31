@@ -7,18 +7,7 @@ import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
-import { TRANSFER_STAGES } from "./onlineVoiceTransferProtocol";
-import { cleanupIncomingTransfer } from "./onlineVoiceTransferStorage";
-import {
-  cancelOutboundTransfers,
-  cancelTransfersByCommandId,
-  createIncomingTransferTimer,
-  emitTransferProgress,
-  sendFile,
-  sendSongSyncError,
-  setupDataChannel,
-  waitForDataChannel
-} from "./onlineVoiceTransfers";
+import OnlineVoiceTransferSession from "./onlineVoiceTransferSession";
 
 const MAX_PENDING_ICE_CANDIDATES = 256;
 const OPUS_PACKET_TIME_MS = 5;
@@ -70,13 +59,20 @@ export default class OnlineVoiceMesh {
     this.invitePromises = new Map();
     this.signalPromises = new Map();
     this.peerVersions = new Map();
-    this.channels = new Map();
-    this.incomingFiles = new Map();
-    this.incomingFileAdmissions = new Map();
-    this.pendingTransferConfirmations = new Map();
-    this.pendingTransferAdmissions = new Map();
-    this.pendingTransferCredits = new Map();
-    this.outboundTransfers = new Map();
+    this.transfers = new OnlineVoiceTransferSession(
+      {
+        version: () => this.lifecycleVersion,
+        hasPeer: (id) => this.peers.has(id),
+        invite: (id) => this.invite(id)
+      },
+      {
+        canAcceptFile: (...args) => this.canAcceptFile?.(...args),
+        onFile: (...args) => this.onFile?.(...args),
+        onSongPullRequest: (...args) => this.onSongPullRequest?.(...args),
+        onSongPullError: (...args) => this.onSongPullError?.(...args),
+        onTransferProgress: (...args) => this.onTransferProgress?.(...args)
+      }
+    );
     this.stream = null;
     this.effectsStream = null;
     this.peerEffectsEnabled = new Map();
@@ -138,7 +134,7 @@ export default class OnlineVoiceMesh {
         }
         // The graph otherwise defaults to a stale/hardcoded noise-suppression
         // level until some settings save happens to dispatch
-        // "audio-settings-changed" -- read the persisted value up front so a
+        // AUDIO_SETTINGS_CHANGED_EVENT -- read the persisted value up front so a
         // room call actually starts with whatever the user last saved.
         const persistedSettings = await api.getAudioSettings().catch(() => null);
         this.microphoneGraph = createStudioMicrophoneGraph(stream, {
@@ -449,7 +445,7 @@ export default class OnlineVoiceMesh {
       this.peers.get(participantId) === peer &&
       peer.connectionState !== "closed";
     const invitePromise = (async () => {
-      if (!this.channels.has(participantId)) {
+      if (!this.transfers.hasChannel(participantId)) {
         this.setupDataChannel(
           participantId,
           peer.createDataChannel("karaoke-library", { ordered: true })
@@ -564,38 +560,24 @@ export default class OnlineVoiceMesh {
     });
   }
 
-  setupDataChannel(participantId, channel) {
-    return setupDataChannel(this, participantId, channel);
+  setupDataChannel(...args) {
+    return this.transfers.setupDataChannel(...args);
   }
 
-  emitTransferProgress(participantId, stage, percent, metadata = {}) {
-    return emitTransferProgress(this, participantId, stage, percent, metadata);
+  waitForDataChannel(...args) {
+    return this.transfers.waitForDataChannel(...args);
   }
 
-  createIncomingTransferTimer(participantId, transferId) {
-    return createIncomingTransferTimer(this, participantId, transferId);
+  sendFile(...args) {
+    return this.transfers.sendFile(...args);
   }
 
-  waitForDataChannel(participantId, timeoutMs, lifecycleVersion, signal) {
-    return waitForDataChannel(
-      this,
-      participantId,
-      timeoutMs,
-      lifecycleVersion ?? this.lifecycleVersion,
-      signal
-    );
+  sendSongSyncError(...args) {
+    return this.transfers.sendSongSyncError(...args);
   }
 
-  sendFile(participantId, blob, metadata = {}, options = {}) {
-    return sendFile(this, participantId, blob, metadata, options);
-  }
-
-  sendSongSyncError(participantId, commandId, error) {
-    return sendSongSyncError(this, participantId, commandId, error);
-  }
-
-  cancelTransfersByCommandId(commandId, error) {
-    return cancelTransfersByCommandId(this, commandId, error);
+  cancelTransfersByCommandId(...args) {
+    return this.transfers.cancelTransfersByCommandId(...args);
   }
 
   removePeer(participantId) {
@@ -605,7 +587,7 @@ export default class OnlineVoiceMesh {
     const disconnectTimer = this.disconnectTimers.get(participantId);
     if (disconnectTimer) globalThis.clearTimeout(disconnectTimer);
     this.disconnectTimers.delete(participantId);
-    const existed = this.peers.has(participantId) || this.channels.has(participantId);
+    const existed = this.peers.has(participantId) || this.transfers.hasChannel(participantId);
     this.peerVersions.set(participantId, (this.peerVersions.get(participantId) || 0) + 1);
     const peer = this.peers.get(participantId);
     this.peers.delete(participantId);
@@ -615,49 +597,16 @@ export default class OnlineVoiceMesh {
     this.invitePromises.delete(participantId);
     this.signalPromises.delete(participantId);
     this.peerEffectsEnabled.delete(participantId);
-    const channel = this.channels.get(participantId);
-    // No partial-transfer resume exists once the peer connection drops -- a
-    // retry always restarts the file from the beginning, so the message
-    // says so up front instead of leaving the sender to discover it.
-    cancelOutboundTransfers(
-      this,
-      participantId,
-      null,
-      new Error(
-        translateSaved("room.participantDisconnectedDuringTransferSendTheFileAgainInterrupted")
-      )
-    );
-    const admission = this.incomingFileAdmissions.get(participantId);
-    if (admission) {
-      admission.cancelled = true;
-      globalThis.clearTimeout(admission.timer);
-      this.emitTransferProgress(participantId, TRANSFER_STAGES.CANCELLED, 0, admission.metadata);
-    }
-    this.incomingFileAdmissions.delete(participantId);
-    const incoming = this.incomingFiles.get(participantId);
-    cleanupIncomingTransfer(incoming);
-    this.incomingFiles.delete(participantId);
-    // A peer we're receiving a file FROM can vanish mid-transfer too (host
-    // disconnects while pushing a song, network drop, tab closed, ...). Without
-    // this, the transfer state was wiped silently and whoever was awaiting an
-    // "error"/"cancelled" progress event (OnlineRoomContext's pending song
-    // command, syncSong()'s promise) would hang until a generic multi-minute
-    // timeout instead of failing right away.
-    if (incoming)
-      this.emitTransferProgress(
-        participantId,
-        "cancelled",
-        incoming.lastPercent,
-        incoming.metadata
-      );
-    channel?.close();
-    this.channels.delete(participantId);
+    this.transfers.removePeer(participantId);
     if (existed) this.onPeerClosed?.(participantId);
   }
 
   stop() {
     this.lifecycleVersion += 1;
-    new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id));
+    new Set([...this.peers.keys(), ...this.transfers.participantIds()]).forEach((id) =>
+      this.removePeer(id)
+    );
+    this.transfers.stop();
     if (this.microphoneGraph) {
       closeAudioContextQuietly(this.microphoneGraph);
       this.microphoneGraph = null;
@@ -673,17 +622,5 @@ export default class OnlineVoiceMesh {
       globalThis.clearTimeout(timer);
     }
     this.disconnectTimers.clear();
-    for (const transfer of this.incomingFiles.values()) cleanupIncomingTransfer(transfer);
-    this.incomingFiles.clear();
-    for (const admission of this.incomingFileAdmissions.values()) admission.cancelled = true;
-    this.incomingFileAdmissions.clear();
-    cancelOutboundTransfers(
-      this,
-      null,
-      null,
-      new Error(translateSaved("room.fileTransferCanceled"))
-    );
-    this.outboundTransfers.clear();
-    this.channels.clear();
   }
 }

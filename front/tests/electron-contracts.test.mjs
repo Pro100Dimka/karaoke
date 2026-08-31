@@ -110,7 +110,7 @@ test("injects one runtime backend URL and allows required renderer resources", (
   const platform = fs.readFileSync(new URL("../src/utils/platform.js", import.meta.url), "utf8");
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   verify(
-    [main, "toContain", "--advoice-backend-url=${runtimeBackendUrl}"],
+    [main, "toContain", "--advoice-backend-url=${backend.url}"],
     [preload, "toContain", "backendUrl"],
     [runtime, "toContain", "platform.backendUrl()"],
     [platform, "toContain", "electronAPI()?.backendUrl"],
@@ -129,7 +129,11 @@ test("keeps packaged writable Electron state beside the installed executable", (
     [main, "toContain", "path.dirname(process.execPath)"],
     [main, "toContain", 'path.join(INSTALL_DATA_ROOT, "electron-profile")'],
     [main, "toContain", 'app.setPath("temp", INSTALL_TEMP_DIR)'],
-    [main, "toContain", 'path.join(app.getPath("userData"), "selected-theme.ico")']
+    [
+      fs.readFileSync(new URL("../electron/theme-icons.cjs", import.meta.url), "utf8"),
+      "toContain",
+      'path.join(app.getPath("userData"), "selected-theme.ico")'
+    ]
   );
 });
 describe("renderer and permission security", () => {
@@ -297,8 +301,7 @@ describe("preload bridge", () => {
     const originalLoad = nodeModule._load;
     // eslint-disable-next-line no-underscore-dangle
     nodeModule._load = function load(specifier, parent, isMain) {
-      if (specifier === "electron")
-        return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke, sendSync } };
+      if (specifier === "electron") return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke, sendSync } };
       return originalLoad.call(this, specifier, parent, isMain);
     };
     process.argv = ["electron", "app", ...arguments_];
@@ -315,7 +318,10 @@ describe("preload bridge", () => {
     return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke, sendSync };
   }
   test("exposes the minimal frozen-channel renderer API", () => {
-    const { api, exposeInMainWorld, invoke, sendSync } = runPreload(["--advoice-theme=violet", "--advoice-backend-url=http://127.0.0.1:8123"]);
+    const { api, exposeInMainWorld, invoke, sendSync } = runPreload([
+      "--advoice-theme=violet",
+      "--advoice-backend-url=http://127.0.0.1:8123"
+    ]);
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     same(
       [exposeInMainWorld.mock.calls[0][0], "electronAPI"],

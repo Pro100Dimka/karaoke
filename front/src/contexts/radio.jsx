@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
+import { createLevelMeter } from "../services/levelMeter";
 import { clamp01 as clampVolume } from "../utils/math";
 import { readJsonStorage } from "../utils/storage";
 import { persistUiPreferences } from "../utils/ui-preferences";
@@ -117,7 +118,8 @@ export function RadioProvider({ children }) {
   // Stryker disable ArrayDeclaration: stopAnalysis is stable for the provider lifetime.
   const startAnalysis = useCallback(() => {
     const analyser = analyserRef.current;
-    const data = frequencyDataRef.current;
+    const meter = frequencyDataRef.current;
+    let data;
     const audioContext = audioContextRef.current;
     const analysisVersion = createVersion();
     analysisVersionRef.current = analysisVersion;
@@ -129,7 +131,7 @@ export function RadioProvider({ children }) {
       )
         return;
       try {
-        analyser.getByteFrequencyData(data);
+        data = meter.read();
       } catch {
         stopAnalysis();
         return;
@@ -168,15 +170,19 @@ export function RadioProvider({ children }) {
     // Stryker disable next-line ConditionalExpression
     if (!AudioContext) return null;
     const context = new AudioContext();
-    const analyser = context.createAnalyser();
+    const meter = createLevelMeter(context, {
+      fftSize: 2048,
+      smoothingTimeConstant: 0.72,
+      domain: "frequency"
+    });
+    const { analyser } = meter;
     const source = context.createMediaElementSource(audio);
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.72;
+
     source.connect(analyser);
     analyser.connect(context.destination);
     audioContextRef.current = context;
     analyserRef.current = analyser;
-    frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+    frequencyDataRef.current = meter;
     return context;
   }, []);
   // Stryker restore ArrayDeclaration

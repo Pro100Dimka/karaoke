@@ -16,7 +16,8 @@ vi.mock("../src/hooks/usePolling", () => ({
   usePolling: () => ({ refresh: mocks.refresh, ...mocks.poll })
 }));
 vi.mock("../src/api/client", () => ({ api: { listSongs: vi.fn(), updateSong: mocks.updateSong } }));
-vi.mock("../src/theme/ui", () => ({
+vi.mock("../src/theme/ui", async (importOriginal) => ({
+  ...(await importOriginal()),
   Modal: ({ children, titleProps }) => (
     <section>
       <span data-testid="description">{titleProps?.description}</span>
@@ -26,16 +27,7 @@ vi.mock("../src/theme/ui", () => ({
   ),
   Button: ({ children, startIcon: _icon, ...props }) => <button {...props}>{children}</button>,
   Stack: passthrough("div"),
-  Typography: passthrough("p"),
-  NumberField: ({ value, onChange, placeholder }) => (
-    <input aria-label={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
-  ),
-  ConfigForm: ({ context, fields }) => (
-    <div data-testid="form">
-      <input aria-label="title" value={context.form.title} onChange={(event) => context.onChange("title", event.target.value)} />
-      {fields.find(({ name }) => name === "note_range").render({ context })}
-    </div>
-  )
+  Typography: passthrough("p")
 }));
 import SongSettings from "../src/pages/Library/song-settings.jsx";
 const song = {
@@ -54,11 +46,21 @@ beforeEach(() => {
   mocks.updateSong.mockReset().mockResolvedValue({ title: "Updated" });
 });
 describe("song settings", () => {
+  test("polling the same song does not replace an unsaved Formik draft", async () => {
+    const view = render(<SongSettings songId="song" />);
+    const title = await view.findByLabelText("Название песни", { exact: false });
+    fireEvent.change(title, { target: { value: "Unsaved draft" } });
+    mocks.poll = { data: [{ ...song, title: "Server value" }], error: null };
+    view.rerender(<SongSettings songId="song" />);
+    expect(title.value).toBe("Unsaved draft");
+    fireEvent.click(view.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(mocks.updateSong).toHaveBeenCalledWith("song", expect.objectContaining({ title: "Unsaved draft" })));
+  });
   test("edits, validates and saves song fields", async () => {
     const result = render(<SongSettings songId="song" onClose={vi.fn()} />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
-    fireEvent.change(result.getByLabelText("title"), { target: { value: "New title" } });
-    const numericFields = result.container.querySelectorAll('[data-testid="form"] input:not([aria-label="title"])');
+    fireEvent.change(result.getByLabelText("Название песни", { exact: false }), { target: { value: "New title" } });
+    const numericFields = [result.getByLabelText("Нижняя нота"), result.getByLabelText("Верхняя нота")];
     fireEvent.change(numericFields[0], { target: { value: "48" } });
     fireEvent.change(numericFields[1], { target: { value: "72" } });
     fireEvent.change(numericFields[0], { target: { value: "" } });
@@ -74,9 +76,7 @@ describe("song settings", () => {
     const close = vi.fn();
     const result = render(<SongSettings songId="song" onClose={close} />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
-    const editor = [...result.container.querySelectorAll("button")].find(
-      (button) => button !== result.getByRole("button", { name: /Сохранить|Зберегти/ })
-    );
+    const editor = result.getByRole("button", { name: "Открыть редактор" });
     fireEvent.click(editor);
     verify([close, "toHaveBeenCalled"], [mocks.navigate, "toHaveBeenCalledWith", "/editor/song"]);
   });
@@ -98,11 +98,11 @@ describe("song settings", () => {
   test("reports validation and backend save errors", async () => {
     const result = render(<SongSettings songId="song" />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
-    fireEvent.change(result.getByLabelText("title"), { target: { value: "" } });
+    fireEvent.change(result.getByLabelText("Название песни", { exact: false }), { target: { value: "" } });
     fireEvent.click(result.getByRole("button", { name: /Сохранить|Зберегти/ }));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
     mocks.updateSong.mockRejectedValueOnce(new Error("save failed"));
-    fireEvent.change(result.getByLabelText("title"), { target: { value: "Valid" } });
+    fireEvent.change(result.getByLabelText("Название песни", { exact: false }), { target: { value: "Valid" } });
     fireEvent.click(result.getByRole("button", { name: /Сохранить|Зберегти/ }));
     await waitFor(() => expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed"));
   });

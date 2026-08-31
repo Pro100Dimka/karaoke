@@ -2,17 +2,18 @@ import { useEffect, useRef } from "react";
 import { api } from "../../../api/client";
 import useLatestRef from "../../../hooks/useLatestRef";
 import { translateSaved } from "../../../i18n/runtime";
-import { getErrorMessage } from "../../../utils/errors";
-import { readJsonStorage, writeJsonStorage } from "../../../utils/storage";
+import { createRoomSyncChannel } from "../../../services/roomSyncChannel";
+import { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
 import { playbackGain } from "../utils/data";
+import { finalizeRecording, formatError } from "../utils/recordingSession";
 import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transport";
+import useKaraokeRecording from "./useKaraokeRecording";
 
-const UNKNOWN_ERROR = "room.transfer.unknownError";
-const MISSING_RECORDING_ID = "karaoke.backendDidNotReturnPostId";
-const PENDING_RECORDING_KEY = "karaoke-pending-recording-session";
+export { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
+
 const ROOM_PLAY_LEAD_MS = 450;
 const MASTER_PLAY_TIMEOUT_MS = 4_000;
-const finalizingRecordings = new Map();
+
 const wait = (milliseconds) =>
   new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, milliseconds)));
 const startMasterMedia = async (media) => {
@@ -37,99 +38,6 @@ const startMasterMedia = async (media) => {
     globalThis.clearTimeout(timer);
   }
 };
-const pendingRecordingIds = () => {
-  const value = readJsonStorage(PENDING_RECORDING_KEY, {});
-  return [...new Set([...(Array.isArray(value.ids) ? value.ids : []), value.id].filter(Boolean))];
-};
-const writePending = (ids) =>
-  writeJsonStorage(
-    PENDING_RECORDING_KEY,
-    ids.length > 1 ? { id: ids[0], ids } : ids.length ? { id: ids[0] } : {}
-  );
-const rememberPending = (id) => writePending([...new Set([...pendingRecordingIds(), id])]);
-const forgetPending = (id) => writePending(pendingRecordingIds().filter((value) => value !== id));
-const isMissingSession = (error) => Number(error?.status) === 404;
-function finalizeRecording(id) {
-  if (finalizingRecordings.has(id)) return finalizingRecordings.get(id);
-  const pending = (async () => {
-    try {
-      const recording = await api.stopRecording(id);
-      forgetPending(id);
-      return { recording };
-    } catch (error) {
-      if (isMissingSession(error)) {
-        forgetPending(id);
-        return { missing: true };
-      }
-      rememberPending(id);
-      await api.pauseRecording(id).catch(() => {});
-      return { error };
-    } finally {
-      finalizingRecordings.delete(id);
-    }
-  })();
-  finalizingRecordings.set(id, pending);
-  return pending;
-}
-const formatError = (message, error) =>
-  translateSaved(message, { 0: getErrorMessage(error, translateSaved(UNKNOWN_ERROR)) });
-
-export async function createRoomVoiceCapture(streams, startPlaybackSec = 0) {
-  const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-  const MediaRecorderClass = globalThis.MediaRecorder;
-  const live = (Array.isArray(streams) ? streams : []).filter((stream) =>
-    stream?.getAudioTracks?.().some((track) => track.readyState === "live")
-  );
-  if (!live.length || !MediaRecorderClass) return null;
-  let context = null;
-  let destination = null;
-  let sources = [];
-  let captureStream = live[0];
-  if (live.length > 1) {
-    if (!AudioContextClass) return null;
-    context = new AudioContextClass({ latencyHint: "interactive" });
-    destination = context.createMediaStreamDestination();
-    sources = live.map((stream) => {
-      const source = context.createMediaStreamSource(stream);
-      source.connect(destination);
-      return source;
-    });
-    await context.resume?.();
-    captureStream = destination.stream;
-  }
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
-  const mimeType = candidates.find((type) => MediaRecorderClass.isTypeSupported?.(type));
-  const recorder = new MediaRecorderClass(captureStream, mimeType ? { mimeType } : undefined);
-  const chunks = [];
-  recorder.addEventListener("dataavailable", ({ data }) => {
-    if (data?.size) chunks.push(data);
-  });
-  recorder.start(500);
-  return {
-    startPlaybackSec: Math.max(0, Number(startPlaybackSec) || 0),
-    pause: () => recorder.state === "recording" && recorder.pause(),
-    resume: () => recorder.state === "paused" && recorder.resume(),
-    stop: () =>
-      new Promise((resolve) => {
-        const finish = async () => {
-          sources.forEach((source) => source.disconnect?.());
-          destination?.stream.getTracks?.().forEach((track) => track.stop());
-          await Promise.resolve(context?.close?.()).catch(() => {});
-          resolve(
-            chunks.length
-              ? new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" })
-              : null
-          );
-        };
-        if (recorder.state === "inactive") finish();
-        else {
-          recorder.addEventListener("stop", finish, { once: true });
-          recorder.stop();
-        }
-      })
-  };
-}
-
 export default function useKaraokeTransport({
   song,
   onlineRoom,
@@ -168,52 +76,26 @@ export default function useKaraokeTransport({
     fail: () => setIsPlaying(false)
   };
   const operationRef = useRef(Symbol("karaoke-operation"));
-  const sessionRef = useRef(recordingSessionId);
-  const pendingRecordingStartRef = useRef(null);
+
   const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);
+  const { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording } =
+    useKaraokeRecording({
+      song,
+      onlineRoom,
+      instrumentalRef,
+      musicVolume,
+      microphoneVolume,
+      microphoneEffects,
+      recordingSessionId,
+      setRecordingSessionId,
+      setRecordingError,
+      setAnalysisRecordingId,
+      operationRef,
+      roomCaptureRef
+    });
 
   const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
-
-  useEffect(() => {
-    sessionRef.current = recordingSessionId;
-  }, [recordingSessionId]);
-
-  useEffect(() => {
-    beginOperation();
-    pendingRecordingIds().forEach((id) => {
-      finalizeRecording(id).then(({ recording }) => {
-        if (recording?.id) setAnalysisRecordingId(recording.id);
-      });
-    });
-    return () => {
-      beginOperation();
-      const roomCapture = roomCaptureRef.current;
-      roomCaptureRef.current = null;
-      roomCapture?.stop?.().catch?.(() => {});
-      const pendingStart = pendingRecordingStartRef.current;
-      if (pendingStart && pendingStart.songId === song?.id) pendingStart.settle = "stop";
-      const id = sessionRef.current;
-      sessionRef.current = null;
-      if (id) {
-        setRecordingSessionId(null);
-        finalizeRecording(id);
-      }
-    };
-  }, [setAnalysisRecordingId, setRecordingSessionId, song?.id]);
-
-  const clearSession = (id, forget = true) => {
-    if (sessionRef.current !== id) return;
-    sessionRef.current = null;
-    if (forget) forgetPending(id);
-    setRecordingSessionId(null);
-  };
-
-  const discardSession = async (id) => {
-    if (!id) return;
-    const { error } = await finalizeRecording(id);
-    if (!error) clearSession(id);
-  };
 
   const broadcast = (action, position, executeAt = null) => {
     if (onlineRoom?.room)
@@ -262,84 +144,6 @@ export default function useKaraokeTransport({
       blob,
       startPlaybackSec: capture.startPlaybackSec
     }));
-  };
-
-  const startRecording = async () => {
-    const { recording_session_id: id } =
-      (await api.startRecording(
-        song.id,
-        instrumentalRef.current.currentTime,
-        playbackGain(musicVolume),
-        microphoneVolume,
-        microphoneEffects.reverb,
-        microphoneEffects.echo,
-        microphoneEffects.delay,
-        Boolean(onlineRoom?.room),
-        microphoneEffects.octave
-      )) || {};
-    if (!id) throw new Error(translateSaved(MISSING_RECORDING_ID));
-    rememberPending(id);
-    return id;
-  };
-
-  const getPendingRecordingStart = (operation) => {
-    const { current } = pendingRecordingStartRef;
-    if (current?.songId === song.id) {
-      current.latestOperation = operation;
-      current.settle = null;
-      return current;
-    }
-    const entry = {
-      songId: song.id,
-      latestOperation: operation,
-      settle: null,
-      promise: null
-    };
-    entry.promise = startRecording().finally(() => {
-      if (pendingRecordingStartRef.current === entry) pendingRecordingStartRef.current = null;
-    });
-    pendingRecordingStartRef.current = entry;
-    return entry;
-  };
-
-  const runRecording = async (operation) => {
-    let id = sessionRef.current;
-    let pendingStart = null;
-    try {
-      if (id) {
-        rememberPending(id);
-        await api.resumeRecording(id);
-      } else {
-        pendingStart = getPendingRecordingStart(operation);
-        id = await pendingStart.promise;
-      }
-      if (operation !== operationRef.current) {
-        if (pendingStart && pendingStart.latestOperation !== operation) return null;
-        if (pendingStart?.settle === "pause") {
-          await api.pauseRecording(id).catch(() => {});
-          sessionRef.current = id;
-          setRecordingSessionId(id);
-          return null;
-        }
-        await discardSession(id);
-        if (pendingStart?.settle === "stop") setRecordingSessionId(null);
-        return null;
-      }
-      sessionRef.current = id;
-      setRecordingSessionId(id);
-      setRecordingError(null);
-      return id;
-    } catch (error) {
-      if (operation !== operationRef.current) return null;
-      if (id) {
-        const { error: finalizeError } = await finalizeRecording(id);
-        if (!finalizeError) clearSession(id);
-      }
-      setRecordingError(
-        formatError("karaoke.recordingIsNotAvailableKaraokeWillContinueToWork", error)
-      );
-      return null;
-    }
   };
 
   const togglePlay = async ({ broadcast: shouldBroadcast = true, forcePlaying = null } = {}) => {
@@ -531,7 +335,10 @@ export default function useKaraokeTransport({
   const togglePlayRef = useLatestRef(togglePlay);
   const seekToRef = useLatestRef(seekTo);
   const stopRef = useLatestRef(stop);
-  const lastAppliedCommandIdRef = useRef(null);
+  const commandChannel = useRef(createRoomSyncChannel());
+  useEffect(() => {
+    commandChannel.current = createRoomSyncChannel();
+  }, [onlineRoom?.room?.id, song?.id]);
   const roomCommand = onlineRoom?.roomCommand;
   useEffect(() => {
     if (
@@ -544,8 +351,7 @@ export default function useKaraokeTransport({
     // A duplicate WebSocket delivery (or a retry after a flaky connection)
     // must not re-apply the same play/pause/seek a second time -- most
     // visibly, a repeated "seek" would otherwise snap playback backward.
-    if (roomCommand.commandId && roomCommand.commandId === lastAppliedCommandIdRef.current) return;
-    lastAppliedCommandIdRef.current = roomCommand.commandId ?? lastAppliedCommandIdRef.current;
+    if (!commandChannel.current.acceptCommand(roomCommand.commandId)) return;
 
     const position = Number(roomCommand.position);
     const sentAt = Number(roomCommand.__serverSentAt);
@@ -591,8 +397,15 @@ export default function useKaraokeTransport({
       runAction();
       return undefined;
     }
-    const timer = globalThis.setTimeout(runAction, delay);
-    return () => globalThis.clearTimeout(timer);
+    let executed = false;
+    const timer = globalThis.setTimeout(() => {
+      executed = true;
+      runAction();
+    }, delay);
+    return () => {
+      globalThis.clearTimeout(timer);
+      if (!executed) commandChannel.current.cancelCommand(roomCommand.commandId);
+    };
   }, [
     instrumentalRef,
     navigate,

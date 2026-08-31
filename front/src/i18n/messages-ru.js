@@ -647,8 +647,7 @@ export const ruMessages = {
   "settings.audio.wasapiMode.options.shared": "Совместный — звук других приложений доступен",
   "settings.audio.wasapiMode.options.inputExclusive": "Эксклюзивный микрофон, совместный выход",
   "settings.audio.wasapiMode.options.exclusive": "Полностью эксклюзивный — только мониторинг",
-  "settings.audio.buffer_size.description":
-    "Меньше буфер — меньше задержка, но выше риск треска. Изменение буфера перезапускает прослушивание. Это не измерение полной задержки голоса.",
+  "settings.audio.buffer_size.description": "Меньше буфер — ниже задержка, выше риск треска.",
   "settings.audio.wasapiMode.warning":
     "Exclusive может занять устройство и помешать записи или комнате. Полный exclusive также может отключить минусовку. При отказе драйвера включится совместный режим.",
   "settings.audio.monitor.retry.label": "Повторить подключение",

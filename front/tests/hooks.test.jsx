@@ -18,7 +18,7 @@ import useLatestRef from "../src/hooks/useLatestRef.js";
 import useMountedRef from "../src/hooks/useMountedRef.js";
 import { shouldSchedulePoll, usePolling } from "../src/hooks/usePolling.js";
 import { translateSaved } from "../src/i18n/runtime.js";
-import useSongCover from "../src/pages/Library/hooks/useSongCover.js";
+import useSongCover from "../src/hooks/useSongCover.js";
 import useKaraokeControls from "../src/pages/Karaoke/hooks/useKaraokeControls.js";
 import useKaraokeHotkeys, { dispatchKaraokeHotkey } from "../src/pages/Karaoke/hooks/useKaraokeHotkeys.js";
 import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";

@@ -5,6 +5,7 @@ import useMountedRef from "../../../hooks/useMountedRef";
 import { usePolling } from "../../../hooks/usePolling";
 import { translateSaved } from "../../../i18n/runtime";
 import { getAudioPreferences } from "../../../utils/audio-preferences";
+import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../../utils/errors";
 import { normalizeAudioEffects, normalizeAudioRuntimeSettings } from "../utils/audio-settings";
 
@@ -61,8 +62,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         setDirectOutputDeviceId(normalized.outputDeviceId);
         setMicrophoneEffects((current) => normalizeAudioEffects({ ...current, ...event.detail }));
       };
-      globalThis.addEventListener("audio-settings-changed", syncAudioSettings);
-      return () => globalThis.removeEventListener("audio-settings-changed", syncAudioSettings);
+      globalThis.addEventListener(AUDIO_SETTINGS_CHANGED_EVENT, syncAudioSettings);
+      return () => globalThis.removeEventListener(AUDIO_SETTINGS_CHANGED_EVENT, syncAudioSettings);
     },
     // Stryker disable next-line ArrayDeclaration: globals and setters are stable.
     []
@@ -84,7 +85,9 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       enqueueUpdate(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          globalThis.dispatchEvent(new CustomEvent("audio-settings-changed", { detail: updated }));
+          globalThis.dispatchEvent(
+            new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
+          );
           return updated;
         } catch (error) {
           if (mountedRef.current) {

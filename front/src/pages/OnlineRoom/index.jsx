@@ -1,40 +1,49 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useMountedRef from "../../hooks/useMountedRef";
 import { useI18n } from "../../i18n";
 import { normalizeRoomId } from "../../services/onlineRoom";
-import { Button, FieldInput, Modal, Stack, Typography } from "../../theme/ui";
+import { Button, Modal, Stack, Typography, RenderFormikFields, useGetForm } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 
 export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
   const { t } = useI18n();
   const room = useOnlineRoom();
   const mounted = useMountedRef();
+  const connecting = useRef(false);
   const [form, setForm] = useState({
     busy: false,
     error: "",
-    join: false,
-    name: onlineName || "",
-    roomId: ""
+    join: false
   });
   const set = (values) => setForm((current) => ({ ...current, ...values }));
-  const connect = async (host) => {
-    if (form.busy) return;
-    const name = form.name.trim();
+  const formik = useGetForm({
+    initialValues: { name: onlineName || "", roomId: "" },
+    enableReinitialize: false,
+    onSubmit: (values) => connect(!form.join, values)
+  });
+  const connect = async (host, values) => {
+    if (!mounted.current || connecting.current) return;
+    const name = values.name.trim();
     if (!name) return set({ error: t("room.nameRequired") });
+    if (!host && normalizeRoomId(values.roomId).length < 4)
+      return set({ error: t("room.theRoomCodeMustContainAtLeast4Characters") });
+    connecting.current = true;
     set({ busy: true, error: "" });
     try {
       if (name !== onlineName) {
         const saved = await api.updateAppSettings({ online_name: name });
+        if (!mounted.current) return;
         onOnlineNameChange?.(saved?.online_name || name);
       }
-      await (host ? room.createRoom(name) : room.joinRoom(normalizeRoomId(form.roomId), name));
+      await (host ? room.createRoom(name) : room.joinRoom(normalizeRoomId(values.roomId), name));
       if (mounted.current) onClose();
     } catch (error) {
       if (mounted.current) set({ error: getErrorMessage(error, t("room.join.failed")) });
     } finally {
+      connecting.current = false;
       if (mounted.current) set({ busy: false });
     }
   };
@@ -65,8 +74,8 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
             <Button
               variant="contained"
               fullWidth
-              disabled={form.busy || (form.join && form.roomId.length < 4)}
-              onClick={() => connect(!form.join)}
+              disabled={form.busy || (form.join && formik.values.roomId.length < 4)}
+              onClick={formik.submitForm}
             >
               {t(action)}
             </Button>
@@ -75,34 +84,36 @@ export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
       }}
     >
       <Stack gap="var(--space-4)" sx={{ padding: "var(--space-4)" }}>
-        <FieldInput
-          field={{
-            name: "onlineName",
-            label: t("room.name"),
-            placeholder: t("room.namePlaceholder"),
-            maxLength: 80
-          }}
-          value={form.name}
-          onChange={(name) => set({ name })}
-        />
-        {form.join && (
-          <FieldInput
-            field={{
-              name: "roomId",
-              label: t("room.code"),
-              placeholder: t("room.codeExample"),
-              maxLength: 32
-            }}
-            value={form.roomId}
-            onChange={(roomId) => set({ roomId: normalizeRoomId(roomId) })}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && form.roomId.length >= 4 && !form.busy) {
-                event.preventDefault();
-                connect(false);
+        <form onSubmit={formik.handleSubmit} noValidate>
+          <RenderFormikFields
+            formik={formik}
+            items={[
+              {
+                tag: "name",
+                type: "TextField",
+                label: t("room.name"),
+                placeholder: t("room.namePlaceholder"),
+                maxLength: 80,
+                disabled: form.busy
+              },
+              {
+                tag: "roomId",
+                type: "TextField",
+                label: t("room.code"),
+                placeholder: t("room.codeExample"),
+                maxLength: 32,
+                parse: normalizeRoomId,
+                showFor: form.join,
+                disabled: form.busy
               }
-            }}
+            ]}
           />
-        )}
+          <button
+            type="submit"
+            hidden
+            disabled={form.busy || (form.join && formik.values.roomId.length < 4)}
+          />
+        </form>
         {form.error && (
           <Typography role="alert" tone="danger">
             {form.error}

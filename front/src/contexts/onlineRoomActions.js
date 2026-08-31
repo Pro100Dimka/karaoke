@@ -1,4 +1,6 @@
 import { translateSaved } from "../i18n/runtime";
+import { isValidSongRevision } from "../services/onlineRoom";
+import { getErrorMessage } from "../utils/errors";
 
 export function createCommandId() {
   return typeof globalThis.crypto?.randomUUID === "function"
@@ -24,7 +26,7 @@ export async function openKaraokeInRoom({
   if (!isCurrentConnection()) return true;
   const revisionPayload = suppliedRevision ? null : await roomApi?.getSongRevision?.(songId);
   const revision = suppliedRevision || revisionPayload?.revision;
-  if (typeof revision !== "string" || !revision.startsWith("sha256:"))
+  if (!isValidSongRevision(revision))
     throw new Error(translateSaved("room.couldNotDetermineTheSongContentVersion"));
   if (!isCurrentConnection()) return false;
 
@@ -109,4 +111,87 @@ export async function openKaraokeInRoom({
   } finally {
     globalThis.clearTimeout(timer);
   }
+}
+
+const SONG_SYNC_REQUEST_TIMEOUT_MS = 2 * 60_000;
+export function requestSongSync({
+  songId,
+  ownerId,
+  options = {},
+  voiceRef,
+  roomRef,
+  librarySyncRef,
+  clientRef,
+  setTransferStatus
+}) {
+  const voice = voiceRef.current;
+  const selfId = roomRef.current?.selfId;
+  if (!voice || !songId || !ownerId || ownerId === selfId || librarySyncRef.current)
+    return Promise.resolve(false);
+  const commandId = createCommandId();
+  return new Promise((resolve) => {
+    const pending = { commandId, songId, ownerId };
+    const finish = (result, error) => {
+      globalThis.clearTimeout(pending.timer);
+      if (librarySyncRef.current === pending) librarySyncRef.current = null;
+      if (error) {
+        setTransferStatus({
+          participantId: ownerId,
+          songId,
+          commandId,
+          stage: "error",
+          error: getErrorMessage(error),
+          percent: 0
+        });
+        if (options.roomWide && roomRef.current?.host)
+          clientRef.current?.send("sync", {
+            state: {
+              type: "song-transfer-status",
+              participantId: "room",
+              songId,
+              commandId,
+              stage: "error",
+              error: getErrorMessage(error),
+              percent: 0
+            }
+          });
+      }
+      resolve(result);
+    };
+    pending.resolve = () => finish(true);
+    pending.reject = (error) => finish(false, error);
+    librarySyncRef.current = pending;
+    pending.timer = globalThis.setTimeout(
+      () =>
+        pending.reject(new Error(translateSaved("room.participantDidNotRespondToTheSongRequest"))),
+      SONG_SYNC_REQUEST_TIMEOUT_MS
+    );
+    setTransferStatus({
+      participantId: ownerId,
+      songId,
+      commandId,
+      stage: "waiting",
+      percent: 0
+    });
+    if (options.roomWide && roomRef.current?.host)
+      clientRef.current?.send("sync", {
+        state: {
+          type: "song-transfer-status",
+          participantId: "room",
+          songId,
+          commandId,
+          stage: "waiting",
+          percent: 0
+        }
+      });
+    voice
+      .waitForDataChannel(ownerId, SONG_SYNC_REQUEST_TIMEOUT_MS, voice.lifecycleVersion)
+      .then((channel) => {
+        if (librarySyncRef.current === pending)
+          channel.send(JSON.stringify({ type: "song-sync-request", commandId, songId }));
+      })
+      .catch((error) => {
+        if (librarySyncRef.current === pending) pending.reject(error);
+      });
+  });
 }

@@ -254,7 +254,7 @@ describe("online room modal", () => {
     fireEvent.click(screen.getByText("room.joinByCode"));
     const input = screen.getByLabelText("room.code");
     fireEvent.change(input, { target: { value: " ab-cd " } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.submit(input.closest("form"));
     await act(async () => Promise.resolve());
     expect(mocks.roomValue.joinRoom).toHaveBeenCalledWith("AB-CD", "Bob");
     fireEvent.click(screen.getByText("room.back"));
@@ -315,6 +315,7 @@ describe("online room modal", () => {
     const create = screen.getByText("room.create");
     fireEvent.click(create);
     fireEvent.click(create);
+    await act(async () => Promise.resolve());
     expect(mocks.roomValue.createRoom).toHaveBeenCalledTimes(1);
     release();
     await act(async () => Promise.resolve());

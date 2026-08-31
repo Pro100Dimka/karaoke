@@ -15,15 +15,19 @@ import {
   OnlineRoomClient,
   OnlineVoiceMesh
 } from "../services/onlineRoom";
+import { AUDIO_SETTINGS_CHANGED_EVENT } from "../utils/audioSettingsEvents";
 import { getErrorMessage } from "../utils/errors";
 import useApplicationAudioMute from "./hooks/useApplicationAudioMute";
 import useOnlineRoomAudio from "./hooks/useOnlineRoomAudio";
 import useOnlineRoomCommands from "./hooks/useOnlineRoomCommands";
+import useOnlineRoomParticipantControls from "./hooks/useOnlineRoomParticipantControls";
 import useOnlineRoomValue from "./hooks/useOnlineRoomValue";
 import useSpeakingLevels from "./hooks/useSpeakingLevels";
-import { createCommandId } from "./onlineRoomActions";
-import { playParticipantJoinedSound, playParticipantLeftSound } from "./onlineRoomAudio";
+import { requestSongSync as requestLibrarySong } from "./onlineRoomActions";
+import { playParticipantJoinedSound, playParticipantLeftSound } from "./onlineRoomChime";
+import { normalizeParticipantEffects, normalizeParticipantEffectPatch } from "./onlineRoomEffects";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
+import { createVoiceMeshHandlers } from "./onlineRoomVoiceHandlers";
 
 // Keep one context identity across Vite Fast Refresh. Recreating the context
 // while a room is active leaves already-mounted providers on the old object,
@@ -41,49 +45,11 @@ if (hotData) hotData.onlineRoomContext = OnlineRoomContext;
 // this context and re-renders on those ticks.
 const OnlineRoomSpeakingContext = createContext({ localSpeakingLevel: 0, speakingLevels: {} });
 const OFF = false;
-// Exporting/importing a song package is disk-bound on slower PCs. Detailed
-// transfer progress and stall detection already guard the data channel, so a
-// 15-second control timeout only converted healthy work into false failures.
-const SONG_SYNC_REQUEST_TIMEOUT_MS = 2 * 60_000;
-const ROOM_TRANSFER_BROADCAST_INTERVAL_MS = 500;
-const TERMINAL_TRANSFER_STAGES = new Set(["complete", "error", "cancelled"]);
-const PARTICIPANT_EFFECT_LIMITS = Object.freeze({
-  volume: 2,
-  reverb: 1,
-  echo: 1,
-  delay: 1,
-  noise_suppression: 1,
-  octave: 1
-});
-export const normalizeParticipantEffects = (settings = {}) =>
-  Object.fromEntries(
-    Object.entries(PARTICIPANT_EFFECT_LIMITS).map(([name, maximum]) => {
-      const fallback = name === "volume" ? 1 : name === "noise_suppression" ? 0.35 : 0;
-      const value = Number(settings?.[name]);
-      return [
-        name,
-        Math.max(
-          name === "octave" ? -1 : 0,
-          Math.min(maximum, Number.isFinite(value) ? value : fallback)
-        )
-      ];
-    })
-  );
-const normalizeParticipantEffectPatch = (settings = {}) =>
-  Object.fromEntries(
-    Object.entries(normalizeParticipantEffects(settings)).filter(
-      ([key]) => Object.hasOwn(settings, key) && Number.isFinite(Number(settings[key]))
-    )
-  );
-export const shouldBroadcastRoomTransferProgress = (
-  previous,
-  { commandId, stage, percent },
-  now = Date.now()
-) =>
-  !previous ||
-  previous.commandId !== commandId ||
-  TERMINAL_TRANSFER_STAGES.has(stage) ||
-  (previous.percent !== percent && now - previous.at >= ROOM_TRANSFER_BROADCAST_INTERVAL_MS);
+export {
+  normalizeParticipantEffects,
+  shouldBroadcastRoomTransferProgress
+} from "./onlineRoomEffects";
+
 export function OnlineRoomProvider({ children }) {
   const clientRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -176,8 +142,8 @@ export function OnlineRoomProvider({ children }) {
   }, []);
   useEffect(() => {
     const publish = (event) => publishParticipantEffects(event.detail);
-    globalThis.addEventListener?.("audio-settings-changed", publish);
-    return () => globalThis.removeEventListener?.("audio-settings-changed", publish);
+    globalThis.addEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, publish);
+    return () => globalThis.removeEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, publish);
   }, [publishParticipantEffects]);
   const {
     applyParticipantEffects,
@@ -265,81 +231,17 @@ export function OnlineRoomProvider({ children }) {
     [prepareSpeakingMeter, setTransferStatus, startSpeakingMeter]
   );
   const requestSongSync = useCallback(
-    (songId, ownerId, options = {}) => {
-      const voice = voiceRef.current;
-      const selfId = roomRef.current?.selfId;
-      if (!voice || !songId || !ownerId || ownerId === selfId || librarySyncRef.current)
-        return Promise.resolve(false);
-      const commandId = createCommandId();
-      return new Promise((resolve) => {
-        const pending = { commandId, songId, ownerId };
-        const finish = (result, error) => {
-          globalThis.clearTimeout(pending.timer);
-          if (librarySyncRef.current === pending) librarySyncRef.current = null;
-          if (error) {
-            setTransferStatus({
-              participantId: ownerId,
-              songId,
-              commandId,
-              stage: "error",
-              error: getErrorMessage(error),
-              percent: 0
-            });
-            if (options.roomWide && roomRef.current?.host)
-              clientRef.current?.send("sync", {
-                state: {
-                  type: "song-transfer-status",
-                  participantId: "room",
-                  songId,
-                  commandId,
-                  stage: "error",
-                  error: getErrorMessage(error),
-                  percent: 0
-                }
-              });
-          }
-          resolve(result);
-        };
-        pending.resolve = () => finish(true);
-        pending.reject = (error) => finish(false, error);
-        librarySyncRef.current = pending;
-        pending.timer = globalThis.setTimeout(
-          () =>
-            pending.reject(
-              new Error(translateSaved("room.participantDidNotRespondToTheSongRequest"))
-            ),
-          SONG_SYNC_REQUEST_TIMEOUT_MS
-        );
-        setTransferStatus({
-          participantId: ownerId,
-          songId,
-          commandId,
-          stage: "waiting",
-          percent: 0
-        });
-        if (options.roomWide && roomRef.current?.host)
-          clientRef.current?.send("sync", {
-            state: {
-              type: "song-transfer-status",
-              participantId: "room",
-              songId,
-              commandId,
-              stage: "waiting",
-              percent: 0
-            }
-          });
-        voice
-          .waitForDataChannel(ownerId, SONG_SYNC_REQUEST_TIMEOUT_MS, voice.lifecycleVersion)
-          .then((channel) => {
-            if (librarySyncRef.current === pending)
-              channel.send(JSON.stringify({ type: "song-sync-request", commandId, songId }));
-          })
-          .catch((error) => {
-            if (librarySyncRef.current === pending) pending.reject(error);
-          });
-      });
-    },
-    // Stryker disable next-line ArrayDeclaration: setTransferStatus is stable.
+    (songId, ownerId, options) =>
+      requestLibrarySong({
+        songId,
+        ownerId,
+        options,
+        voiceRef,
+        roomRef,
+        librarySyncRef,
+        clientRef,
+        setTransferStatus
+      }),
     [setTransferStatus]
   );
   const setRoomSoundMuted = useCallback(
@@ -414,252 +316,25 @@ export function OnlineRoomProvider({ children }) {
       clientRef.current = client;
       voiceRef.current = voice;
       const isCurrentConnection = () => connectionToken === connectionTokenRef.current;
-      voice.onRemoteStream = (participantId, stream) => {
-        if (!isCurrentConnection()) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        attachRemoteStream(participantId, stream, () => {
-          if (!isCurrentConnection()) return;
-          setVoiceError(translateSaved("room.tapAnywhereInTheAppToEnableRoomAudio"));
-        });
-      };
-      voice.onPeerClosed = (participantId) => {
-        if (isCurrentConnection()) removeRemoteAudio(participantId);
-      };
-      voice.onPeerError = (participantId, message) => {
-        if (!isCurrentConnection()) return;
-        const participant = participantsRef.current.find(
-          ({ id: participantKey }) => participantKey === participantId
-        );
-        setVoiceError(`${participant?.name || participantId}: ${message}`);
-      };
-      voice.onTransferProgress = ({ participantId, stage, percent, metadata }) => {
-        if (!isCurrentConnection()) return;
-        const commandId = metadata?.commandId;
-        // A library sync has no host/pending-command correlation to check --
-        // it's a direct request between two participants -- so its sends are
-        // always shown (this is also how the sender sees a recipient's
-        // download percentage while serving voice.onSongPullRequest above).
-        if (metadata?.kind !== "library-song-package") {
-          const currentCommandId = roomRef.current?.host
-            ? hostSongCommandRef.current?.commandId
-            : pendingSongCommandRef.current?.commandId;
-          if (commandId && commandId !== currentCommandId) return;
-        }
-        const normalizedPercent = Number(percent) || 0;
-        setTransferStatus({
-          participantId,
-          songId: metadata?.songId,
-          commandId,
-          stage,
-          percent: normalizedPercent
-        });
-        if (roomRef.current?.host && metadata?.kind === "song-package") {
-          const roomProgress = {
-            commandId,
-            stage,
-            percent: normalizedPercent,
-            at: Date.now()
-          };
-          if (
-            shouldBroadcastRoomTransferProgress(
-              roomTransferBroadcastRef.current,
-              roomProgress,
-              roomProgress.at
-            )
-          ) {
-            roomTransferBroadcastRef.current = roomProgress;
-            clientRef.current?.send("sync", {
-              state: {
-                type: "song-transfer-status",
-                participantId: "room",
-                songId: metadata.songId,
-                commandId,
-                stage: "waiting",
-                percent: normalizedPercent
-              }
-            });
-          }
-        }
-      };
-      const canAcceptSongPackage = (participantId, metadata) => {
-        const pending = pendingSongCommandRef.current;
-        return (
-          isCurrentConnection() &&
-          metadata?.kind === "song-package" &&
-          !!metadata.songId &&
-          !!metadata.commandId &&
-          pending?.commandId === metadata.commandId &&
-          pending.songId === metadata.songId &&
-          pending.revision === metadata.revision &&
-          !pending.__originatedHere &&
-          participantsRef.current.some(
-            (participant) => participant.id === participantId && participant.role === "host"
-          )
-        );
-      };
-      const canAcceptLibrarySongPackage = (participantId, metadata) => {
-        const pending = librarySyncRef.current;
-        return (
-          isCurrentConnection() &&
-          !!pending &&
-          metadata?.kind === "library-song-package" &&
-          pending.commandId === metadata.commandId &&
-          pending.songId === metadata.songId &&
-          pending.ownerId === participantId
-        );
-      };
-      voice.canAcceptFile = (participantId, metadata) =>
-        metadata?.kind === "library-song-package"
-          ? canAcceptLibrarySongPackage(participantId, metadata)
-          : canAcceptSongPackage(participantId, metadata);
-
-      const handleLibrarySongFile = async (participantId, blob, metadata, signal) => {
-        const pending = librarySyncRef.current;
-        if (!canAcceptLibrarySongPackage(participantId, metadata))
-          throw new Error(translateSaved("room.receivingThisSongIsNoLongerAllowed"));
-        try {
-          setTransferStatus({
-            participantId,
-            songId: metadata.songId,
-            commandId: metadata.commandId,
-            stage: "importing",
-            percent: 100
-          });
-          await api.importSongPackage(blob, metadata.filename, {
-            ...(signal ? { signal } : {}),
-            expectedRevision: metadata.revision
-          });
-          if (!isCurrentConnection() || librarySyncRef.current !== pending) return false;
-          setTransferStatus({
-            participantId,
-            songId: metadata.songId,
-            commandId: metadata.commandId,
-            stage: "complete",
-            percent: 100
-          });
-          pending.resolve?.();
-          return true;
-        } catch (error) {
-          if (signal?.aborted) return false;
-          if (isCurrentConnection() && librarySyncRef.current === pending) {
-            pending.reject?.(
-              new Error(translateSaved("room.couldNotReceiveSong", { 0: getErrorMessage(error) }))
-            );
-          }
-          throw error;
-        }
-      };
-
-      const handleKaraokeSongFile = async (participantId, blob, metadata, signal) => {
-        const pendingCommand = pendingSongCommandRef.current;
-        if (!canAcceptSongPackage(participantId, metadata))
-          throw new Error(translateSaved("room.receivingThisSongPackageIsNoLongerAllowed"));
-        try {
-          setTransferStatus({
-            participantId,
-            songId: metadata.songId,
-            commandId: metadata.commandId,
-            stage: "importing",
-            percent: 100
-          });
-          await api.importSongPackage(blob, metadata.filename, {
-            ...(signal ? { signal } : {}),
-            expectedRevision: metadata.revision
-          });
-          const imported = await api.getSongRevision(metadata.songId);
-          if (imported?.revision !== metadata.revision)
-            throw new Error(translateSaved("room.importedSongVersionDoesNotMatchTheRoomVersion"));
-          if (
-            !isCurrentConnection() ||
-            pendingSongCommandRef.current?.commandId !== metadata.commandId
-          )
-            return false;
-          setTransferStatus({
-            participantId,
-            songId: metadata.songId,
-            commandId: metadata.commandId,
-            stage: "complete",
-            percent: 100
-          });
-          if (
-            pendingCommand?.commandId === metadata.commandId &&
-            pendingCommand.songId === metadata.songId
-          ) {
-            client.send("sync", {
-              state: {
-                type: "song-ready",
-                commandId: pendingCommand.commandId,
-                songId: pendingCommand.songId,
-                revision: pendingCommand.revision,
-                requesterId: roomRef.current?.selfId
-              }
-            });
-          }
-          return true;
-        } catch (error) {
-          if (signal?.aborted) return false;
-          if (isCurrentConnection()) {
-            setTransferStatus({
-              participantId,
-              songId: metadata.songId,
-              commandId: metadata.commandId,
-              stage: "error",
-              error: translateSaved("room.failedToImportSong", {
-                0: getErrorMessage(error)
-              }),
-              percent: 0
-            });
-          }
-          throw error;
-        }
-      };
-      voice.onFile = (participantId, blob, metadata, signal) =>
-        metadata?.kind === "library-song-package"
-          ? handleLibrarySongFile(participantId, blob, metadata, signal)
-          : handleKaraokeSongFile(participantId, blob, metadata, signal);
-
-      // Any participant can ask any other participant for a song straight over
-      // the already-open peer-to-peer channel -- this is the library "sync on
-      // demand" path (OnlineRoomDock/song-card), independent of the host-driven
-      // "start karaoke" push above, so it works for guest-to-guest transfers too.
-      voice.onSongPullRequest = async (participantId, channel, message) => {
-        if (!isCurrentConnection()) return;
-        let blob;
-        try {
-          const revisionPayload = await api.getSongRevision(message.songId);
-          const revision = revisionPayload?.revision;
-          if (typeof revision !== "string" || !revision.startsWith("sha256:"))
-            throw new Error(translateSaved("room.songIsUnavailableForTransfer"));
-          if (!isCurrentConnection()) return;
-          blob = await api.exportSongPackage(message.songId, revision);
-          if (!isCurrentConnection()) return;
-          await voice.sendFile(participantId, blob, {
-            kind: "library-song-package",
-            songId: message.songId,
-            commandId: message.commandId,
-            revision,
-            filename: `${message.songId}.karaoke.zip`
-          });
-        } catch (error) {
-          voice.sendSongSyncError(participantId, message.commandId, getErrorMessage(error));
-        } finally {
-          await blob?.cleanup?.();
-        }
-      };
-      voice.onSongPullError = (participantId, message) => {
-        const pending = librarySyncRef.current;
-        if (
-          !pending ||
-          pending.commandId !== message.commandId ||
-          pending.ownerId !== participantId
-        )
-          return;
-        pending.reject?.(
-          new Error(message.error || translateSaved("room.participantCouldNotSendTheSong"))
-        );
-      };
+      Object.assign(
+        voice,
+        createVoiceMeshHandlers({
+          voice,
+          isCurrentConnection,
+          attachRemoteStream,
+          setVoiceError,
+          removeRemoteAudio,
+          participantsRef,
+          roomRef,
+          hostSongCommandRef,
+          pendingSongCommandRef,
+          setTransferStatus,
+          roomTransferBroadcastRef,
+          clientRef,
+          librarySyncRef,
+          client
+        })
+      );
       unsubscribeRef.current = client.onMessage(
         createOnlineRoomMessageHandler({
           id,
@@ -694,7 +369,7 @@ export function OnlineRoomProvider({ children }) {
               .updateAudioSettings(normalizeParticipantEffectPatch(effects))
               .then((updated) => {
                 globalThis.dispatchEvent?.(
-                  new CustomEvent("audio-settings-changed", { detail: updated })
+                  new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
                 );
               })
               .catch((error) => {
@@ -806,65 +481,24 @@ export function OnlineRoomProvider({ children }) {
     // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
-  const togglePersonMuted = useCallback(
-    (id) => {
-      setMutedPeople((items) => {
-        const next = new Set(items);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        mutedPeopleRef.current = next;
-        queueMicrotask(applyRemoteAudioMute);
-        return next;
-      });
-    },
-    // Stryker disable next-line ArrayDeclaration: applyRemoteAudioMute is stable.
-    [applyRemoteAudioMute]
-  );
-
-  const setParticipantVolume = useCallback(
-    (id, value) => {
-      const nextValue = Math.max(0, Math.min(1, Number(value) || 0));
-      participantVolumesRef.current = { ...participantVolumesRef.current, [id]: nextValue };
-      setParticipantVolumes((current) => ({ ...current, [id]: nextValue }));
-      applyParticipantVolume(id, nextValue);
-    },
-    [applyParticipantVolume]
-  );
-
-  const setEffectsLocked = useCallback((locked) => {
-    clientRef.current?.send("effect-permission", { locked: Boolean(locked) });
-  }, []);
-
-  const requestParticipantEffects = useCallback((participantId, patch) => {
-    if (!participantId || participantId === roomRef.current?.selfId) return false;
-    return clientRef.current?.send("effect-control", {
-      targetId: participantId,
-      effects: normalizeParticipantEffectPatch(patch)
-    });
-  }, []);
-
-  const togglePersonEffects = useCallback(
-    (id) => {
-      setEffectPeople((items) => {
-        const next = new Set(items);
-        const enabled = !next.has(id);
-        if (enabled) next.add(id);
-        else next.delete(id);
-        // Ask that singer's sender to select its already-running wet or dry
-        // track for this listener. Processing a received MediaStream through
-        // another AudioContext added an avoidable render quantum and made
-        // duets audibly late on consumer USB devices.
-        clientRef.current?.send("signal", {
-          targetId: id,
-          signal: { effectsEnabled: enabled }
-        });
-        queueMicrotask(() => applyParticipantEffects(id, false));
-        return next;
-      });
-    },
-    // Stryker disable next-line ArrayDeclaration: applyParticipantEffects is stable.
-    [applyParticipantEffects]
-  );
+  const {
+    togglePersonMuted,
+    setParticipantVolume,
+    setEffectsLocked,
+    requestParticipantEffects,
+    togglePersonEffects
+  } = useOnlineRoomParticipantControls({
+    setMutedPeople,
+    mutedPeopleRef,
+    applyRemoteAudioMute,
+    participantVolumesRef,
+    setParticipantVolumes,
+    applyParticipantVolume,
+    clientRef,
+    roomRef,
+    setEffectPeople,
+    applyParticipantEffects
+  });
   const { effectsByParticipant } = roomUi;
   useEffect(() => {
     roomUiRef.current = roomUi;

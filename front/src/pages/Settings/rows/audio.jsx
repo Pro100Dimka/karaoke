@@ -18,6 +18,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       ["output_device_id", "settings.audio.output_device_id.label", "outputs"],
       ["input_device_id", "settings.audio.input_device_id.label", "inputs"]
     ].map(([name, label, list]) => ({
+      md: 4,
       type: "SelectField",
       tag: `audio.${name}`,
       label: tr(label),
@@ -25,6 +26,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       valueType: "nullable-number"
     })),
     {
+      md: 4,
       type: "ButtonField",
       label: tr("settings.audio.speakerTest.label"),
       startIcon: <Volume2 />,
@@ -32,9 +34,23 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       disabled: audio.busy,
       onClick: () => run(audio.speaker)
     },
+    ...[
+      ["volume", "settings.audio.volume.label", 2],
+      ["noise_suppression", "settings.audio.noise_suppression.label", 1]
+    ].map(([name, label, max]) => ({
+      type: "Slider",
+      md: 4,
+      tag: `audio.${name}`,
+      label: tr(label),
+      min: 0,
+      max,
+      step: 0.05,
+      formatValue: (value) => `${Math.round(value * 100)}%`
+    })),
     {
+      md: 4,
       render: () => (
-        <Stack gap={0.5}>
+        <Stack>
           <Switch
             label={tr("settings.audio.monitoringEnabled.label")}
             variant="plain"
@@ -48,28 +64,6 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
             ariaLabel={tr("settings.audio.microphoneLevel")}
           />
         </Stack>
-      )
-    },
-    ...[
-      ["volume", "settings.audio.volume.label", 2],
-      ["noise_suppression", "settings.audio.noise_suppression.label", 1]
-    ].map(([name, label, max]) => ({
-      type: "Slider",
-      tag: `audio.${name}`,
-      label: tr(label),
-      min: 0,
-      max,
-      step: 0.05,
-      formatValue: (value) => `${Math.round(value * 100)}%`
-    })),
-    {
-      type: "Label",
-      role: "status",
-      variant: "caption",
-      text: tr(
-        audio.monitorStatusError
-          ? "settings.audio.monitor.status.unavailable"
-          : states[status?.state] || "settings.audio.monitor.status.checking"
       )
     },
     {
@@ -116,6 +110,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       ]
     },
     {
+      md: 6,
       type: "SelectField",
       tag: "audio.buffer_size",
       showFor: wasapi,
@@ -124,12 +119,14 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       options: [128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
     },
     {
+      md: 6,
       type: "Label",
       variant: "caption",
       showFor: wasapi,
       text: tr("settings.audio.buffer_size.description")
     },
     {
+      md: 6,
       type: "Label",
       variant: "caption",
       showFor: (values) => wasapi && values.monitor.wasapiMode !== "shared",

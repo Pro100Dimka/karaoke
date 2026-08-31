@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   stopAllSpeakingMeters: vi.fn()
 }));
 
-vi.mock("../src/services/onlineRoom", () => {
+vi.mock("../src/services/onlineRoom", async (importOriginal) => {
   class OnlineRoomClient {
     constructor() {
       this.send = vi.fn();
@@ -50,6 +50,7 @@ vi.mock("../src/services/onlineRoom", () => {
     }
   }
   return {
+    ...(await importOriginal()),
     createHostToken: () => "host-token",
     createRoomId: () => "created-room",
     OnlineRoomClient,
@@ -80,7 +81,8 @@ vi.mock("../src/contexts/hooks/useSpeakingLevels", () => ({
     stopAllSpeakingMeters: mocks.stopAllSpeakingMeters
   })
 }));
-vi.mock("../src/contexts/onlineRoomActions", () => ({
+vi.mock("../src/contexts/onlineRoomActions", async (importOriginal) => ({
+  ...(await importOriginal()),
   openKaraokeInRoom: mocks.openKaraokeInRoom,
   createCommandId: () => "command-id"
 }));

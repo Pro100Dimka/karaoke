@@ -6,11 +6,12 @@ import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved as tr } from "../../i18n/runtime";
 import { POLLING_INTERVALS as POLL } from "../../runtime-config";
+import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
 import { applyTheme } from "../../utils/theme";
 import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/utils/devices";
 
-const emit = (detail) => dispatchEvent(new CustomEvent("audio-settings-changed", { detail }));
+const emit = (detail) => dispatchEvent(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const useOpenPoll = (open, fn, interval, fallback) =>
   usePolling(() => (open ? fn() : Promise.resolve(fallback)), open ? interval : 0, [open]);

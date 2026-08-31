@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SongCoverArt } from "../../../../components/SongCoverArt";
 import { translateSaved as t } from "../../../../i18n/runtime";
 import { Box, Card, Chip, Stack, Typography } from "../../../../theme/ui";
 import * as platform from "../../../../utils/platform";
-import { SongCoverArt } from "../../../Library/components";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import usePitchDetection from "../../hooks/usePitchDetection";
 import AuroraWorld from "./aurora-world";

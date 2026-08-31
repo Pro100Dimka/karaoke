@@ -1,8 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import {
-  playParticipantJoinedSound,
-  playParticipantLeftSound
-} from "../src/contexts/onlineRoomAudio.js";
+import { playParticipantJoinedSound, playParticipantLeftSound } from "../src/contexts/onlineRoomChime.js";
 import { notCalled, verify } from "./helpers/assertions.mjs";
 afterEach(() => {
   vi.restoreAllMocks();

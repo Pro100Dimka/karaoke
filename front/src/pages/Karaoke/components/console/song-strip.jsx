@@ -1,7 +1,7 @@
 import { Mic } from "lucide-react";
+import useSongCover from "../../../../hooks/useSongCover";
 import { translateSaved as t } from "../../../../i18n/runtime";
 import { Box, Stack, Typography } from "../../../../theme/ui";
-import useSongCover from "../../../Library/hooks/useSongCover";
 import { formatTime } from "../../utils/format";
 import WaveformTimeline from "../waveform-timeline";
 

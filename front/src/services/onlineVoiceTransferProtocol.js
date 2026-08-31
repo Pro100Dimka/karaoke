@@ -6,7 +6,7 @@ export const TRANSFER_LIMITS = Object.freeze({
   filename: 512,
   chunks: 32_768,
   message: 16 * 1024,
-  pendingWriteBytes: 512 * 1024
+  pendingWriteBytes: 8 * 1024 * 1024
 });
 // The single source of truth for every transfer progress stage this project
 // emits. Sender and receiver each track their own local view of a transfer
@@ -63,19 +63,27 @@ export function sendTransferStatus(channel, payload) {
     return false;
   }
 }
-export function cancelOutboundTransferById(mesh, transferId, error) {
-  for (const store of [mesh.pendingTransferAdmissions, mesh.pendingTransferConfirmations]) {
-    const pending = store.get(transferId);
-    if (!pending) continue;
-    store.delete(transferId);
-    globalThis.clearTimeout(pending.timer);
-    pending.reject(error);
+export function rejectPendingTransfers(transfers, matches, error) {
+  for (const store of [
+    transfers.pendingTransferAdmissions,
+    transfers.pendingTransferConfirmations
+  ]) {
+    for (const [transferId, pending] of store) {
+      if (!matches(pending, transferId)) continue;
+      store.delete(transferId);
+      globalThis.clearTimeout(pending.timer);
+      pending.reject(error);
+    }
   }
-  const flow = mesh.pendingTransferCredits.get(transferId);
-  if (!flow) return;
-  mesh.pendingTransferCredits.delete(transferId);
-  flow.waiters.forEach((waiter) => {
-    globalThis.clearTimeout(waiter.timer);
-    waiter.reject(error);
-  });
+  for (const [transferId, flow] of transfers.pendingTransferCredits) {
+    if (!matches(flow, transferId)) continue;
+    transfers.pendingTransferCredits.delete(transferId);
+    flow.waiters.forEach((waiter) => {
+      globalThis.clearTimeout(waiter.timer);
+      waiter.reject(error);
+    });
+  }
+}
+export function cancelOutboundTransferById(transfers, transferId, error) {
+  rejectPendingTransfers(transfers, (_entry, id) => id === transferId, error);
 }

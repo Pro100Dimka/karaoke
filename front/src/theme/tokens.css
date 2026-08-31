@@ -1,17 +1,59 @@
 :root {
-  --z-titlebar: 1000;
+  /* Default tokens live here, never in runtime inline styles. */
+  --typography-font-family:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --typography-h1-size: clamp(2.5rem, 4vw, 4.5rem);
+  --typography-h1-weight: 900;
+  --typography-h1-line-height: 0.95;
+  --typography-h2-size: clamp(2rem, 3vw, 3.25rem);
+  --typography-h2-weight: 800;
+  --typography-h2-line-height: 1;
+  --typography-h3-size: clamp(1.5rem, 2vw, 2rem);
+  --typography-h3-weight: 750;
+  --typography-h3-line-height: 1.1;
+  --typography-body1-size: 1rem;
+  --typography-body1-weight: 400;
+  --typography-body1-line-height: 1.5;
+  --typography-body2-size: 0.875rem;
+  --typography-body2-weight: 400;
+  --typography-body2-line-height: 1.45;
+  --typography-caption-size: 0.75rem;
+  --typography-caption-weight: 600;
+  --typography-caption-line-height: 1.4;
+  --shape-xs: 0.25rem;
+  --shape-sm: 0.5rem;
+  --shape-md: 0.75rem;
+  --shape-lg: 1.125rem;
+  --shape-xl: 1.5rem;
+  --shape-round: 999rem;
+  --spacing: 0.5rem;
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-normal: 200ms;
+  --motion-duration-slow: 280ms;
+  --motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-easing-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-easing-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-easing-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-press: 0.98;
+  --states-hover-opacity: 0.08;
+  --states-focus-opacity: 0.12;
+  --states-selected-opacity: 0.14;
+  --states-disabled-opacity: 0.38;
   --z-index-modal: 1300;
   --z-index-popover: 1400;
   --z-index-tooltip: 1500;
+  --shadows-0: none;
+  --shadows-1: var(--shadow-sm);
+  --shadows-2: var(--shadow-md);
+  --shadows-3: var(--shadow-lg);
+  --shadows-4: var(--shadow-glass);
 
-  --shadow-sm:
-    0vw 0.416667vw 1.25vw color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
+  --shadow-sm: 0vw 0.416667vw 1.25vw color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
 
-  --shadow-md:
-    0vw 0.9375vw 2.864583vw color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
+  --shadow-md: 0vw 0.9375vw 2.864583vw color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
 
-  --shadow-lg:
-    0vw 1.458333vw 4.6875vw color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
+  --shadow-lg: 0vw 1.458333vw 4.6875vw color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
 
   --shadow-glass:
     inset 0vw 0.052083vw 0vw color-mix(in srgb, var(--color-highlight) 12%, transparent),
@@ -40,29 +82,22 @@
   --card-edge-3: var(--color-primary);
   --card-edge-4: var(--color-accent-strong);
 
-  --card-glint:
-    color-mix(in srgb, var(--color-highlight) 92%, transparent);
+  --card-glint: color-mix(in srgb, var(--color-highlight) 92%, transparent);
 
-  --card-panel-top:
-    color-mix(in srgb, var(--color-surface-strong) 94%, transparent);
+  --card-panel-top: color-mix(in srgb, var(--color-surface-strong) 94%, transparent);
 
-  --card-panel-bottom:
-    color-mix(in srgb, var(--color-bg-deep) 88%, transparent);
+  --card-panel-bottom: color-mix(in srgb, var(--color-bg-deep) 88%, transparent);
 
-  --card-panel-accent:
-    color-mix(in srgb, var(--color-primary) 14%, transparent);
+  --card-panel-accent: color-mix(in srgb, var(--color-primary) 14%, transparent);
 
-  --card-panel-accent-deep:
-    color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  --card-panel-accent-deep: color-mix(in srgb, var(--color-secondary) 18%, transparent);
 
-  --card-sheen:
-    color-mix(in srgb, var(--color-highlight) 22%, transparent);
+  --card-sheen: color-mix(in srgb, var(--color-highlight) 22%, transparent);
 
-  --card-sheen-soft:
-    color-mix(in srgb, var(--color-primary-hover) 8%, transparent);
+  --card-sheen-soft: color-mix(in srgb, var(--color-primary-hover) 8%, transparent);
 
-  --card-panel-shadow:
-    0vw 1.5625vw 4.166667vw color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
+  --card-panel-shadow: 0vw 1.5625vw 4.166667vw
+    color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
 
   --color-white: #fff;
   --color-black: #000;
@@ -73,35 +108,20 @@
   --color-studio-edit: #ffbd4a;
   --color-studio-danger: #ff3d5f;
 
-  --font-sans:
-    "Bahnschrift",
-    "Aptos",
-    "Segoe UI Variable",
-    "Segoe UI",
-    system-ui,
-    sans-serif;
+  --font-sans: "Bahnschrift", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 
-  --font-display:
-    "Bahnschrift",
-    "Aptos Display",
-    "Segoe UI Variable Display",
-    sans-serif;
+  --font-display: "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", sans-serif;
 
-  --font-mono:
-    Consolas,
-    "SFMono-Regular",
-    monospace;
+  --font-mono: Consolas, "SFMono-Regular", monospace;
 
   --font-size-xs: 0.625vw;
   --font-size-sm: 0.729167vw;
   --font-size-md: 0.833333vw;
   --font-size-lg: 0.9375vw;
 
-  --font-size-xl:
-    clamp(1.125vw, 2vw, 1.5vw);
+  --font-size-xl: clamp(1.125vw, 2vw, 1.5vw);
 
-  --font-size-2xl:
-    clamp(1.833333vw, 5vw, 4vw);
+  --font-size-2xl: clamp(1.833333vw, 5vw, 4vw);
 
   --line-height-tight: 1.08;
   --line-height-base: 1.5;
@@ -129,13 +149,6 @@
 
   --radius-round: var(--radius-pill);
 
-  --shape-xs: calc(var(--radius-sm) * 0.6);
-  --shape-sm: var(--radius-sm);
-  --shape-md: var(--radius-md);
-  --shape-lg: var(--radius-lg);
-  --shape-xl: var(--radius-xl);
-  --shape-round: var(--radius-round);
-
   --content-max: 75vw;
   --content-sm: 23.333333vw;
 
@@ -143,25 +156,22 @@
 
   --hairline: max(0.052083vw, 0.06vw);
 
-  --library-gutter:
-    clamp(0.833333vw, 3vw, 2.5vw);
+  --library-gutter: clamp(0.833333vw, 3vw, 2.5vw);
 
   --shadow-neon-cyan: var(--shadow-neon-soft);
   --shadow-neon-pink: var(--shadow-neon-primary);
 
-  --duration-fast: 140ms;
-  --duration-normal: 240ms;
-  --duration-slow: 520ms;
+  --duration-fast: var(--motion-duration-fast);
+  --duration-normal: var(--motion-duration-normal);
+  --duration-slow: var(--motion-duration-slow);
 
   --transition-fast: var(--duration-fast);
   --transition-normal: var(--duration-normal);
   --transition-slow: var(--duration-slow);
 
-  --ease-standard:
-    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: var(--motion-easing-standard);
 
-  --ease-emphasized:
-    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-emphasized: var(--motion-easing-enter);
 
   --color-background: var(--color-bg);
   --color-primary-soft: var(--color-primary-hover);
@@ -191,17 +201,6 @@
 
   --radio-bass: 0;
   --wave-min: 0;
-  --typography-h1-size: 3.75vw;
-  --typography-h1-weight: 900;
-  --typography-h1-line-height: 0.95;
-
-  --typography-h2-size: 2.708333vw;
-  --typography-h2-weight: 800;
-  --typography-h2-line-height: 1;
-
-  --typography-h3-size: 1.666667vw;
-  --typography-h3-weight: 750;
-  --typography-h3-line-height: 1.1;
 
   --typography-h4-size: 1.25vw;
   --typography-h4-weight: 750;
@@ -214,18 +213,6 @@
   --typography-h6-size: 0.833333vw;
   --typography-h6-weight: 750;
   --typography-h6-line-height: 1.1;
-
-  --typography-body1-size: 0.833333vw;
-  --typography-body1-weight: 400;
-  --typography-body1-line-height: 1.5;
-
-  --typography-body2-size: 0.729167vw;
-  --typography-body2-weight: 400;
-  --typography-body2-line-height: 1.45;
-
-  --typography-caption-size: 0.625vw;
-  --typography-caption-weight: 600;
-  --typography-caption-line-height: 1.4;
 
   --typography-caption2-size: 0.520833vw;
   --typography-caption2-weight: 500;

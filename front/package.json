@@ -118,6 +118,7 @@
         "to": "dist"
       },
       "electron/**/*",
+      "src/theme/palettes.css",
       "assets/icons/**/*"
     ],
     "extraResources": [

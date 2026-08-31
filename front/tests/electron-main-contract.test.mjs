@@ -10,8 +10,8 @@ test("main process registers every preload channel through the trusted boundary"
   expect(main).toMatch(/registerTrustedIpc\(\s*ipcMain,/);
 });
 test("backend restart attempts reset only after a stable run", () => {
-  const main = fs.readFileSync("electron/main.cjs", "utf8");
-  const spawnHandler = main.match(/childProcess\.once\("spawn", \(\) => \{([\s\S]*?)\n    \}\);/s)?.[1] || "";
+  const main = fs.readFileSync("electron/backend-process.cjs", "utf8");
+  const spawnHandler = main.match(/childProcess\.once\("spawn", \(\) => \{([\s\S]*?)\n\s*\}\);/s)?.[1] || "";
   expect(main).toContain("BACKEND_STABLE_RESET_MS");
   expect(spawnHandler).toContain("setTimeout");
   const beforeStableTimer = spawnHandler.split("setTimeout", 1)[0];

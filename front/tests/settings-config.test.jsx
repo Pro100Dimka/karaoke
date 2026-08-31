@@ -1,9 +1,9 @@
 import { readFileSync, existsSync } from "node:fs";
 import { expect, test } from "vitest";
 import { SERVICES, TABS } from "../src/pages/Settings/schema";
-import appearanceRows from "../src/pages/Settings/appearance-rows";
-import audioRows from "../src/pages/Settings/audio-rows";
-import processingRows from "../src/pages/Settings/processing-rows";
+import appearanceRows from "../src/pages/Settings/rows/appearance";
+import audioRows from "../src/pages/Settings/rows/audio";
+import processingRows from "../src/pages/Settings/rows/processing";
 
 test("Settings uses direct Formik rows and has no old form adapters", () => {
   const source = readFileSync(new URL("../src/pages/Settings/index.jsx", import.meta.url), "utf8");

@@ -1,5 +1,8 @@
 import { translateSaved as translate } from "../i18n/runtime";
 
+export const isValidSongRevision = (revision) =>
+  typeof revision === "string" && revision.startsWith("sha256:");
+
 export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 // Keep in sync with ROOM_PROTOCOL_VERSION in cloudflare/src/worker.js -- bump
 // both together only when the message schema itself changes incompatibly.

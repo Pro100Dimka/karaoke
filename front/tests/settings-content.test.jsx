@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
-import appearanceRows from "../src/pages/Settings/appearance-rows";
-import audioRows from "../src/pages/Settings/audio-rows";
+import appearanceRows from "../src/pages/Settings/rows/appearance";
+import audioRows from "../src/pages/Settings/rows/audio";
 
 test("appearance rows only override saving for custom radio actions", async () => {
   const radio = {

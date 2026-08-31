@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AudioPlayer } from "../../components/AudioPlayer";
 import { toggleAudioPlayback } from "../../components/audio-player-utils";
+import useSongCover from "../../hooks/useSongCover";
 import { translateSaved as tr } from "../../i18n/runtime";
 import {
   Box,
@@ -23,14 +24,13 @@ import {
   Chip,
   IconButton,
   Modal,
-  Select,
+  RenderFormikFields,
+  useGetForm,
   Stack,
-  TextField,
   Typography
 } from "../../theme/ui";
 import * as platform from "../../utils/platform";
 import { ProcessingSignal } from "./components";
-import useSongCover from "./hooks/useSongCover";
 import { getProcessingModeOptions } from "./processing-modes";
 import { formatEta, getProcessingProgress, isProcessingActive } from "./utils";
 
@@ -49,9 +49,10 @@ export function SelectedFilePreview({ file }) {
   useEffect(() => {
     if (!file || typeof URL.createObjectURL !== "function") return undefined;
     const url = URL.createObjectURL(file);
+    const element = audio.current;
     setSource(url);
     return () => {
-      audio.current?.pause();
+      element?.pause();
       URL.revokeObjectURL(url);
     };
   }, [file]);
@@ -82,8 +83,18 @@ export function SelectedFilePreview({ file }) {
   );
 }
 
-export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
+export function AddSongsModal({ review, onCancel, onConfirm }) {
   const item = review?.items?.[review.index];
+  const formik = useGetForm({
+    initialValues: {
+      artist: item?.artist || "",
+      title: item?.title || "",
+      processingMode: item?.processingMode || ""
+    },
+    onSubmit: async (values) => {
+      if (values.title.trim()) await onConfirm(values);
+    }
+  });
   return (
     <Modal
       isOpen={Boolean(item)}
@@ -103,8 +114,8 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
             <Button
               variant="contained"
               type="button"
-              disabled={!item.title.trim()}
-              onClick={onConfirm}
+              disabled={!formik.values.title.trim() || formik.isSubmitting}
+              onClick={formik.submitForm}
             >
               {tr("common.confirm")}
             </Button>
@@ -113,40 +124,46 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
       }}
     >
       {item && (
-        <Box
-          as="form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onConfirm();
-          }}
-          sx={{ padding: "var(--space-5)" }}
-        >
-          <Stack direction="row" align="center" gap="var(--space-5)">
-            <TextField
-              label={tr("library.sort.artist")}
-              value={item.artist}
-              size="lg"
-              required
-              fullWidth
-              onChange={(artist) => onUpdate({ artist })}
-            />
-            <TextField
-              label={tr("library.songTitle")}
-              required
-              fullWidth
-              size="lg"
-              value={item.title}
-              onChange={(title) => onUpdate({ title })}
-            />
-            <Select
-              label={tr("library.processingMode")}
-              size="lg"
-              value={item.processingMode}
-              options={getProcessingModeOptions()}
-              onChange={(processingMode) => onUpdate({ processingMode })}
-            />
-            <SelectedFilePreview file={item.file} />
-          </Stack>
+        <Box as="form" onSubmit={formik.handleSubmit} sx={{ padding: "var(--space-5)" }}>
+          <RenderFormikFields
+            formik={formik}
+            items={[
+              {
+                tag: "artist",
+                type: "TextField",
+                label: tr("library.sort.artist"),
+                size: "lg",
+                required: true,
+                xs: 12,
+                md: 4
+              },
+              {
+                tag: "title",
+                type: "TextField",
+                label: tr("library.songTitle"),
+                size: "lg",
+                required: true,
+                xs: 12,
+                md: 4
+              },
+              {
+                tag: "processingMode",
+                type: "SelectField",
+                label: tr("library.processingMode"),
+                size: "lg",
+                options: getProcessingModeOptions(),
+                xs: 10,
+                md: 3
+              },
+              {
+                tag: "preview",
+                type: "custom",
+                xs: 2,
+                md: 1,
+                render: () => <SelectedFilePreview file={item.file} />
+              }
+            ]}
+          />
         </Box>
       )}
     </Modal>

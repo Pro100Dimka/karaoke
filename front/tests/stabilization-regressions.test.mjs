@@ -10,21 +10,19 @@ test("startup fallback never masks the packaged theme backdrop", () => {
     [html, "toContain", '<div id="root"></div>'],
     [renderer, "not.toContain", "appRoot.style.background"],
     [electron, "toContain", "backgroundColor: themeBackgrounds[initialTheme]"],
-    [electron, "toContain", 'light: "#fff8f5"'],
-    [electron, "toContain", 'green: "#020904"'],
-    [electron, "toContain", 'violet: "#07020f"']
+    [electron, "toContain", "readThemeBackgrounds()"]
   );
 });
 test("backend child exit 23 cannot create an Electron restart storm", () => {
-  const main = read("electron/main.cjs");
+  const main = read("electron/backend-process.cjs");
   verify(
-    [main, "toContain", "if (code === 23)"],
+    [main, "toContain", "if (code === BACKEND_ALREADY_RUNNING_EXIT_CODE)"],
     [main, "toContain", "watchDuplicateBackend()"],
     [main, "toContain", "backendDuplicateDetected = false"],
     [main, "toContain", "backendDuplicateWatchGeneration"],
     [main, "toContain", "if (!active()) return"],
     [main, "toMatch", /function startBackend\(\)[\s\S]{0,260}isQuitting[\s\S]*backendStopRequested/],
-    [main, "not.toMatch", /if \(code === 23\)[\s\S]{0,300}backendStopRequested = true/],
+    [main, "not.toMatch", /if \(code === BACKEND_ALREADY_RUNNING_EXIT_CODE\)[\s\S]{0,300}backendStopRequested = true/],
     [main, "toContain", 'spawn("taskkill", ["/PID", String(pid), "/T", "/F"]']
   );
 });

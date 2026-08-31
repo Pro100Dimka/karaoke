@@ -7,6 +7,7 @@ import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
 import { queryKeys } from "../../query-client";
 import { POLLING_INTERVALS } from "../../runtime-config";
+import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
 import { flattenLyricsNotes, shiftLyricsSync } from "../../utils/lyrics-sync";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
@@ -15,6 +16,7 @@ import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
+import useKaraokeRoomEffects from "./hooks/useKaraokeRoomEffects";
 import useKaraokeRoomPreferences from "./hooks/useKaraokeRoomPreferences";
 import useKaraokeSceneFlow from "./hooks/useKaraokeSceneFlow";
 import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
@@ -149,10 +151,13 @@ export default function Karaoke({ onOpenAppSettings }) {
   const microphoneSettings = useMicrophoneSettings({ audioSettings, onError: setRecordingError });
   const { microphoneVolume, setMicrophoneVolume, microphoneEffects, setMicrophoneEffects } =
     microphoneSettings;
-  useEffect(() => {
-    if (!onlineRoomState) return;
-    syncRoomUi({ participantEffects: { volume: microphoneVolume, ...microphoneEffects } });
-  }, [microphoneEffects, microphoneVolume, onlineParticipantCount, onlineRoomState, syncRoomUi]);
+  useKaraokeRoomEffects({
+    room: onlineRoomState,
+    participantCount: onlineParticipantCount,
+    volume: microphoneVolume,
+    effects: microphoneEffects,
+    syncUi: syncRoomUi
+  });
   const {
     audioDriver,
     directOutputDeviceId,
@@ -175,7 +180,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     const updated = await api.stopDirectMonitoring();
     monitoringEnabledRef.current = false;
     setMonitoringEnabled(false);
-    globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
+    globalThis.dispatchEvent?.(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated }));
     return updated;
   }, [roomMonitoringEnabled, setMonitoringEnabled, setRoomLocalMonitoring]);
   useEffect(
@@ -385,7 +390,7 @@ export default function Karaoke({ onOpenAppSettings }) {
           monitoringEnabledRef.current = false;
           setMonitoringEnabled(false);
           globalThis.dispatchEvent?.(
-            new CustomEvent("audio-settings-changed", { detail: updated })
+            new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
           );
         }
         const active = await setRoomLocalMonitoring(enabled, {
@@ -398,7 +403,9 @@ export default function Karaoke({ onOpenAppSettings }) {
       const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
       const updated = await action();
       setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
-      globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
+      globalThis.dispatchEvent?.(
+        new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
+      );
     } catch (error) {
       setRecordingError(
         translateSaved("karaoke.failedToChangeMicrophoneListening", {

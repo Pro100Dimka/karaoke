@@ -313,7 +313,7 @@ describe("online voice mesh", () => {
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "disk", size: 2 })
     });
-    await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
+    await vi.waitFor(() => expect(mesh.transfers.incomingFiles.has("host")).toBe(true));
     channel.onmessage({ data: new Uint8Array([1, 2]).buffer });
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "disk" }) });
     await vi.waitFor(() => expect(mesh.onFile).toHaveBeenCalledOnce());
@@ -327,8 +327,8 @@ describe("online voice mesh", () => {
     const metadata = { kind: "k".repeat(65), songId: "s".repeat(129), filename: "f".repeat(513) };
     const payload = new Blob([new Uint8Array(40_000)], { type: "application/zip" });
     const sending = mesh.sendFile("guest", payload, metadata);
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
-    const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
+    const transferId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
     const sent = channel.send.mock.calls.map(([value]) => value);
     expect(JSON.parse(sent[0])).toEqual({
       type: "file-start",
@@ -370,8 +370,8 @@ describe("online voice mesh", () => {
     });
     await expect(mesh.sendFile("guest", oversized)).rejects.toThrow("Файл слишком большой для передачи через комнату");
     const sending = mesh.sendFile("g".repeat(128), new Blob([]));
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
-    const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
+    const transferId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
     expect(JSON.parse(channel.send.mock.calls[0][0])).toEqual({
       type: "file-start",
       transferId,
@@ -419,9 +419,9 @@ describe("online voice mesh", () => {
       data: JSON.stringify({ type: "file-start", transferId: "stall", size: 1 })
     });
     vi.advanceTimersByTime(29_999);
-    expect(mesh.incomingFiles.has("host")).toBe(true);
+    expect(mesh.transfers.incomingFiles.has("host")).toBe(true);
     vi.advanceTimersByTime(1);
-    expect(mesh.incomingFiles.has("host")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
     expect(JSON.parse(channel.send.mock.calls.at(-1)[0])).toEqual({
       type: "file-error",
       transferId: "stall",
@@ -500,7 +500,7 @@ describe("online voice mesh", () => {
     mesh.onPeerClosed = vi.fn();
     const peerOnly = mesh.createPeer("peer");
     const channelOnly = new FakeChannel();
-    mesh.channels.set("channel", channelOnly);
+    mesh.transfers.channels.set("channel", channelOnly);
     const local = track("local");
     mesh.stream = stream([local]);
     mesh.pendingCandidates.set("peer", [1]);
@@ -516,12 +516,12 @@ describe("online voice mesh", () => {
     expect(mesh.onPeerClosed.mock.calls.map(([id]) => id).sort()).toEqual(["channel", "peer"]);
     for (const collection of [
       mesh.peers,
-      mesh.channels,
+      mesh.transfers.channels,
       mesh.pendingCandidates,
       mesh.pendingInvites,
       mesh.invitePromises,
       mesh.signalPromises,
-      mesh.incomingFiles,
+      mesh.transfers.incomingFiles,
       mesh.disconnectTimers
     ]) {
       expect(collection.size).toBe(0);
@@ -642,12 +642,12 @@ describe("online voice mesh", () => {
     for (const message of cases) {
       const { mesh, channel } = setupChannel("host");
       channel.onmessage({ data: JSON.stringify({ type: "file-start", ...message }) });
-      expect(mesh.incomingFiles.size).toBe(0);
+      expect(mesh.transfers.incomingFiles.size).toBe(0);
     }
     for (const size of [0, 64 * 1024 * 1024]) {
       const { mesh, channel } = setupChannel("host");
       channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size }) });
-      expect(mesh.incomingFiles.get("host").metadata.size).toBe(size);
+      expect(mesh.transfers.incomingFiles.get("host").metadata.size).toBe(size);
     }
   });
   test("matches confirmations by transfer and participant with exact errors", () => {
@@ -659,16 +659,16 @@ describe("online voice mesh", () => {
     const resolve = vi.fn();
     const reject = vi.fn();
     const pending = { participantId: "host", channel: host, resolve, reject, timer: 10 };
-    mesh.pendingTransferConfirmations.set("t", pending);
+    mesh.transfers.pendingTransferConfirmations.set("t", pending);
     guest.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: "t" }) });
     host.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: "wrong" }) });
-    expect(mesh.pendingTransferConfirmations.get("t")).toBe(pending);
+    expect(mesh.transfers.pendingTransferConfirmations.get("t")).toBe(pending);
     expect(resolve).not.toHaveBeenCalled();
     host.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: "t" }) });
     expect(resolve).toHaveBeenCalledOnce();
     expect(reject).not.toHaveBeenCalled();
-    expect(mesh.pendingTransferConfirmations.has("t")).toBe(false);
-    mesh.pendingTransferConfirmations.set("error", {
+    expect(mesh.transfers.pendingTransferConfirmations.has("t")).toBe(false);
+    mesh.transfers.pendingTransferConfirmations.set("error", {
       participantId: "host",
       channel: host,
       resolve,
@@ -679,7 +679,7 @@ describe("online voice mesh", () => {
       data: JSON.stringify({ type: "file-error", transferId: "error", error: "e".repeat(501) })
     });
     expect(reject).toHaveBeenLastCalledWith(expect.objectContaining({ message: "e".repeat(500) }));
-    mesh.pendingTransferConfirmations.set("fallback", {
+    mesh.transfers.pendingTransferConfirmations.set("fallback", {
       participantId: "host",
       channel: host,
       resolve,
@@ -712,12 +712,12 @@ describe("online voice mesh", () => {
     const { mesh, channel } = setupChannel("host");
     for (const data of [new Uint8Array([1]), {}, new Uint8Array([])]) {
       channel.onmessage({ data });
-      expect(mesh.incomingFiles.size).toBe(0);
+      expect(mesh.transfers.incomingFiles.size).toBe(0);
     }
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "one", size: 2 }) });
-    const original = mesh.incomingFiles.get("host");
+    const original = mesh.transfers.incomingFiles.get("host");
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "two", size: 2 }) });
-    expect(mesh.incomingFiles.get("host")).toBe(original);
+    expect(mesh.transfers.incomingFiles.get("host")).toBe(original);
     channel.onmessage({ data: new Uint8Array([]) });
     expect(original.received).toBe(0);
     channel.onmessage({ data: new Uint8Array([1]) });
@@ -729,16 +729,16 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     channel.bufferedAmount = 512 * 1024;
     mesh.setupDataChannel("guest", channel);
-    mesh.waitForDataChannel = vi.fn().mockResolvedValue(channel);
+    mesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(channel);
     const sending = mesh.sendFile("guest", new Blob(["x"]), {
       kind: 1,
       songId: null,
       filename: {},
       ignored: true
     });
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
-    expect(mesh.waitForDataChannel).toHaveBeenCalledWith("guest", 15_000, 0, expect.anything());
-    const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
+    expect(mesh.transfers.waitForDataChannel).toHaveBeenCalledWith("guest", 15_000, 0, expect.anything());
+    const transferId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
     expect(JSON.parse(channel.send.mock.calls[0][0])).toEqual({
       type: "file-start",
       transferId,
@@ -785,10 +785,10 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     mesh.onPeerClosed = vi.fn();
     mesh.disconnectTimers.set("guest", 21);
-    mesh.incomingFiles.set("guest", { timer: 22 });
-    mesh.channels.set("guest", new FakeChannel());
+    mesh.transfers.incomingFiles.set("guest", { timer: 22 });
+    mesh.transfers.channels.set("guest", new FakeChannel());
     const reject = vi.fn();
-    mesh.pendingTransferConfirmations.set("owned", {
+    mesh.transfers.pendingTransferConfirmations.set("owned", {
       participantId: "guest",
       timer: 23,
       reject,
@@ -805,7 +805,7 @@ describe("online voice mesh", () => {
     );
     expect(mesh.onPeerClosed).toHaveBeenCalledWith("guest");
     clear.mockClear();
-    mesh.incomingFiles.set("untimed", { timer: 0 });
+    mesh.transfers.incomingFiles.set("untimed", { timer: 0 });
     mesh.removePeer("untimed");
     expect(clear).not.toHaveBeenCalled();
     expect(mesh.onPeerClosed).toHaveBeenCalledTimes(1);
@@ -931,17 +931,17 @@ describe("online voice mesh", () => {
     const maximum = makeStart(16 * 1024);
     expect(maximum).toHaveLength(16 * 1024);
     acceptedChannel.onmessage({ data: maximum });
-    expect(acceptedMesh.incomingFiles.has("host")).toBe(true);
+    expect(acceptedMesh.transfers.incomingFiles.has("host")).toBe(true);
     const rejectedMesh = makeMesh();
     const rejectedChannel = new FakeChannel();
     rejectedMesh.setupDataChannel("host", rejectedChannel);
     rejectedChannel.onmessage({ data: `${maximum} ` });
-    expect(rejectedMesh.incomingFiles.size).toBe(0);
+    expect(rejectedMesh.transfers.incomingFiles.size).toBe(0);
   });
   test.each([null, [], 1, "text"])("rejects structurally invalid decoded control message %#", (message) => {
     const { mesh, channel } = setupChannel("host");
     channel.onmessage({ data: JSON.stringify(message) });
-    expect(mesh.incomingFiles.size).toBe(0);
+    expect(mesh.transfers.incomingFiles.size).toBe(0);
     expect(channel.send).not.toHaveBeenCalled();
   });
   test("emits the first one-percent receive update and keeps Blob type", async () => {
@@ -970,9 +970,9 @@ describe("online voice mesh", () => {
     mesh.setupDataChannel("guest", second);
     first.onclose();
     first.onerror();
-    expect(mesh.channels.get("guest")).toBe(second);
+    expect(mesh.transfers.channels.get("guest")).toBe(second);
     second.onclose();
-    expect(mesh.channels.has("guest")).toBe(false);
+    expect(mesh.transfers.channels.has("guest")).toBe(false);
   });
   test.each([
     { failure: new Error("broken"), sent: "broken" },
@@ -1025,7 +1025,7 @@ describe("online voice mesh", () => {
   test("normalizes polling timeouts and distinguishes closing channels", async () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
-    mesh.channels.set("closing", new FakeChannel("closing"));
+    mesh.transfers.channels.set("closing", new FakeChannel("closing"));
     await expect(mesh.waitForDataChannel("closing")).rejects.toThrow("Канал передачи песни закрыт");
     const numeric = mesh.waitForDataChannel("numeric", "50");
     const numericResult = expect(numeric).rejects.toThrow("Канал передачи песни не готов");
@@ -1068,15 +1068,15 @@ describe("online voice mesh", () => {
     const result = expect(sending).rejects.toThrow("Участник не подтвердил получение песни");
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5 * 60_000 - 1);
-    expect(mesh.pendingTransferConfirmations.size).toBe(1);
+    expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1);
     await vi.advanceTimersByTimeAsync(1);
     await result;
-    expect(mesh.pendingTransferConfirmations.size).toBe(0);
+    expect(mesh.transfers.pendingTransferConfirmations.size).toBe(0);
   });
   test("keeps invalid binary and absent callbacks side-effect free", () => {
     const { mesh, channel } = setupChannel("host");
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 1 }) });
-    const transfer = mesh.incomingFiles.get("host");
+    const transfer = mesh.transfers.incomingFiles.get("host");
     channel.onmessage({ data: {} });
     expect(transfer).toMatchObject({ received: 0, chunks: [] });
     const peer = mesh.createPeer("guest");
@@ -1146,13 +1146,13 @@ describe("online voice mesh", () => {
   test("tolerates optional channel methods and timer owners", () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
-    mesh.channels.set("guest", { readyState: "open" });
+    mesh.transfers.channels.set("guest", { readyState: "open" });
     expect(() => mesh.setupDataChannel("guest", new FakeChannel())).not.toThrow();
-    const timer = mesh.createIncomingTransferTimer("missing", "t");
+    const timer = mesh.transfers.createIncomingTransferTimer("missing", "t");
     expect(() => vi.advanceTimersByTime(30_000)).not.toThrow();
     clearTimeout(timer);
-    mesh.incomingFiles.set("orphan", { metadata: { transferId: "t" }, timer: 0 });
-    const orphan = mesh.createIncomingTransferTimer("orphan", "t");
+    mesh.transfers.incomingFiles.set("orphan", { metadata: { transferId: "t" }, timer: 0 });
+    const orphan = mesh.transfers.createIncomingTransferTimer("orphan", "t");
     expect(() => vi.advanceTimersByTime(30_000)).not.toThrow();
     clearTimeout(orphan);
   });
@@ -1164,7 +1164,7 @@ describe("online voice mesh", () => {
     });
     const { mesh, channel } = setupChannel();
     const sending = mesh.sendFile("guest", new Blob([]), null);
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
     expect(JSON.parse(channel.send.mock.calls[0][0]).transferId).toBe("exact-uuid");
     channel.onmessage({
       data: JSON.stringify({ type: "file-complete", transferId: "exact-uuid" })
@@ -1177,7 +1177,7 @@ describe("online voice mesh", () => {
     const fallbackMesh = makeMesh();
     fallbackMesh.setupDataChannel("fallback", fallbackChannel);
     const fallback = fallbackMesh.sendFile("fallback", new Blob([]));
-    await vi.waitFor(() => expect(fallbackMesh.pendingTransferConfirmations.size).toBe(1));
+    await vi.waitFor(() => expect(fallbackMesh.transfers.pendingTransferConfirmations.size).toBe(1));
     expect(JSON.parse(fallbackChannel.send.mock.calls[0][0]).transferId).toBe("1000-8");
     fallbackChannel.onmessage({
       data: JSON.stringify({ type: "file-complete", transferId: "1000-8" })
@@ -1190,7 +1190,7 @@ describe("online voice mesh", () => {
     Object.defineProperties(maximum, { size: { value: 512 * 1024 * 1024 }, type: { value: "" } });
     const closed = new FakeChannel("closed");
     const maximumMesh = makeMesh();
-    maximumMesh.waitForDataChannel = vi.fn().mockResolvedValue(closed);
+    maximumMesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(closed);
     await expect(maximumMesh.sendFile("guest", maximum)).rejects.toThrow("Канал передачи песни закрыт");
   });
   test("emits receive progress only when its integer percent changes", () => {
@@ -1227,7 +1227,7 @@ describe("online voice mesh", () => {
   test("does not clear absent transfer timers while stopping", () => {
     const mesh = makeMesh();
     const clear = vi.spyOn(globalThis, "clearTimeout");
-    mesh.incomingFiles.set("untimed", { timer: 0 });
+    mesh.transfers.incomingFiles.set("untimed", { timer: 0 });
     mesh.stop();
     expect(clear).not.toHaveBeenCalled();
   });
@@ -1240,7 +1240,7 @@ describe("online voice mesh", () => {
     const { mesh, channel } = setupChannel();
     mesh.setupDataChannel("guest", channel);
     expect(channel.close).not.toHaveBeenCalled();
-    expect(mesh.channels.get("guest")).toBe(channel);
+    expect(mesh.transfers.channels.get("guest")).toBe(channel);
   });
   test("does not clear or reply for a missing incomplete transfer on a closed channel", () => {
     const clear = vi.spyOn(globalThis, "clearTimeout");
@@ -1259,7 +1259,7 @@ describe("online voice mesh", () => {
     const { mesh, channel } = setupChannel();
     const payload = new Blob([], { type: `x/${"a".repeat(300)}` });
     const sending = mesh.sendFile("guest", payload);
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
     const start = JSON.parse(channel.send.mock.calls[0][0]);
     expect(start.mimeType).toHaveLength(255);
     expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(0);
@@ -1273,8 +1273,8 @@ describe("online voice mesh", () => {
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: undefined });
     const { mesh, channel } = setupChannel();
     const sending = mesh.sendFile("guest", new Blob([]));
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
-    const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
+    const transferId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
     expect(transferId).toMatch(/^\d+-[\da-f]+$/u);
     channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId }) });
     await sending;
@@ -1320,9 +1320,9 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: JSON.stringify({ type: "unknown" }) });
     expect(() => channel.onmessage({ data: JSON.stringify({ type: "__proto__" }) })).not.toThrow();
     expect(channel.send).not.toHaveBeenCalled();
-    expect(mesh.incomingFiles.size).toBe(0);
+    expect(mesh.transfers.incomingFiles.size).toBe(0);
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 0 }) });
-    const { timer } = mesh.incomingFiles.get("host");
+    const { timer } = mesh.transfers.incomingFiles.get("host");
     const clear = vi.spyOn(globalThis, "clearTimeout");
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "t" }) });
     expect(clear).toHaveBeenCalledWith(timer);
@@ -1460,7 +1460,7 @@ describe("online voice mesh", () => {
     expect(remote).toHaveBeenCalledWith("guest", remoteStream);
     const channel = new FakeChannel();
     peer.ondatachannel({ channel });
-    expect(mesh.channels.get("guest")).toBe(channel);
+    expect(mesh.transfers.channels.get("guest")).toBe(channel);
     peer.connectionState = "disconnected";
     peer.onconnectionstatechange();
     peer.connectionState = "connected";
@@ -1513,7 +1513,7 @@ describe("online voice mesh", () => {
     });
     expect(mesh.invitePromises.size).toBe(0);
     const existingChannelMesh = makeMesh();
-    existingChannelMesh.channels.set("guest", new FakeChannel());
+    existingChannelMesh.transfers.channels.set("guest", new FakeChannel());
     await expect(existingChannelMesh.invite("guest")).resolves.toBe(true);
     expect(FakePeer.instances.at(-1).createDataChannel).not.toHaveBeenCalled();
   });
@@ -1671,10 +1671,10 @@ describe("online voice mesh", () => {
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "denied", size: 3 })
     });
-    expect(mesh.incomingFiles.has("guest")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("guest")).toBe(false);
     expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
     channel.onmessage({ data: new Uint8Array([1, 2, 3]) });
-    expect(mesh.incomingFiles.has("guest")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("guest")).toBe(false);
     mesh.canAcceptFile = vi.fn(() => true);
     mesh.onFile = vi.fn().mockResolvedValue(undefined);
     channel.onmessage({
@@ -1703,7 +1703,7 @@ describe("online voice mesh", () => {
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "large", size: 65 * 1024 * 1024 })
     });
-    expect(mesh.incomingFiles.has("host")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
     expect(channel.send.mock.calls.map(([value]) => (typeof value === "string" ? JSON.parse(value) : null))).toContainEqual(
       expect.objectContaining({ type: "file-error", transferId: "large" })
     );
@@ -1736,9 +1736,9 @@ describe("online voice mesh", () => {
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: {} });
     const fallback = mesh.sendFile("guest", new Blob(["x"]));
     await vi.waitFor(() => {
-      expect(mesh.pendingTransferConfirmations.size).toBe(1);
+      expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1);
     });
-    const fallbackId = [...mesh.pendingTransferConfirmations.keys()][0];
+    const fallbackId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
     channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: fallbackId }) });
     await expect(fallback).resolves.toBeUndefined();
     if (cryptoDescriptor) Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
@@ -1756,7 +1756,7 @@ describe("online voice mesh", () => {
     });
     mesh.setupDataChannel("guest", channel);
     await expect(mesh.sendFile("guest", new Blob([]))).rejects.toThrow("send failed");
-    expect(mesh.pendingTransferConfirmations.size).toBe(0);
+    expect(mesh.transfers.pendingTransferConfirmations.size).toBe(0);
   });
   test("closes replacement channels and clears all transfer resources on stop", () => {
     vi.useFakeTimers();
@@ -1767,23 +1767,23 @@ describe("online voice mesh", () => {
     first.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "transfer", size: 10 })
     });
-    const { timer } = mesh.incomingFiles.get("guest");
+    const { timer } = mesh.transfers.incomingFiles.get("guest");
     const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
     mesh.setupDataChannel("guest", second);
     expect(first.close).toHaveBeenCalled();
     expect(clearTimeoutSpy).toHaveBeenCalledWith(timer);
-    mesh.incomingFiles.set("orphan", { timer: 99 });
-    mesh.channels.set("orphan", new FakeChannel());
+    mesh.transfers.incomingFiles.set("orphan", { timer: 99 });
+    mesh.transfers.channels.set("orphan", new FakeChannel());
     mesh.stop();
-    expect(mesh.channels.size).toBe(0);
-    expect(mesh.incomingFiles.size).toBe(0);
+    expect(mesh.transfers.channels.size).toBe(0);
+    expect(mesh.transfers.incomingFiles.size).toBe(0);
     const closedMesh = makeMesh();
     const closedChannel = new FakeChannel("closed");
-    closedMesh.channels.set("guest", closedChannel);
-    closedMesh.incomingFiles.set("guest", { timer: 0 });
+    closedMesh.transfers.channels.set("guest", closedChannel);
+    closedMesh.transfers.incomingFiles.set("guest", { timer: 0 });
     closedMesh.setupDataChannel("guest", new FakeChannel());
     expect(closedChannel.close).not.toHaveBeenCalled();
-    closedMesh.incomingFiles.set("untimed", { timer: 0 });
+    closedMesh.transfers.incomingFiles.set("untimed", { timer: 0 });
     closedMesh.stop();
   });
   test("attaches a new microphone to existing peers and flushes pending invites", async () => {
@@ -1830,7 +1830,7 @@ describe("online voice mesh", () => {
     const reject = vi.fn();
     mesh.onTransferProgress = vi.fn();
     mesh.setupDataChannel("guest", channel);
-    mesh.pendingTransferConfirmations.set("transfer", {
+    mesh.transfers.pendingTransferConfirmations.set("transfer", {
       participantId: "guest",
       channel,
       reject,
@@ -1839,7 +1839,7 @@ describe("online voice mesh", () => {
     });
     channel.onmessage({ data: JSON.stringify({ type: "file-error", transferId: "transfer" }) });
     expect(reject).toHaveBeenCalledWith(expect.any(Error));
-    mesh.pendingTransferConfirmations.set("remote-error", {
+    mesh.transfers.pendingTransferConfirmations.set("remote-error", {
       participantId: "guest",
       channel,
       reject,
@@ -1860,15 +1860,15 @@ describe("online voice mesh", () => {
     vi.advanceTimersByTime(30_000);
     expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe("file-error");
     channel.onclose();
-    expect(mesh.channels.has("guest")).toBe(false);
+    expect(mesh.transfers.channels.has("guest")).toBe(false);
     channel.onerror();
   });
   test("waits for channels and reports closed, cancelled and timed out states", async () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
-    mesh.channels.set("open", new FakeChannel());
-    await expect(mesh.waitForDataChannel("open")).resolves.toBe(mesh.channels.get("open"));
-    mesh.channels.set("closed", new FakeChannel("closed"));
+    mesh.transfers.channels.set("open", new FakeChannel());
+    await expect(mesh.waitForDataChannel("open")).resolves.toBe(mesh.transfers.channels.get("open"));
+    mesh.transfers.channels.set("closed", new FakeChannel("closed"));
     await expect(mesh.waitForDataChannel("closed")).rejects.toThrow("Канал передачи песни закрыт");
     await expect(mesh.waitForDataChannel("missing", 0)).rejects.toThrow("Канал передачи песни не готов");
     const cancelled = mesh.waitForDataChannel("missing", 100, -1);
@@ -1945,13 +1945,13 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "one", size: 1 }) });
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "two", size: 1 }) });
     channel.onmessage({ data: new Uint8Array([1, 2]) });
-    expect(mesh.incomingFiles.has("host")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "chunks", size: 40_000 })
     });
-    mesh.incomingFiles.get("host").chunkCount = 32_768;
+    mesh.transfers.incomingFiles.get("host").chunkCount = 32_768;
     channel.onmessage({ data: new Uint8Array([1]) });
-    expect(mesh.incomingFiles.has("host")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
   });
   test("handles unavailable Blob construction and peer removal during transfer", async () => {
     const { mesh, channel } = setupChannel();
@@ -1962,7 +1962,7 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "one" }) });
     globalThis.Blob = BlobClass;
     const rejected = vi.fn();
-    mesh.pendingTransferConfirmations.set("pending", {
+    mesh.transfers.pendingTransferConfirmations.set("pending", {
       participantId: "guest",
       channel,
       reject: rejected,
@@ -1975,28 +1975,28 @@ describe("online voice mesh", () => {
         message: "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя."
       })
     );
-    expect(mesh.pendingTransferConfirmations.has("pending")).toBe(false);
+    expect(mesh.transfers.pendingTransferConfirmations.has("pending")).toBe(false);
   });
   test("cleans detached timers and detects channels closed after waiting", async () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
     const clear = vi.spyOn(globalThis, "clearTimeout");
     mesh.disconnectTimers.set("detached", 10);
-    mesh.incomingFiles.set("detached", { timer: 11 });
+    mesh.transfers.incomingFiles.set("detached", { timer: 11 });
     mesh.stop();
     expect(clear).toHaveBeenCalledWith(10);
     expect(clear).toHaveBeenCalledWith(11);
     const closed = new FakeChannel("closed");
-    mesh.waitForDataChannel = vi.fn().mockResolvedValue(closed);
+    mesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(closed);
     await expect(mesh.sendFile("guest", new Blob([]))).rejects.toThrow("Канал передачи песни закрыт");
   });
   test("clears a channel-owned incoming timer and ignores stale transfer timers", () => {
     vi.useFakeTimers();
     const { mesh, channel } = setupChannel();
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "one", size: 1 }) });
-    const incomingTimer = mesh.incomingFiles.get("guest").timer;
+    const incomingTimer = mesh.transfers.incomingFiles.get("guest").timer;
     const pendingReject = vi.fn();
-    mesh.pendingTransferConfirmations.set("pending-close", {
+    mesh.transfers.pendingTransferConfirmations.set("pending-close", {
       participantId: "guest",
       channel,
       reject: pendingReject,
@@ -2008,25 +2008,25 @@ describe("online voice mesh", () => {
     expect(clear).toHaveBeenCalledWith(incomingTimer);
     expect(clear).toHaveBeenCalledWith(99);
     expect(pendingReject).toHaveBeenCalledWith(expect.objectContaining({ message: "Канал передачи песни закрыт" }));
-    expect(mesh.pendingTransferConfirmations.has("pending-close")).toBe(false);
-    mesh.incomingFiles.set("guest", { metadata: { transferId: "new" }, timer: 1 });
-    const staleTimer = mesh.createIncomingTransferTimer("guest", "old");
+    expect(mesh.transfers.pendingTransferConfirmations.has("pending-close")).toBe(false);
+    mesh.transfers.incomingFiles.set("guest", { metadata: { transferId: "new" }, timer: 1 });
+    const staleTimer = mesh.transfers.createIncomingTransferTimer("guest", "old");
     vi.advanceTimersByTime(30_000);
-    expect(mesh.incomingFiles.get("guest").metadata.transferId).toBe("new");
+    expect(mesh.transfers.incomingFiles.get("guest").metadata.transferId).toBe("new");
     clearTimeout(staleTimer);
-    mesh.channels.set("guest", new FakeChannel("closed"));
-    const expiring = mesh.createIncomingTransferTimer("guest", "new");
+    mesh.transfers.channels.set("guest", new FakeChannel("closed"));
+    const expiring = mesh.transfers.createIncomingTransferTimer("guest", "new");
     vi.advanceTimersByTime(30_000);
     clearTimeout(expiring);
   });
   test("preserves unrelated confirmations while removing a peer", () => {
     const mesh = makeMesh();
     const pending = { participantId: "other", reject: vi.fn(), resolve: vi.fn(), timer: 1 };
-    mesh.pendingTransferConfirmations.set("other-transfer", pending);
+    mesh.transfers.pendingTransferConfirmations.set("other-transfer", pending);
     mesh.disconnectTimers.set("guest", 22);
     mesh.createPeer("guest");
     mesh.removePeer("guest");
-    expect(mesh.pendingTransferConfirmations.get("other-transfer")).toBe(pending);
+    expect(mesh.transfers.pendingTransferConfirmations.get("other-transfer")).toBe(pending);
   });
   test("clears a pending incoming-file admission timer when its peer disconnects", () => {
     vi.useFakeTimers();
@@ -2035,7 +2035,7 @@ describe("online voice mesh", () => {
     const admissionTimer = globalThis.setTimeout(() => {}, 15_000);
     const progress = vi.fn();
     mesh.onTransferProgress = progress;
-    mesh.incomingFileAdmissions.set("guest", {
+    mesh.transfers.incomingFileAdmissions.set("guest", {
       channel: new FakeChannel(),
       cancelled: false,
       timer: admissionTimer,
@@ -2044,7 +2044,7 @@ describe("online voice mesh", () => {
     const clear = vi.spyOn(globalThis, "clearTimeout");
     mesh.removePeer("guest");
     expect(clear).toHaveBeenCalledWith(admissionTimer);
-    expect(mesh.incomingFileAdmissions.has("guest")).toBe(false);
+    expect(mesh.transfers.incomingFileAdmissions.has("guest")).toBe(false);
     // TASK 5.4: waiting-for-admission transfers must also surface a terminal
     // event, or the sender's caller (syncSong/openKaraokeInRoom) hangs.
     expect(progress).toHaveBeenCalledWith(
@@ -2060,7 +2060,7 @@ describe("online voice mesh", () => {
     const progress = vi.fn();
     mesh.onTransferProgress = progress;
     mesh.createPeer("host");
-    mesh.incomingFiles.set("host", {
+    mesh.transfers.incomingFiles.set("host", {
       metadata: { transferId: "song-1", commandId: "cmd-1" },
       lastPercent: 42,
       timer: 0,
@@ -2075,13 +2075,13 @@ describe("online voice mesh", () => {
         metadata: { transferId: "song-1", commandId: "cmd-1" }
       })
     );
-    expect(mesh.incomingFiles.has("host")).toBe(false);
+    expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
   });
   test("surfaces a cancelled transfer event when the receiving data channel closes mid-receive", () => {
     const { mesh, channel } = setupChannel("host");
     const progress = vi.fn();
     mesh.onTransferProgress = progress;
-    mesh.incomingFiles.set("host", {
+    mesh.transfers.incomingFiles.set("host", {
       channel,
       metadata: { transferId: "song-2" },
       lastPercent: 10,
@@ -2278,12 +2278,12 @@ describe("online voice mesh", () => {
 test("peer removal and mesh stop clean incoming transfer sinks exactly once", async () => {
   const mesh = makeMesh();
   const removedCleanup = vi.fn().mockResolvedValue();
-  mesh.incomingFiles.set("guest", { timer: 0, sink: { cleanup: removedCleanup } });
+  mesh.transfers.incomingFiles.set("guest", { timer: 0, sink: { cleanup: removedCleanup } });
   mesh.removePeer("guest");
   await Promise.resolve();
   expect(removedCleanup).toHaveBeenCalledTimes(1);
   const stoppedCleanup = vi.fn().mockResolvedValue();
-  mesh.incomingFiles.set("other", { timer: 0, sink: { cleanup: stoppedCleanup } });
+  mesh.transfers.incomingFiles.set("other", { timer: 0, sink: { cleanup: stoppedCleanup } });
   mesh.stop();
   await Promise.resolve();
   expect(stoppedCleanup).toHaveBeenCalledTimes(1);
@@ -2293,7 +2293,7 @@ test("receiver write credits bound sender in-flight payload to the advertised wi
   const channel = new FakeChannel();
   channel.autoCredit = false;
   mesh.setupDataChannel("guest", channel);
-  mesh.waitForDataChannel = vi.fn().mockResolvedValue(channel);
+  mesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(channel);
   const transfer = mesh.sendFile("guest", new Blob([new Uint8Array(1024 * 1024)]));
   await vi.waitFor(() => {
     const chunks = channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer);
@@ -2331,14 +2331,14 @@ test("channel close cancels a credit waiter immediately", async () => {
   const channel = new FakeChannel();
   channel.autoCredit = false;
   mesh.setupDataChannel("guest", channel);
-  mesh.waitForDataChannel = vi.fn().mockResolvedValue(channel);
+  mesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(channel);
   const transfer = mesh.sendFile("guest", new Blob([new Uint8Array(1024 * 1024)]));
-  await vi.waitFor(() => expect(mesh.pendingTransferCredits.size).toBe(1));
+  await vi.waitFor(() => expect(mesh.transfers.pendingTransferCredits.size).toBe(1));
   await vi.waitFor(() => expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(16));
   channel.readyState = "closed";
   channel.onclose();
   await expect(transfer).rejects.toThrow("Канал передачи песни закрыт");
-  expect(mesh.pendingTransferCredits.size).toBe(0);
+  expect(mesh.transfers.pendingTransferCredits.size).toBe(0);
 });
 test("channel replacement cancels admission, credit and confirmation owned by the old channel", async () => {
   const makeTransfer = async (phase) => {
@@ -2348,15 +2348,15 @@ test("channel replacement cancels admission, credit and confirmation owned by th
     if (phase === "admission") oldChannel.autoReady = false;
     if (phase === "credit") oldChannel.autoCredit = false;
     mesh.setupDataChannel("guest", oldChannel);
-    mesh.waitForDataChannel = vi.fn().mockResolvedValue(oldChannel);
+    mesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(oldChannel);
     const size = phase === "credit" ? 1024 * 1024 : 1;
     const transfer = mesh.sendFile("guest", new Blob([new Uint8Array(size)]));
     const store =
       phase === "admission"
-        ? mesh.pendingTransferAdmissions
+        ? mesh.transfers.pendingTransferAdmissions
         : phase === "credit"
-          ? mesh.pendingTransferCredits
-          : mesh.pendingTransferConfirmations;
+          ? mesh.transfers.pendingTransferCredits
+          : mesh.transfers.pendingTransferConfirmations;
     await vi.waitFor(() => expect(store.size).toBe(1));
     mesh.setupDataChannel("guest", nextChannel);
     await expect(transfer).rejects.toThrow("Канал передачи песни закрыт");
@@ -2372,19 +2372,19 @@ test("stop rejects orphan outbound transfer registries instead of clearing them 
   const rejectConfirmation = vi.fn();
   const rejectCredit = vi.fn();
   const timer = setTimeout(() => {}, 60_000);
-  mesh.pendingTransferAdmissions.set("a", {
+  mesh.transfers.pendingTransferAdmissions.set("a", {
     participantId: "gone",
     channel: {},
     timer,
     reject: rejectAdmission
   });
-  mesh.pendingTransferConfirmations.set("b", {
+  mesh.transfers.pendingTransferConfirmations.set("b", {
     participantId: "gone",
     channel: {},
     timer,
     reject: rejectConfirmation
   });
-  mesh.pendingTransferCredits.set("c", {
+  mesh.transfers.pendingTransferCredits.set("c", {
     participantId: "gone",
     channel: {},
     waiters: [{ timer, reject: rejectCredit }]
@@ -2393,13 +2393,13 @@ test("stop rejects orphan outbound transfer registries instead of clearing them 
   expect(rejectAdmission).toHaveBeenCalledOnce();
   expect(rejectConfirmation).toHaveBeenCalledOnce();
   expect(rejectCredit).toHaveBeenCalledOnce();
-  expect(mesh.pendingTransferAdmissions.size).toBe(0);
-  expect(mesh.pendingTransferConfirmations.size).toBe(0);
-  expect(mesh.pendingTransferCredits.size).toBe(0);
+  expect(mesh.transfers.pendingTransferAdmissions.size).toBe(0);
+  expect(mesh.transfers.pendingTransferConfirmations.size).toBe(0);
+  expect(mesh.transfers.pendingTransferCredits.size).toBe(0);
 });
 test("busy receiver rejects file-start immediately", () => {
   const { mesh, channel } = setupChannel("host");
-  mesh.incomingFileAdmissions.set("host", { channel, transferId: "existing", cancelled: false });
+  mesh.transfers.incomingFileAdmissions.set("host", { channel, transferId: "existing", cancelled: false });
   channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 }) });
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"transferId":"new"'));
@@ -2410,12 +2410,12 @@ test("stale old-channel close never cancels a transfer owned by its replacement"
   const nextChannel = new FakeChannel();
   mesh.setupDataChannel("guest", oldChannel);
   mesh.setupDataChannel("guest", nextChannel);
-  mesh.waitForDataChannel = vi.fn().mockResolvedValue(nextChannel);
+  mesh.transfers.waitForDataChannel = vi.fn().mockResolvedValue(nextChannel);
   const transfer = mesh.sendFile("guest", new Blob([new Uint8Array(1)]));
-  await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
+  await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
   oldChannel.onclose?.();
-  expect(mesh.pendingTransferConfirmations.size).toBe(1);
-  const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
+  expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1);
+  const transferId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
   nextChannel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId }) });
   await expect(transfer).resolves.toBeUndefined();
 });
@@ -2431,10 +2431,10 @@ test("stale old-channel binary never mutates the replacement incoming transfer",
   nextChannel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 })
   });
-  const transfer = mesh.incomingFiles.get("host");
+  const transfer = mesh.transfers.incomingFiles.get("host");
   const write = vi.spyOn(transfer.sink, "write");
   oldChannel.onmessage({ data: new Uint8Array([7]).buffer });
-  expect(mesh.incomingFiles.get("host")).toBe(transfer);
+  expect(mesh.transfers.incomingFiles.get("host")).toBe(transfer);
   expect(transfer.received).toBe(0);
   expect(write).not.toHaveBeenCalled();
   expect(oldChannel.send).not.toHaveBeenCalledWith(expect.stringContaining('"type":"file-credit"'));
@@ -2451,10 +2451,10 @@ test("stale old-channel file-end never destroys the replacement incoming transfe
   nextChannel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 })
   });
-  const transfer = mesh.incomingFiles.get("host");
+  const transfer = mesh.transfers.incomingFiles.get("host");
   const cleanup = vi.spyOn(transfer.sink, "cleanup");
   oldChannel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "old" }) });
-  expect(mesh.incomingFiles.get("host")).toBe(transfer);
+  expect(mesh.transfers.incomingFiles.get("host")).toBe(transfer);
   expect(cleanup).not.toHaveBeenCalled();
 });
 test("invalid current-channel chunk rejects immediately and cleans the transfer once", async () => {
@@ -2462,12 +2462,12 @@ test("invalid current-channel chunk rejects immediately and cleans the transfer 
   channel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "oversized", size: 1 })
   });
-  const transfer = mesh.incomingFiles.get("host");
+  const transfer = mesh.transfers.incomingFiles.get("host");
   const cleanup = vi.spyOn(transfer.sink, "cleanup");
   channel.send.mockClear();
   channel.onmessage({ data: new Uint8Array([1, 2]).buffer });
   await Promise.resolve();
-  expect(mesh.incomingFiles.has("host")).toBe(false);
+  expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
   expect(cleanup).toHaveBeenCalledOnce();
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"transferId":"oversized"'));
@@ -2488,17 +2488,17 @@ test("channel replacement cancels pending incoming admission without blocking th
   oldChannel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 })
   });
-  await vi.waitFor(() => expect(mesh.incomingFileAdmissions.has("host")).toBe(true));
+  await vi.waitFor(() => expect(mesh.transfers.incomingFileAdmissions.has("host")).toBe(true));
   mesh.setupDataChannel("host", nextChannel);
-  expect(mesh.incomingFileAdmissions.has("host")).toBe(false);
+  expect(mesh.transfers.incomingFileAdmissions.has("host")).toBe(false);
   nextChannel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 })
   });
-  await vi.waitFor(() => expect(mesh.incomingFiles.get("host")?.metadata.transferId).toBe("new"));
+  await vi.waitFor(() => expect(mesh.transfers.incomingFiles.get("host")?.metadata.transferId).toBe("new"));
   resolveOld(true);
   await Promise.resolve();
   await Promise.resolve();
-  expect(mesh.incomingFiles.get("host")?.metadata.transferId).toBe("new");
+  expect(mesh.transfers.incomingFiles.get("host")?.metadata.transferId).toBe("new");
 });
 test("file-end keeps ownership while the final disk write is pending and channel close cancels it", async () => {
   let resolveWrite;
@@ -2527,14 +2527,14 @@ test("file-end keeps ownership while the final disk write is pending and channel
   channel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "pending-write", size: 1 })
   });
-  await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
+  await vi.waitFor(() => expect(mesh.transfers.incomingFiles.has("host")).toBe(true));
   channel.onmessage({ data: new Uint8Array([1]).buffer });
   await vi.waitFor(() => expect(writable.write).toHaveBeenCalledOnce());
   channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "pending-write" }) });
-  expect(mesh.incomingFiles.get("host")?.phase).toBe("flushing");
+  expect(mesh.transfers.incomingFiles.get("host")?.phase).toBe("flushing");
   channel.readyState = "closed";
   channel.onclose();
-  expect(mesh.incomingFiles.has("host")).toBe(false);
+  expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
   await vi.waitFor(() => expect(writable.abort).toHaveBeenCalledOnce());
   await vi.waitFor(() => expect(removeEntry).toHaveBeenCalledOnce());
   expect(mesh.onFile).not.toHaveBeenCalled();
@@ -2566,13 +2566,13 @@ test("mesh stop cancels post-file-end finalization before application handoff", 
   channel.onmessage({
     data: JSON.stringify({ type: "file-start", transferId: "stop-finalize", size: 1 })
   });
-  await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
+  await vi.waitFor(() => expect(mesh.transfers.incomingFiles.has("host")).toBe(true));
   channel.onmessage({ data: new Uint8Array([1]).buffer });
   await vi.waitFor(() => expect(writable.write).toHaveBeenCalledOnce());
   channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "stop-finalize" }) });
   mesh.stop();
   await vi.waitFor(() => expect(writable.abort).toHaveBeenCalledOnce());
-  expect(mesh.incomingFiles.size).toBe(0);
+  expect(mesh.transfers.incomingFiles.size).toBe(0);
   expect(mesh.onFile).not.toHaveBeenCalled();
   resolveWrite();
 });
@@ -2590,13 +2590,13 @@ test("receiver stays busy until finalization completes", async () => {
   channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "one", size: 1 }) });
   channel.onmessage({ data: new Uint8Array([1]).buffer });
   channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "one" }) });
-  await vi.waitFor(() => expect(mesh.incomingFiles.get("host")?.phase).toBe("importing"));
+  await vi.waitFor(() => expect(mesh.transfers.incomingFiles.get("host")?.phase).toBe("importing"));
   channel.send.mockClear();
   channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "two", size: 1 }) });
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"transferId":"two"'));
   resolveImport(true);
-  await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(false));
+  await vi.waitFor(() => expect(mesh.transfers.incomingFiles.has("host")).toBe(false));
 });
 test("finalization timeout cleans a stalled transfer", async () => {
   vi.useFakeTimers();
@@ -2620,13 +2620,13 @@ test("finalization timeout cleans a stalled transfer", async () => {
   });
   await vi.runAllTicks();
   for (let index = 0; index < 8; index += 1) await Promise.resolve();
-  expect(mesh.incomingFiles.has("host")).toBe(true);
+  expect(mesh.transfers.incomingFiles.has("host")).toBe(true);
   channel.onmessage({ data: new Uint8Array([1]).buffer });
   await Promise.resolve();
   channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "timeout-finalize" }) });
-  expect(mesh.incomingFiles.has("host")).toBe(true);
+  expect(mesh.transfers.incomingFiles.has("host")).toBe(true);
   await vi.advanceTimersByTimeAsync(30_000);
-  expect(mesh.incomingFiles.has("host")).toBe(false);
+  expect(mesh.transfers.incomingFiles.has("host")).toBe(false);
   expect(writable.abort).toHaveBeenCalledOnce();
   expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
 });

@@ -1,3 +1,5 @@
+import { createLevelMeter } from "./levelMeter";
+
 const CURVES = { limiter: 1024 };
 const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
 
@@ -23,11 +25,8 @@ export function connectMicrophoneChannelStrip(
 ) {
   const highpass = assign(context.createBiquadFilter(), { frequency: 70 });
   highpass.type = "highpass";
-  const analyser = context.createAnalyser?.();
-  if (analyser) {
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.45;
-  }
+  const meter = createLevelMeter(context, { smoothingTimeConstant: 0.45 });
+  const analyser = meter?.analyser;
   const noiseGate = assign(context.createGain(), { gain: 1 });
   // Boosting presence before the compressor makes the compressor's envelope
   // detector react harder to exactly the frequencies (~2-8kHz) where hiss and
@@ -64,12 +63,8 @@ export function connectMicrophoneChannelStrip(
   let lastVoiceAt = 0;
   let timer = null;
   if (analyser) {
-    const samples = new Uint8Array(analyser.fftSize);
     const updateGate = () => {
-      analyser.getByteTimeDomainData(samples);
-      const rms = Math.sqrt(
-        samples.reduce((sum, sample) => sum + ((sample - 128) / 128) ** 2, 0) / samples.length
-      );
+      const rms = meter.read();
       const now = Date.now();
       const threshold = 0.0035 + suppression * 0.008;
       if (rms >= threshold) lastVoiceAt = now;

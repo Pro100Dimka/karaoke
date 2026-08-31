@@ -7,12 +7,12 @@ import { queryClient } from "./query-client";
 import { installGlobalErrorReporting } from "./utils/error-reporter";
 import { applyPerformanceProfile } from "./utils/performance-profile";
 import * as platform from "./utils/platform";
-import { getSavedTheme, saveTheme, THEME_BACKGROUNDS } from "./utils/theme";
+import { getSavedTheme, saveTheme } from "./utils/theme";
 
 const electronTheme = platform.initialTheme();
 const initialTheme = electronTheme ? saveTheme(electronTheme) : getSavedTheme();
 document.documentElement.dataset.theme = initialTheme;
-const initialBackground = THEME_BACKGROUNDS[initialTheme] || THEME_BACKGROUNDS.dark;
+const initialBackground = "var(--color-bg)";
 document.documentElement.style.backgroundColor = initialBackground;
 document.body.style.backgroundColor = initialBackground;
 applyPerformanceProfile(window);

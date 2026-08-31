@@ -102,18 +102,22 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
     []
   );
 
-  const confirmDraft = useCallback(() => {
-    const item = review?.items[review.index];
-    if (!item?.title.trim()) return;
-    advance([
-      ...review.approved,
-      {
-        ...item,
-        title: item.title.trim(),
-        artist: item.artist.trim()
-      }
-    ]);
-  }, [advance, review]);
+  const confirmDraft = useCallback(
+    (values) => {
+      const draft = review?.items[review.index];
+      const item = draft && { ...draft, ...values };
+      if (!item?.title.trim()) return;
+      advance([
+        ...review.approved,
+        {
+          ...item,
+          title: item.title.trim(),
+          artist: item.artist.trim()
+        }
+      ]);
+    },
+    [advance, review]
+  );
 
   return {
     review,

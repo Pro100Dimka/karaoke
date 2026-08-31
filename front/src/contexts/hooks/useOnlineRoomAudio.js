@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { connectVoiceEffects } from "../../services/voiceEffects";
 import { clamp01 as clampUnit } from "../../utils/math";
 
 const clamp01 = (value) => clampUnit(Number(value) || 0);
@@ -166,39 +167,7 @@ export default function useOnlineRoomAudio({
       master.gain.value = 1;
       source.connect(master);
 
-      const echo = clamp01(effects.echo);
-      const delayAmount = clamp01(effects.delay);
-      if (echo || delayAmount) {
-        const delay = context.createDelay(1);
-        const feedback = context.createGain();
-        const wet = context.createGain();
-        delay.delayTime.value = 0.06 + delayAmount * 0.34;
-        feedback.gain.value = Math.min(0.72, echo * 0.55 + delayAmount * 0.3);
-        wet.gain.value = Math.min(0.65, echo * 0.46 + delayAmount * 0.24);
-        source.connect(delay);
-        delay.connect(feedback);
-        feedback.connect(delay);
-        delay.connect(wet);
-        wet.connect(master);
-      }
-
-      const reverb = clamp01(effects.reverb);
-      if (reverb) {
-        const convolver = context.createConvolver();
-        const wet = context.createGain();
-        const frames = Math.floor(context.sampleRate * (0.35 + reverb * 1.15));
-        const impulse = context.createBuffer(2, frames, context.sampleRate);
-        for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
-          const data = impulse.getChannelData(channel);
-          for (let index = 0; index < frames; index += 1)
-            data[index] = (Math.random() * 2 - 1) * (1 - index / frames) ** (1.5 + reverb * 2);
-        }
-        convolver.buffer = impulse;
-        wet.gain.value = Math.min(0.58, reverb * 0.48);
-        source.connect(convolver);
-        convolver.connect(wet);
-        wet.connect(master);
-      }
+      connectVoiceEffects(context, source, master, effects);
       master.connect(context.destination);
       const activate = () => {
         if (
@@ -277,39 +246,7 @@ export default function useOnlineRoomAudio({
         // compress the singer twice.
         source.connect(gain);
 
-        const echo = clamp01(effects.echo);
-        const delayAmount = clamp01(effects.delay);
-        if (echo || delayAmount) {
-          const delay = context.createDelay(1);
-          const feedback = context.createGain();
-          const wet = context.createGain();
-          delay.delayTime.value = 0.06 + delayAmount * 0.34;
-          feedback.gain.value = Math.min(0.72, echo * 0.55 + delayAmount * 0.3);
-          wet.gain.value = Math.min(0.65, echo * 0.46 + delayAmount * 0.24);
-          source.connect(delay);
-          delay.connect(feedback);
-          feedback.connect(delay);
-          delay.connect(wet);
-          wet.connect(gain);
-        }
-
-        const reverb = clamp01(effects.reverb);
-        if (reverb) {
-          const convolver = context.createConvolver();
-          const wet = context.createGain();
-          const frames = Math.floor(context.sampleRate * (0.35 + reverb * 1.15));
-          const impulse = context.createBuffer(2, frames, context.sampleRate);
-          for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
-            const data = impulse.getChannelData(channel);
-            for (let index = 0; index < frames; index += 1)
-              data[index] = (Math.random() * 2 - 1) * (1 - index / frames) ** (1.5 + reverb * 2);
-          }
-          convolver.buffer = impulse;
-          wet.gain.value = Math.min(0.58, reverb * 0.48);
-          source.connect(convolver);
-          convolver.connect(wet);
-          wet.connect(gain);
-        }
+        connectVoiceEffects(context, source, gain, effects);
         gain.connect(context.destination);
         await context.resume?.();
         if (voiceRef.current !== voice) {

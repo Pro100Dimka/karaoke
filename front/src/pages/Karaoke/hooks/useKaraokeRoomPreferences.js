@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { createRoomSyncChannel } from "../../../services/roomSyncChannel";
 import { normalizeKaraokePreferences } from "../utils/preferences";
 
 const valuesOf = (preferences) =>
@@ -15,8 +16,11 @@ const valuesOf = (preferences) =>
   });
 
 export default function useKaraokeRoomPreferences({ preferences, room, roomUi, syncUi }) {
-  const remoteTarget = useRef(null);
-  const sent = useRef("");
+  const connected = Boolean(room),
+    roomId = room?.id,
+    selfId = room?.selfId,
+    host = room?.host;
+  const channel = useRef(createRoomSyncChannel());
   const local = useMemo(() => valuesOf(preferences), [preferences]);
   const localSignature = JSON.stringify(local);
   const currentLocal = useRef(local);
@@ -25,39 +29,24 @@ export default function useKaraokeRoomPreferences({ preferences, room, roomUi, s
   currentPreferences.current = preferences;
 
   useEffect(() => {
-    remoteTarget.current = null;
-    sent.current = room && !room.host ? JSON.stringify(currentLocal.current) : "";
-  }, [room?.host, room?.id, room?.selfId]);
+    channel.current = createRoomSyncChannel(connected && !host ? currentLocal.current : undefined);
+  }, [connected, host, roomId, selfId]);
 
   useEffect(() => {
-    if (!room || !roomUi?.karaoke) return;
+    if (!connected || !roomUi?.karaoke) return;
     const remote = valuesOf(roomUi.karaoke);
-    const remoteSignature = JSON.stringify(remote);
     const { current } = currentLocal;
-    if (remoteSignature === JSON.stringify(current)) {
-      remoteTarget.current = null;
-      sent.current = remoteSignature;
-      return;
-    }
-    remoteTarget.current = remoteSignature;
+    if (!channel.current.receiveState(remote, current)) return;
     Object.entries(remote).forEach(([key, value]) => {
       if (current[key] === value) return;
       const setter = `set${key[0].toUpperCase()}${key.slice(1)}`;
       currentPreferences.current[setter]?.(value);
     });
-  }, [room?.id, roomUi?.__eventId, roomUi?.karaoke]);
+  }, [connected, roomId, roomUi?.__eventId, roomUi?.karaoke]);
 
   useEffect(() => {
     if (!room) return;
-    if (remoteTarget.current !== null) {
-      if (remoteTarget.current === localSignature) {
-        remoteTarget.current = null;
-        sent.current = localSignature;
-      }
-      return;
-    }
-    if (sent.current === localSignature) return;
-    sent.current = localSignature;
+    if (!channel.current.shouldSend(local)) return;
     syncUi({ karaoke: local });
   }, [local, localSignature, room, syncUi]);
 }

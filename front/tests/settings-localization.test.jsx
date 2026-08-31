@@ -2,9 +2,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { messages } from "../src/i18n/messages";
-import appearanceRows from "../src/pages/Settings/appearance-rows";
-import audioRows from "../src/pages/Settings/audio-rows";
-import processingRows from "../src/pages/Settings/processing-rows";
+import appearanceRows from "../src/pages/Settings/rows/appearance";
+import audioRows from "../src/pages/Settings/rows/audio";
+import processingRows from "../src/pages/Settings/rows/processing";
 import SettingsPage from "./helpers/settings-page";
 
 const settings = () => ({

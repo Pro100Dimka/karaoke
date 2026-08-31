@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createLevelMeter } from "../../services/levelMeter";
 
 const METER_INTERVAL_MS = 70;
 const MIN_LEVEL_DELTA_PERCENT = 1;
@@ -120,19 +121,18 @@ export default function useSpeakingLevels() {
 
       let source;
       let analyser;
+      let meter;
       try {
         source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
+        meter = createLevelMeter(audioContext);
+        analyser = meter.analyser;
       } catch {
         disconnectNode(source);
         disconnectNode(analyser);
         return;
       }
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.55;
       source.connect(analyser);
 
-      const samples = new Uint8Array(analyser.fftSize);
       let smoothed = 0;
       let lastPublished;
       const liveTrack = stream.getAudioTracks()[0];
@@ -146,19 +146,13 @@ export default function useSpeakingLevels() {
           stopSpeakingMeter(key);
           return;
         }
+        let rms;
         try {
-          analyser.getByteTimeDomainData(samples);
+          rms = meter.read();
         } catch {
           stopSpeakingMeter(key);
           return;
         }
-        let sum = 0;
-        for (const sample of samples) {
-          const normalized = (sample - 128) / 128;
-          sum += normalized * normalized;
-        }
-
-        const rms = Math.sqrt(sum / samples.length);
         const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.004) / 0.12));
         const response = normalizedLevel > smoothed ? 0.48 : 0.18;
         smoothed += (normalizedLevel - smoothed) * response;

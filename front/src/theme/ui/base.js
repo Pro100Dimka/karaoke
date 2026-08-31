@@ -1,5 +1,3 @@
-import theme, { createTheme } from "../ThemeConfig";
+import "../tokens.css";
 import "../ThemeConfig/theme-adapter.css";
 import "./_internal/base.css";
-
-createTheme(theme);
