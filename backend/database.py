@@ -171,7 +171,22 @@ def _repair_corrupted_audio_settings(connection) -> None:
         )
 
 
-def _mark_interrupted_jobs(connection) -> None: connection.execute(text('UPDATE songs SET status = :cancelled, progress_step = :step, progress_percent = 0, error_message = :message WHERE status IN (:queued, :processing)'), {'cancelled': 'CANCELLED', 'queued': 'QUEUED', 'processing': 'PROCESSING', 'step': 'Interrupted', 'message': 'Processing was interrupted by an application restart'})
+def _mark_interrupted_jobs(connection) -> None:
+    connection.execute(
+        text(
+            "UPDATE songs SET status = :cancelled, progress_step = :step, "
+            "progress_percent = 0, error_message = :message "
+            "WHERE status IN (:queued, :processing, :cancelling)"
+        ),
+        {
+            "cancelled": "CANCELLED",
+            "queued": "QUEUED",
+            "processing": "PROCESSING",
+            "cancelling": "CANCELLING",
+            "step": "Interrupted",
+            "message": "Processing was interrupted by an application restart",
+        },
+    )
 
 
 def init_db() -> None:

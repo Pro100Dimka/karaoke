@@ -20,6 +20,12 @@ venv/
 env/
 ENV/
 downloads/
+!downloads/
+downloads/*
+!downloads/engines/
+downloads/engines/*
+!downloads/engines/node-api-headers/
+!downloads/engines/node-api-headers/*.h
 karaoke_songs/
 data/
 .pytest_cache/

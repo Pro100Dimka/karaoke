@@ -3,6 +3,26 @@ from contextlib import suppress
 from pathlib import Path
 
 
+def recover_orphaned_backups(root: str | Path) -> list[Path]:
+    """Finish or clean interrupted atomic publishes below *root*.
+
+    A backup is restored only when its destination is absent. If both files
+    exist, the publish completed and the stale backup is safely discarded.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    restored = []
+    for backup in root.rglob("*.bak"):
+        target = backup.with_suffix("")
+        if target.exists():
+            backup.unlink(missing_ok=True)
+            continue
+        os.replace(backup, target)
+        restored.append(target)
+    return restored
+
+
 def publish_files_atomically(pairs: list[tuple[Path, Path]]) -> None:
     backups = []
     published = []

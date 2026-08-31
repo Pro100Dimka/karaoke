@@ -75,6 +75,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setVocalVolume,
     melodyVolume,
     setMelodyVolume,
+    previewPreference,
     speed,
     setSpeed,
     keyShift,
@@ -348,7 +349,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     );
   }
   const rawBaseTempo = Number(lyricsSync?.bpm);
-  const baseTempo = rawBaseTempo;
+  const baseTempo = Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
   const currentTempo = Math.max(1, Math.round(baseTempo * speed));
   const compactKey = formatCompactKey(transposeKey(lyricsSync.key, keyShift));
   const changeTempo = (delta) => {
@@ -375,6 +376,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     navigateToLibraryFromBlackout();
   };
   const handleEffectChange = (key, value) => {
+    setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
+  };
+  const handleEffectCommit = (key, value) => {
     setEffectPreset("custom");
     setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
     updateMicrophone({ [key]: value });
@@ -488,13 +492,19 @@ export default function Karaoke({ onOpenAppSettings }) {
         },
         onVolumeChange: {
           microphone: setMicrophoneVolume,
+          music: (value) => previewPreference("musicVolume", value),
+          vocal: (value) => previewPreference("vocalVolume", value),
+          melody: (value) => previewPreference("melodyVolume", value)
+        },
+        onVolumeCommit: {
+          microphone: (value) => updateMicrophone({ volume: value }),
           music: setMusicVolume,
           vocal: setVocalVolume,
           melody: setMelodyVolume
         },
-        onMicrophoneCommit: (value) => updateMicrophone({ volume: value }),
         microphoneEffects,
         onEffectChange: handleEffectChange,
+        onEffectCommit: handleEffectCommit,
         isPlaying,
         onSkip: skip,
         onTogglePlay: handleTogglePlay,

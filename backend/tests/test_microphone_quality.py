@@ -169,3 +169,44 @@ def test_pitch_shifter_accepts_both_octave_directions_and_keeps_block_shape():
     assert low.shape == source.shape
     assert np.isfinite(high).all()
     assert np.isfinite(low).all()
+
+
+def _reference_pitch_blocks(sample_rate, blocks, octave):
+    length = max(1024, int(round(max(8_000.0, float(sample_rate)) * 0.032)))
+    buffer = np.zeros(length, dtype=np.float32)
+    write_pos, phase = 0, 0.0
+    ratio = 2.0**octave
+    outputs = []
+    for source in blocks:
+        output = np.empty_like(source)
+        for index, sample in enumerate(source):
+            buffer[write_pos] = sample
+            phase_a = (phase + 1.0) % 1.0
+            phase_b = (phase_a + 0.5) % 1.0
+            read_a = (write_pos - 1.0 - phase_a * (length - 2.0)) % length
+            read_b = (write_pos - 1.0 - phase_b * (length - 2.0)) % length
+            a0, b0 = int(read_a), int(read_b)
+            frac_a, frac_b = read_a - a0, read_b - b0
+            sample_a = buffer[a0] * (1.0 - frac_a) + buffer[(a0 + 1) % length] * frac_a
+            sample_b = buffer[b0] * (1.0 - frac_b) + buffer[(b0 + 1) % length] * frac_b
+            weight_a = 0.5 - 0.5 * math.cos(2.0 * math.pi * phase_a)
+            weight_b = 0.5 - 0.5 * math.cos(2.0 * math.pi * phase_b)
+            output[index] = (
+                sample_a * weight_a + sample_b * weight_b
+            ) / max(1e-6, weight_a + weight_b)
+            phase = (phase + (1.0 - ratio) / length + 1.0) % 1.0
+            write_pos = (write_pos + 1) % length
+        outputs.append(output)
+    return outputs
+
+
+def test_vectorized_pitch_shifter_matches_original_streaming_algorithm():
+    rng = np.random.default_rng(2026)
+    blocks = [rng.uniform(-0.7, 0.7, size=size).astype(np.float32)
+              for size in (64, 128, 256, 91)]
+    for octave in (-0.75, 0.4, 1.0):
+        expected = _reference_pitch_blocks(48_000, blocks, octave)
+        shifter = RealtimePitchShifter(48_000)
+        actual = [shifter.process(block, octave) for block in blocks]
+        for reference, vectorized in zip(expected, actual, strict=True):
+            np.testing.assert_allclose(vectorized, reference, rtol=2e-5, atol=2e-6)

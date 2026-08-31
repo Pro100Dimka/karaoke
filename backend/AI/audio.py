@@ -94,7 +94,10 @@ def _render(source: str | Path, target: Path, sample_rate: int, channels: int) -
     handle, temporary = tempfile.mkstemp(suffix=target.suffix, dir=target.parent)
     os.close(handle)
     try:
-        run_ffmpeg(["-i", str(source), "-vn", "-ar", str(sample_rate), "-ac", str(channels), temporary])
+        run_ffmpeg(
+            ["-i", str(source), "-vn", "-ar", str(sample_rate), "-ac", str(channels), temporary],
+            timeout=20 * 60,
+        )
         os.replace(temporary, target)
     finally:
         Path(temporary).unlink(missing_ok=True)

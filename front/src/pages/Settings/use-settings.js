@@ -87,6 +87,7 @@ function useAudio(open) {
   const merge = (patch) => setLocal((state) => ({ ...state, ...patch }));
   const update = (name, value) => {
     const patch = { [name]: value };
+    const previous = values[name];
     merge(patch);
     return queue(name, async (latest) => {
       try {
@@ -95,6 +96,7 @@ function useAudio(open) {
         emit(saved);
         await settings.refresh();
       } catch (error) {
+        if (latest()) merge({ [name]: previous });
         await fail("settings.couldNotSaveAudioSettings", error);
       }
     });

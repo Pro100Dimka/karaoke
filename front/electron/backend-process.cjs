@@ -29,6 +29,8 @@ function createBackendProcess({
   let backendStopRequested = false;
   let backendRestartAttempts = 0;
   let backendStableTimer = null;
+  let backendHealthTimer = null;
+  let backendHealthFailures = 0;
   let backendDuplicateWatchTimer = null;
   let backendDuplicateDetected = false;
   let backendDuplicateWatchGeneration = 0;
@@ -255,8 +257,27 @@ function createBackendProcess({
         backendStableTimer = setTimeout(() => {
           if (backendProcess === childProcess) backendRestartAttempts = 0;
         }, BACKEND_STABLE_RESET_MS);
+        clearInterval(backendHealthTimer);
+        backendHealthFailures = 0;
+        backendHealthTimer = setInterval(async () => {
+          if (backendProcess !== childProcess || backendStopRequested || isQuitting()) return;
+          try {
+            await requestBackendJson("/diagnostics/health", 3000);
+            backendHealthFailures = 0;
+          } catch (error) {
+            backendHealthFailures += 1;
+            if (backendHealthFailures < 3 || backendProcess !== childProcess) return;
+            const message = "Backend health check failed three times; restarting";
+            console.error(message, error?.stack || error);
+            reportBackendError(message, error?.stack || String(error));
+            childProcess.kill();
+          }
+        }, 10_000);
+        backendHealthTimer.unref?.();
       });
       childProcess.on("error", (err) => {
+        clearInterval(backendHealthTimer);
+        backendHealthTimer = null;
         clearTimeout(backendStableTimer);
         backendStableTimer = null;
         console.error("Не удалось запустить backend:", err);
@@ -265,6 +286,8 @@ function createBackendProcess({
         scheduleBackendRestart();
       });
       childProcess.on("exit", (code, signal) => {
+        clearInterval(backendHealthTimer);
+        backendHealthTimer = null;
         clearTimeout(backendStableTimer);
         backendStableTimer = null;
         if (backendProcess === childProcess) backendProcess = null;
@@ -296,8 +319,10 @@ function createBackendProcess({
     clearTimeout(backendRestartTimer);
     clearTimeout(backendStableTimer);
     clearTimeout(backendDuplicateWatchTimer);
+    clearInterval(backendHealthTimer);
     backendStableTimer = null;
     backendDuplicateWatchTimer = null;
+    backendHealthTimer = null;
     backendDuplicateDetected = false;
     backendDuplicateWatchGeneration += 1;
 

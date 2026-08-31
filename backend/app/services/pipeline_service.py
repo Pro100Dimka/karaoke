@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 import config
 import models
+from AI.artifacts import recover_orphaned_backups
 from AI.cache import StageCache
 from AI.notes import NOTE_DECODER_VERSION
 from AI.pipeline import KaraokePipeline
@@ -877,6 +878,7 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
     if paths is None or _is_cancelled(song_id): return
     if _reject_full_process_if_source_retired(song_id, reuse_vocals=reuse_vocals): return
     source_path, out_dir = paths
+    recover_orphaned_backups(out_dir)
     if not reuse_vocals and Path(source_path).suffix.casefold() in config.ALLOWED_KARAOKE_EXTENSIONS:
         _run_symbolic_job(song_id, source_path, out_dir)
         return

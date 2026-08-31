@@ -8,8 +8,8 @@ set "ASIO=%ROOT%\downloads\engines\asio-sdk"
 set "TMP=%TEMP%\advoice-asio"
 set "ZIP=%TMP%\asio.zip"
 set "UNPACK=%TMP%\unpack"
-set "REPO=https://github.com/audiosdk/asio.git"
-set "ZIPURL=https://github.com/audiosdk/asio/archive/refs/heads/main.zip"
+set "ZIPURL=https://www.steinberg.net/asiosdk"
+set "ZIP_SHA256=D5EBF0C20DD2C5F43771FD0C1418F4B361BF52434EE670097CFA6B3A335E2ECA"
 
 call :verify >nul 2>&1 && (
     echo ASIO SDK is ready.
@@ -21,20 +21,8 @@ rmdir /s /q "%ASIO%" "%TMP%" >nul 2>&1
 mkdir "%ROOT%\downloads\engines" >nul 2>&1
 mkdir "%TMP%" >nul 2>&1 || goto :fail
 
-where git.exe >nul 2>&1
-if not errorlevel 1 (
-    echo Downloading ASIO SDK with Git...
-    git clone --quiet --depth 1 "%REPO%" "%ASIO%" >nul 2>&1
-    if not errorlevel 1 (
-        call :verify >nul 2>&1
-        if not errorlevel 1 goto :ok
-    )
-    echo Git download failed. Trying ZIP...
-    rmdir /s /q "%ASIO%" >nul 2>&1
-)
-
 mkdir "%UNPACK%" >nul 2>&1 || goto :fail
-echo Downloading ASIO SDK ZIP...
+echo Downloading official Steinberg ASIO SDK...
 
 where curl.exe >nul 2>&1
 if not errorlevel 1 curl.exe -LfsS --retry 5 --retry-delay 2 -o "%ZIP%" "%ZIPURL%"
@@ -48,6 +36,12 @@ if not exist "%ZIP%" (
 
 if not exist "%ZIP%" goto :fail
 for %%F in ("%ZIP%") do if %%~zF==0 goto :fail
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"$s=[IO.File]::OpenRead('%ZIP%');try{$h=[Security.Cryptography.SHA256]::Create();$v=([BitConverter]::ToString($h.ComputeHash($s))).Replace('-','')}finally{$s.Dispose()};if($v -ne '%ZIP_SHA256%'){exit 1}"
+if errorlevel 1 (
+    echo [ERROR] ASIO SDK archive checksum mismatch.
+    goto :fail
+)
 
 echo Extracting ASIO SDK...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -77,6 +71,7 @@ for %%F in (
     "%ASIO%\host\asiodrivers.h"
     "%ASIO%\host\asiodrivers.cpp"
     "%ASIO%\host\pc\asiolist.cpp"
+    "%ASIO%\LICENSE.txt"
 ) do if not exist "%%~F" exit /b 1
 exit /b 0
 

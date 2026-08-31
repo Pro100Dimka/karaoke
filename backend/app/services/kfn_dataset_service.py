@@ -316,7 +316,7 @@ def _write_embedded_audio(entry: KfnEntry, target: Path) -> bool:
     source.write_bytes(entry.payload)
     result = subprocess.run(
         [
-            str(config.FFMPEG_BIN),
+            str(config.FFMPEG_EXE),
             "-hide_banner",
             "-loglevel",
             "error",

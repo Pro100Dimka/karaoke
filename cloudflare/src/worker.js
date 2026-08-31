@@ -411,7 +411,7 @@ export class KaraokeRoom {
         // room-state instead of staying on stale playback until the host's
         // next command.
         const sentAt = Date.now();
-        if (state.type === "karaoke-player") {
+        if (state.type === "karaoke-player" || state.type === "start-karaoke") {
           this.playbackState = { state, sentAt };
           await this.ctx.storage?.put?.("playbackState", this.playbackState);
         }
@@ -646,7 +646,12 @@ export async function handleLogUpload(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/health") return json({ ok: true, service: "A&D Voice Online" });
+    if (url.pathname === "/health")
+      return json({
+        ok: true,
+        service: "A&D Voice Online",
+        turnConfigured: Boolean(env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN),
+      });
     if (url.pathname === "/logs" && request.method === "POST") {
       return handleLogUpload(request, env);
     }

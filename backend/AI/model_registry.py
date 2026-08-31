@@ -38,10 +38,10 @@ class ModelSpec:
 
 
 MODELS = (
-    ModelSpec("asr", "Qwen3 ASR", "Qwen/Qwen3-ASR-0.6B", "5eb144179a02acc5e5ba31e748d22b0cf3e303b0", "qwen/Qwen3-ASR-0.6B", "KARAOKE_AI_ASR_MODEL", 1_876_091_704),
-    ModelSpec("aligner", "Qwen3 Forced Aligner", "Qwen/Qwen3-ForcedAligner-0.6B", "c7cbfc2048c462b0d63a45797104fc9db3ad62b7", "qwen/Qwen3-ForcedAligner-0.6B", "KARAOKE_AI_ALIGNER_MODEL", 1_840_072_459),
-    ModelSpec("ctc_ru", "Russian CTC aligner", "jonatasgrosman/wav2vec2-large-xlsr-53-russian", "2329100508896c6d9b157019803ab5601e6f3406", "ctc/wav2vec2-large-xlsr-53-russian", "KARAOKE_AI_CTC_RU_MODEL", 1_265_908_849, ignore_patterns=("language_model/**", "flax_model.msgpack")),
-    ModelSpec("ctc_uk", "Ukrainian CTC aligner", "Yehor/wav2vec2-xls-r-300m-uk-with-small-lm", "e3ced4def0d70be3aab0f2db598a59961fe9ab3b", "ctc/wav2vec2-xls-r-300m-uk", "KARAOKE_AI_CTC_UK_MODEL", 1_261_978_306, ignore_patterns=("language_model/**", "flax_model.msgpack")),
+    ModelSpec("asr", "Qwen3 ASR", "Qwen/Qwen3-ASR-0.6B", "5eb144179a02acc5e5ba31e748d22b0cf3e303b0", "qwen/Qwen3-ASR-0.6B", "KARAOKE_AI_ASR_MODEL", 1_876_091_704, filename="model.safetensors", sha256="79d6cbd4c98c7bbffe9db2edac07f56cd6637d0d5944b27f6c2b8353840323ea"),
+    ModelSpec("aligner", "Qwen3 Forced Aligner", "Qwen/Qwen3-ForcedAligner-0.6B", "c7cbfc2048c462b0d63a45797104fc9db3ad62b7", "qwen/Qwen3-ForcedAligner-0.6B", "KARAOKE_AI_ALIGNER_MODEL", 1_840_072_459, filename="model.safetensors", sha256="47831d0e82f96b20e9034dba01a075ee06436654719f6a68289e49f1b65ce0e7"),
+    ModelSpec("ctc_ru", "Russian CTC aligner", "jonatasgrosman/wav2vec2-large-xlsr-53-russian", "2329100508896c6d9b157019803ab5601e6f3406", "ctc/wav2vec2-large-xlsr-53-russian", "KARAOKE_AI_CTC_RU_MODEL", 1_265_908_849, filename="pytorch_model.bin", sha256="d1cdb1a7921de7d363f967a9b0101a713602e109dba62b6f3f9ae2e0b2df0c1c", ignore_patterns=("language_model/**", "flax_model.msgpack")),
+    ModelSpec("ctc_uk", "Ukrainian CTC aligner", "Yehor/wav2vec2-xls-r-300m-uk-with-small-lm", "e3ced4def0d70be3aab0f2db598a59961fe9ab3b", "ctc/wav2vec2-xls-r-300m-uk", "KARAOKE_AI_CTC_UK_MODEL", 1_261_978_306, filename="model.safetensors", sha256="e8d3ea3825853c6016539d474878fc281cf0bbb2fa9209f34f403b91e2eb0fe9", ignore_patterns=("language_model/**", "flax_model.msgpack")),
     ModelSpec("roformer", "Mel-Band RoFormer", "KimberleyJSN/melbandroformer", "ac9b0614ab3cd7f77219e18ba494dfd93956c348", "roformer", "MSST_CHECKPOINT", 913_106_900, kind="file", filename="MelBandRoformer.ckpt", sha256="87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e"),
 )
 MODEL_BY_KEY = {model.key: model for model in MODELS}

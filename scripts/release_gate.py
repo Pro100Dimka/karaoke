@@ -245,6 +245,23 @@ def main() -> int:
                 ],
                 BACKEND,
             ),
+            (
+                "Backend dependency audit",
+                [
+                    sys.executable,
+                    "-m",
+                    "pip_audit",
+                    "--ignore-vuln",
+                    "PYSEC-2025-217",
+                    "--ignore-vuln",
+                    "PYSEC-2026-2288",
+                    "--ignore-vuln",
+                    "PYSEC-2026-2289",
+                    "--ignore-vuln",
+                    "PYSEC-2026-2290",
+                ],
+                BACKEND,
+            ),
         ],
         [
             ("Frontend verify", [npm, "run", "verify"], FRONT),

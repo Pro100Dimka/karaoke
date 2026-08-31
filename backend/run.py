@@ -54,6 +54,10 @@ class _RedactingFormatter(logging.Formatter):
 def _is_useful_record(record: logging.LogRecord) -> bool:
     if record.levelno >= logging.WARNING: return True
     message = record.getMessage()
+    if record.name.endswith("pipeline_service") and any(
+        marker in message.casefold() for marker in ("song processing", "ai stage")
+    ):
+        return True
     return any(marker in message for marker in ("[AI]", "AI runtime:", "AI build="))
 
 

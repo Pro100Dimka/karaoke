@@ -11,8 +11,8 @@ function loadWindows(resourcesPath) {
     // The filename is resolved only from our packaged/development build root.
     // eslint-disable-next-line import/no-dynamic-require, global-require
     if (fs.existsSync(filename)) return require(filename);
-  } catch {
-    /* Optional unsupported OS/API. */
+  } catch (error) {
+    console.error("Native keyboard lighting failed to load", error?.stack || error);
   }
   return null;
 }
@@ -90,7 +90,8 @@ class LightingController {
         provider: "openrgb",
         count: names.length
       };
-    } catch {
+    } catch (error) {
+      console.error("Keyboard lighting connection failed", error?.stack || error);
       client.stop();
       if (token === this.generation)
         this.status = nativeStatus || { state: "unavailable", count: 0 };
@@ -138,7 +139,8 @@ class LightingController {
           }
         } else this.provider?.frame(rgb);
       }
-    } catch {
+    } catch (error) {
+      console.error("Keyboard lighting frame failed", error?.stack || error);
       this.status = { state: "unavailable", count: 0 };
       await this.release();
     } finally {

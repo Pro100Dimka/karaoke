@@ -114,12 +114,18 @@ def test_interrupted_jobs_are_cancelled():
                 "progress_percent FLOAT, error_message TEXT)"
             )
         )
-        connection.execute(text("INSERT INTO songs (status) VALUES ('QUEUED'), ('DONE')"))
+        connection.execute(
+            text("INSERT INTO songs (status) VALUES ('QUEUED'), ('CANCELLING'), ('DONE')")
+        )
         database._mark_interrupted_jobs(connection)
         rows = connection.execute(
             text("SELECT status, progress_step, progress_percent FROM songs ORDER BY rowid")
         ).all()
-        assert rows == [("CANCELLED", "Interrupted", 0.0), ("DONE", None, None)]
+        assert rows == [
+            ("CANCELLED", "Interrupted", 0.0),
+            ("CANCELLED", "Interrupted", 0.0),
+            ("DONE", None, None),
+        ]
     engine.dispose()
 
 

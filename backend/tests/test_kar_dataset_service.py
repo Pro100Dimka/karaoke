@@ -1,7 +1,9 @@
 import asyncio
+import io
 import json
 import struct
 import sys
+import wave
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -58,6 +60,23 @@ def build_kfn(path, midi_payload=None, audio_payload=None):
         payload_offset += len(payload)
     path.write_bytes(header + payloads)
     return path
+
+
+def test_writes_real_embedded_kfn_audio_with_configured_ffmpeg(tmp_path):
+    audio = io.BytesIO()
+    with wave.open(audio, "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(8000)
+        output.writeframes(b"\0\0" * 800)
+    source = build_kfn(tmp_path / "audio.kfn", audio_payload=audio.getvalue())
+    entry = next(item for item in kfn_dataset_service.parse_kfn_container(source).entries
+                 if item.name == "original.mp3")
+    target = tmp_path / "output"
+    target.mkdir()
+
+    assert kfn_dataset_service._write_embedded_audio(entry, target)
+    assert (target / "original.flac").stat().st_size > 0
 
 
 def test_parses_kar_words_tempo_identity_and_melody(tmp_path):

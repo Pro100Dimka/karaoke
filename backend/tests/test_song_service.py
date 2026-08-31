@@ -108,6 +108,7 @@ def test_validate_status_transition_allows_the_documented_lifecycle():
         (S.PROCESSING, S.CANCELLED),
         (S.CANCELLING, S.CANCELLED),
         (S.CANCELLING, S.ERROR),
+        (S.CANCELLING, S.QUEUED),
         (S.ERROR, S.QUEUED),
         (S.CANCELLED, S.QUEUED),
         (S.DONE, S.QUEUED),

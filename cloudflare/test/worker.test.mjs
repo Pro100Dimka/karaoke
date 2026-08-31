@@ -9,6 +9,17 @@ import {
   reclaimGuestId,
   ROOM_PROTOCOL_VERSION
 } from "../src/worker.js";
+import worker from "../src/worker.js";
+
+test("health reports whether TURN credentials are configured", async () => {
+  const withoutTurn = await worker.fetch(new Request("https://worker.test/health"), {});
+  const withTurn = await worker.fetch(new Request("https://worker.test/health"), {
+    TURN_KEY_ID: "id",
+    TURN_KEY_API_TOKEN: "token"
+  });
+  assert.equal((await withoutTurn.json()).turnConfigured, false);
+  assert.equal((await withTurn.json()).turnConfigured, true);
+});
 
 const joinRequest = (params = {}) => {
   const url = new URL("https://worker.test/rooms/ABCD1234");

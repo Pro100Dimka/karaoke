@@ -116,25 +116,47 @@ class RealtimePitchShifter:
             return source
 
         ratio = 2.0**octave
-        output = np.empty_like(source)
         length = self._buffer_len
-        for index, sample in enumerate(source):
-            self._buffer[self._write_pos] = sample
-            phase_a = (self._phase + 1.0) % 1.0
-            phase_b = (phase_a + 0.5) % 1.0
-            read_a = (self._write_pos - 1.0 - phase_a * (length - 2.0)) % length
-            read_b = (self._write_pos - 1.0 - phase_b * (length - 2.0)) % length
-            a0, b0 = int(read_a), int(read_b)
-            frac_a, frac_b = read_a - a0, read_b - b0
-            sample_a = self._buffer[a0] * (1.0 - frac_a) + self._buffer[(a0 + 1) % length] * frac_a
-            sample_b = self._buffer[b0] * (1.0 - frac_b) + self._buffer[(b0 + 1) % length] * frac_b
-            weight_a = 0.5 - 0.5 * math.cos(2.0 * math.pi * phase_a)
-            weight_b = 0.5 - 0.5 * math.cos(2.0 * math.pi * phase_b)
-            output[index] = (sample_a * weight_a + sample_b * weight_b) / max(1e-6, weight_a + weight_b)
-            self._phase = (self._phase + (1.0 - ratio) / length + 1.0) % 1.0
-            self._write_pos = (self._write_pos + 1) % length
+        count = len(source)
+        if not count:
+            return np.empty_like(source)
+        # The ring contains input samples only, so all fractional read heads
+        # can be evaluated together against a chronological history followed
+        # by this already-known input block. This preserves the original
+        # causal interpolation without a Python loop in the realtime callback.
+        history = np.concatenate((
+            self._buffer[self._write_pos:],
+            self._buffer[:self._write_pos],
+            source,
+        ))
+        increment = (1.0 - ratio) / length
+        phases = np.mod(self._phase + np.arange(count) * increment, 1.0)
+        phase_a = phases
+        phase_b = np.mod(phases + 0.5, 1.0)
+        current = np.arange(count, dtype=np.float64)
+
+        def read(phase):
+            positions = length + current - 1.0 - phase * (length - 2.0)
+            lower = np.floor(positions).astype(np.intp)
+            fraction = positions - lower
+            return history[lower] * (1.0 - fraction) + history[lower + 1] * fraction
+
+        sample_a, sample_b = read(phase_a), read(phase_b)
+        weight_a = 0.5 - 0.5 * np.cos(2.0 * math.pi * phase_a)
+        weight_b = 0.5 - 0.5 * np.cos(2.0 * math.pi * phase_b)
+        output = (sample_a * weight_a + sample_b * weight_b) / np.maximum(
+            1e-6, weight_a + weight_b
+        )
+        if count >= length:
+            self._buffer[:] = source[-length:]
+            self._write_pos = 0
+        else:
+            positions = (self._write_pos + np.arange(count)) % length
+            self._buffer[positions] = source
+            self._write_pos = (self._write_pos + count) % length
+        self._phase = (self._phase + count * increment) % 1.0
         self._previous_octave = octave
-        return output
+        return output.astype(source.dtype, copy=False)
 
 
 class MonitorEffectsChain:

@@ -87,7 +87,8 @@ vi.mock("../src/pages/Karaoke/components/console", () => ({
         <button data-testid="preset" onClick={() => props.onApplyEffectPreset({ id: "hall", reverb: 0.4, echo: 0.2, delay: 0.1 })} />
         <button data-testid="monitor-off" onClick={() => props.onMonitoringChange(false)} />
         <button data-testid="effect" onClick={() => props.onEffectChange("echo", 0.6)} />
-        <button data-testid="commit" onClick={() => props.onMicrophoneCommit(0.9)} />
+        <button data-testid="effect-commit" onClick={() => props.onEffectCommit("echo", 0.6)} />
+        <button data-testid="commit" onClick={() => props.onVolumeCommit.microphone(0.9)} />
         <button data-testid="tempo" onClick={() => props.onTempoChange(-200)} />
         <button data-testid="lyrics-offset" onClick={() => props.onLyricsOffsetChange(-4)} />
         <button data-testid="notes" onClick={props.onToggleNotes} />
@@ -382,6 +383,7 @@ describe("karaoke page", () => {
   test("wires all console mutations and stopping monitoring", async () => {
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("effect"));
+    fireEvent.click(page.getByTestId("effect-commit"));
     fireEvent.click(page.getByTestId("commit"));
     fireEvent.click(page.getByTestId("tempo"));
     fireEvent.click(page.getByTestId("notes"));

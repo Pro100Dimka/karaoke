@@ -116,7 +116,9 @@ ALLOWED_STATUS_TRANSITIONS: dict[models.SongStatus | None, frozenset[models.Song
         models.SongStatus.DONE, models.SongStatus.ERROR,
         models.SongStatus.CANCELLING, models.SongStatus.CANCELLED,
     }),
-    models.SongStatus.CANCELLING: frozenset({models.SongStatus.CANCELLED, models.SongStatus.ERROR}),
+    models.SongStatus.CANCELLING: frozenset({
+        models.SongStatus.QUEUED, models.SongStatus.CANCELLED, models.SongStatus.ERROR,
+    }),
     models.SongStatus.ERROR: frozenset({models.SongStatus.QUEUED}),
     models.SongStatus.CANCELLED: frozenset({models.SongStatus.QUEUED}),
     models.SongStatus.DONE: frozenset({models.SongStatus.QUEUED}),
@@ -530,15 +532,16 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
 
 
 def delete_song(db: Session, song: models.Song) -> None:
-    output_dir, source_path = resolve_output_dir(song), resolve_source_path(song)
-    paths = (
-        (output_dir,)
-        if output_dir == source_path or output_dir in source_path.parents
-        else (
-            output_dir,
-            source_path,
+    with song_content_lock(song.id), library_write_lock():
+        output_dir, source_path = resolve_output_dir(song), resolve_source_path(song)
+        paths = (
+            (output_dir,)
+            if output_dir == source_path or output_dir in source_path.parents
+            else (
+                output_dir,
+                source_path,
+            )
         )
-    )
-    song_id = song.id
-    delete_with_files(db, song, paths)
-    revision_cache.invalidate(song_id)
+        song_id = song.id
+        delete_with_files(db, song, paths)
+        revision_cache.invalidate(song_id)

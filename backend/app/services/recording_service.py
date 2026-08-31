@@ -166,23 +166,33 @@ class RecordingSession:
         return True
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
-        self._update_signal(indata)
-        if not self._paused:
-            self._enqueue(
-                self._quality.process(indata, self.gain, self.noise_suppression).copy(),
-                time_info,
-            )
+        try:
+            self._update_signal(indata)
+            if not self._paused:
+                self._enqueue(
+                    self._quality.process(indata, self.gain, self.noise_suppression).copy(),
+                    time_info,
+                )
+        except BaseException as exc:
+            self._capture_error = exc
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
-        self._update_signal(indata)
-        processed = self._quality.process(indata, self.gain, self.noise_suppression)
-        if not self._paused: self._enqueue(processed.copy(), time_info)
         outdata.fill(0)
-        if self._monitoring_enabled:
-            effects = {} if self._monitor_effects_disabled else self.effects
-            monitored = self._pitch.process(processed[:, 0], effects.get("octave", 0))
-            monitored = self._effects_chain.process(monitored, *(effects.get(key, 0) for key in ("reverb", "echo", "delay")))
-            for channel in range(outdata.shape[1]): outdata[:, channel] = monitored
+        try:
+            self._update_signal(indata)
+            processed = self._quality.process(indata, self.gain, self.noise_suppression)
+            if not self._paused: self._enqueue(processed.copy(), time_info)
+            if self._monitoring_enabled:
+                effects = {} if self._monitor_effects_disabled else self.effects
+                monitored = self._pitch.process(processed[:, 0], effects.get("octave", 0))
+                monitored = self._effects_chain.process(
+                    monitored,
+                    *(effects.get(key, 0) for key in ("reverb", "echo", "delay")),
+                )
+                for channel in range(outdata.shape[1]):
+                    outdata[:, channel] = monitored
+        except BaseException as exc:
+            self._capture_error = exc
 
     def _update_signal(self, samples):
         import numpy as np

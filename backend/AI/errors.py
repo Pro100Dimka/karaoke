@@ -6,6 +6,10 @@ class EngineUnavailableError(AICoreError):
     pass
 
 
+class AcceleratorUnavailableError(AICoreError):
+    """A typed accelerator failure that may be retried on CPU."""
+
+
 class InvalidArtifactError(AICoreError):
     pass
 

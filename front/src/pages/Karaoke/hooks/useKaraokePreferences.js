@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { createStore } from "zustand/vanilla";
@@ -31,6 +31,7 @@ const preferencesOf = (state) => Object.fromEntries(keys.map((key) => [key, stat
 
 export default function useKaraokePreferences() {
   const [store] = useState(createKaraokePreferencesStore);
+  const skipNextPersistence = useRef(false);
   const state = useStore(
     store,
     useShallow((value) => value)
@@ -39,6 +40,10 @@ export default function useKaraokePreferences() {
   useEffect(
     () =>
       store.subscribe((value) => {
+        if (skipNextPersistence.current) {
+          skipNextPersistence.current = false;
+          return;
+        }
         const preferences = preferencesOf(value);
         if (saveKaraokePreferences(preferences))
           api.updateUiPreferences("karaoke", preferences).catch(() => {});
@@ -46,5 +51,12 @@ export default function useKaraokePreferences() {
     [store]
   );
 
-  return state;
+  const previewPreference = useCallback(
+    (key, value) => {
+      skipNextPersistence.current = true;
+      store.setState({ [key]: value });
+    },
+    [store]
+  );
+  return { ...state, previewPreference };
 }

@@ -1930,7 +1930,9 @@ call "$VcVars" >nul && "$CMake" -S "$Asio" -B "$AsioBuild" -G Ninja -DCMAKE_BUIL
 function Sign-File([string]$Path) {
     Require-File $SignScript "Signing script"
 
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SignScript -Path $Path
+    $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $SignScript, "-Path", $Path)
+    if ($Mode -eq "clean") { $arguments += "-Required" }
+    & powershell.exe @arguments
 
     if ($LASTEXITCODE -ne 0) {
         throw "Code signing failed for: $Path"

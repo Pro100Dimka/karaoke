@@ -1,8 +1,16 @@
 import gc
 
+from ..runtime import selected_backend
 
-def select_torch_device(torch, _model="") -> str:
-    return "cuda" if torch.cuda.is_available() else "cpu"
+
+def select_torch_device(torch, role="") -> str:
+    """Return the device selected by the configured runtime plan for *role*."""
+    backend = selected_backend(role)
+    if backend is None:
+        return "cpu"
+    if backend.device == "cuda" and not torch.cuda.is_available():
+        return "cpu"
+    return backend.device
 
 
 def release_torch_memory() -> None:

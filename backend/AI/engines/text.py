@@ -154,6 +154,18 @@ def _ctc_tokens(tokens: list[str], language: str) -> list[str]:
     return [_ctc_token(token, language) or token for token in tokens]
 
 
+def _ctc_role(language: str) -> str:
+    return "ctc_uk" if language == "Ukrainian" else "ctc_ru"
+
+
+def _create_ctc_aligner(model_path: str, language: str):
+    from .ctc import CTCWordAligner
+
+    aligner = CTCWordAligner(model_path)
+    aligner.role = _ctc_role(language)
+    return aligner
+
+
 def _relabel_ctc_words(words: list[Word], tokens: list[str], offset: int = 0) -> list[Word]:
     if len(words) != len(tokens):
         raise InvalidArtifactError(
@@ -569,9 +581,7 @@ class Qwen3Transcriber(Transcriber):
         model_path = os.getenv(variable) if variable else None
         if model_path:
             try:
-                from .ctc import CTCWordAligner
-
-                ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+                ctc = self._ctc.setdefault(model_path, _create_ctc_aligner(model_path, resolved))
                 direct = ctc.transcribe(audio)
                 text = " ".join(word.text for word in direct).strip()
                 if len(direct) >= 4 and sum(char.isalnum() for char in text) >= 12:
@@ -662,9 +672,7 @@ class Qwen3ForcedAligner(Aligner):
         if not model_path:
             raise EngineUnavailableError(
                 f"{resolved} CTC model is unavailable")
-        from .ctc import CTCWordAligner
-
-        ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+        ctc = self._ctc.setdefault(model_path, _create_ctc_aligner(model_path, resolved))
         for lower, upper in _context_groups(runs, len(words)):
             _, _, crop_start, crop_end, left, right = _repair_bounds(
                 words, lower, upper, span, context=0
@@ -721,9 +729,7 @@ class Qwen3ForcedAligner(Aligner):
         if not model_path or not tokens:
             return None
         try:
-            from .ctc import CTCWordAligner
-
-            ctc = self._ctc.setdefault(model_path, CTCWordAligner(model_path))
+            ctc = self._ctc.setdefault(model_path, _create_ctc_aligner(model_path, resolved))
             aligned = ctc.align(samples, rate, _ctc_tokens(tokens, resolved), 0)
             words = _relabel_ctc_words(aligned, tokens, 0)
             validated = self._validate(words, tokens, span)
@@ -916,10 +922,10 @@ class Qwen3ForcedAligner(Aligner):
                 "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
             }.get(resolved)
             if variable and (model_path := os.getenv(variable)):
-                from .ctc import CTCWordAligner
-
                 ctc = self._ctc.setdefault(
-                    model_path, CTCWordAligner(model_path))
+                    model_path,
+                    _create_ctc_aligner(model_path, resolved),
+                )
                 for line_index, (start, lower, upper) in enumerate(entries):
                     if not any(word is None for word in words[lower:upper]):
                         continue

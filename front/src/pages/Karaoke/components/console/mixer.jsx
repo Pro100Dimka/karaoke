@@ -7,9 +7,10 @@ export default function MixerPanel({
   microphoneLevel,
   volumes,
   onVolumeChange,
-  onMicrophoneCommit,
+  onVolumeCommit,
   microphoneEffects,
   onEffectChange,
+  onEffectCommit,
   monitoringEnabled,
   onMonitoringChange
 }) {
@@ -57,7 +58,7 @@ export default function MixerPanel({
                     "--slider-thumb-border": accent
                   }}
                   onChange={onVolumeChange[key]}
-                  onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
+                  onCommit={onVolumeCommit[key]}
                 />
                 <Typography variant="caption" style={{ color: accent }}>
                   {Math.round((volumes[key] ?? 0) * 100)}%
@@ -68,6 +69,7 @@ export default function MixerPanel({
                 value={microphoneEffects[effectKey] ?? 0}
                 accent={effectAccent}
                 onChange={(value) => onEffectChange(effectKey, value)}
+                onCommit={(value) => onEffectCommit(effectKey, value)}
               />
             </Grid>
           );
@@ -85,6 +87,7 @@ export default function MixerPanel({
           accent="secondary"
           size="md"
           onChange={(value) => onEffectChange("octave", value)}
+          onCommit={(value) => onEffectCommit("octave", value)}
         />
       </Stack>
     </Stack>

@@ -81,6 +81,28 @@ def test_callback_stops_enqueueing_once_writer_has_died(monkeypatch):
     assert session._queue.qsize() == 1  # unchanged: the crashed-writer frame was dropped
 
 
+def test_audio_callbacks_expose_dsp_failures_and_silence_monitor_output(monkeypatch):
+    patch_attrs(
+        monkeypatch,
+        recording_service.sd,
+        query_devices=Mock(return_value={"max_output_channels": 2}),
+        Stream=Mock(return_value=Mock()),
+    )
+    session, _stream = make_session(monkeypatch, monitoring_enabled=True)
+    failure = RuntimeError("DSP failed")
+    session._quality.process = Mock(side_effect=failure)
+    input_data = np.zeros((4, 1), dtype=np.float32)
+
+    session._callback(input_data, 4, None, None)
+    assert session._capture_error is failure
+
+    session._capture_error = None
+    output = np.full((4, 2), 1.0, dtype=np.float32)
+    session._monitoring_callback(input_data, output, 4, None, None)
+    assert session._capture_error is failure
+    assert not output.any()
+
+
 def test_queue_is_bounded_and_drops_frames_instead_of_blocking_the_audio_thread(monkeypatch):
     # TASK 4.1: a real-time audio callback must never block on a full queue —
     # dropping the frame is the only safe option, and the queue itself must

@@ -11,8 +11,9 @@ from .device import select_torch_device
 
 
 class CTCWordAligner:
-    def __init__(self, model_path):
+    def __init__(self, model_path, role="ctc"):
         self.model_path = str(model_path)
+        self.role = str(role)
         self._model = self._processor = self._device = None
 
     def _load(self):
@@ -21,11 +22,11 @@ class CTCWordAligner:
         if self._model is None:
             from transformers import AutoModelForCTC, Wav2Vec2Processor
 
-            self._device = select_torch_device(torch, "ctc")
+            self._device = select_torch_device(torch, self.role)
             self._processor = Wav2Vec2Processor.from_pretrained(self.model_path)
             self._model = AutoModelForCTC.from_pretrained(self.model_path).to(self._device).eval()
         else:
-            device = select_torch_device(torch, "ctc")
+            device = select_torch_device(torch, self.role)
             if str(next(self._model.parameters()).device) != device:
                 self._model.to(device)
             self._device = device

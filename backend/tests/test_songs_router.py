@@ -104,6 +104,26 @@ def test_queue_song_job_rejects_a_status_the_state_machine_forbids():
     database.commit.assert_not_called()
 
 
+def test_queue_song_job_does_not_overwrite_a_concurrent_worker_transition():
+    current, database = domain_song(status=models.SongStatus.PENDING), Mock()
+
+    def concurrently_started(_song_id):
+        current.status = models.SongStatus.PROCESSING
+        return False
+
+    assert_http_status(
+        409,
+        lambda: songs._queue_song_job(
+            database,
+            current,
+            concurrently_started,
+            status=models.SongStatus.QUEUED,
+        ),
+    )
+    assert current.status == models.SongStatus.PROCESSING
+    assert database.commit.call_count == 1
+
+
 def test_add_song_streams_upload_maps_validation_and_cleans_temp(monkeypatch, tmp_path):
     monkeypatch.setattr(songs.config, "UPLOAD_TEMP_DIR", tmp_path)
     save = AsyncMock()

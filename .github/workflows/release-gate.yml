@@ -1,0 +1,22 @@
+name: Windows release gate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - name: Verify release
+        shell: cmd
+        run: verify-release.bat

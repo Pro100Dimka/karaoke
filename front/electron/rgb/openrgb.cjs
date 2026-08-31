@@ -61,6 +61,7 @@ class OpenRgb {
           }
         }
       } catch (error) {
+        console.error("OpenRGB packet handling failed", error?.stack || error);
         fail(error);
       }
     });
@@ -100,6 +101,7 @@ class OpenRgb {
       this.state = this.devices.length ? "ready" : keyboards ? "unsupported" : "no_devices";
       return this.devices.map(({ name }) => name);
     } catch (error) {
+      console.error("OpenRGB connection failed", error?.stack || error);
       fail(error);
       throw error;
     }

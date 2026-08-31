@@ -78,6 +78,10 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
     # A cancelled install must not therefore make a partial snapshot look ready.
     if any(path.rglob("*.incomplete")):
         return False
+    if model.filename and model.sha256:
+        weights = path / model.filename
+        if not weights.is_file() or _cached_hash(weights) != model.sha256:
+            return False
     return _size(path) >= max(1, model.expected_bytes // 2)
 
 

@@ -96,6 +96,11 @@ def _queue_song_job(
             song_service.validate_status_transition(song.status, requested_status)
 
     def restore_previous_state() -> None:
+        # start_job(False) can mean another request won the race and already
+        # advanced this row. Refresh first and never overwrite that newer state.
+        db.refresh(song)
+        if isinstance(requested_status, models.SongStatus) and song.status != requested_status:
+            return
         for field, value in previous.items(): setattr(song, field, value)
         commit(db)
 
