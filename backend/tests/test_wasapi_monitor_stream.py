@@ -27,6 +27,23 @@ def test_queue_is_bounded_and_keeps_newest_samples_without_aliasing():
     assert len(queue.free) == 6
 
 
+def test_queue_measures_residence_time_not_capacity(monkeypatch):
+    clock = [10.0]
+    monkeypatch.setattr(monitor.time, "perf_counter", lambda: clock[0])
+    queue = monitor.MonitorQueue(128, 2)
+    samples = np.ones((128, 2), dtype=np.float32)
+    queue.push(samples)
+    clock[0] += .003
+    queue.push(samples)
+    clock[0] += .004
+    assert queue.pop(samples)
+    assert queue.last_wait_ms == 7
+    assert queue.pop(samples)
+    assert queue.last_wait_ms == 4
+    assert not queue.pop(samples)
+    assert queue.last_wait_ms is None
+
+
 def test_queue_pool_is_safe_with_concurrent_producer_and_consumer():
     queue = monitor.MonitorQueue(128, 2)
     finished = threading.Event()
@@ -69,11 +86,12 @@ def test_split_stream_preserves_routes_and_copies_processed_audio():
     assert sd.OutputStream.call_args.kwargs["extra_settings"] == "exclusive-output"
     stream.start()
     sd.InputStream.call_args.kwargs["callback"](np.ones((128, 1)), 128, None, None)
+    sd.InputStream.call_args.kwargs["callback"](np.ones((128, 1)), 128, None, None)
     output = np.empty((128, 2), dtype=np.float32)
     sd.OutputStream.call_args.kwargs["callback"](output, 128, None, None)
     assert np.all(output == 1)
     assert not restart.is_set()
-    assert stats["queue_frames"] == 0
+    assert stats["queue_frames"] == 128
     assert stats["queue_capacity_ms"] == 11.61
     stream.abort()
     stream.close()
@@ -83,7 +101,7 @@ def test_split_stream_preserves_routes_and_copies_processed_audio():
         endpoint.close.assert_called_once()
 
 
-def test_split_requests_fallback_for_sustained_empty_queue(monkeypatch):
+def test_split_keeps_selected_configuration_despite_sustained_empty_queue(monkeypatch):
     stream, sd, stats, restart = setup_stream()
     stream.started_at = 0
     monkeypatch.setattr(monitor.time, "monotonic", lambda: 1)
@@ -93,7 +111,7 @@ def test_split_requests_fallback_for_sustained_empty_queue(monkeypatch):
         render(output, 128, None, None)
     assert not restart.is_set()
     render(output, 128, None, None)
-    assert restart.is_set()
+    assert not restart.is_set()
     assert stats["queue_underruns"] == 12
     assert not output.any()
 
@@ -103,6 +121,24 @@ def test_input_callback_errors_request_fallback():
     sd.InputStream.call_args.kwargs["callback"](np.ones((128, 1)), 128, None, None)
     assert restart.is_set()
     assert stream.queue.size == 0
+
+
+def test_split_primes_one_spare_block_and_reprimes_after_starvation():
+    stream, sd, _, restart = setup_stream()
+    capture = sd.InputStream.call_args.kwargs["callback"]
+    render = sd.OutputStream.call_args.kwargs["callback"]
+    output = np.empty((128, 2), dtype=np.float32)
+    capture(np.ones((128, 1)), 128, None, None)
+    render(output, 128, None, None)
+    assert not output.any() and stream.queue.size == 128
+    capture(np.ones((128, 1)) * 2, 128, None, None)
+    render(output, 128, None, None)
+    assert np.all(output == 1)
+    render(output, 128, None, None)
+    assert np.all(output == 2)
+    render(output, 128, None, None)
+    assert not output.any() and not stream.primed
+    assert not restart.is_set()
 
 
 def test_open_failure_closes_already_opened_input():

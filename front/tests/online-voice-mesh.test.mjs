@@ -26,6 +26,19 @@ afterEach(() => {
   }
 });
 describe("online voice mesh", () => {
+  test("routes the existing microphone graph without another capture or context", async () => {
+    const mesh = makeMesh();
+    await expect(mesh.setSinkId("headphones")).resolves.toBe(false);
+    expect(mesh.outputDeviceId).toBe("headphones");
+    const setSinkId = vi.fn().mockResolvedValue(undefined);
+    mesh.microphoneGraph = { context: { setSinkId } };
+    await expect(mesh.setSinkId(mesh.outputDeviceId)).resolves.toBe(true);
+    expect(setSinkId).toHaveBeenCalledWith("headphones");
+    setSinkId.mockRejectedValueOnce(new Error("device unavailable"));
+    await expect(mesh.setSinkId("missing")).resolves.toBe(false);
+    await expect(mesh.setSinkId("")).resolves.toBe(true);
+    expect(setSinkId).toHaveBeenLastCalledWith("");
+  });
   test("requests five-millisecond Opus packets without changing unrelated media sections", () => {
     const input = {
       type: "offer",

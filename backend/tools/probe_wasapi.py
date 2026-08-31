@@ -49,7 +49,7 @@ def probe(config):
     dsp = None
     if config.get("dsp"):
         from app.services.monitor_worker import _audio_callback
-        dsp = _audio_callback(2.0, restart, [], config["rate"], stats)
+        dsp = _audio_callback(2.0, config["rate"], stats)
 
     def observe(frames, clocks, status, has_input, has_output):
         nonlocal glitches

@@ -91,12 +91,12 @@
     transition: transform var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
-  .ui-select-popover {
+  .ui-select-popover.ui-popover {
     z-index: var(--z-index-popover);
     box-sizing: border-box;
 
-    min-inline-size: 12rem;
-    max-inline-size: min(30rem, calc(100vw - 1rem));
+    min-inline-size: 0;
+    max-inline-size: calc(100vw - 1rem);
     max-block-size: min(24rem, calc(100vh - 1rem));
 
     padding: var(--space-1);
@@ -123,6 +123,8 @@
   }
 
   .ui-select-group {
+    white-space: normal;
+    overflow-wrap: anywhere;
     position: sticky;
     inset-block-start: calc(var(--space-1) * -1);
     z-index: 1;
@@ -147,6 +149,7 @@
     min-block-size: var(--control-size, var(--control-md));
 
     padding-inline: var(--control-pad, var(--control-pad-md));
+    padding-block: .5em;
 
     border: 0;
     border-radius: var(--shape-sm);
@@ -219,9 +222,8 @@
   .ui-select-option-label {
     min-inline-size: 0;
 
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
 
     color: var(--ui-text);
     font-weight: 650;
@@ -230,9 +232,8 @@
   .ui-select-option-description {
     min-inline-size: 0;
 
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
 
     color: var(--ui-text-muted);
     font-size: var(--typography-caption-size);

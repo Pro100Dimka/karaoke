@@ -101,23 +101,16 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       options: [128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
     },
     {
-      md: 12,
-      type: "Switch",
-      tag: "monitor.autoBuffer",
-      showFor: wasapi,
-      label: tr("settings.audio.monitor.autoBuffer.label"),
-      tooltip: tr("settings.audio.monitor.autoBuffer.tooltip"),
-      onSave: audio.setAutoBuffer
+      type: "Label",
+      variant: "caption",
+      showFor: status?.state === "running",
+      text: `${status?.host_api || status?.driver} · ${status?.mode || "ASIO"} · ${tr("settings.audio.monitor.buffer.label")}: ${status?.blocksize === 0 ? tr("settings.audio.monitor.buffer.auto") : (status?.blocksize ?? "—")} · ${status?.sample_rate ?? "—"} Hz`
     },
     {
       type: "Label",
       variant: "caption",
       showFor: status?.state === "running",
-      text: `${status?.host_api || status?.driver} · ${status?.mode || "ASIO"} · ${tr("settings.audio.monitor.buffer.label")}: ${status?.blocksize === 0 ? tr("settings.audio.monitor.buffer.auto") : (status?.blocksize ?? "—")} · ${status?.sample_rate ?? "—"} Hz${
-        Number.isFinite(status?.input_latency_ms) && Number.isFinite(status?.output_latency_ms)
-          ? ` · ${tr("settings.audio.monitor.latency.label")}: ${(status.input_latency_ms + status.output_latency_ms).toFixed(1)} ms`
-          : ""
-      }`
+      text: tr("settings.audio.monitor.endToEnd.unmeasured")
     },
     {
       type: "Label",
@@ -136,6 +129,8 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       ["output_latency_ms", "settings.audio.monitor.outputLatency.label", "ms"],
       ["callback_frames", "settings.audio.monitor.callbackFrames.label", ""],
       ["glitch_count", "settings.audio.monitor.glitchCount.label", ""],
+      ["dsp_compute_ms", "settings.audio.monitor.dspCompute.label", "ms"],
+      ["queue_wait_ms", "settings.audio.monitor.queueWait.label", "ms"],
       ["queue_ms", "settings.audio.monitor.queueLatency.label", "ms"],
       ["queue_capacity_ms", "settings.audio.monitor.queueLimit.label", "ms"],
       ["queue_underruns", "settings.audio.monitor.queueUnderruns.label", ""]

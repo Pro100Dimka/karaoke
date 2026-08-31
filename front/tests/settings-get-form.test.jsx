@@ -2,8 +2,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import SettingsPage from "./helpers/settings-page";
 import { saveLanguage } from "../src/utils/language";
+import SettingsPage from "./helpers/settings-page";
 
 beforeEach(() => saveLanguage("ru"));
 
@@ -115,11 +115,11 @@ test("audio device ids stay numeric/null and microphone monitoring does not get 
   await user.click(screen.getByRole("button", { name: "Микрофон", exact: true }));
   await user.click(screen.getByRole("option", { name: "Авто" }));
   expect(settings.audio.update).toHaveBeenLastCalledWith("input_device_id", null);
-  await user.click(screen.getByRole("switch", { name: "Слышать свой голос" }));
+  await user.click(screen.getByRole("switch", { name: "Мониторинг" }));
   expect(settings.audio.monitor.mock.calls).toEqual([[]]);
   expect(settings.audio.update).not.toHaveBeenCalledWith("monitoring_enabled", expect.anything());
   // A failed start must not leave the UI claiming that monitoring was enabled.
-  expect(screen.getByRole("switch", { name: "Слышать свой голос" }).checked).toBe(false);
+  expect(screen.getByRole("switch", { name: "Мониторинг" }).checked).toBe(false);
 });
 
 test("processing validates thread count before persistence and Enter saves the draft", async () => {

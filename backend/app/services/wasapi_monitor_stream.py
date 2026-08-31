@@ -23,6 +23,7 @@ class MonitorQueue:
         self.free = deque(np.empty((blocksize, channels), dtype=np.float32)
                           for _ in range(max_blocks + 2))
         self.dropped_frames = self.underruns = self.contentions = 0
+        self.last_wait_ms = None
 
     @property
     def size(self):
@@ -38,20 +39,22 @@ class MonitorQueue:
         np.copyto(block, samples)
         if len(self.ready) >= self.max_blocks:
             try:
-                self.free.append(self.ready.popleft())
+                self.free.append(self.ready.popleft()[0])
                 self.dropped_frames += self.blocksize
             except IndexError:
                 pass  # The render callback consumed it first.
-        self.ready.append(block)
+        self.ready.append((block, time.perf_counter()))
 
     def pop(self, output):
         try:
-            block = self.ready.popleft()
+            block, enqueued_at = self.ready.popleft()
         except IndexError:
+            self.last_wait_ms = None
             output.fill(0)
             self.underruns += 1
             return False
         try:
+            self.last_wait_ms = round((time.perf_counter() - enqueued_at) * 1000, 3)
             np.copyto(output, block)
             return True
         finally:
@@ -59,7 +62,7 @@ class MonitorQueue:
 
 
 class WasapiMonitorStream:
-    def __init__(self, sd, candidate, callback, statistics, restart_requested):
+    def __init__(self, sd, candidate, callback, statistics, failed):
         rate = float(candidate["samplerate"])
         blocksize = int(candidate["blocksize"])
         if blocksize <= 0:
@@ -69,15 +72,15 @@ class WasapiMonitorStream:
         self.statistics = statistics
         self.rate = rate
         self.started_at = None
-        self.failures = []
-        self.last_dropped = 0
+        self.late_underruns = 0
+        self.primed = False
         work = np.zeros((blocksize, candidate["channels"][1]), dtype=np.float32)
 
         def capture(indata, frames, clocks, status):
             # Fixed callbacks avoid allocation in the realtime path. Fail closed
             # if a driver violates the requested size instead of repeating audio.
             if frames != blocksize:
-                restart_requested.set()
+                failed.set()
                 return
             try:
                 callback(indata, work, frames, clocks, status)
@@ -85,32 +88,41 @@ class WasapiMonitorStream:
             except Exception:
                 # PortAudio otherwise swallows callback errors and can leave the
                 # parent reporting a running stream with no microphone audio.
-                restart_requested.set()
+                failed.set()
 
         def render(outdata, frames, clocks, status):
             if frames != blocksize:
                 outdata.fill(0)
-                restart_requested.set()
+                failed.set()
                 return
-            complete = self.queue.pop(outdata)
+            # Start with one spare callback block. Without it two independent
+            # event callbacks can alternate between an empty and nonempty queue
+            # even on the same interface. Re-prime after an actual starvation.
+            if not self.primed and self.queue.size >= blocksize * 2:
+                self.primed = True
+            if self.primed:
+                complete = self.queue.pop(outdata)
+                self.primed = complete
+            else:
+                outdata.fill(0)
+                self.queue.underruns += 1
+                self.queue.last_wait_ms = None
+                complete = False
             now = time.monotonic()
-            dropped = self.queue.dropped_frames != self.last_dropped
-            self.last_dropped = self.queue.dropped_frames
             if status:
                 statistics["glitch_count"] = statistics.get("glitch_count", 0) + 1
-            if self.started_at is not None and now - self.started_at > .3 and (status or not complete or dropped):
-                self.failures.append(now)
-                while self.failures and self.failures[0] < now - 5:
-                    self.failures.pop(0)
-                if len(self.failures) >= 12:
-                    restart_requested.set()
+            past_startup = self.started_at is not None and now - self.started_at > .3
+            if past_startup and not complete:
+                self.late_underruns += 1
             statistics.update(
                 queue_frames=self.queue.size,
                 queue_capacity_frames=self.queue.capacity,
                 queue_underruns=self.queue.underruns,
+                queue_underruns_after_start=self.late_underruns,
                 queue_dropped_frames=self.queue.dropped_frames,
                 queue_contentions=self.queue.contentions,
                 queue_ms=round(self.queue.size * 1000 / rate, 2),
+                queue_wait_ms=self.queue.last_wait_ms,
                 queue_capacity_ms=round(self.queue.capacity * 1000 / rate, 2),
             )
 

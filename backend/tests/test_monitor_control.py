@@ -50,15 +50,15 @@ def test_latest_request_wins_and_old_status_is_ignored(control):
     assert "error" not in control.snapshot()
 
 
-@pytest.mark.parametrize("driver, expected", [("auto", 0), ("asio", 128)])
-def test_auto_buffer_only_overrides_monitor_snapshot(control, monkeypatch, driver, expected):
+@pytest.mark.parametrize("driver", ["auto", "asio"])
+def test_monitor_snapshot_preserves_saved_buffer(control, monkeypatch, driver):
     original = settings(audio_driver=driver, buffer_size=128, monitoring_enabled=True)
     snapshots = []
     done = threading.Event()
     monkeypatch.setattr(audio_service, "configure_monitoring", lambda value: (snapshots.append(value), done.set()))
-    audio_service.request_monitoring(original, auto_buffer=True)
+    audio_service.request_monitoring(original)
     assert done.wait(2)
-    assert snapshots[-1].buffer_size == expected
+    assert snapshots[-1].buffer_size == 128
     assert original.buffer_size == 128
     done.clear()
     audio_service.request_monitoring(original)
@@ -75,7 +75,7 @@ def test_monitor_statistics_reset_on_restart(control):
     assert control.snapshot()["input_latency_ms"] == 5
 
 
-def test_http_auto_buffer_is_forwarded_as_a_monitor_only_option(monkeypatch):
+def test_legacy_http_auto_buffer_cannot_override_saved_buffer(monkeypatch):
     current = settings(monitoring_enabled=True, noise_suppression=0.35, octave=0)
     start = Mock(return_value=current)
     monkeypatch.setattr(audio_service, "set_monitoring_enabled", start)
@@ -87,7 +87,7 @@ def test_http_auto_buffer_is_forwarded_as_a_monitor_only_option(monkeypatch):
         response = client.post("/audio/direct-monitor/start?auto_buffer=true&wasapi_mode=shared")
     assert response.status_code == 202
     start.assert_called_once_with(db, True, disabled_effects=False, background=True,
-                                  wasapi_mode="shared", auto_buffer=True)
+                                  wasapi_mode="shared")
 
 
 def test_stop_during_device_enumeration_never_launches_worker(control, monkeypatch):
@@ -232,16 +232,17 @@ def test_cancelled_launch_does_not_spawn_a_process(control, monkeypatch, tmp_pat
     launch.assert_not_called()
 
 
-def test_exclusive_is_opt_in_with_shared_fallback_and_correct_labels(monkeypatch):
+def test_exclusive_is_opt_in_without_fallback_and_with_correct_labels(monkeypatch):
     monkeypatch.setattr(monitor_worker.sd, "WasapiSettings", lambda **kwargs: kwargs)
     base = {"sample_rate": 48000, "output_channels": 2, "input_device_id": 0,
             "output_device_id": 1, "blocksize": 128, "wasapi_mode": "exclusive"}
     candidates = monitor_worker._stream_candidates(base)
-    assert candidates[0]["extra_settings"] == ({"exclusive": True}, {"exclusive": True})
-    shared = next(item for item in candidates if item["_mode"] == "shared")
-    assert shared["extra_settings"] == ({"auto_convert": True}, {"auto_convert": True})
+    assert len(candidates) == 1
+    assert candidates[0]["extra_settings"] == ({"exclusive": True, "auto_convert": False}, {"exclusive": True, "auto_convert": False})
+    shared = monitor_worker._stream_candidates({**base, "wasapi_mode": "shared"})[0]
+    assert shared["extra_settings"] == ({"exclusive": False, "auto_convert": True}, {"exclusive": False, "auto_convert": True})
     partial = monitor_worker._stream_candidates({**base, "wasapi_mode": "input-exclusive"})[0]
-    assert partial["extra_settings"] == ({"exclusive": True}, {"auto_convert": True})
+    assert partial["extra_settings"] == ({"exclusive": True, "auto_convert": False}, {"exclusive": False, "auto_convert": True})
     details = monitor_worker._stream_diagnostics(SimpleNamespace(latency=(.004, .006)), shared, base, "shared")
     assert details["exclusive"] is False
     assert details["input_latency_ms"] == 4 and details["output_latency_ms"] == 6
@@ -258,7 +259,7 @@ def test_format_fallbacks_keep_native_rate_first():
             "input_device_id": 0, "output_device_id": 1, "blocksize": 128}
     candidates = monitor_worker._stream_candidates(base)
     assert candidates[0]["samplerate"] == 44100
-    assert candidates[-1]["samplerate"] == 48000
+    assert len(candidates) == 1
 
 
 def test_asio_settings_do_not_enumerate_drivers_in_http_thread(control, monkeypatch):

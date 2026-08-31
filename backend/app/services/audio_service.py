@@ -490,7 +490,6 @@ def update_settings(db: Session, patch: dict, *, background: bool = False) -> mo
 def set_monitoring_enabled(
     db: Session, enabled: bool, *, disabled_effects: bool = False,
     background: bool = False, wasapi_mode: str | None = None,
-    auto_buffer: bool = False,
 ) -> models.AudioSettings:
     global _monitor_effects_disabled
     settings = get_settings(db)
@@ -499,8 +498,7 @@ def set_monitoring_enabled(
     if background:
         settings.monitoring_enabled = enabled
         commit_refresh(db, settings)
-        request_monitoring(settings, disabled_effects=disabled_effects, wasapi_mode=wasapi_mode,
-                           auto_buffer=auto_buffer)
+        request_monitoring(settings, disabled_effects=disabled_effects, wasapi_mode=wasapi_mode)
         return settings
     _monitor_effects_disabled = bool(disabled_effects) if enabled else False
     if previous == enabled:
@@ -528,7 +526,7 @@ def set_monitoring_enabled(
         raise
 
 
-def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None, auto_buffer=False) -> None:
+def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None) -> None:
     global _monitor_wasapi_mode, _requested_effects_disabled
     if wasapi_mode is not None:
         if wasapi_mode not in {"shared", "input-exclusive", "exclusive"}:
@@ -539,9 +537,6 @@ def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None, aut
         for field in _MONITOR_RESTART_FIELDS | _LIVE_UPDATE_FIELDS | {"monitoring_enabled"}
     })
     mode = _monitor_wasapi_mode
-    # A one-start diagnostic override, never a database/recording/ASIO setting.
-    if auto_buffer and snapshot.audio_driver != "asio":
-        snapshot.buffer_size = 0
     if disabled_effects is not None:
         _requested_effects_disabled = bool(disabled_effects)
     effects_disabled = _requested_effects_disabled
@@ -684,10 +679,6 @@ def _configure_monitoring(settings) -> None:
         "input_device_id": resolved_input_id,
         "output_device_id": resolved_output_id,
         "sample_rate": _monitor_sample_rate(resolved_input_id, resolved_output_id, devices),
-        "sample_rates": list(dict.fromkeys(
-            rate for rate in (output_info.get("default_samplerate"), input_info.get("default_samplerate"), 48_000, 44_100)
-            if rate and float(rate) > 0
-        )),
         "output_channels": output_channels,
         "blocksize": settings.buffer_size,
         "gain": gain,

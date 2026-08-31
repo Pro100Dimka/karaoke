@@ -342,38 +342,13 @@ def _capture_attempts(
     sample_rate: int,
     blocksize: int,
     monitoring_enabled: bool,
-) -> list[tuple[int | None, int | None, int, int, bool, str]]:
-    # This duplex callback processes and writes the microphone while also
-    # feeding live monitoring. 128 frames remains realtime (~3 ms at 44.1 kHz)
-    # and prevents progressive underflow/lag on every supported host API.
-    stable_blocksize = max(128, blocksize) if monitoring_enabled else blocksize
-    attempts = (
-        [
-            (device_id, output_device_id, sample_rate, stable_blocksize, True, "low"),
-            (device_id, None, sample_rate, 0, False, "high"),
-        ]
-        if monitoring_enabled
-        else [
-            # Recording without direct monitoring does not benefit from a
-            # low-latency duplex stream. Consumer WDM-KS/USB drivers often
-            # reject that mode (PaError -9999), making every start wait for a
-            # doomed attempt before the exact same high-latency input works.
-            (device_id, None, sample_rate, 0, False, "high"),
-        ]
-    )
-    with contextlib.suppress(Exception):
-        info = sd.query_devices(device_id, kind="input") if device_id is not None else None
-        if info:
-            attempts.append(
-                (device_id, None, int(round(float(info["default_samplerate"]))), 0, False, "high")
-            )
-    with contextlib.suppress(Exception):
-        default_info = sd.query_devices(kind="input")
-        attempts.append(
-            (None, None, int(round(float(default_info["default_samplerate"]))), 0, False, "high")
-        )
-    attempts.append((None, None, sample_rate, 0, False, "high"))
-    return list(dict.fromkeys(attempts))
+) -> list[tuple[int | None, int | None, int, int, bool, float]]:
+    # Do not silently change device, rate, buffer or disable self-monitoring.
+    # Driver rejection is reported to the user, not retried with hidden latency.
+    if blocksize <= 0 or sample_rate <= 0:
+        raise RuntimeError("Recording requires a fixed positive buffer and sample rate")
+    return [(device_id, output_device_id if monitoring_enabled else None,
+             sample_rate, blocksize, monitoring_enabled, blocksize / sample_rate)]
 
 
 def backend_available() -> tuple[bool, str | None]: return (_AUDIO_BACKEND_AVAILABLE, _AUDIO_BACKEND_ERROR)
@@ -421,10 +396,10 @@ def start_recording(
                 latency,
             )
             session.start()
-            if errors:
-                logger.warning(
-                    "Recording started with a compatibility fallback after: %s", errors[-1]
-                )
+            logger.info(
+                "Recording audio started: input=%s output=%s rate=%s buffer=%s monitor=%s requested_latency=%s",
+                input_id, output_id, rate, frames, monitor, latency,
+            )
             break
         except Exception as exc:  # Audio drivers raise implementation-specific errors.
             errors.append(str(exc))

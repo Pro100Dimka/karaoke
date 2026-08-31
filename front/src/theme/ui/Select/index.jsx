@@ -1,6 +1,6 @@
 import { translateSaved as tr } from "../../../i18n/runtime";
 import { Check, ChevronDown } from "lucide-react";
-import { Fragment, forwardRef, useEffect, useId, useRef, useState } from "react";
+import { Fragment, forwardRef, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import Button from "../Button";
@@ -13,6 +13,7 @@ import mergeRefs from "../_internal/mergeRefs";
 import { optionItem } from "../_internal/option";
 import mergeSx from "../_internal/sx";
 import useControllable from "../_internal/useControllable";
+import { selectPosition } from "./position";
 
 import "./select.css";
 
@@ -66,11 +67,14 @@ const Select = forwardRef(
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      setPosition({
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width
+      const next = selectPosition(rect, {
+        width: document.documentElement.clientWidth,
+        height: window.innerHeight,
+        menuHeight: popoverRef.current?.scrollHeight || 0
       });
+      setPosition((previous) =>
+        previous && Object.keys(next).every((key) => previous[key] === next[key]) ? previous : next
+      );
     };
 
     const close = () => setOpen(false);
@@ -93,7 +97,7 @@ const Select = forwardRef(
       buttons?.[index]?.focus();
     };
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       if (!open) return;
 
       updatePosition();
@@ -109,12 +113,17 @@ const Select = forwardRef(
       };
 
       const onViewportChange = () => updatePosition();
+      const observer =
+        typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onViewportChange);
+      if (triggerRef.current) observer?.observe(triggerRef.current);
+      if (popoverRef.current) observer?.observe(popoverRef.current);
 
       document.addEventListener("pointerdown", onPointerDown, true);
       window.addEventListener("resize", onViewportChange);
       window.addEventListener("scroll", onViewportChange, true);
 
       return () => {
+        observer?.disconnect();
         document.removeEventListener("pointerdown", onPointerDown, true);
         window.removeEventListener("resize", onViewportChange);
         window.removeEventListener("scroll", onViewportChange, true);
@@ -226,7 +235,9 @@ const Select = forwardRef(
                   position: "fixed",
                   top: position.top,
                   left: position.left,
-                  width: position.width
+                  width: position.width,
+                  maxHeight: `min(24rem, ${position.maxHeight}px)`,
+                  transform: position.above ? "translateY(-100%)" : undefined
                 }}
                 onKeyDown={(event) => {
                   const buttons = [

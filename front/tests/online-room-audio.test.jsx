@@ -100,6 +100,19 @@ test("routes an attached remote voice to the selected room output", async () => 
   expect(audio.setSinkId).toHaveBeenCalledWith("studio-output");
 });
 
+test("direct self-monitor uses the chosen output before enabling and follows output changes", async () => {
+  const voice = { setSinkId: vi.fn().mockResolvedValue(true), setLocalMonitoring: vi.fn().mockResolvedValue(true) };
+  const props = makeHookProps({ voiceRef: { current: voice } });
+  const { result } = renderHook(() => useOnlineRoomAudio(props));
+  act(() => window.dispatchEvent(new CustomEvent("audio-output-route-changed", { detail: { deviceId: "headphones" } })));
+  await act(async () => { await result.current.setLocalMonitoring(true); });
+  expect(voice.setSinkId).toHaveBeenLastCalledWith("headphones");
+  expect(voice.setSinkId.mock.invocationCallOrder[0]).toBeLessThan(voice.setLocalMonitoring.mock.invocationCallOrder[0]);
+  act(() => window.dispatchEvent(new CustomEvent("audio-output-route-changed", { detail: { deviceId: "interface" } })));
+  expect(voice.setSinkId).toHaveBeenLastCalledWith("interface");
+  expect(contexts).toHaveLength(0);
+});
+
 test("a pending effect activation is discarded, not attached, once the participant is removed mid-flight", async () => {
   const { result } = renderHook(() => useOnlineRoomAudio(makeHookProps()));
   act(() => {

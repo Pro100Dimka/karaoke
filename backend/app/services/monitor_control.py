@@ -6,7 +6,8 @@ import time
 
 _STREAM_STATISTICS = ("callback_frames", "callback_count", "glitch_count", "queue_frames",
                       "queue_capacity_frames", "queue_underruns", "queue_dropped_frames",
-                      "queue_contentions", "queue_ms", "queue_capacity_ms")
+                      "queue_contentions", "queue_ms", "queue_capacity_ms", "queue_underruns_after_start",
+                      "queue_wait_ms", "dsp_compute_ms")
 
 
 class MonitorCancelled(RuntimeError):
@@ -91,14 +92,15 @@ class MonitorControl:
             if event == "started" and "buffer_size" in message:
                 # Normalize the existing ASIO bridge protocol without changing
                 # its command, callback, buffer selection or effects.
-                message = {**message, "blocksize": message["buffer_size"], "mode": "ASIO"}
+                message = {**message, "blocksize": message["buffer_size"], "mode": "ASIO",
+                           "latency_source": "asio-driver-report"}
                 rate = float(message.get("sample_rate") or 0)
                 if rate > 0:
                     for kind in ("input", "output"):
                         if f"{kind}_latency" in message:
                             message[f"{kind}_latency_ms"] = round(float(message[f"{kind}_latency"]) * 1000 / rate, 2)
             if event in {"started", "fallback"}:
-                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "input_latency_ms", "output_latency_ms"):
+                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms"):
                     if key in message:
                         self.status[key] = message[key]
                 if event == "started":

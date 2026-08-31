@@ -77,6 +77,7 @@ export default class OnlineVoiceMesh {
     this.effectsStream = null;
     this.peerEffectsEnabled = new Map();
     this.microphoneGraph = null;
+    this.outputDeviceId = "";
     this.startPromise = null;
     this.lifecycleVersion = 0;
     this.onRemoteStream = null;
@@ -145,6 +146,10 @@ export default class OnlineVoiceMesh {
           echo: persistedSettings?.echo,
           delay: persistedSettings?.delay
         });
+        await this.setSinkId(this.outputDeviceId);
+        if (lifecycleVersion !== this.lifecycleVersion) {
+          throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+        }
         const outgoingStream = this.microphoneGraph.stream || stream;
         this.stream = outgoingStream;
         this.effectsStream = this.microphoneGraph.effectsStream || outgoingStream;
@@ -222,6 +227,18 @@ export default class OnlineVoiceMesh {
     if (!enabled) return this.microphoneGraph?.setMonitoring?.(false) ?? false;
     await this.start();
     return this.microphoneGraph?.setMonitoring?.(true, effects) ?? false;
+  }
+
+  async setSinkId(deviceId) {
+    this.outputDeviceId = typeof deviceId === "string" ? deviceId : "";
+    const context = this.microphoneGraph?.context;
+    if (typeof context?.setSinkId !== "function") return false;
+    try {
+      await context.setSinkId(this.outputDeviceId);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   createPeer(participantId) {

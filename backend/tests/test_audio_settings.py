@@ -224,7 +224,6 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "input_device_id": 1,
         "output_device_id": 2,
         "sample_rate": 48_000.0,
-        "sample_rates": [48_000, 44_100],
         "output_channels": 2,
         "blocksize": 128,
         "gain": 4,

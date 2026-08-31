@@ -12,9 +12,9 @@ export const audioApi = {
   updateAudioSettings: (patch) =>
     request("/audio/settings", { method: "POST", body: JSON.stringify(patch) }),
   getDirectMonitorStatus: () => request("/audio/direct-monitor/status"),
-  startDirectMonitoring: ({ disabledEffects = false, wasapiMode, autoBuffer = false } = {}) =>
+  startDirectMonitoring: ({ disabledEffects = false, wasapiMode } = {}) =>
     request(
-      `/audio/direct-monitor/start?disabled_effects=${disabledEffects}${wasapiMode ? `&wasapi_mode=${encodeURIComponent(wasapiMode)}` : ""}${autoBuffer ? "&auto_buffer=true" : ""}`,
+      `/audio/direct-monitor/start?disabled_effects=${disabledEffects}${wasapiMode ? `&wasapi_mode=${encodeURIComponent(wasapiMode)}` : ""}`,
       {
         method: "POST",
         timeoutMs: DIRECT_MONITOR_START_TIMEOUT_MS

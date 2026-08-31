@@ -11,26 +11,25 @@ from tests._shared import make_song, patch_attrs, patch_many, raises
 def recording(path, *, duration=12.5): return models.Recording(id='recording', song_id='song', filename='take.wav', path=str(path), duration_sec=duration, sample_rate=48000)
 
 
-def test_capture_attempts_are_unique_and_survive_device_errors(monkeypatch):
+def test_capture_rejects_auto_buffer_without_probing_other_devices(monkeypatch):
     patch_attrs(monkeypatch, recording_service.sd, query_devices=Mock(side_effect=RuntimeError('device unavailable')))
-    attempts = recording_service._capture_attempts(None, None, 44_100, 0, False)
-    assert attempts == [
-        (None, None, 44_100, 0, False, "high"),
-    ]
+    with pytest.raises(RuntimeError, match="fixed positive"):
+        recording_service._capture_attempts(None, None, 44_100, 0, False)
+    recording_service.sd.query_devices.assert_not_called()
 
 
-def test_plain_recording_skips_doomed_low_latency_duplex_attempt():
+def test_plain_recording_keeps_selected_buffer_without_opening_output():
     attempts = recording_service._capture_attempts(1, 2, 44_100, 64, False)
-    assert attempts[0] == (1, None, 44_100, 0, False, "high")
+    assert attempts == [(1, None, 44_100, 64, False, 64 / 44100)]
     assert all(not monitor and output is None for _, output, _, _, monitor, _ in attempts)
 
 
-def test_monitoring_uses_a_stable_duplex_block_at_every_sample_rate():
+def test_monitoring_never_raises_selected_block_or_retries_without_monitoring():
     attempts = recording_service._capture_attempts(1, 2, 16_000, 64, True)
     standard_rate_attempts = recording_service._capture_attempts(1, 2, 48_000, 32, True)
 
-    assert attempts[0] == (1, 2, 16_000, 128, True, "low")
-    assert standard_rate_attempts[0] == (1, 2, 48_000, 128, True, "low")
+    assert attempts == [(1, 2, 16_000, 64, True, 64 / 16000)]
+    assert standard_rate_attempts == [(1, 2, 48_000, 32, True, 32 / 48000)]
 
 
 def test_backend_status_and_session_controls(monkeypatch):
@@ -62,9 +61,8 @@ def test_close_sessions_for_song_keeps_unrelated_recordings(monkeypatch):
     assert recording_service._sessions == {"other": other}
 
 
-def test_start_recording_uses_compatibility_fallback(monkeypatch):
+def test_start_recording_does_not_hide_driver_failure_with_fallback(monkeypatch):
     patch_many(monkeypatch, (recording_service, "_AUDIO_BACKEND_AVAILABLE", True), (recording_service.uuid, "uuid4", lambda: SimpleNamespace(hex="session")))
-    patch_attrs(monkeypatch, recording_service, _capture_attempts=lambda *_args: [(1, 2, 48000, 64, True, 'low'), (1, None, 48000, 0, False, 'high')])
 
     failed = Mock()
     failed.start.side_effect = RuntimeError("WDM host error")
@@ -72,10 +70,12 @@ def test_start_recording_uses_compatibility_fallback(monkeypatch):
     factory = Mock(side_effect=[failed, fallback])
     patch_attrs(monkeypatch, recording_service, RecordingSession=factory, _sessions={})
 
-    assert recording_service.start_recording("song") == "session"
+    with pytest.raises(RuntimeError, match="WDM host error"):
+        recording_service.start_recording("song", device_id=1, output_device_id=2, sample_rate=48000, blocksize=64, monitoring_enabled=True)
     failed.close.assert_called_once_with()
-    fallback.start.assert_called_once_with()
-    assert recording_service._sessions == {"session": fallback}
+    factory.assert_called_once()
+    fallback.start.assert_not_called()
+    assert recording_service._sessions == {}
 
 
 def test_start_recording_reports_backend_and_final_driver_errors(monkeypatch):

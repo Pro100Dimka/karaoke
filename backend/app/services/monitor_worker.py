@@ -27,95 +27,31 @@ _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
 _live_lock = threading.Lock()
 _live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0}
-_GLITCH_WINDOW_SECONDS = 5.0
-_GLITCH_RESTART_THRESHOLD = 12
 
 
 def _stream_candidates(options: dict) -> list[dict]:
-    rates = list(dict.fromkeys([options["sample_rate"], *options.get("sample_rates", [])]))
-    if len(rates) > 1:
-        return [candidate for rate in rates for candidate in _stream_candidates({
-            **options, "sample_rate": rate, "sample_rates": []
-        })]
-    sample_rate = float(options["sample_rate"])
-    base = {
-        "samplerate": sample_rate,
+    """Exactly one requested configuration: no buffer, mode or rate fallback."""
+    rate = float(options["sample_rate"])
+    blocksize = int(options["blocksize"])
+    if blocksize <= 0:
+        raise ValueError("A fixed positive monitoring buffer is required")
+    mode = options.get("wasapi_mode", "exclusive" if options.get("wasapi_exclusive") else "plain")
+    if mode not in {"exclusive", "input-exclusive", "shared", "plain"}:
+        raise ValueError("Unsupported WASAPI mode")
+    candidate = {
+        "samplerate": rate, "blocksize": blocksize, "latency": blocksize / rate,
         "channels": (1, int(options["output_channels"])),
         "device": (int(options["input_device_id"]), int(options["output_device_id"])),
+        "_mode": mode,
     }
-    requested_blocksize = int(options["blocksize"])
-    # Effects and noise suppression run in Python on every callback. Tiny
-    # 32/64-frame blocks can starve even a normal 44.1/48 kHz device and make
-    # monitoring fall progressively behind. 128 frames is still only ~3 ms at
-    # those rates and is a much safer realtime floor for every host API.
-    stable_blocksize = max(128, requested_blocksize)
-    blocks = tuple(dict.fromkeys((stable_blocksize, min(2048, stable_blocksize * 2))))
-    if requested_blocksize == 0:
-        blocks = (0, *blocks)
-    candidates = []
-    requested_mode = options.get("wasapi_mode", "exclusive" if options.get("wasapi_exclusive") else "plain")
-    modes = {
-        "exclusive": ("exclusive", "input-exclusive", "shared", "plain"),
-        "input-exclusive": ("input-exclusive", "shared", "plain"),
-        "shared": ("shared", "plain"),
-        "plain": ("plain",),
-    }[requested_mode]
-    for mode in modes:
-        # Keep latency deterministic for as long as the endpoint accepts it.
-        # PortAudio's generic "low" preset can map to a surprisingly large
-        # shared-mode buffer on consumer USB sound cards. Try 128 and 256
-        # frames explicitly before allowing that host-controlled fallback.
-        for blocksize in blocks:
-            candidate = {
-                **base,
-                "_mode": mode,
-                "blocksize": blocksize,
-                "latency": max(0.002, (blocksize or 128) / sample_rate),
-            }
-            if mode == "exclusive":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(exclusive=True),
-                    sd.WasapiSettings(exclusive=True),
-                )
-            elif mode == "input-exclusive":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(exclusive=True),
-                    sd.WasapiSettings(auto_convert=True),
-                )
-            elif mode == "shared":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(auto_convert=True),
-                    sd.WasapiSettings(auto_convert=True),
-                )
-            if candidate not in candidates:
-                candidates.append(candidate)
-        for blocksize in (*blocks, 0):
-            candidate = {**base, "blocksize": blocksize, "latency": "low", "_mode": mode}
-            if mode == "exclusive":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(exclusive=True),
-                    sd.WasapiSettings(exclusive=True),
-                )
-            elif mode == "input-exclusive":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(exclusive=True),
-                    sd.WasapiSettings(auto_convert=True),
-                )
-            elif mode == "shared":
-                candidate["extra_settings"] = (
-                    sd.WasapiSettings(auto_convert=True),
-                    sd.WasapiSettings(auto_convert=True),
-                )
-            if candidate not in candidates:
-                candidates.append(candidate)
-    # Duplex WASAPI uses polling and couples output buffering to capture. Only
-    # the explicitly selected full-exclusive fixed-buffer monitor tries separate
-    # event-driven endpoints. Keep the original duplex ladder as a safe fallback.
-    split = [dict(candidate, _engine="wasapi-split") for candidate in candidates
-             if requested_mode == "exclusive" and requested_blocksize > 0
-             and candidate["_mode"] == "exclusive" and candidate["latency"] != "low"]
-    return [*split, *candidates]
-
+    if mode != "plain":
+        candidate["extra_settings"] = (
+            sd.WasapiSettings(exclusive=mode != "shared", auto_convert=mode == "shared"),
+            sd.WasapiSettings(exclusive=mode == "exclusive", auto_convert=mode != "exclusive"),
+        )
+    if mode == "exclusive":
+        candidate["_engine"] = "wasapi-split"
+    return [candidate]
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
 
@@ -127,8 +63,9 @@ def _stream_diagnostics(stream, candidate, options, mode):
         "exclusive": mode == "exclusive",
         "engine": "wasapi-split" if isinstance(stream, WasapiMonitorStream) else "duplex",
     }
-    # PortAudio reports endpoint latency, not full mic-to-ear latency (DSP and
-    # hardware can add more). Never present the requested latency hint as measured.
+    # WASAPI PortAudio derives these estimates from allocated buffer capacity,
+    # not an observed mic-to-output transit time. Keep their provenance explicit.
+    result["latency_source"] = "portaudio-buffer-estimate"
     latency = getattr(stream, "latency", None)
     if isinstance(latency, (tuple, list)) and len(latency) == 2:
         result.update(input_latency_ms=round(float(latency[0]) * 1000, 2),
@@ -157,26 +94,17 @@ def _read_live_updates() -> None:
         return
 
 
-def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 44_100, statistics=None):
+def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None):
     statistics = {} if statistics is None else statistics
     quality = StudioMicrophoneProcessor(sample_rate, 1)
     pitch = RealtimePitchShifter(sample_rate)
     effects = MonitorEffectsChain(sample_rate)
     def callback(indata, outdata, _frames, _time_info, status):
+        compute_started = time.perf_counter()
         statistics["callback_frames"] = int(_frames)
         statistics["callback_count"] = statistics.get("callback_count", 0) + 1
         if status:
             statistics["glitch_count"] = statistics.get("glitch_count", 0) + 1
-            now = time.monotonic()
-            glitches.append(now)
-            while glitches and glitches[0] < now - _GLITCH_WINDOW_SECONDS:
-                glitches.pop(0)
-            # A consumer USB endpoint can report an isolated underflow while
-            # another application starts. Three such events used to push the
-            # monitor permanently onto a high-latency host fallback. Restart
-            # only for sustained failure, not harmless transients.
-            if len(glitches) >= _GLITCH_RESTART_THRESHOLD:
-                restart_requested.set()
         with _live_lock:
             reverb, echo, delay, noise_suppression, octave = (
                 _live_params["reverb"],
@@ -198,6 +126,7 @@ def _audio_callback(gain: float, restart_requested: threading.Event, glitches: l
                 "silent": rms < 10 ** (-50 / 20),
             }
         )
+        statistics["dsp_compute_ms"] = round((time.perf_counter() - compute_started) * 1000, 3)
 
     return callback
 
@@ -215,79 +144,40 @@ def main() -> int:
         _live_params["octave"] = float(options.get("octave", 0.0))
     threading.Thread(target=_read_live_updates, daemon=True).start()
 
-    restart_requested = threading.Event()
-    glitches: list[float] = []
+    failed = threading.Event()
     statistics = {"glitch_count": 0}
-    callback, stream = _audio_callback(gain, restart_requested, glitches, float(options['sample_rate']), statistics), None
+    stream = None
     try:
-        failures: list[str] = []
-        minimum_blocks = {}
-        glitch_fallback = False
-        callback_rate = float(options["sample_rate"])
-        candidates = _stream_candidates(options)
-        for candidate_index, candidate in enumerate(candidates):
-            candidate = dict(candidate)
-            mode = candidate.pop("_mode", "plain")
-            engine = candidate.pop("_engine", "duplex")
-            if 0 < candidate.get("blocksize", 0) < minimum_blocks.get(engine, 0):
-                continue
+        candidate = dict(_stream_candidates(options)[0])
+        mode = candidate.pop("_mode")
+        engine = candidate.pop("_engine", "duplex")
+        process = _audio_callback(gain, float(options["sample_rate"]), statistics)
+
+        def callback(*args):
             try:
-                candidate_rate = float(candidate.get("samplerate", callback_rate))
-                if candidate_rate != callback_rate:
-                    callback = _audio_callback(gain, restart_requested, glitches, candidate_rate, statistics)
-                    callback_rate = candidate_rate
-                statistics.clear()
-                statistics["glitch_count"] = 0
-                restart_requested.clear()
-                glitches.clear()
-                stream = (WasapiMonitorStream(sd, candidate, callback, statistics, restart_requested)
-                          if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
-                stream.start()
-                diagnostics = _stream_diagnostics(stream, candidate, options, mode)
-                if failures or candidate_index:
-                    _emit(
-                        {
-                            "event": "fallback",
-                            "message": "Audio glitches detected" if glitch_fallback else (failures[-1] if failures else "Driver compatibility fallback"),
-                            "cause": "glitches" if glitch_fallback else "device-open",
-                            **diagnostics,
-                        }
-                    )
-                _emit(
-                    {
-                        "event": "started",
-                        **diagnostics,
-                    }
-                )
-                while _running and not restart_requested.wait(0.1): _emit({"event": "level", **_level, **statistics})
-                if _running:
-                    minimum_blocks[engine] = max(minimum_blocks.get(engine, 0), candidate.get("blocksize", 0) + 1)
-                    glitch_fallback = True
-                    failures.clear()
-                stream.abort()
-                stream.close()
-                stream = None
-                if not _running: break
+                process(*args)
             except Exception as error:
-                failures.append(str(error))
-                if stream is not None:
-                    try:
-                        stream.abort()
-                        stream.close()
-                    except Exception:
-                        pass
-                    stream = None
-        if _running: raise RuntimeError(failures[-1] if failures else "No audio stream candidate")
+                statistics["callback_error"] = str(error)
+                failed.set()
+
+        stream = (WasapiMonitorStream(sd, candidate, callback, statistics, failed)
+                  if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
+        stream.start()
+        _emit({"event": "started", **_stream_diagnostics(stream, candidate, options, mode)})
+        while _running and not failed.wait(0.1):
+            _emit({"event": "level", **_level, **statistics})
+        if failed.is_set():
+            raise RuntimeError(statistics.get("callback_error", "Monitoring callback failed; selected settings were not changed"))
     except Exception as exc:  # The parent converts this into a friendly API error.
         _emit({"event": "error", "message": str(exc)})
         return 1
     finally:
         if stream is not None:
-            try:
-                stream.abort()
-                stream.close()
-            except Exception:
-                pass
+            for method in ("abort", "close"):
+                try:
+                    getattr(stream, method)()
+                except Exception:
+                    pass
     return 0
 
 

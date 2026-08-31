@@ -42,12 +42,10 @@ def update_settings(patch: schemas.AudioSettingsUpdate, db: Session = Depends(ge
 def start_direct_monitoring(
     db: Session = Depends(get_db), disabled_effects: bool = False,
     wasapi_mode: Literal["shared", "input-exclusive", "exclusive"] | None = None,
-    auto_buffer: bool = False,
 ):
     with http_error(RuntimeError, 503):
         return audio_service.set_monitoring_enabled(
             db, True, disabled_effects=disabled_effects, background=True, wasapi_mode=wasapi_mode,
-            auto_buffer=auto_buffer,
         )
 
 

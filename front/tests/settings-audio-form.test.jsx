@@ -30,6 +30,6 @@ test("audio settings group devices, actions and levels semantically", () => {
   expect(meter.querySelector("path")).not.toBeNull();
   expect(meter.querySelector("rect")).toBeNull();
   expect(screen.getByRole("button", { name: "Проверить звук" })).not.toBeNull();
-  fireEvent.click(screen.getByRole("switch", { name: "Слышать свой голос" }));
+  fireEvent.click(screen.getByRole("switch", { name: "Мониторинг" }));
   expect(monitor).toHaveBeenCalledOnce();
 });

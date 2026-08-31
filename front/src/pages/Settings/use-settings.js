@@ -80,7 +80,6 @@ function useAudio(open) {
   const monitorStatus = useOpenPoll(open, api.getDirectMonitorStatus, 750, null);
   const [local, setLocal] = useState({});
   const [wasapiMode, setWasapiMode] = useState("shared");
-  const [autoBuffer, setAutoBuffer] = useState(false);
   const [busy, setBusy] = useState(false);
   const values = { ...settings.data, ...local };
   const needsAsio = open && Number(monitorStatus.data?.glitch_fallback_count) >= 2;
@@ -107,7 +106,7 @@ function useAudio(open) {
       const enabled = !!values.monitoring_enabled && !retry;
       const saved = await (enabled
         ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode, autoBuffer }));
+        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode }));
 
       merge({ monitoring_enabled: !enabled });
       emit(saved);
@@ -137,8 +136,6 @@ function useAudio(open) {
     speaker,
     wasapiMode,
     setWasapiMode,
-    autoBuffer,
-    setAutoBuffer,
     monitorStatus: monitorStatus.data,
     monitorStatusError: monitorStatus.error,
     suggestAsio: needsAsio && Array.isArray(asio.data) && !asio.data.length,

@@ -22,7 +22,7 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
     () => ({
       ...s.app.form,
       audio: s.audio.values ?? {},
-      monitor: { wasapiMode: s.audio.wasapiMode ?? "shared", autoBuffer: !!s.audio.autoBuffer },
+      monitor: { wasapiMode: s.audio.wasapiMode ?? "shared" },
       radio: {
         enabled: !!s.radio.isPlaying,
         stationId: s.radio.stationId ?? "",
@@ -33,7 +33,6 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
       s.app.form,
       s.audio.values,
       s.audio.wasapiMode,
-      s.audio.autoBuffer,
       s.radio.isPlaying,
       s.radio.stationId,
       s.radio.volume

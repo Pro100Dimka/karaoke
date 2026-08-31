@@ -6,7 +6,7 @@ import { RenderFormikFields, useGetForm } from "../src/theme/ui";
 
 function AudioFields({ audio }) {
   const formik = useGetForm({
-    initialValues: { audio: audio.values, monitor: { wasapiMode: audio.wasapiMode, autoBuffer: !!audio.autoBuffer } }
+    initialValues: { audio: audio.values, monitor: { wasapiMode: audio.wasapiMode } }
   });
   return (
     <RenderFormikFields
@@ -25,8 +25,6 @@ const audio = (status = {}, rest = {}) => ({
   values: { monitoring_enabled: true, audio_driver: "auto", buffer_size: 128 },
   wasapiMode: "shared",
   setWasapiMode: vi.fn(),
-  autoBuffer: false,
-  setAutoBuffer: vi.fn(),
   update: vi.fn(),
   monitor: vi.fn(),
   monitorStatus: { state: "starting", ...status },
@@ -54,7 +52,8 @@ test("shows measured driver latency and fallback reason without claiming end-to-
       })}
     />
   );
-  expect(screen.getByText(/Задержка драйвера/).textContent).toContain("12.0 ms");
+  expect(screen.queryByText(/Задержка драйвера/)).toBeNull();
+  expect(screen.getByText(/Полная задержка микрофон → наушники: не измерена/)).toBeTruthy();
   expect(screen.getByRole("alert").textContent).toContain("underflows");
   expect(screen.queryByRole("button", { name: /ASIO4ALL/ })).toBeNull();
 });
@@ -107,19 +106,18 @@ test("shows asynchronous startup errors", () => {
   expect(screen.getByRole("alert").textContent).toBe("Device busy");
 });
 
-test("automatic buffer is a next-start diagnostic option, not a saved audio buffer", async () => {
-  const state = audio({ state: "running" });
-  render(<AudioFields audio={state} />);
-  fireEvent.click(screen.getByRole("switch", { name: "Автобуфер WASAPI при следующем запуске" }));
-  await waitFor(() => expect(state.setAutoBuffer).toHaveBeenCalledWith(true));
-  expect(state.update).not.toHaveBeenCalled();
-  expect(state.monitor).not.toHaveBeenCalled();
+test("automatic buffer is not offered for any WASAPI mode", () => {
+  for (const wasapiMode of ["shared", "input-exclusive", "exclusive"]) {
+    render(<AudioFields audio={audio({}, { wasapiMode })} />);
+    expect(screen.queryByRole("switch", { name: /Автобуфер/ })).toBeNull();
+    cleanup();
+  }
 });
 
 test("split input/output latency and actual callback statistics are visible", () => {
   render(<AudioFields audio={audio({ state: "running", blocksize: 0, input_latency_ms: 9.2, output_latency_ms: 12.4, callback_frames: 480, glitch_count: 2 })} />);
-  expect(screen.getByText("Задержка входа по данным драйвера: 9.2 ms")).toBeTruthy();
-  expect(screen.getByText("Задержка выхода по данным драйвера: 12.4 ms")).toBeTruthy();
+  expect(screen.getByText("Оценка входа аудиобэкендом (не замер): 9.2 ms")).toBeTruthy();
+  expect(screen.getByText("Оценка выхода аудиобэкендом (не замер): 12.4 ms")).toBeTruthy();
   expect(screen.getByText("Последний блок аудио, отсчётов: 480")).toBeTruthy();
   expect(screen.getByText("События сбоя текущего потока: 2")).toBeTruthy();
 });
@@ -132,9 +130,17 @@ test("ASIO does not offer the automatic WASAPI buffer override", () => {
 test("split WASAPI queue is shown separately from driver endpoint latency", () => {
   render(<AudioFields audio={audio({ state: "running", engine: "wasapi-split", input_latency_ms: 5.8, output_latency_ms: 5.8, queue_ms: 2.9, queue_capacity_ms: 11.61, queue_underruns: 6 })} />);
   expect(screen.getByText("Раздельные WASAPI-потоки входа и выхода")).toBeTruthy();
-  expect(screen.getByText(/Задержка драйвера/).textContent).toContain("11.6 ms");
-  expect(screen.getByText("Дополнительная очередь мониторинга сейчас: 2.9 ms")).toBeTruthy();
-  expect(screen.getByText("Максимум дополнительной очереди (не полная задержка): 11.61 ms")).toBeTruthy();
+  expect(screen.queryByText(/Задержка драйвера/)).toBeNull();
+  expect(screen.getByText(/Полная задержка микрофон → наушники: не измерена/)).toBeTruthy();
+  expect(screen.getByText("Остаток аудио в очереди (не время ожидания): 2.9 ms")).toBeTruthy();
+  expect(screen.getByText("Вместимость очереди в миллисекундах аудио: 11.61 ms")).toBeTruthy();
+});
+
+test("measured software timings are separate from unmeasured physical latency", () => {
+  render(<AudioFields audio={audio({ state: "running", queue_wait_ms: 4.1, dsp_compute_ms: .03 })} />);
+  expect(screen.getByText("Измеренное ожидание последнего блока в программной очереди: 4.1 ms")).toBeTruthy();
+  expect(screen.getByText("Время вычислений последнего блока (не задержка звука): 0.03 ms")).toBeTruthy();
+  expect(screen.getByText(/Полная задержка микрофон → наушники: не измерена/)).toBeTruthy();
 });
 
 test("ASIO4ALL help requires explicit click, never downloads or starts an installer", () => {

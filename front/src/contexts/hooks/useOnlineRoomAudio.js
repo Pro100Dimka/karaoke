@@ -40,8 +40,9 @@ export default function useOnlineRoomAudio({
     outputDeviceIdRef.current = normalized;
     remoteAudioRef.current.forEach((audio) => routeMediaOutput(audio, normalized));
     remoteEffectsRef.current.forEach(({ context }) => routeMediaOutput(context, normalized));
+    routeMediaOutput(voiceRef.current, normalized);
     routeMediaOutput(localMonitorRef.current?.context, normalized);
-  }, []);
+  }, [voiceRef]);
 
   useEffect(() => {
     const route = (event) => applyOutputRoute(event.detail?.deviceId);
@@ -219,6 +220,7 @@ export default function useOnlineRoomAudio({
       const voice = voiceRef.current;
       if (!voice) return false;
       if (typeof voice.setLocalMonitoring === "function") {
+        await routeMediaOutput(voice, outputDeviceIdRef.current);
         const active = await voice.setLocalMonitoring(true, effects);
         if (voiceRef.current !== voice) {
           voice.setLocalMonitoring(false);

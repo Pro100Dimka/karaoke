@@ -638,15 +638,16 @@ export const ukMessages = {
   "settings.audio.monitor.status.checking": "Перевіряємо стан…",
   "settings.audio.monitor.buffer.label": "Буфер",
   "settings.audio.monitor.buffer.auto": "авто",
-  "settings.audio.monitor.autoBuffer.label": "Автобуфер WASAPI при наступному запуску",
-  "settings.audio.monitor.autoBuffer.tooltip": "Перевірка моніторингу: увімкніть і натисніть «Повторити підключення». Розмір блоку обирає драйвер. Збережений буфер та ASIO не змінюються. У разі збоїв можливий перехід на фіксований буфер — дивіться фактичний режим нижче.",
-  "settings.audio.monitor.inputLatency.label": "Затримка входу за даними драйвера",
-  "settings.audio.monitor.outputLatency.label": "Затримка виходу за даними драйвера",
+  "settings.audio.monitor.inputLatency.label": "Оцінка входу аудіобекендом (не вимірювання)",
+  "settings.audio.monitor.outputLatency.label": "Оцінка виходу аудіобекендом (не вимірювання)",
+  "settings.audio.monitor.endToEnd.unmeasured": "Повна затримка мікрофон → навушники: не виміряна. Потрібен тест із поверненням звуку з виходу на вхід.",
+  "settings.audio.monitor.dspCompute.label": "Час обчислень останнього блоку (не затримка звуку)",
+  "settings.audio.monitor.queueWait.label": "Виміряне очікування останнього блоку в програмній черзі",
   "settings.audio.monitor.callbackFrames.label": "Останній блок аудіо, відліків",
   "settings.audio.monitor.glitchCount.label": "Події збою поточного потоку",
   "settings.audio.monitor.splitEngine.label": "Окремі WASAPI-потоки входу та виходу",
-  "settings.audio.monitor.queueLatency.label": "Додаткова черга моніторингу зараз",
-  "settings.audio.monitor.queueLimit.label": "Максимум додаткової черги (не повна затримка)",
+  "settings.audio.monitor.queueLatency.label": "Залишок аудіо в черзі (не час очікування)",
+  "settings.audio.monitor.queueLimit.label": "Місткість черги в мілісекундах аудіо",
   "settings.audio.monitor.queueUnderruns.label": "Порожні блоки черги, включно із запуском",
   "settings.audio.monitor.latency.label": "Затримка драйвера (вхід + вихід)",
   "settings.audio.monitor.fallback":
@@ -658,7 +659,7 @@ export const ukMessages = {
   "settings.audio.buffer_size.description":
     "Менший буфер — менша затримка, але вищий ризик тріску. Зміна буфера перезапускає прослуховування. Це не вимірювання повної затримки голосу.",
   "settings.audio.wasapiMode.warning":
-    "Exclusive може зайняти пристрій і завадити запису або кімнаті. Повний exclusive також може вимкнути мінусовку. У разі відмови драйвера ввімкнеться спільний режим.",
+    "Exclusive може зайняти пристрій і завадити запису або кімнаті. Повний exclusive також може вимкнути мінусовку. У разі відмови драйвера буде показано помилку; вибрані режим і буфер не змінюються автоматично.",
   "settings.audio.monitor.retry.label": "Повторити підключення",
   "settings.audio.asioHelp.description":
     "Повторюються збої аудіо. Програма не виявила ASIO-драйверів. ASIO4ALL можна встановити самостійно; зниження затримки не гарантовано.",
