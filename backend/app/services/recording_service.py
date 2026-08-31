@@ -292,10 +292,13 @@ class RecordingSession:
         with self._timeline_lock:
             frames, capture_end = self._timeline_frames, self._last_capture_end_clock
         timeline = frames / float(self.sample_rate) if self.sample_rate else 0.0
-        if capture_end is None: return timeline
+        # stop_recording releases the device before it finalizes the WAV.
+        # Once stopped there are no pending captured samples to extrapolate,
+        # and PortAudio no longer provides a valid stream clock.
+        if self._capture_stopped or capture_end is None: return timeline
         try:
             stream_time = float(self._stream.time)
-        except (AttributeError, TypeError, ValueError):
+        except Exception:  # The optional clock can fail if the device disappears.
             return timeline
         # PortAudio's ADC clock describes when the most recent input buffer was
         # physically captured. Add only the small not-yet-delivered interval so
@@ -339,9 +342,9 @@ class RecordingSession:
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
         if self._closed: raise RuntimeError("Recording session is already closed")
         self._paused = True
-        self._close_playback_segment()
         self._closed = True
         self.stop_capture()
+        self._close_playback_segment()
         stream_error = self._capture_error
         self._stop_writer()
 

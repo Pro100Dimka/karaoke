@@ -4,7 +4,7 @@ import io
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, PropertyMock
 
 import numpy as np
 import pytest
@@ -144,6 +144,42 @@ def test_playback_anchor_compensates_the_audible_output_latency(monkeypatch):
     session.sync_playback(0.02)
 
     assert session.playback_segments[0]["start_playback_sec"] == pytest.approx(-0.03)
+
+
+def test_timeline_uses_captured_frames_when_driver_clock_is_unavailable(monkeypatch):
+    session, stream = make_session(monkeypatch)
+    session._timeline_frames = 4800
+    session._last_capture_end_clock = 10.1
+    clock = PropertyMock(side_effect=recording_service.sd.PortAudioError("Error getting stream time"))
+    monkeypatch.setattr(type(stream), "time", clock, raising=False)
+    assert session._timeline_time() == pytest.approx(.1)
+
+
+@pytest.mark.parametrize("capture_already_stopped", [False, True])
+def test_save_active_segment_never_reads_closed_stream_clock(monkeypatch, tmp_path, capture_already_stopped):
+    session, stream = make_session(monkeypatch)
+    session._temporary_path = tmp_path / "temporary.wav"
+    recording_service.sf.write(session._temporary_path, np.zeros((9600, 1)), session.sample_rate)
+    session._frames_written = session._timeline_frames = 9600
+    session._last_capture_end_clock = 10.2
+    # Even a live clock must not extend the final segment past the saved WAV.
+    clock = PropertyMock(return_value=10.25)
+    monkeypatch.setattr(type(stream), "time", clock, raising=False)
+    session._active_playback_segment = {"start_recording_sec": 0.0, "start_playback_sec": 1.0}
+    session._playback_segments.append(session._active_playback_segment)
+    def close_stream():
+        clock.side_effect = recording_service.sd.PortAudioError("Error getting stream time")
+    stream.close.side_effect = close_stream
+    if capture_already_stopped:
+        session.stop_capture()
+    destination = tmp_path / "saved.wav"
+    duration, rate = session.stop_and_save(destination)
+    assert duration == pytest.approx(.2)
+    assert session.playback_segments[0]["end_recording_sec"] == pytest.approx(duration)
+    assert recording_service.sf.info(destination).frames == 9600
+    clock.assert_not_called()
+    stream.stop.assert_called_once()
+    stream.close.assert_called_once()
 
 
 def test_writer_persists_chunks_and_reports_library_errors(monkeypatch, tmp_path, caplog):
