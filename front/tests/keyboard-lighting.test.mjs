@@ -1,7 +1,13 @@
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
 import { afterEach, expect, test, vi } from "vitest";
-import { lightingColor, readLightingMusic, registerLightingSource, observeLightingMedia } from "../src/services/keyboardLighting";
+import {
+  lightingColor,
+  musicLightingColor,
+  readLightingMusic,
+  registerLightingSource,
+  observeLightingMedia
+} from "../src/services/keyboardLighting";
 const require = createRequire(import.meta.url);
 const { LightingController, installLightingShutdown } = require("../electron/rgb/controller.cjs");
 const { parseController, uint32, packet } = require("../electron/rgb/protocol.cjs");
@@ -213,6 +219,9 @@ test("music selection prioritizes active karaoke and unregisters without losing 
   expect(lightingColor("#ff0000", 0.5, 0.5, "music")).toEqual([64, 0, 0]);
   expect(lightingColor("#ff0000", 0, 1, "theme")).toEqual([0, 0, 0]);
   expect(lightingColor("#00ff00", 1, 0, "theme")).toEqual([0, 255, 0]);
+  expect(musicLightingColor(1, 1, 0)).toEqual([255, 0, 0]);
+  expect(musicLightingColor(1, 1, 1 / 3)).toEqual([0, 255, 0]);
+  expect(musicLightingColor(1, 0, 2 / 3)).toEqual([0, 0, 41]);
 });
 test("unsupported media analysis does not modify the playback element", () => {
   const media = { pause: vi.fn(), play: vi.fn() };

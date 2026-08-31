@@ -22,14 +22,29 @@ add_library(KeyboardLighting SHARED
   vial_protocol.h
   winbond_protocol.h
 )
+# This toolchain emits unscanned MSVC Ninja rules, so make local header
+# dependencies explicit. Otherwise a protocol-only edit can leave a stale
+# KeyboardLighting.node while rebuilding only the test executable.
+set_property(SOURCE lighting.cpp APPEND PROPERTY OBJECT_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/usb_lighting.h"
+)
+set_property(SOURCE usb_lighting.cpp APPEND PROPERTY OBJECT_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/usb_lighting.h;${CMAKE_CURRENT_SOURCE_DIR}/vial_protocol.h;${CMAKE_CURRENT_SOURCE_DIR}/winbond_protocol.h"
+)
 target_compile_features(KeyboardLighting PRIVATE cxx_std_17)
 target_include_directories(KeyboardLighting PRIVATE "${NODE_HEADERS}")
 target_link_libraries(KeyboardLighting PRIVATE windowsapp ole32 wooting_rgb)
 set_target_properties(KeyboardLighting PROPERTIES PREFIX "" SUFFIX ".node" MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 enable_testing()
 add_executable(LightingProtocolTests vial_protocol_test.cpp)
+set_property(SOURCE vial_protocol_test.cpp APPEND PROPERTY OBJECT_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/vial_protocol.h"
+)
 target_compile_features(LightingProtocolTests PRIVATE cxx_std_17)
 add_test(NAME lighting-protocol COMMAND LightingProtocolTests)
 add_executable(WinbondProtocolTests winbond_protocol_test.cpp)
+set_property(SOURCE winbond_protocol_test.cpp APPEND PROPERTY OBJECT_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/winbond_protocol.h"
+)
 target_compile_features(WinbondProtocolTests PRIVATE cxx_std_17)
 add_test(NAME winbond-protocol COMMAND WinbondProtocolTests)

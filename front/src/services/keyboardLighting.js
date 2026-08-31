@@ -23,6 +23,26 @@ export function lightingColor(hex, brightness, level, mode) {
   return [1, 3, 5].map((offset) => Math.round(parseInt(base.slice(offset, offset + 2), 16) * gain));
 }
 
+export function musicLightingColor(brightness, level, phase) {
+  const clamp = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+  const hue = (((Number(phase) || 0) % 1) + 1) % 1;
+  const sector = hue * 6;
+  const chroma = 1;
+  const secondary = chroma * (1 - Math.abs((sector % 2) - 1));
+  const colors = [
+    [chroma, secondary, 0],
+    [secondary, chroma, 0],
+    [0, chroma, secondary],
+    [0, secondary, chroma],
+    [secondary, 0, chroma],
+    [chroma, 0, secondary]
+  ];
+  const gain = clamp(brightness) * (0.16 + clamp(level) * 0.84);
+  return colors[Math.floor(sector) % colors.length].map((channel) =>
+    Math.round(channel * gain * 255)
+  );
+}
+
 // Read a copy of already playing media. Never re-route the original element,
 // open the microphone, or connect audible analysis output.
 export function observeLightingMedia(media, register = registerLightingSource) {
