@@ -6,13 +6,6 @@ import { Stack, Switch } from "../../../theme/ui";
 export default function rows({ settings: { audio }, run, tr = translateSaved }) {
   const status = audio.monitorStatus;
   const wasapi = audio.values?.audio_driver !== "asio";
-  const states = {
-    idle: "settings.audio.monitor.status.idle",
-    starting: "settings.audio.monitor.status.starting",
-    stopping: "settings.audio.monitor.status.stopping",
-    running: "settings.audio.monitor.status.running",
-    error: "settings.audio.monitor.status.error"
-  };
   return [
     ...[
       ["output_device_id", "settings.audio.output_device_id.label", "outputs"],
@@ -75,6 +68,49 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
     },
     {
       type: "Label",
+      role: "alert",
+      variant: "caption",
+      showFor: Number(status?.fallback_count) > 0,
+      text: `${tr("settings.audio.monitor.fallback")} ${status?.fallback_reason ?? ""}`
+    },
+    {
+      md: 6,
+      type: "SelectField",
+      tag: "monitor.wasapiMode",
+      ...(wasapi &&
+        audio.wasapiMode !== "shared" && {
+          tooltip: tr("settings.audio.wasapiMode.warning")
+        }),
+      showFor: wasapi,
+      label: tr("settings.audio.wasapiMode.label"),
+      onSave: audio.setWasapiMode,
+      options: [
+        { value: "shared", label: tr("settings.audio.wasapiMode.options.shared") },
+        { value: "input-exclusive", label: tr("settings.audio.wasapiMode.options.inputExclusive") },
+        { value: "exclusive", label: tr("settings.audio.wasapiMode.options.exclusive") }
+      ]
+    },
+    {
+      md: 6,
+      type: "SelectField",
+      tag: "audio.buffer_size",
+      tooltip: tr("settings.audio.buffer_size.description"),
+      showFor: wasapi,
+      valueType: "number",
+      label: tr("settings.audio.buffer_size.label"),
+      options: [128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
+    },
+    {
+      md: 12,
+      type: "Switch",
+      tag: "monitor.autoBuffer",
+      showFor: wasapi,
+      label: tr("settings.audio.monitor.autoBuffer.label"),
+      tooltip: tr("settings.audio.monitor.autoBuffer.tooltip"),
+      onSave: audio.setAutoBuffer
+    },
+    {
+      type: "Label",
       variant: "caption",
       showFor: status?.state === "running",
       text: `${status?.host_api || status?.driver} · ${status?.mode || "ASIO"} · ${tr("settings.audio.monitor.buffer.label")}: ${status?.blocksize === 0 ? tr("settings.audio.monitor.buffer.auto") : (status?.blocksize ?? "—")} · ${status?.sample_rate ?? "—"} Hz${
@@ -91,48 +127,24 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
     },
     {
       type: "Label",
-      role: "alert",
       variant: "caption",
-      showFor: Number(status?.fallback_count) > 0,
-      text: `${tr("settings.audio.monitor.fallback")} ${status?.fallback_reason ?? ""}`
+      showFor: status?.state === "running" && status?.engine === "wasapi-split",
+      text: tr("settings.audio.monitor.splitEngine.label")
     },
-    {
-      md: 6,
-      type: "SelectField",
-      tag: "monitor.wasapiMode",
-      showFor: wasapi,
-      label: tr("settings.audio.wasapiMode.label"),
-      onSave: audio.setWasapiMode,
-      options: [
-        { value: "shared", label: tr("settings.audio.wasapiMode.options.shared") },
-        { value: "input-exclusive", label: tr("settings.audio.wasapiMode.options.inputExclusive") },
-        { value: "exclusive", label: tr("settings.audio.wasapiMode.options.exclusive") }
-      ]
-    },
-    {
-      md: 6,
-      type: "SelectField",
-      tag: "audio.buffer_size",
-      showFor: wasapi,
-      valueType: "number",
-      label: tr("settings.audio.buffer_size.label"),
-      options: [128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
-    },
-    {
-      md: 6,
+    ...[
+      ["input_latency_ms", "settings.audio.monitor.inputLatency.label", "ms"],
+      ["output_latency_ms", "settings.audio.monitor.outputLatency.label", "ms"],
+      ["callback_frames", "settings.audio.monitor.callbackFrames.label", ""],
+      ["glitch_count", "settings.audio.monitor.glitchCount.label", ""],
+      ["queue_ms", "settings.audio.monitor.queueLatency.label", "ms"],
+      ["queue_capacity_ms", "settings.audio.monitor.queueLimit.label", "ms"],
+      ["queue_underruns", "settings.audio.monitor.queueUnderruns.label", ""]
+    ].map(([key, label, unit]) => ({
       type: "Label",
       variant: "caption",
-      showFor: wasapi,
-      text: tr("settings.audio.buffer_size.description")
-    },
-    {
-      md: 6,
-      type: "Label",
-      variant: "caption",
-      showFor: (values) => wasapi && values.monitor.wasapiMode !== "shared",
-      text: tr("settings.audio.wasapiMode.warning")
-    },
-
+      showFor: status?.state === "running" && Number.isFinite(status?.[key]),
+      text: `${tr(label)}: ${status?.[key]} ${unit}`.trim()
+    })),
     {
       type: "ButtonField",
       label: tr("settings.audio.monitor.retry.label"),

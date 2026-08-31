@@ -4,6 +4,10 @@ import logging
 import threading
 import time
 
+_STREAM_STATISTICS = ("callback_frames", "callback_count", "glitch_count", "queue_frames",
+                      "queue_capacity_frames", "queue_underruns", "queue_dropped_frames",
+                      "queue_contentions", "queue_ms", "queue_capacity_ms")
+
 
 class MonitorCancelled(RuntimeError):
     pass
@@ -80,6 +84,10 @@ class MonitorControl:
             if token is not None and (token is not self.token or token.is_set()):
                 return
             event = message.get("event")
+            if event == "level":
+                for key in _STREAM_STATISTICS:
+                    if key in message:
+                        self.status[key] = message[key]
             if event == "started" and "buffer_size" in message:
                 # Normalize the existing ASIO bridge protocol without changing
                 # its command, callback, buffer selection or effects.
@@ -90,10 +98,12 @@ class MonitorControl:
                         if f"{kind}_latency" in message:
                             message[f"{kind}_latency_ms"] = round(float(message[f"{kind}_latency"]) * 1000 / rate, 2)
             if event in {"started", "fallback"}:
-                for key in ("blocksize", "sample_rate", "mode", "driver", "latency", "input_latency_ms", "output_latency_ms"):
+                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "input_latency_ms", "output_latency_ms"):
                     if key in message:
                         self.status[key] = message[key]
                 if event == "started":
+                    for key in _STREAM_STATISTICS:
+                        self.status.pop(key, None)
                     self.status["state"] = "running"
                     started = self.status.get("requested_at")
                     if started is not None:

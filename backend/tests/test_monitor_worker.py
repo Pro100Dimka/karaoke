@@ -47,6 +47,78 @@ def test_low_rate_device_keeps_a_stable_minimum_block_before_safe_fallback():
     assert any(candidate["blocksize"] == 128 for candidate in candidates)
 
 
+@pytest.mark.parametrize("mode", ["shared", "input-exclusive", "exclusive"])
+def test_explicit_auto_buffer_uses_host_frames_without_changing_fixed_default(mode):
+    candidates = monitor_worker._stream_candidates({**options(), "wasapi_mode": mode, "blocksize": 0})
+    assert candidates[0]["blocksize"] == 0
+    assert candidates[0]["_mode"] == mode
+    assert candidates[0]["latency"] == 128 / 48000
+    assert candidates[1]["blocksize"] == 128
+    assert monitor_worker._stream_candidates({**options(), "wasapi_mode": mode, "blocksize": 128})[0]["blocksize"] == 128
+
+
+def test_variable_callback_frames_and_glitches_are_reported(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0, "echo": 0, "delay": 0, "octave": 0, "noise_suppression": 0})
+    stats = {}
+    callback = monitor_worker._audio_callback(0.5, threading.Event(), [], 48000, stats)
+    for frames in (48, 128, 480, 96):
+        samples = np.full((frames, 1), 0.1, dtype=np.float32)
+        output = np.empty((frames, 2), dtype=np.float32)
+        callback(samples, output, frames, None, "underflow" if frames == 480 else None)
+        assert np.isfinite(output).all()
+        assert np.allclose(output[:, 0], output[:, 1])
+    assert stats == {"callback_frames": 96, "callback_count": 4, "glitch_count": 1}
+
+
+def test_split_endpoints_are_only_used_for_explicit_full_exclusive_fixed_monitor():
+    candidates = monitor_worker._stream_candidates({**options(), "wasapi_mode": "exclusive"})
+    assert [item["_engine"] for item in candidates[:2]] == ["wasapi-split"] * 2
+    assert [item["blocksize"] for item in candidates[:3]] == [128, 256, 128]
+    assert "_engine" not in candidates[2]
+    for config in ({"wasapi_mode": "shared"}, {"wasapi_mode": "input-exclusive"},
+                   {"wasapi_mode": "exclusive", "blocksize": 0}, {}):
+        assert all("_engine" not in item for item in monitor_worker._stream_candidates({**options(), **config}))
+
+
+def test_failed_split_open_falls_back_to_original_duplex(monkeypatch, capsys):
+    configure_argv(monkeypatch, {**options(), "wasapi_mode": "exclusive"})
+    monkeypatch.setattr(monitor_worker, "_running", False)
+    # Keep the real class for isinstance diagnostics; fake endpoints only.
+    monkeypatch.setattr(monitor_worker.sd, "InputStream", Mock(side_effect=RuntimeError("separate endpoints rejected")), raising=False)
+    duplex = Mock(latency=(.02, .026))
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=duplex))
+    assert monitor_worker.main() == 0
+    monitor_worker.sd.Stream.assert_called_once()
+    assert monitor_worker.sd.Stream.call_args.kwargs["blocksize"] == 128
+    assert "_engine" not in monitor_worker.sd.Stream.call_args.kwargs
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert events[0]["event"] == "fallback"
+    assert events[-1]["engine"] == "duplex"
+
+
+def test_split_glitch_fallback_keeps_128_duplex_available(monkeypatch, capsys):
+    configure_argv(monkeypatch, {**options(), "wasapi_mode": "exclusive"})
+    monkeypatch.setattr(monitor_worker, "_running", True)
+    candidates = monitor_worker._stream_candidates({**options(), "wasapi_mode": "exclusive"})
+    monkeypatch.setattr(monitor_worker, "_stream_candidates", lambda _: [candidates[0], candidates[2]])
+    input_endpoint = Mock(latency=.006)
+    def start_input():
+        # An unexpected callback size requests restart before start() returns.
+        monitor_worker.sd.InputStream.call_args.kwargs["callback"](np.zeros((64, 1)), 64, None, None)
+    input_endpoint.start.side_effect = start_input
+    monkeypatch.setattr(monitor_worker.sd, "InputStream", Mock(return_value=input_endpoint), raising=False)
+    monkeypatch.setattr(monitor_worker.sd, "OutputStream", Mock(return_value=Mock(latency=.006)), raising=False)
+    duplex = Mock(latency=(.02, .026))
+    duplex.start.side_effect = lambda: setattr(monitor_worker, "_running", False)
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=duplex))
+    assert monitor_worker.main() == 0
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [event["event"] for event in events] == ["started", "fallback", "started"]
+    assert events[0]["engine"] == "wasapi-split"
+    assert events[1]["cause"] == "glitches"
+    assert events[-1]["blocksize"] == 128
+
+
 def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch):
     monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.0, "echo": 0.0, "delay": 0.0})
     lines = iter(["not-json\n", "\n", '{"reverb": 0.4}\n', '{"echo": 0.2, "delay": 0.1}\n'])

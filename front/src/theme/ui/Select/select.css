@@ -27,6 +27,10 @@
     text-align: start;
   }
 
+  .ui-select-popover .ui-card__panel .ui-card__content {
+    padding: 0;
+  }
+
   .ui-select-trigger:focus-visible,
   .ui-select-trigger[data-open] {
     outline: 0;
@@ -51,8 +55,8 @@
     color: var(--ui-text-muted);
   }
 
-  .ui-select-start-icon > svg,
-  .ui-select-end-icon > svg {
+  .ui-select-start-icon>svg,
+  .ui-select-end-icon>svg {
     display: block;
     inline-size: 1rem;
     block-size: 1rem;
@@ -98,16 +102,13 @@
     padding: var(--space-1);
     overflow: auto;
 
-    border: var(--hairline) solid
-      color-mix(in srgb, var(--ui-primary) 58%, var(--overlay-border));
+    border: var(--hairline) solid color-mix(in srgb, var(--ui-primary) 58%, var(--overlay-border));
     border-radius: var(--control-radius);
 
     background:
-      radial-gradient(
-        circle at 82% 0,
+      radial-gradient(circle at 82% 0,
         color-mix(in srgb, var(--ui-primary) 14%, transparent),
-        transparent 42%
-      ),
+        transparent 42%),
       color-mix(in srgb, var(--overlay-bg) 94%, transparent);
     box-shadow:
       var(--shadows-3),
@@ -165,19 +166,15 @@
     transform: none;
     outline: 0;
     background: color-mix(in srgb, var(--ui-primary) 13%, var(--overlay-bg));
-    box-shadow: inset 0 0 0 var(--hairline)
-      color-mix(in srgb, var(--ui-primary) 42%, transparent);
+    box-shadow: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--ui-primary) 42%, transparent);
   }
 
   .ui-select-option[data-selected] {
-    background: linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--ui-primary) 22%, var(--overlay-bg)),
-      color-mix(in srgb, var(--ui-primary) 8%, var(--overlay-bg))
-    );
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--ui-primary) 22%, var(--overlay-bg)),
+        color-mix(in srgb, var(--ui-primary) 8%, var(--overlay-bg)));
     box-shadow:
-      inset 0 0 0 var(--hairline)
-        color-mix(in srgb, var(--ui-primary) 70%, transparent),
+      inset 0 0 0 var(--hairline) color-mix(in srgb, var(--ui-primary) 70%, transparent),
       0 0 var(--space-2) color-mix(in srgb, var(--ui-primary) 14%, transparent);
   }
 
@@ -201,8 +198,8 @@
     color: var(--ui-primary);
   }
 
-  .ui-select-option-mark > svg,
-  .ui-select-option-icon > svg {
+  .ui-select-option-mark>svg,
+  .ui-select-option-icon>svg {
     inline-size: 100%;
     block-size: 100%;
   }

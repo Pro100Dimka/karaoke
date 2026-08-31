@@ -21,6 +21,7 @@ from app.services.microphone_quality import (
     RealtimePitchShifter,
     StudioMicrophoneProcessor,
 )
+from app.services.wasapi_monitor_stream import WasapiMonitorStream
 
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
@@ -49,6 +50,8 @@ def _stream_candidates(options: dict) -> list[dict]:
     # those rates and is a much safer realtime floor for every host API.
     stable_blocksize = max(128, requested_blocksize)
     blocks = tuple(dict.fromkeys((stable_blocksize, min(2048, stable_blocksize * 2))))
+    if requested_blocksize == 0:
+        blocks = (0, *blocks)
     candidates = []
     requested_mode = options.get("wasapi_mode", "exclusive" if options.get("wasapi_exclusive") else "plain")
     modes = {
@@ -67,7 +70,7 @@ def _stream_candidates(options: dict) -> list[dict]:
                 **base,
                 "_mode": mode,
                 "blocksize": blocksize,
-                "latency": max(0.002, blocksize / sample_rate),
+                "latency": max(0.002, (blocksize or 128) / sample_rate),
             }
             if mode == "exclusive":
                 candidate["extra_settings"] = (
@@ -105,7 +108,13 @@ def _stream_candidates(options: dict) -> list[dict]:
                 )
             if candidate not in candidates:
                 candidates.append(candidate)
-    return candidates
+    # Duplex WASAPI uses polling and couples output buffering to capture. Only
+    # the explicitly selected full-exclusive fixed-buffer monitor tries separate
+    # event-driven endpoints. Keep the original duplex ladder as a safe fallback.
+    split = [dict(candidate, _engine="wasapi-split") for candidate in candidates
+             if requested_mode == "exclusive" and requested_blocksize > 0
+             and candidate["_mode"] == "exclusive" and candidate["latency"] != "low"]
+    return [*split, *candidates]
 
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
@@ -116,6 +125,7 @@ def _stream_diagnostics(stream, candidate, options, mode):
         "blocksize": candidate.get("blocksize", 0), "sample_rate": candidate.get("samplerate", options["sample_rate"]),
         "latency": candidate.get("latency", "low"), "mode": mode,
         "exclusive": mode == "exclusive",
+        "engine": "wasapi-split" if isinstance(stream, WasapiMonitorStream) else "duplex",
     }
     # PortAudio reports endpoint latency, not full mic-to-ear latency (DSP and
     # hardware can add more). Never present the requested latency hint as measured.
@@ -147,12 +157,16 @@ def _read_live_updates() -> None:
         return
 
 
-def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 44_100):
+def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 44_100, statistics=None):
+    statistics = {} if statistics is None else statistics
     quality = StudioMicrophoneProcessor(sample_rate, 1)
     pitch = RealtimePitchShifter(sample_rate)
     effects = MonitorEffectsChain(sample_rate)
     def callback(indata, outdata, _frames, _time_info, status):
+        statistics["callback_frames"] = int(_frames)
+        statistics["callback_count"] = statistics.get("callback_count", 0) + 1
         if status:
+            statistics["glitch_count"] = statistics.get("glitch_count", 0) + 1
             now = time.monotonic()
             glitches.append(now)
             while glitches and glitches[0] < now - _GLITCH_WINDOW_SECONDS:
@@ -203,24 +217,31 @@ def main() -> int:
 
     restart_requested = threading.Event()
     glitches: list[float] = []
-    callback, stream = _audio_callback(gain, restart_requested, glitches, float(options['sample_rate'])), None
+    statistics = {"glitch_count": 0}
+    callback, stream = _audio_callback(gain, restart_requested, glitches, float(options['sample_rate']), statistics), None
     try:
         failures: list[str] = []
-        minimum_block = 0
+        minimum_blocks = {}
         glitch_fallback = False
         callback_rate = float(options["sample_rate"])
         candidates = _stream_candidates(options)
         for candidate_index, candidate in enumerate(candidates):
             candidate = dict(candidate)
             mode = candidate.pop("_mode", "plain")
-            if 0 < candidate.get("blocksize", 0) < minimum_block:
+            engine = candidate.pop("_engine", "duplex")
+            if 0 < candidate.get("blocksize", 0) < minimum_blocks.get(engine, 0):
                 continue
             try:
                 candidate_rate = float(candidate.get("samplerate", callback_rate))
                 if candidate_rate != callback_rate:
-                    callback = _audio_callback(gain, restart_requested, glitches, candidate_rate)
+                    callback = _audio_callback(gain, restart_requested, glitches, candidate_rate, statistics)
                     callback_rate = candidate_rate
-                stream = sd.Stream(**candidate, callback=callback)
+                statistics.clear()
+                statistics["glitch_count"] = 0
+                restart_requested.clear()
+                glitches.clear()
+                stream = (WasapiMonitorStream(sd, candidate, callback, statistics, restart_requested)
+                          if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
                 stream.start()
                 diagnostics = _stream_diagnostics(stream, candidate, options, mode)
                 if failures or candidate_index:
@@ -238,11 +259,9 @@ def main() -> int:
                         **diagnostics,
                     }
                 )
-                restart_requested.clear()
-                glitches.clear()
-                while _running and not restart_requested.wait(0.1): _emit({"event": "level", **_level})
+                while _running and not restart_requested.wait(0.1): _emit({"event": "level", **_level, **statistics})
                 if _running:
-                    minimum_block = max(minimum_block, candidate.get("blocksize", 0) + 1)
+                    minimum_blocks[engine] = max(minimum_blocks.get(engine, 0), candidate.get("blocksize", 0) + 1)
                     glitch_fallback = True
                     failures.clear()
                 stream.abort()

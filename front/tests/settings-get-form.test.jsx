@@ -115,11 +115,11 @@ test("audio device ids stay numeric/null and microphone monitoring does not get 
   await user.click(screen.getByRole("button", { name: "Микрофон", exact: true }));
   await user.click(screen.getByRole("option", { name: "Авто" }));
   expect(settings.audio.update).toHaveBeenLastCalledWith("input_device_id", null);
-  await user.click(screen.getByRole("switch"));
+  await user.click(screen.getByRole("switch", { name: "Слышать свой голос" }));
   expect(settings.audio.monitor.mock.calls).toEqual([[]]);
   expect(settings.audio.update).not.toHaveBeenCalledWith("monitoring_enabled", expect.anything());
   // A failed start must not leave the UI claiming that monitoring was enabled.
-  expect(screen.getByRole("switch").checked).toBe(false);
+  expect(screen.getByRole("switch", { name: "Слышать свой голос" }).checked).toBe(false);
 });
 
 test("processing validates thread count before persistence and Enter saves the draft", async () => {

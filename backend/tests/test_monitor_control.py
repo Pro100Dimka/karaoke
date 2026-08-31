@@ -50,6 +50,46 @@ def test_latest_request_wins_and_old_status_is_ignored(control):
     assert "error" not in control.snapshot()
 
 
+@pytest.mark.parametrize("driver, expected", [("auto", 0), ("asio", 128)])
+def test_auto_buffer_only_overrides_monitor_snapshot(control, monkeypatch, driver, expected):
+    original = settings(audio_driver=driver, buffer_size=128, monitoring_enabled=True)
+    snapshots = []
+    done = threading.Event()
+    monkeypatch.setattr(audio_service, "configure_monitoring", lambda value: (snapshots.append(value), done.set()))
+    audio_service.request_monitoring(original, auto_buffer=True)
+    assert done.wait(2)
+    assert snapshots[-1].buffer_size == expected
+    assert original.buffer_size == 128
+    done.clear()
+    audio_service.request_monitoring(original)
+    assert done.wait(2)
+    assert snapshots[-1].buffer_size == 128
+
+
+def test_monitor_statistics_reset_on_restart(control):
+    control.event(None, {"event": "level", "callback_frames": 480, "callback_count": 12, "glitch_count": 2})
+    assert control.snapshot()["callback_frames"] == 480
+    assert control.snapshot()["glitch_count"] == 2
+    control.event(None, {"event": "started", "input_latency_ms": 5, "output_latency_ms": 7})
+    assert "glitch_count" not in control.snapshot()
+    assert control.snapshot()["input_latency_ms"] == 5
+
+
+def test_http_auto_buffer_is_forwarded_as_a_monitor_only_option(monkeypatch):
+    current = settings(monitoring_enabled=True, noise_suppression=0.35, octave=0)
+    start = Mock(return_value=current)
+    monkeypatch.setattr(audio_service, "set_monitoring_enabled", start)
+    app = FastAPI()
+    app.include_router(audio.router)
+    db = Mock()
+    app.dependency_overrides[get_db] = lambda: db
+    with TestClient(app) as client:
+        response = client.post("/audio/direct-monitor/start?auto_buffer=true&wasapi_mode=shared")
+    assert response.status_code == 202
+    start.assert_called_once_with(db, True, disabled_effects=False, background=True,
+                                  wasapi_mode="shared", auto_buffer=True)
+
+
 def test_stop_during_device_enumeration_never_launches_worker(control, monkeypatch):
     entered, release, finished = threading.Event(), threading.Event(), threading.Event()
 
@@ -259,3 +299,16 @@ def test_existing_asio_protocol_is_normalized_without_native_changes(control):
     status = control.snapshot()
     assert status["mode"] == "ASIO" and status["blocksize"] == 128
     assert status["input_latency_ms"] == 5 and status["output_latency_ms"] == 10
+
+
+def test_split_queue_statistics_are_separate_and_reset_after_fallback(control):
+    control.run_sync(lambda: None)
+    control.event(control.token, {"event": "started", "engine": "wasapi-split", "input_latency_ms": 5.8, "output_latency_ms": 5.8})
+    control.event(control.token, {"event": "level", "queue_ms": 2.9, "queue_capacity_ms": 11.6, "queue_underruns": 6})
+    status = control.snapshot()
+    assert status["engine"] == "wasapi-split"
+    assert status["input_latency_ms"] + status["output_latency_ms"] == 11.6
+    assert status["queue_ms"] == 2.9
+    control.event(control.token, {"event": "started", "engine": "duplex"})
+    assert "queue_ms" not in control.snapshot()
+    assert "queue_underruns" not in control.snapshot()

@@ -270,6 +270,10 @@ describe("API domains", () => {
       method: "POST",
       keepalive: true
     });
+    await assertRequest(() => audioApi.startDirectMonitoring({ disabledEffects: true, wasapiMode: "shared", autoBuffer: true }), {
+      path: "/audio/direct-monitor/start?disabled_effects=true&wasapi_mode=shared&auto_buffer=true",
+      method: "POST"
+    });
     fetch.mockRejectedValueOnce(Error("closed"));
     equal([await audioApi.releaseDirectMonitoring(), null]);
   });

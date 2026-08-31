@@ -6,7 +6,7 @@ import { RenderFormikFields, useGetForm } from "../src/theme/ui";
 
 function AudioFields({ audio }) {
   const formik = useGetForm({
-    initialValues: { audio: audio.values, monitor: { wasapiMode: audio.wasapiMode } }
+    initialValues: { audio: audio.values, monitor: { wasapiMode: audio.wasapiMode, autoBuffer: !!audio.autoBuffer } }
   });
   return (
     <RenderFormikFields
@@ -25,6 +25,8 @@ const audio = (status = {}, rest = {}) => ({
   values: { monitoring_enabled: true, audio_driver: "auto", buffer_size: 128 },
   wasapiMode: "shared",
   setWasapiMode: vi.fn(),
+  autoBuffer: false,
+  setAutoBuffer: vi.fn(),
   update: vi.fn(),
   monitor: vi.fn(),
   monitorStatus: { state: "starting", ...status },
@@ -103,6 +105,36 @@ test("ASIO hides WASAPI fields, polling failures remain visible", () => {
 test("shows asynchronous startup errors", () => {
   render(<AudioFields audio={audio({ state: "error", error: "Device busy" })} />);
   expect(screen.getByRole("alert").textContent).toBe("Device busy");
+});
+
+test("automatic buffer is a next-start diagnostic option, not a saved audio buffer", async () => {
+  const state = audio({ state: "running" });
+  render(<AudioFields audio={state} />);
+  fireEvent.click(screen.getByRole("switch", { name: "Автобуфер WASAPI при следующем запуске" }));
+  await waitFor(() => expect(state.setAutoBuffer).toHaveBeenCalledWith(true));
+  expect(state.update).not.toHaveBeenCalled();
+  expect(state.monitor).not.toHaveBeenCalled();
+});
+
+test("split input/output latency and actual callback statistics are visible", () => {
+  render(<AudioFields audio={audio({ state: "running", blocksize: 0, input_latency_ms: 9.2, output_latency_ms: 12.4, callback_frames: 480, glitch_count: 2 })} />);
+  expect(screen.getByText("Задержка входа по данным драйвера: 9.2 ms")).toBeTruthy();
+  expect(screen.getByText("Задержка выхода по данным драйвера: 12.4 ms")).toBeTruthy();
+  expect(screen.getByText("Последний блок аудио, отсчётов: 480")).toBeTruthy();
+  expect(screen.getByText("События сбоя текущего потока: 2")).toBeTruthy();
+});
+
+test("ASIO does not offer the automatic WASAPI buffer override", () => {
+  render(<AudioFields audio={audio({}, { values: { audio_driver: "asio" } })} />);
+  expect(screen.queryByRole("switch", { name: "Автобуфер WASAPI при следующем запуске" })).toBeNull();
+});
+
+test("split WASAPI queue is shown separately from driver endpoint latency", () => {
+  render(<AudioFields audio={audio({ state: "running", engine: "wasapi-split", input_latency_ms: 5.8, output_latency_ms: 5.8, queue_ms: 2.9, queue_capacity_ms: 11.61, queue_underruns: 6 })} />);
+  expect(screen.getByText("Раздельные WASAPI-потоки входа и выхода")).toBeTruthy();
+  expect(screen.getByText(/Задержка драйвера/).textContent).toContain("11.6 ms");
+  expect(screen.getByText("Дополнительная очередь мониторинга сейчас: 2.9 ms")).toBeTruthy();
+  expect(screen.getByText("Максимум дополнительной очереди (не полная задержка): 11.61 ms")).toBeTruthy();
 });
 
 test("ASIO4ALL help requires explicit click, never downloads or starts an installer", () => {
