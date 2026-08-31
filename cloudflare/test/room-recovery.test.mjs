@@ -97,6 +97,8 @@ test("all shared controls converge; a guest cannot forge per-participant maps or
   assert.deepEqual(fresh.sharedUi, state);
   assert.equal(normalizeRoomUi({ host: true }), null);
   assert.equal(normalizeRoomUi([]), null);
+  assert.equal(normalizeRoomUi({ radio: { volume: "1", stationId: {} }, karaoke: { speed: -5 } }), null);
+  assert.deepEqual(normalizeRoomUi({ participantEffects: { octave: -2, echo: 0.2 } }), { participantEffects: { octave: -1, echo: 0.2 } });
 });
 
 test("ICE bursts do not consume playback or heartbeat budget; overload never closes the host", async () => {

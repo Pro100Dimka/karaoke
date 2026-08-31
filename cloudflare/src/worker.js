@@ -47,6 +47,18 @@ export function normalizeParticipantEffects(value) {
 
 const isRecord = (value) => value && typeof value === "object" && !Array.isArray(value);
 const SHARED_UI_KEYS = ["query", "filters", "radio", "karaoke"];
+const uiText = (value) => typeof value === "string" && value.length <= 200;
+const uiBool = (value) => typeof value === "boolean";
+const uiNumber = (min, max) => (value) => Number.isFinite(value) && value >= min && value <= max;
+const UI_SCHEMAS = {
+  filters: { genre: uiText, key: uiText, status: uiText, sort: uiText },
+  radio: { stationId: uiText, isPlaying: uiBool, volume: uiNumber(0, 1) },
+  karaoke: {
+    musicVolume: uiNumber(0, 1), vocalVolume: uiNumber(0, 1), melodyVolume: uiNumber(0, 1),
+    speed: uiNumber(0.5, 1.5), keyShift: uiNumber(-12, 12), effectPreset: uiText,
+    showLyrics: uiBool, showNotes: uiBool, autoHideConsole: uiBool,
+  },
+};
 export function normalizeRoomUi(value) {
   if (!isRecord(value)) return null;
   const state = {};
@@ -54,7 +66,9 @@ export function normalizeRoomUi(value) {
   // Only these namespaces are shared. Identity, roles and per-person maps
   // are always assigned by the server, never accepted from a client.
   for (const key of ["filters", "radio", "karaoke"]) {
-    if (isRecord(value[key]) && JSON.stringify(value[key]).length <= 8192) state[key] = value[key];
+    if (!isRecord(value[key])) continue;
+    const fields = Object.entries(UI_SCHEMAS[key]).filter(([name, valid]) => Object.hasOwn(value[key], name) && valid(value[key][name]));
+    if (fields.length) state[key] = Object.fromEntries(fields.map(([name]) => [name, value[key][name]]));
   }
   const effects = normalizeParticipantEffects(value.participantEffects);
   if (effects) state.participantEffects = effects;
@@ -136,9 +150,7 @@ export class KaraokeRoom {
 
   reportInvalid(socket, message = "Некорректное сообщение комнаты.") {
     // A stale/oversized UI snapshot must not destroy a live karaoke session.
-    // In particular, closing the host here invokes webSocketClose(), which by
-    // design closes the entire room. The bad state is ignored and the sender
-    // receives a useful error while media/voice connections stay alive.
+    // Ignore it and report an error while media/voice connections stay alive.
     this.send(socket, "error", { message });
   }
 
