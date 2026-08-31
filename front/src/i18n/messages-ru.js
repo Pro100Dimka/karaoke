@@ -644,6 +644,8 @@ export const ruMessages = {
   "settings.audio.monitor.compact.driver": "Задержка драйвера: {0} мс · вход {1} · выход {2}",
   "settings.audio.monitor.compact.estimate": "Задержка (оценка): {0} мс · вход {1} · выход {2}",
   "settings.audio.monitor.compact.unavailable": "Задержка: нет данных",
+  "settings.audio.monitor.compact.sharedTiming": "Задержка потока (оценка): {0} мс",
+  "settings.audio.monitor.compact.sharedTooltip": "Оценка пути от захвата до воспроизведения по временным меткам WASAPI и позиции аудиочасов; включает очередь программы. Зависит от точности меток драйвера и не заменяет физический loopback-замер.",
   "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: отсчёты драйвера × 1000 / частота. Вход и выход включают задержки, сообщённые драйвером, но не являются физическим замером микрофон → наушники.",
   "settings.audio.monitor.compact.estimateTooltip": "Оценка PortAudio для активного потока, не физический замер. Точную полную задержку можно измерить тестовым сигналом с возвратом выхода на вход.",
   "settings.audio.monitor.buffer.auto": "авто",

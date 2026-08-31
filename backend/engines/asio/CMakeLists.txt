@@ -26,3 +26,8 @@ target_include_directories(KaraokeAsioBridge PRIVATE
 )
 target_compile_definitions(KaraokeAsioBridge PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
 target_link_libraries(KaraokeAsioBridge PRIVATE ole32)
+
+# Independent shared-mode I/O library; the existing ASIO target is unchanged.
+add_library(KaraokeWasapi SHARED ../wasapi/monitor.cpp)
+target_link_libraries(KaraokeWasapi PRIVATE ole32 avrt ksuser)
+add_executable(WasapiBufferTests EXCLUDE_FROM_ALL ../wasapi/monitor_buffer_test.cpp)

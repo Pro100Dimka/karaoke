@@ -642,6 +642,8 @@ export const ukMessages = {
   "settings.audio.monitor.compact.driver": "Затримка драйвера: {0} мс · вхід {1} · вихід {2}",
   "settings.audio.monitor.compact.estimate": "Затримка (оцінка): {0} мс · вхід {1} · вихід {2}",
   "settings.audio.monitor.compact.unavailable": "Затримка: немає даних",
+  "settings.audio.monitor.compact.sharedTiming": "Затримка потоку (оцінка): {0} мс",
+  "settings.audio.monitor.compact.sharedTooltip": "Оцінка шляху від захоплення до відтворення за часовими мітками WASAPI та позицією аудіогодинника, включно з чергою програми. Залежить від точності драйвера та не замінює фізичний loopback-вимір.",
   "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: відліки драйвера × 1000 / частота. Вхід і вихід включають затримки, повідомлені драйвером, але це не фізичний вимір мікрофон → навушники.",
   "settings.audio.monitor.compact.estimateTooltip": "Оцінка PortAudio для активного потоку, не фізичний вимір. Точну повну затримку можна виміряти тестовим сигналом із поверненням виходу на вхід.",
   "settings.audio.monitor.buffer.auto": "авто",

@@ -49,6 +49,8 @@ def _stream_candidates(options: dict) -> list[dict]:
             sd.WasapiSettings(exclusive=False, auto_convert=True),
             sd.WasapiSettings(exclusive=False, auto_convert=True),
         )
+        if options.get("native_shared"):
+            candidate["_engine"] = "wasapi-native-shared"
     return [candidate]
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
@@ -149,7 +151,10 @@ def main() -> int:
         candidate = dict(_stream_candidates(options)[0])
         mode = candidate.pop("_mode")
         engine = candidate.pop("_engine", "duplex")
-        process = _audio_callback(gain, float(options["sample_rate"]), statistics)
+        if engine == "wasapi-native-shared":
+            from app.services.native_wasapi import NativeWasapiStream
+            stream = NativeWasapiStream(options, statistics)
+        process = _audio_callback(gain, stream.info.sample_rate if stream else float(options["sample_rate"]), statistics)
 
         def callback(*args):
             try:
@@ -158,11 +163,24 @@ def main() -> int:
                 statistics["callback_error"] = str(error)
                 failed.set()
 
-        stream = (WasapiMonitorStream(sd, candidate, callback, statistics, failed)
-                  if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
-        stream.start()
-        _emit({"event": "started", **_stream_diagnostics(stream, candidate, options, mode)})
-        while _running and not failed.wait(0.1):
+        if engine == "wasapi-native-shared":
+            stream.start(process)
+            details = stream.diagnostics()
+        else:
+            stream = (WasapiMonitorStream(sd, candidate, callback, statistics, failed)
+                      if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
+            stream.start()
+            details = _stream_diagnostics(stream, candidate, options, mode)
+        _emit({"event": "started", **details})
+        reported = time.monotonic()
+        while _running and not failed.is_set():
+            if engine == "wasapi-native-shared":
+                stream.pump()
+                if time.monotonic() - reported < .1:
+                    continue
+                reported = time.monotonic()
+            elif failed.wait(.1):
+                break
             _emit({"event": "level", **_level, **statistics})
         if failed.is_set():
             raise RuntimeError(statistics.get("callback_error", "Monitoring callback failed; selected settings were not changed"))

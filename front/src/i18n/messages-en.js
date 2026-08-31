@@ -641,6 +641,8 @@ export const enMessages = {
   "settings.audio.monitor.compact.driver": "Driver latency: {0} ms · input {1} · output {2}",
   "settings.audio.monitor.compact.estimate": "Latency (estimate): {0} ms · input {1} · output {2}",
   "settings.audio.monitor.compact.unavailable": "Latency: unavailable",
+  "settings.audio.monitor.compact.sharedTiming": "Stream latency (estimate): {0} ms",
+  "settings.audio.monitor.compact.sharedTooltip": "Capture-to-playback estimate from WASAPI timestamps and audio-clock position, including the application's queue. Depends on driver timestamp accuracy; not a physical loopback measurement.",
   "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: driver samples × 1000 / sample rate. Input and output include driver-reported delays, not a physical microphone-to-headphones measurement.",
   "settings.audio.monitor.compact.estimateTooltip": "PortAudio estimate for the active stream, not a physical measurement. Actual round-trip latency requires a test signal returned from output to input.",
   "settings.audio.monitor.buffer.auto": "auto",

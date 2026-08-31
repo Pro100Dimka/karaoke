@@ -208,8 +208,8 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
 
     patch_attrs(monkeypatch, audio_service, _AUDIO_BACKEND_AVAILABLE=True, preferred_input_device=Mock(return_value=1), preferred_output_device=Mock(return_value=2), _resolved_device_index=lambda value, _kind, _devices: value)
     devices = {
-        1: {"hostapi": 0, "default_samplerate": 48_000, "max_input_channels": 1},
-        2: {"hostapi": 0, "default_samplerate": 48_000, "max_output_channels": 2},
+        1: {"name": "Selected microphone", "hostapi": 0, "default_samplerate": 48_000, "max_input_channels": 1},
+        2: {"name": "Selected speakers", "hostapi": 0, "default_samplerate": 48_000, "max_output_channels": 2},
     }
     patch_many(
         monkeypatch,
@@ -234,6 +234,9 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
                 "noise_suppression": 0.35,
             "wasapi_exclusive": False,
             "wasapi_mode": "shared",
+            "native_shared": True,
+            "input_device_name": "Selected microphone",
+            "output_device_name": "Selected speakers",
     }
 
     monkeypatch.setattr(audio_service, "_monitor_effects_disabled", True)

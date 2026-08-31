@@ -720,6 +720,9 @@ def _configure_monitoring(settings) -> None:
         "wasapi_exclusive": wasapi_mode == "exclusive",
         "wasapi_mode": wasapi_mode,
     }
+    if wasapi:
+        worker_options.update(native_shared=True, input_device_name=str(input_info["name"]),
+                              output_device_name=str(output_info["name"]))
     _start_monitor_worker(worker_options)
 
 

@@ -8,7 +8,7 @@ import time
 _STREAM_STATISTICS = ("callback_frames", "callback_count", "glitch_count", "queue_frames",
                       "queue_capacity_frames", "queue_underruns", "queue_dropped_frames",
                       "queue_contentions", "queue_ms", "queue_capacity_ms", "queue_underruns_after_start",
-                      "queue_wait_ms", "dsp_compute_ms")
+                      "queue_wait_ms", "dsp_compute_ms", "stream_latency_ms")
 
 
 class MonitorCancelled(RuntimeError):
@@ -102,7 +102,8 @@ class MonitorControl:
                         if isinstance(samples, (int, float)) and math.isfinite(samples) and samples >= 0:
                             message[f"{kind}_latency_ms"] = samples * 1000 / rate
             if event in {"started", "fallback"}:
-                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms"):
+                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms",
+                            "output_sample_rate", "input_period_frames", "output_period_frames"):
                     if key in message:
                         self.status[key] = message[key]
                 if event == "started":

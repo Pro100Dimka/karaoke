@@ -672,7 +672,7 @@ function Get-FrontendFingerprint {
 }
 
 function Get-AsioInputFingerprint {
-    $source = Get-ContentFingerprint @($Asio,$AsioSdk) `
+    $source = Get-ContentFingerprint @($Asio,$AsioSdk,(Join-Path $Backend "engines\wasapi")) `
         @("build",".git",".cache","__pycache__") `
         @("*.obj","*.pdb","*.ilk","*.log")
 
@@ -1915,6 +1915,7 @@ call "$VcVars" >nul && "$CMake" -S "$Asio" -B "$AsioBuild" -G Ninja -DCMAKE_BUIL
     }
 
     Require-File (Join-Path $AsioBuild "KaraokeAsioBridge.exe") "Compiled KaraokeAsioBridge.exe"
+    Require-File (Join-Path $AsioBuild "KaraokeWasapi.dll") "Compiled shared WASAPI library"
 }
 
 function Sign-File([string]$Path) {
@@ -1937,6 +1938,10 @@ function Finalize-Asio {
     Require-Directory $BackendDist "Packaged backend directory"
 
     Copy-Item -LiteralPath $bridge -Destination (Join-Path $BackendDist "KaraokeAsioBridge.exe") -Force
+    $sharedLibrary = Join-Path $AsioBuild "KaraokeWasapi.dll"
+    Require-File $sharedLibrary "Compiled shared WASAPI library"
+    Copy-Item -LiteralPath $sharedLibrary -Destination (Join-Path $BackendDist "KaraokeWasapi.dll") -Force
+    Sign-File (Join-Path $BackendDist "KaraokeWasapi.dll")
 
     Sign-File (Join-Path $BackendDist "KaraokeBackend.exe")
     Sign-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe")
@@ -1966,6 +1971,7 @@ function Verify-BackendBase {
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
     Require-File (Join-Path $BackendDist "KaraokeAsioBridge.exe") "KaraokeAsioBridge.exe"
+    Require-File (Join-Path $BackendDist "KaraokeWasapi.dll") "KaraokeWasapi.dll"
     Require-Directory (Join-Path $BackendDist "_internal") "PyInstaller internal directory"
     Require-File `
         (Join-Path $BackendDist "_internal\torchfcpe\assets\fcpe_c_v001.pt") `
@@ -2002,6 +2008,7 @@ function Verify-Unpacked {
     Require-File (Join-Path $PackagedBackend "KaraokeBackend.exe") "Electron backend"
     Require-File (Join-Path $PackagedBackend "KaraokeAudioMonitor.exe") "Electron audio monitor"
     Require-File (Join-Path $PackagedBackend "KaraokeAsioBridge.exe") "Electron ASIO bridge"
+    Require-File (Join-Path $PackagedBackend "KaraokeWasapi.dll") "Electron shared WASAPI library"
 
     if (Test-Path -LiteralPath (Join-Path $PackagedBackend "_internal\models")) {
         throw "Electron package unexpectedly contains AI models."
@@ -2831,7 +2838,7 @@ function Parallel-FullBuild {
     $script:AsioChanged = Test-StepNeeded `
         "asio" `
         $script:AsioFingerprint `
-        @((Join-Path $AsioBuild "KaraokeAsioBridge.exe")) `
+        @((Join-Path $AsioBuild "KaraokeAsioBridge.exe"),(Join-Path $AsioBuild "KaraokeWasapi.dll")) `
         -Force:$force
 
     $script:FrontendChanged = Test-StepNeeded `
@@ -3041,7 +3048,7 @@ try {
         "asio" `
         $script:AsioFingerprint `
         @($legacyAsioFp) `
-        @((Join-Path $AsioBuild "KaraokeAsioBridge.exe")))
+        @((Join-Path $AsioBuild "KaraokeAsioBridge.exe"),(Join-Path $AsioBuild "KaraokeWasapi.dll")))
 
     [void](Migrate-StateIfCompatible `
         "frontend" `
@@ -3065,7 +3072,7 @@ try {
         "finalize" `
         $finalizeFp `
         @($legacyFinalizeFp) `
-        @((Join-Path $BackendDist "KaraokeAsioBridge.exe")))
+        @((Join-Path $BackendDist "KaraokeAsioBridge.exe"),(Join-Path $BackendDist "KaraokeWasapi.dll")))
 
     $legacyElectronFp = Get-LegacyV23ElectronFingerprint `
         $legacyBackendFp `
@@ -3158,7 +3165,7 @@ try {
         $needFinalize = Test-StepNeeded `
             "finalize" `
             $finalizeFp `
-            @((Join-Path $BackendDist "KaraokeAsioBridge.exe")) `
+            @((Join-Path $BackendDist "KaraokeAsioBridge.exe"),(Join-Path $BackendDist "KaraokeWasapi.dll")) `
             -Force:($Mode -eq "clean")
 
         if ($needFinalize) {

@@ -10,13 +10,19 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
   const output = status?.output_latency_ms;
   const known = [input, output].every((value) => Number.isFinite(value) && value >= 0);
   const source = status?.latency_source === "asio-driver-report" ? "driver" : "estimate";
-  const latency = known
-    ? tr(`settings.audio.monitor.compact.${source}`, {
-        0: (input + output).toFixed(3),
-        1: input.toFixed(3),
-        2: output.toFixed(3)
-      })
-    : tr("settings.audio.monitor.compact.unavailable");
+  const timed =
+    status?.latency_source === "wasapi-stream-report" &&
+    Number.isFinite(status?.stream_latency_ms) &&
+    status.stream_latency_ms > 0;
+  const latency = timed
+    ? tr("settings.audio.monitor.compact.sharedTiming", { 0: status.stream_latency_ms.toFixed(3) })
+    : known
+      ? tr(`settings.audio.monitor.compact.${source}`, {
+          0: (input + output).toFixed(3),
+          1: input.toFixed(3),
+          2: output.toFixed(3)
+        })
+      : tr("settings.audio.monitor.compact.unavailable");
   return [
     ...[
       ["output_device_id", "settings.audio.output_device_id.label", "outputs"],
@@ -125,7 +131,9 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       type: "Label",
       variant: "caption",
       showFor: running,
-      title: tr(`settings.audio.monitor.compact.${source}Tooltip`),
+      title: tr(
+        `settings.audio.monitor.compact.${status?.latency_source === "wasapi-stream-report" ? "shared" : source}Tooltip`
+      ),
       text: latency
     },
     {
