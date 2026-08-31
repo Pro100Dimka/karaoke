@@ -5,61 +5,54 @@ import audioRows from "../src/pages/Settings/rows/audio";
 import { RenderFormikFields, useGetForm } from "../src/theme/ui";
 
 function AudioFields({ audio }) {
-  const formik = useGetForm({
-    initialValues: { audio: audio.values, monitor: { wasapiMode: audio.wasapiMode } }
-  });
-  return (
-    <RenderFormikFields
-      formik={formik}
-      items={audioRows({ settings: { audio }, run: (action) => action() })}
-      onFieldCommit={(name, value) => audio.update(name.slice(6), value)}
-    />
-  );
+  const formik = useGetForm({ initialValues: { audio: audio.values } });
+  return <RenderFormikFields formik={formik}
+    items={audioRows({ settings: { audio }, run: (action) => action() })}
+    onFieldCommit={(name, value) => audio.update(name.slice(6), value)} />;
 }
-
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
-});
+afterEach(cleanup);
 const audio = (status = {}, rest = {}) => ({
-  values: { monitoring_enabled: true, audio_driver: "auto", buffer_size: 128 },
-  wasapiMode: "shared",
-  setWasapiMode: vi.fn(),
-  update: vi.fn(),
-  monitor: vi.fn(),
-  monitorStatus: { state: "starting", ...status },
+  values: { monitoring_enabled: true, audio_driver: "auto", asio_driver_name: "", buffer_size: 128 },
+  options: { drivers: [{ value: "", label: "WASAPI shared" }, { value: "Studio ASIO", label: "ASIO · Studio ASIO" }] },
+  selectDriver: vi.fn(), update: vi.fn(), monitor: vi.fn(),
+  monitorStatus: { state: "running", host_api: "Windows WASAPI", mode: "shared", ...status },
   ...rest
 });
 
-test("accepted start is shown as starting, not running", () => {
-  render(<AudioFields audio={audio()} />);
+test("starting is not displayed as working audio or zero latency", () => {
+  render(<AudioFields audio={audio({ state: "starting" })} />);
   expect(screen.getByText("Подключаем микрофон…").getAttribute("role")).toBe("status");
   expect(screen.getByRole("button", { name: "Повторить подключение" }).disabled).toBe(true);
+  expect(screen.queryByText(/Задержка/)).toBeNull();
 });
 
-test("shows measured driver latency and fallback reason without claiming end-to-end latency", () => {
-  render(
-    <AudioFields
-      audio={audio({
-        state: "running",
-        mode: "shared",
-        blocksize: 256,
-        sample_rate: 48000,
-        input_latency_ms: 4,
-        output_latency_ms: 8,
-        fallback_count: 1,
-        fallback_reason: "underflows"
-      })}
-    />
-  );
-  expect(screen.queryByText(/Задержка драйвера/)).toBeNull();
-  expect(screen.getByText(/Полная задержка микрофон → наушники: не измерена/)).toBeTruthy();
-  expect(screen.getByRole("alert").textContent).toContain("underflows");
-  expect(screen.queryByRole("button", { name: /ASIO4ALL/ })).toBeNull();
+test("ASIO reports input, output and total with three decimal places", () => {
+  render(<AudioFields audio={audio({ mode: "ASIO", driver: "Studio ASIO", latency_source: "asio-driver-report",
+    input_latency_ms: 130000 / 44100, output_latency_ms: 154000 / 44100 })} />);
+  expect(screen.getByText("Драйвер: Studio ASIO")).toBeTruthy();
+  expect(screen.getByText("Задержка драйвера: 6.440 мс · вход 2.948 · выход 3.492").title).toContain("ASIOGetLatencies");
 });
 
-test("manual retry and buffer control are wired without automatic buffer reduction", async () => {
-  const state = audio({ state: "running" });
+test("shared estimate is not labelled as a measurement; technical wall of text is removed", () => {
+  render(<AudioFields audio={audio({ input_latency_ms: 22, output_latency_ms: 24.9,
+    latency_source: "portaudio-buffer-estimate", callback_frames: 128, glitch_count: 2, dsp_compute_ms: .083,
+    queue_ms: 5, queue_capacity_ms: 12, input_device: "Microphone", output_device: "Speakers" })} />);
+  expect(screen.getByText("Драйвер: Windows WASAPI · shared")).toBeTruthy();
+  expect(screen.getByText("Задержка (оценка): 46.900 мс · вход 22.000 · выход 24.900").title).toContain("не физический замер");
+  for (const text of [/Задержка драйвера/, /Последний блок/, /События сбоя/, /Время вычислений/, /очереди/, /Microphone →/])
+    expect(screen.queryByText(text)).toBeNull();
+});
+
+test.each([{}, { input_latency_ms: -1, output_latency_ms: 3 }, { input_latency_ms: null, output_latency_ms: 3 },
+  { input_latency_ms: NaN, output_latency_ms: 3 }, { input_latency_ms: 3, output_latency_ms: Infinity }])(
+  "invalid latency does not become zero: %j", (status) => {
+    render(<AudioFields audio={audio(status)} />);
+    expect(screen.getByText("Задержка: нет данных")).toBeTruthy();
+    expect(screen.queryByText(/0.000 мс/)).toBeNull();
+  });
+
+test("retry and fixed buffer keep their existing behavior", async () => {
+  const state = audio();
   render(<AudioFields audio={state} />);
   fireEvent.click(screen.getByRole("button", { name: "Повторить подключение" }));
   expect(state.monitor).toHaveBeenCalledWith(true);
@@ -68,85 +61,24 @@ test("manual retry and buffer control are wired without automatic buffer reducti
   await waitFor(() => expect(state.update).toHaveBeenCalledWith("buffer_size", 256));
 });
 
-test("exclusive mode has an explicit warning", () => {
-  render(<AudioFields audio={audio({}, { wasapiMode: "exclusive" })} />);
-  expect(screen.getByText(/Полный exclusive/).textContent).toContain("минусовку");
-});
-
-test("WASAPI mode is a custom next-start action, not an audio settings API update", async () => {
+test("driver selector offers ASIO and shared, no exclusive", async () => {
   const state = audio();
   render(<AudioFields audio={state} />);
-  fireEvent.click(screen.getByRole("button", { name: "Режим WASAPI при следующем запуске" }));
-  fireEvent.click(screen.getByRole("option", { name: "Эксклюзивный микрофон, совместный выход" }));
-  await waitFor(() => expect(state.setWasapiMode).toHaveBeenCalledWith("input-exclusive"));
+  fireEvent.click(screen.getByRole("button", { name: "Режим звука" }));
+  expect(screen.queryByRole("option", { name: /Эксклюзив/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: "ASIO · Studio ASIO" }));
+  await waitFor(() => expect(state.selectDriver).toHaveBeenCalledWith("Studio ASIO"));
   expect(state.update).not.toHaveBeenCalled();
-  expect(state.monitor).not.toHaveBeenCalled();
-  expect(screen.getByText(/Полный exclusive/)).toBeTruthy();
 });
 
-test("ASIO hides WASAPI fields, polling failures remain visible", () => {
-  render(
-    <AudioFields
-      audio={audio(
-        {},
-        {
-          values: { audio_driver: "asio", monitoring_enabled: false },
-          monitorStatusError: true
-        }
-      )}
-    />
-  );
-  expect(screen.queryByRole("button", { name: "Режим WASAPI при следующем запуске" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Аудиобуфер" })).toBeNull();
+test("ASIO retains fixed buffer selection, not auto buffer", () => {
+  render(<AudioFields audio={audio({}, { values: { audio_driver: "asio", asio_driver_name: "Studio ASIO" } })} />);
+  expect(screen.getByRole("button", { name: "Аудиобуфер" })).toBeTruthy();
+  expect(screen.queryByRole("switch", { name: /Автобуфер/ })).toBeNull();
+});
+
+test("polling and startup errors remain visible", () => {
+  render(<AudioFields audio={audio({ state: "error", error: "Device busy" }, { monitorStatusError: true })} />);
+  expect(screen.getByText("Device busy").getAttribute("role")).toBe("alert");
   expect(screen.getByText("Не удалось получить состояние микрофона")).toBeTruthy();
-});
-
-test("shows asynchronous startup errors", () => {
-  render(<AudioFields audio={audio({ state: "error", error: "Device busy" })} />);
-  expect(screen.getByRole("alert").textContent).toBe("Device busy");
-});
-
-test("automatic buffer is not offered for any WASAPI mode", () => {
-  for (const wasapiMode of ["shared", "input-exclusive", "exclusive"]) {
-    render(<AudioFields audio={audio({}, { wasapiMode })} />);
-    expect(screen.queryByRole("switch", { name: /Автобуфер/ })).toBeNull();
-    cleanup();
-  }
-});
-
-test("split input/output latency and actual callback statistics are visible", () => {
-  render(<AudioFields audio={audio({ state: "running", blocksize: 0, input_latency_ms: 9.2, output_latency_ms: 12.4, callback_frames: 480, glitch_count: 2 })} />);
-  expect(screen.getByText("Оценка входа аудиобэкендом (не замер): 9.2 ms")).toBeTruthy();
-  expect(screen.getByText("Оценка выхода аудиобэкендом (не замер): 12.4 ms")).toBeTruthy();
-  expect(screen.getByText("Последний блок аудио, отсчётов: 480")).toBeTruthy();
-  expect(screen.getByText("События сбоя текущего потока: 2")).toBeTruthy();
-});
-
-test("ASIO does not offer the automatic WASAPI buffer override", () => {
-  render(<AudioFields audio={audio({}, { values: { audio_driver: "asio" } })} />);
-  expect(screen.queryByRole("switch", { name: "Автобуфер WASAPI при следующем запуске" })).toBeNull();
-});
-
-test("split WASAPI queue is shown separately from driver endpoint latency", () => {
-  render(<AudioFields audio={audio({ state: "running", engine: "wasapi-split", input_latency_ms: 5.8, output_latency_ms: 5.8, queue_ms: 2.9, queue_capacity_ms: 11.61, queue_underruns: 6 })} />);
-  expect(screen.getByText("Раздельные WASAPI-потоки входа и выхода")).toBeTruthy();
-  expect(screen.queryByText(/Задержка драйвера/)).toBeNull();
-  expect(screen.getByText(/Полная задержка микрофон → наушники: не измерена/)).toBeTruthy();
-  expect(screen.getByText("Остаток аудио в очереди (не время ожидания): 2.9 ms")).toBeTruthy();
-  expect(screen.getByText("Вместимость очереди в миллисекундах аудио: 11.61 ms")).toBeTruthy();
-});
-
-test("measured software timings are separate from unmeasured physical latency", () => {
-  render(<AudioFields audio={audio({ state: "running", queue_wait_ms: 4.1, dsp_compute_ms: .03 })} />);
-  expect(screen.getByText("Измеренное ожидание последнего блока в программной очереди: 4.1 ms")).toBeTruthy();
-  expect(screen.getByText("Время вычислений последнего блока (не задержка звука): 0.03 ms")).toBeTruthy();
-  expect(screen.getByText(/Полная задержка микрофон → наушники: не измерена/)).toBeTruthy();
-});
-
-test("ASIO4ALL help requires explicit click, never downloads or starts an installer", () => {
-  const open = vi.spyOn(globalThis, "open").mockImplementation(() => null);
-  render(<AudioFields audio={audio({ state: "running" }, { suggestAsio: true })} />);
-  expect(open).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "ASIO4ALL: официальный сайт" }));
-  expect(open).toHaveBeenCalledWith("https://asio4all.org/about/download-asio4all/", "_blank", "noopener,noreferrer");
 });
