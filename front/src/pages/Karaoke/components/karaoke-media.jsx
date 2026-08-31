@@ -56,6 +56,7 @@ function AudioTrack({ audioRef, songId, track, volume }) {
         audioRef.current = node;
       }}
       src={source || undefined}
+      crossOrigin="anonymous"
       preload="auto"
       sx={{ display: "none" }}
       onLoadedMetadata={(event) => {
