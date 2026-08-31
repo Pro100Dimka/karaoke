@@ -44,6 +44,15 @@ public:
         if (capacity < 2 || !std::isfinite(ratio) || ratio <= 0) throw std::runtime_error("Invalid monitor queue");
     }
     size_t size() const { return used; }
+    size_t available() const {
+        if (ratio == 1) return used;
+        if (used < 2) return 0;
+        // Interpolation needs a following source sample, even when the byte
+        // count alone suggests another output frame would fit.
+        const double interpolated = std::ceil((used - 1 - phase) / ratio - 1e-9);
+        const double advanced = std::floor((used - phase) / ratio + 1e-9);
+        return static_cast<size_t>(std::max(0.0, std::min(interpolated, advanced)));
+    }
     uint64_t dropped() const { return lost; }
     void push(const float* input, size_t count, double captured_at = 0, double step = 0) {
         for (size_t i = 0; i < count; ++i) {

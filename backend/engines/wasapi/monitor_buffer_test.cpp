@@ -32,6 +32,21 @@ int main() {
     downsample.push(source, 6);
     for (float expected : {1, 3, 5}) { verify(downsample.pop(result)); verify(result == expected); }
     verify(!downsample.pop(result));
+    for (double ratio : {44100.0 / 48000.0, 48000.0 / 44100.0, .5, 2.0}) {
+        MonitorBuffer converted(2048, ratio);
+        float packet[441]{};
+        for (unsigned i = 0; i < 2000; ++i) {
+            converted.push(packet, 441, 10.0 + i * .01, 1.0 / 44100);
+            const size_t ready = converted.available();
+            for (size_t frame = 0; frame < ready; ++frame) {
+                double timestamp = 0;
+                verify(converted.pop(result, &timestamp));
+                verify(timestamp >= 10.0);
+            }
+            verify(converted.size() <= 2);
+        }
+        verify(converted.dropped() == 0);
+    }
     // Long mismatched-clock simulation must remain bounded, never accumulating
     // seconds of old microphone audio when render misses a wake-up.
     MonitorBuffer bounded(256, 44100.0 / 48000.0);

@@ -221,7 +221,7 @@ struct Engine {
         const UINT32 target = std::min(output.period, output.buffer);
         // An early render event must not enqueue a period of silence ahead of
         // microphone data that arrives a moment later. Submit only ready audio.
-        const auto ready = UINT32(queue->size() * double(output.format->nSamplesPerSec) / input.format->nSamplesPerSec);
+        const auto ready = UINT32(queue->available());
         const UINT32 count = padding < target ? std::min(target - padding, ready) : 0;
         if (count) {
             double presentation = 0;
