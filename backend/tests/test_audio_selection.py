@@ -53,7 +53,7 @@ def test_asio_bridge_path_and_driver_enumeration(monkeypatch, tmp_path):
     assert audio_service.list_asio_drivers() == []
 
     patch_attrs(monkeypatch, audio_service.config, IS_FROZEN=False, PROJECT_ROOT=tmp_path)
-    assert audio_service._asio_bridge_path() == tmp_path / "build/asio/KaraokeAsioBridge.exe"
+    assert audio_service._asio_bridge_path() == tmp_path / "generated/build/asio/KaraokeAsioBridge.exe"
 
 
 def test_device_token_latency_and_asio_hint_normalization():

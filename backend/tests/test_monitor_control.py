@@ -302,6 +302,25 @@ def test_existing_asio_protocol_is_normalized_without_native_changes(control):
     assert status["input_latency_ms"] == 5 and status["output_latency_ms"] == 10
 
 
+def test_asio_latency_uses_reported_samples_not_requested_buffer(control):
+    control.event(control.token, {"event": "started", "driver": "Studio ASIO",
+                                 "sample_rate": 44100, "buffer_size": 64,
+                                 "input_latency": 130, "output_latency": 154})
+    status = control.snapshot()
+    assert status["input_latency_ms"] == pytest.approx(130000 / 44100)
+    assert status["output_latency_ms"] == pytest.approx(154000 / 44100)
+    assert status["latency_source"] == "asio-driver-report"
+
+
+@pytest.mark.parametrize("rate,samples", [(0, 128), (44100, -1), (44100, None), (float("nan"), 128)])
+def test_invalid_asio_latency_is_not_reported_as_zero(control, rate, samples):
+    control.event(control.token, {"event": "started", "sample_rate": rate, "buffer_size": 128,
+                                 "input_latency": samples, "output_latency": samples})
+    status = control.snapshot()
+    assert "input_latency_ms" not in status
+    assert "output_latency_ms" not in status
+
+
 def test_split_queue_statistics_are_separate_and_reset_after_fallback(control):
     control.run_sync(lambda: None)
     control.event(control.token, {"event": "started", "engine": "wasapi-split", "input_latency_ms": 5.8, "output_latency_ms": 5.8})

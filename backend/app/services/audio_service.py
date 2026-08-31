@@ -74,7 +74,7 @@ def _asio_bridge_path() -> Path:
     return (
         Path(sys.executable).with_name("KaraokeAsioBridge.exe")
         if config.IS_FROZEN
-        else Path(config.PROJECT_ROOT) / "build" / "asio" / "KaraokeAsioBridge.exe"
+        else Path(config.PROJECT_ROOT) / "generated" / "build" / "asio" / "KaraokeAsioBridge.exe"
     )
 
 

@@ -12,7 +12,9 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
   const source = status?.latency_source === "asio-driver-report" ? "driver" : "estimate";
   const latency = known
     ? tr(`settings.audio.monitor.compact.${source}`, {
-        0: (input + output).toFixed(3), 1: input.toFixed(3), 2: output.toFixed(3)
+        0: (input + output).toFixed(3),
+        1: input.toFixed(3),
+        2: output.toFixed(3)
       })
     : tr("settings.audio.monitor.compact.unavailable");
   return [
@@ -112,7 +114,10 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       variant: "caption",
       showFor: running,
       text: tr("settings.audio.monitor.compact.driverName", {
-        0: status?.mode === "ASIO" ? (status?.driver || "ASIO") : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
+        0:
+          status?.mode === "ASIO"
+            ? status?.driver || "ASIO"
+            : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
       })
     },
     {
