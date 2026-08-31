@@ -55,6 +55,36 @@ def test_native_callback_reuses_existing_dsp_and_supports_partial_engine_packets
     stream.close()
 
 
+@pytest.mark.parametrize("latency", [0, -1])
+def test_unavailable_native_latency_is_not_reported_as_zero(dll, latency):
+    stats = {}
+    stream = native_wasapi.NativeWasapiStream(options(), stats)
+    try:
+        stream.info.input_latency_ms = stream.info.output_latency_ms = latency
+        stream.stats.stream_latency_ms = latency
+        stream.pump()
+        assert stats["stream_latency_ms"] is None
+        assert stream.diagnostics()["input_latency_ms"] is None
+        assert stream.diagnostics()["output_latency_ms"] is None
+    finally:
+        stream.close()
+
+
+def test_native_clock_and_bounded_queue_statistics_are_propagated(dll):
+    stats = {}
+    stream = native_wasapi.NativeWasapiStream(options(), stats)
+    try:
+        stream.stats.stream_latency_ms = 22.6694
+        stream.stats.queued_frames = 441
+        stream.stats.dropped_frames = 3
+        stream.pump()
+        assert stats["stream_latency_ms"] == 22.669
+        assert stats["queue_ms"] == 10
+        assert stats["queue_dropped_frames"] == 3
+    finally:
+        stream.close()
+
+
 def test_callback_failure_stops_native_output_instead_of_replaying_old_block(dll):
     stats = {}
     stream = native_wasapi.NativeWasapiStream(options(), stats)

@@ -1,6 +1,7 @@
 /* Stryker disable all */
 export const ruMessages = {
-  "room.audio.selectedInputUnavailable": "Выбранный микрофон недоступен в комнате. Проверьте выбор устройства в настройках звука.",
+  "room.audio.selectedInputUnavailable":
+    "Выбранный микрофон недоступен в комнате. Проверьте выбор устройства в настройках звука.",
   "audio.mute": "Выключить звук",
   "audio.pause": "Пауза",
   "audio.playRecording": "Воспроизвести запись",
@@ -645,15 +646,21 @@ export const ruMessages = {
   "settings.audio.monitor.compact.estimate": "Задержка (оценка): {0} мс · вход {1} · выход {2}",
   "settings.audio.monitor.compact.unavailable": "Задержка: нет данных",
   "settings.audio.monitor.compact.sharedTiming": "Задержка потока (оценка): {0} мс",
-  "settings.audio.monitor.compact.sharedTooltip": "Оценка пути от захвата до воспроизведения по временным меткам WASAPI и позиции аудиочасов; включает очередь программы. Зависит от точности меток драйвера и не заменяет физический loopback-замер.",
-  "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: отсчёты драйвера × 1000 / частота. Вход и выход включают задержки, сообщённые драйвером, но не являются физическим замером микрофон → наушники.",
-  "settings.audio.monitor.compact.estimateTooltip": "Оценка PortAudio для активного потока, не физический замер. Точную полную задержку можно измерить тестовым сигналом с возвратом выхода на вход.",
+  "settings.audio.monitor.compact.sharedTooltip":
+    "Оценка пути от захвата до воспроизведения по временным меткам WASAPI и позиции аудиочасов; включает очередь программы. Зависит от точности меток драйвера и не заменяет физический loopback-замер.",
+  "settings.audio.monitor.compact.driverTooltip":
+    "ASIOGetLatencies: отсчёты драйвера × 1000 / частота. Вход и выход включают задержки, сообщённые драйвером, но не являются физическим замером микрофон → наушники.",
+  "settings.audio.monitor.compact.estimateTooltip":
+    "Оценка PortAudio для активного потока, не физический замер. Точную полную задержку можно измерить тестовым сигналом с возвратом выхода на вход.",
   "settings.audio.monitor.buffer.auto": "авто",
   "settings.audio.monitor.inputLatency.label": "Оценка входа аудиобэкендом (не замер)",
   "settings.audio.monitor.outputLatency.label": "Оценка выхода аудиобэкендом (не замер)",
-  "settings.audio.monitor.endToEnd.unmeasured": "Полная задержка микрофон → наушники: не измерена. Нужен тест с возвратом звука с выхода на вход.",
-  "settings.audio.monitor.dspCompute.label": "Время вычислений последнего блока (не задержка звука)",
-  "settings.audio.monitor.queueWait.label": "Измеренное ожидание последнего блока в программной очереди",
+  "settings.audio.monitor.endToEnd.unmeasured":
+    "Полная задержка микрофон → наушники: не измерена. Нужен тест с возвратом звука с выхода на вход.",
+  "settings.audio.monitor.dspCompute.label":
+    "Время вычислений последнего блока (не задержка звука)",
+  "settings.audio.monitor.queueWait.label":
+    "Измеренное ожидание последнего блока в программной очереди",
   "settings.audio.monitor.callbackFrames.label": "Последний блок аудио, отсчётов",
   "settings.audio.monitor.glitchCount.label": "События сбоя текущего потока",
   "settings.audio.monitor.splitEngine.label": "Раздельные WASAPI-потоки входа и выхода",
@@ -664,7 +671,7 @@ export const ruMessages = {
   "settings.audio.monitor.fallback":
     "Драйвер перешёл на резервный режим. Задержка может увеличиться.",
   "settings.audio.wasapiMode.label": "Режим WASAPI при следующем запуске",
-  "settings.audio.wasapiMode.options.shared": "Совместный — звук других приложений доступен",
+  "settings.audio.wasapiMode.options.shared": "Windows Driver",
   "settings.audio.wasapiMode.options.inputExclusive": "Эксклюзивный микрофон, совместный выход",
   "settings.audio.wasapiMode.options.exclusive": "Полностью эксклюзивный — только мониторинг",
   "settings.audio.buffer_size.description": "Меньше буфер — ниже задержка, выше риск треска.",

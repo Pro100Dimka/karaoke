@@ -1,10 +1,10 @@
 import { createRoot } from "react-dom/client";
 import "../../src/index.css";
-import "../../src/theme/ui/base";
 import { Select } from "../../src/theme/ui";
+import "../../src/theme/ui/base";
 
 const options = [
-  { value: "shared", label: "Совместный — звук других приложений доступен" },
+  { value: "shared", label: "Windows Driver" },
   { value: "input", label: "Эксклюзивный микрофон, совместный выход" },
   { value: "exclusive", label: "Полностью эксклюзивный — только мониторинг" },
   ...Array.from({ length: 12 }, (_, index) => ({

@@ -76,6 +76,27 @@ test("shared estimate is not labelled as a measurement; technical wall of text i
     expect(screen.queryByText(text)).toBeNull();
 });
 
+test("native shared uses timestamp latency, not allocated buffer estimates", () => {
+  render(
+    <AudioFields
+      audio={audio({
+        latency_source: "wasapi-stream-report",
+        stream_latency_ms: 22.6694,
+        input_latency_ms: 22,
+        output_latency_ms: 24.9
+      })}
+    />
+  );
+  expect(screen.getByText("Задержка потока (оценка): 22.669 мс").title).toContain("не заменяет физический");
+  expect(screen.queryByText(/46.900/)).toBeNull();
+});
+
+test.each([0, -1, null, NaN, Infinity])("invalid native clock latency stays unavailable: %s", (value) => {
+  render(<AudioFields audio={audio({ latency_source: "wasapi-stream-report", stream_latency_ms: value })} />);
+  expect(screen.getByText("Задержка: нет данных")).toBeTruthy();
+  expect(screen.queryByText(/0.000 мс/)).toBeNull();
+});
+
 test.each([
   {},
   { input_latency_ms: -1, output_latency_ms: 3 },
