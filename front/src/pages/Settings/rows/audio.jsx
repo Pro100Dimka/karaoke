@@ -1,7 +1,7 @@
 import { Volume2 } from "lucide-react";
-import LiveSignalWaveform from "../../components/LiveSignalWaveform";
-import { translateSaved } from "../../i18n/runtime";
-import { Stack, Switch } from "../../theme/ui";
+import LiveSignalWaveform from "../../../components/LiveSignalWaveform";
+import { translateSaved } from "../../../i18n/runtime";
+import { Stack, Switch } from "../../../theme/ui";
 
 export default function rows({ settings: { audio }, run, tr = translateSaved }) {
   const status = audio.monitorStatus;

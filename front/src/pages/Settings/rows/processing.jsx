@@ -1,5 +1,5 @@
-import { translateSaved } from "../../i18n/runtime";
-import ModelStatus from "./ModelStatus";
+import { translateSaved } from "../../../i18n/runtime";
+import ModelStatus from "../ModelStatus";
 
 export default function rows({ tr = translateSaved } = {}) {
   return [

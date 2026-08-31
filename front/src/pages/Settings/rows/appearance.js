@@ -1,4 +1,4 @@
-import { translateSaved } from "../../i18n/runtime";
+import { translateSaved } from "../../../i18n/runtime";
 
 const appearanceRows = ({ settings: { radio }, tr = translateSaved }) => [
   {
