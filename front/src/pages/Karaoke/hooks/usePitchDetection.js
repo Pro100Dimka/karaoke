@@ -3,7 +3,7 @@ import { acquireMicrophone } from "../../../services/microphoneCapture";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
-export default function usePitchDetection({ isPlaying, monitorInputDeviceId, monitoringEnabled }) {
+export default function usePitchDetection({ isPlaying, monitorInputDeviceId, getLocalVoiceStream }) {
   const [sungMidi, setSungMidi] = useState(null);
   const [isPitchDetected, setIsPitchDetected] = useState(false);
   const [isPitchAttacking, setIsPitchAttacking] = useState(false);
@@ -41,15 +41,20 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, mon
     resetPitch();
     const start = async () => {
       try {
-        microphoneLease = await acquireMicrophone(monitorInputDeviceId);
-        stream = microphoneLease.stream;
+        if (getLocalVoiceStream) {
+          stream = await getLocalVoiceStream();
+          if (!stream) return;
+        } else {
+          microphoneLease = await acquireMicrophone(monitorInputDeviceId, { disabledEffects: true });
+          stream = microphoneLease.stream;
+        }
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         context = new AudioContextClass({ latencyHint: "interactive" });
         ownsContext = true;
         if (cancelled) {
           // Cancellation can only interleave with the awaited capture above,
           // so this stream is necessarily owned by this effect.
-          await microphoneLease.release();
+          await microphoneLease?.release();
           if (ownsContext) await closeAudioContext(context);
           return;
         }
@@ -151,6 +156,6 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, mon
       microphoneLease?.release();
       if (ownsContext) closeAudioContextQuietly(context);
     };
-  }, [isPlaying, monitorInputDeviceId, monitoringEnabled]);
+  }, [isPlaying, monitorInputDeviceId, getLocalVoiceStream]);
   return { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress };
 }

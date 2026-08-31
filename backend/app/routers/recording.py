@@ -11,6 +11,7 @@ from app import repositories
 from app.api.dependencies import DatabaseSession, RecordingDependency, SongDependency
 from app.api.errors import http_error
 from app.services import audio_service, pipeline_service, recording_service
+from app.services.audio_runtime import serialized
 from database import get_db
 
 router = APIRouter(prefix="/recording", tags=["recording"])
@@ -65,6 +66,7 @@ def get_recording_settings(db: Session = Depends(get_db)):
 
 
 @router.post("/start", response_model=schemas.RecordingStartOut)
+@serialized
 def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
     song = repositories.get_song(db, body.song_id)
     if song is None: raise HTTPException(status_code=404, detail="Песня не найдена")
@@ -116,6 +118,8 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
                 if getattr(settings, "noise_suppression", None) is None
                 else settings.noise_suppression
             ),
+            monitor_owner="room" if body.room_mode else "asio" if keep_native_monitor else "recording",
+            monitor_mode=None if body.room_mode or keep_native_monitor else audio_service.recording_monitor_mode(input_device_id),
         )
     except RuntimeError as exc:
         _restore_monitoring(db)

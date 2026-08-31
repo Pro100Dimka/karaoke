@@ -17,6 +17,7 @@ import models
 from AI.utils.numeric import clamp01
 from app.services.db_utils import commit_refresh
 from app.services.monitor_control import MonitorCancelled, MonitorControl
+from app.services.audio_runtime import hardware_lock
 
 try:
     import numpy as np
@@ -63,7 +64,7 @@ _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 _monitor_effects_disabled = False
 _MONITOR_START_TIMEOUT_SECONDS = 12.0
 logger = logging.getLogger(__name__)
-_monitor_control = MonitorControl()
+_monitor_control = MonitorControl(execution_lock=hardware_lock)
 _monitor_wasapi_mode = "shared"
 _requested_effects_disabled = False
 _known_device_names: dict[int, str] = {}
@@ -434,6 +435,9 @@ def _normalized_settings_patch(
 def update_settings(db: Session, patch: dict, *, background: bool = False) -> models.AudioSettings:
     settings = _get_or_create_settings(db)
     updates, changed_fields = _normalized_settings_patch(settings, patch, resolve_devices=not background)
+    from app.services import recording_service
+    if changed_fields & {"input_device_id", "output_device_id", "audio_driver", "asio_driver_name", "buffer_size"} and recording_service.has_live_capture():
+        raise RuntimeError("Stop recording before changing audio devices, driver or buffer")
     previous, driver = (
         {field: getattr(settings, field) for field in updates},
         updates.get("audio_driver", settings.audio_driver),
@@ -557,10 +561,22 @@ def monitoring_status() -> dict:
     return _monitor_control.snapshot()
 
 
+def monitoring_mode() -> str:
+    return _monitor_wasapi_mode
+
+
+def recording_monitor_mode(device_id):
+    if _AUDIO_BACKEND_AVAILABLE and "wasapi" in _host_api_name(sd.query_devices(device_id)).lower():
+        return _monitor_wasapi_mode
+    return "plain"
+
+
 def stop_monitoring() -> None:
     # Recording and shutdown must invalidate even a request still enumerating
     # devices, so it cannot resurrect the monitor after recording takes ownership.
     _monitor_control.cancel()
+    from app.services import recording_service
+    recording_service.update_capture_controls({"monitoring_enabled": False})
     _stop_monitoring_process()
 
 
@@ -595,6 +611,8 @@ def _stop_monitoring_process(expected_process=None) -> None:
 
 
 def _send_live_update(payload: dict) -> None:
+    from app.services import recording_service
+    recording_service.update_capture_controls(payload)
     if _monitor_effects_disabled:
         payload = {
             key: (0.0 if key in {"reverb", "echo", "delay", "octave"} else value)
@@ -620,6 +638,13 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
 def _configure_monitoring(settings) -> None:
     _stop_monitoring_process()
     _monitor_control.check()
+    from app.services import recording_service
+    if recording_service.apply_monitor_settings(
+        settings, getattr(settings, "wasapi_mode", _monitor_wasapi_mode), _monitor_effects_disabled
+    ):
+        _monitor_control.publish(state="running" if settings.monitoring_enabled else "idle",
+                                 engine="recording", mode=_monitor_wasapi_mode)
+        return
     if not settings.monitoring_enabled:
         _monitor_control.publish(state="idle")
         return
@@ -855,6 +880,11 @@ def check_signal_quality(
     global _monitor_process
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Аудио-бэкенд (sounddevice) недоступен")
+
+    from app.services import recording_service
+    signal = recording_service.capture_signal()
+    if signal is not None:
+        return signal
 
     with _monitor_lock:
         process = _monitor_process

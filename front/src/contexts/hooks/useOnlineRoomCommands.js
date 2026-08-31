@@ -28,7 +28,8 @@ export default function useOnlineRoomCommands({
         roomRef.current &&
         (roomRef.current.host || ["karaoke-player", "open-library"].includes(state?.type))
       )
-        return clientRef.current?.send("sync", { state });
+        return clientRef.current?.send("sync", { state: state?.type === "karaoke-player"
+          ? { ...state, positionAt: clientRef.current?.serverNow?.() ?? Date.now() } : state });
       return false;
     },
     [clientRef, roomRef]
@@ -38,6 +39,13 @@ export default function useOnlineRoomCommands({
     () => clientRef.current?.serverNow?.() ?? Date.now(),
     [clientRef]
   );
+
+  const getLocalVoiceStream = useCallback(async () => {
+    const voice = voiceRef.current;
+    if (!voice) return null;
+    await voice.start();
+    return voiceRef.current === voice ? voice.getMeterStream() : null;
+  }, [voiceRef]);
 
   const openKaraoke = useCallback(
     (songId, options = {}) => {
@@ -69,5 +77,5 @@ export default function useOnlineRoomCommands({
     ]
   );
 
-  return { openKaraoke, roomClockNow, syncCommand, syncUi };
+  return { openKaraoke, roomClockNow, syncCommand, syncUi, getLocalVoiceStream };
 }

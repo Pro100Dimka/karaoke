@@ -4,6 +4,7 @@ import { translateSaved } from "../i18n/runtime";
 import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
+import { resolveMicrophoneDevice } from "./microphoneDevice";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
@@ -113,8 +114,12 @@ export default class OnlineVoiceMesh {
     }
     const { lifecycleVersion } = this;
     let capturedStream;
-    const startPromise = navigator.mediaDevices
-      .getUserMedia({
+    let persistedSettings;
+    const startPromise = api.getAudioSettings().catch(() => null).then(async (settings) => {
+      persistedSettings = settings;
+      const deviceId = await resolveMicrophoneDevice(settings);
+      if (lifecycleVersion !== this.lifecycleVersion) throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+      return navigator.mediaDevices.getUserMedia({
         audio: {
           ...MICROPHONE_CAPTURE_CONSTRAINTS,
           // Browser AEC adds a capture look-ahead/buffer that is audible in
@@ -124,9 +129,11 @@ export default class OnlineVoiceMesh {
           echoCancellation: false,
           channelCount: 1,
           latency: { ideal: 0 },
-          sampleRate: { ideal: 48_000 }
+          sampleRate: { ideal: 48_000 },
+          ...(deviceId && { deviceId: { exact: deviceId } })
         }
-      })
+      });
+    })
       .then(async (stream) => {
         capturedStream = stream;
         if (lifecycleVersion !== this.lifecycleVersion) {
@@ -137,7 +144,6 @@ export default class OnlineVoiceMesh {
         // level until some settings save happens to dispatch
         // AUDIO_SETTINGS_CHANGED_EVENT -- read the persisted value up front so a
         // room call actually starts with whatever the user last saved.
-        const persistedSettings = await api.getAudioSettings().catch(() => null);
         this.microphoneGraph = createStudioMicrophoneGraph(stream, {
           noiseSuppression: persistedSettings?.noise_suppression,
           octave: persistedSettings?.octave,

@@ -451,6 +451,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         toggleRadio
       }}
       performanceProps={{
+        getLocalVoiceStream: onlineRoomState ? onlineRoom.getLocalVoiceStream : undefined,
         currentTime,
         currentTimeRef,
         isPlaying,

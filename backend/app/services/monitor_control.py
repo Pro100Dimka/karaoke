@@ -15,9 +15,9 @@ class MonitorCancelled(RuntimeError):
 
 
 class MonitorControl:
-    def __init__(self):
+    def __init__(self, execution_lock=None):
         self.condition = threading.Condition(threading.RLock())
-        self.execution = threading.RLock()
+        self.execution = execution_lock if execution_lock is not None else threading.RLock()
         self.local = threading.local()
         self.token = threading.Event()
         self.pending = None

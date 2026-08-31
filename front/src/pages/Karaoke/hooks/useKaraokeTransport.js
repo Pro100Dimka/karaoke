@@ -357,7 +357,9 @@ export default function useKaraokeTransport({
     if (!commandChannel.current.acceptCommand(roomCommand.commandId)) return;
 
     const position = Number(roomCommand.position);
-    const sentAt = Number(roomCommand.__serverSentAt);
+    const sampledAt = Number(roomCommand.positionAt);
+    const sentAt = Number.isFinite(sampledAt) && roomCommand.positionAt != null
+      ? sampledAt : Number(roomCommand.__serverSentAt);
     const receivedAt = Number(roomCommand.__receivedServerAt);
     const executeAt = Number(roomCommand.executeAt);
     const serverNow = typeof roomClockNow === "function" ? Number(roomClockNow()) : receivedAt;

@@ -19,7 +19,8 @@ from AI.utils.numeric import clamp01
 from app import repositories
 from app.services import song_artifacts, song_service
 from app.services.db_utils import commit_refresh
-from app.services.microphone_quality import StudioMicrophoneProcessor
+from app.services.microphone_quality import StudioMicrophoneProcessor, RealtimePitchShifter, MonitorEffectsChain
+from app.services.audio_runtime import hardware_lock, serialized
 from app.services.resource_deletion import delete_with_files
 from app.utils.quarantine import existing_unique_paths
 from database import SessionLocal
@@ -59,6 +60,8 @@ class RecordingSession:
         effects: dict[str, float] | None = None,
         noise_suppression: float = 0.35,
         latency: str | float = "low",
+        monitor_mode: str | None = None,
+        monitor_owner: str = "recording",
     ):
         self.session_id = session_id
         self.song_id = song_id
@@ -93,9 +96,26 @@ class RecordingSession:
         self._closed = False
         self._paused = False
         self._monitoring_enabled = monitoring_enabled
+        self._monitor_owner = monitor_owner
+        self._monitor_mode = monitor_mode
+        self._monitor_effects_disabled = False
+        self._capture_stopped = False
+        self._capture_error = None
+        self._signal = {"rms_db": -120.0, "clipping": False, "silent": True}
+        self._audio_config = (device_id, output_device_id, blocksize)
         self.noise_suppression = clamp01(noise_suppression)
         self._quality = StudioMicrophoneProcessor(sample_rate, channels)
-        if monitoring_enabled:
+        self._pitch = RealtimePitchShifter(sample_rate)
+        self._effects_chain = MonitorEffectsChain(sample_rate)
+        extra = {}
+        if monitor_mode in {"shared", "input-exclusive", "exclusive"}:
+            extra["extra_settings"] = (
+                sd.WasapiSettings(exclusive=monitor_mode != "shared", auto_convert=monitor_mode == "shared"),
+                sd.WasapiSettings(exclusive=monitor_mode == "exclusive", auto_convert=monitor_mode != "exclusive"),
+            )
+        if monitor_mode == "exclusive":
+            raise RuntimeError("Full WASAPI exclusive is monitoring-only; select shared or input-exclusive for karaoke")
+        if monitoring_enabled or (monitor_owner == "recording" and monitor_mode is not None):
             output_info = (
                 sd.query_devices(output_device_id, kind="output")
                 if output_device_id is not None
@@ -110,6 +130,7 @@ class RecordingSession:
                 blocksize=blocksize,
                 latency=latency,
                 callback=self._monitoring_callback,
+                **extra,
             )
         else:
             self._stream = sd.InputStream(
@@ -146,6 +167,7 @@ class RecordingSession:
         return True
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
+        self._update_signal(indata)
         if not self._paused:
             self._enqueue(
                 self._quality.process(indata, self.gain, self.noise_suppression).copy(),
@@ -153,11 +175,37 @@ class RecordingSession:
             )
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
+        self._update_signal(indata)
         processed = self._quality.process(indata, self.gain, self.noise_suppression)
         if not self._paused: self._enqueue(processed.copy(), time_info)
         outdata.fill(0)
         if self._monitoring_enabled:
-            for channel in range(outdata.shape[1]): outdata[:, channel] = processed[:, 0]
+            effects = {} if self._monitor_effects_disabled else self.effects
+            monitored = self._pitch.process(processed[:, 0], effects.get("octave", 0))
+            monitored = self._effects_chain.process(monitored, *(effects.get(key, 0) for key in ("reverb", "echo", "delay")))
+            for channel in range(outdata.shape[1]): outdata[:, channel] = monitored
+
+    def _update_signal(self, samples):
+        import numpy as np
+        rms = float(np.sqrt(np.mean(np.square(samples)))) if samples.size else 0.0
+        self._signal = {"rms_db": round(20 * np.log10(rms), 1) if rms > 0 else -120.0,
+                        "clipping": bool(np.any(np.abs(samples) >= .99)), "silent": rms < .0031623}
+
+    @serialized
+    def stop_capture(self):
+        if self._capture_stopped:
+            return
+        self._capture_stopped = True
+        self._monitoring_enabled = False
+        try:
+            self._stream.stop()
+        except BaseException as exc:
+            self._capture_error = exc
+        finally:
+            try:
+                self._stream.close()
+            except BaseException as exc:
+                self._capture_error = self._capture_error or exc
 
     def _write_audio(self) -> None:
         assert self._temporary_path is not None
@@ -285,7 +333,7 @@ class RecordingSession:
     def close(self) -> None:
         if self._closed: return
         self._closed = True
-        with contextlib.suppress(Exception): self._stream.close()
+        self.stop_capture()
         self._stop_writer()
         self._cleanup_temporary_file()
 
@@ -294,14 +342,9 @@ class RecordingSession:
         self._paused = True
         self._close_playback_segment()
         self._closed = True
-        stream_error: BaseException | None = None
-        try:
-            self._stream.stop()
-            self._stream.close()
-        except BaseException as exc:
-            stream_error = exc
-        finally:
-            self._stop_writer()
+        self.stop_capture()
+        stream_error = self._capture_error
+        self._stop_writer()
 
         if stream_error is not None:
             logger.error(
@@ -332,8 +375,50 @@ class RecordingSession:
 _sessions: dict[str, RecordingSession] = {}
 _completed_recordings: dict[str, str] = {}
 _finalizing_recordings: dict[str, threading.Event] = {}
-_sessions_lock = threading.Lock()
+_sessions_lock = threading.RLock()
 _COMPLETED_RECORDING_LIMIT = 64
+
+
+def update_capture_controls(patch):
+    with _sessions_lock:
+        for session in _sessions.values():
+            if session._closed:
+                continue
+            if "monitoring_enabled" in patch:
+                session._monitoring_enabled = bool(patch["monitoring_enabled"]) and session._monitor_owner == "recording"
+            if "volume" in patch:
+                session.gain = max(0, min(4, float(patch["volume"])))
+            if patch.get("noise_suppression") is not None:
+                session.noise_suppression = clamp01(patch["noise_suppression"])
+            session.effects = {**session.effects, **{key: patch[key] for key in ("reverb", "echo", "delay", "octave") if patch.get(key) is not None}}
+
+
+def apply_monitor_settings(settings, mode, disabled_effects):
+    with _sessions_lock:
+        sessions = [session for session in _sessions.values() if not session._closed]
+        if not sessions:
+            return False
+        if any(session._monitor_owner == "room" for session in sessions):
+            return True  # Browser room owns monitoring; never open a competing output.
+        owned = [session for session in sessions if session._monitor_owner == "recording"]
+        for session in owned:
+            if settings.monitoring_enabled and session._monitor_mode and mode != session._monitor_mode:
+                raise RuntimeError("Stop recording before changing the WASAPI monitoring mode")
+            session._monitor_effects_disabled = disabled_effects
+        patch = {key: getattr(settings, key, None) for key in ("volume", "noise_suppression", "reverb", "echo", "delay", "octave")}
+        patch["monitoring_enabled"] = settings.monitoring_enabled
+        update_capture_controls(patch)
+        return bool(owned)
+
+
+def capture_signal():
+    with _sessions_lock:
+        return next((dict(session._signal) for session in _sessions.values() if not session._closed), None)
+
+
+def has_live_capture():
+    with _sessions_lock:
+        return any(not session._closed for session in _sessions.values())
 
 
 def _capture_attempts(
@@ -354,6 +439,7 @@ def _capture_attempts(
 def backend_available() -> tuple[bool, str | None]: return (_AUDIO_BACKEND_AVAILABLE, _AUDIO_BACKEND_ERROR)
 
 
+@serialized
 def start_recording(
     song_id: str,
     device_id: int | None = None,
@@ -368,14 +454,19 @@ def start_recording(
     music_gain: float = 1.0,
     effects: dict[str, float] | None = None,
     noise_suppression: float = 0.35,
+    monitor_mode: str | None = None,
+    monitor_owner: str = "recording",
 ) -> str:
     if not _AUDIO_BACKEND_AVAILABLE: raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
+    if has_live_capture():
+        raise RuntimeError("A microphone recording is already active")
 
     session_id = uuid.uuid4().hex
     session: RecordingSession | None = None
     errors: list[str] = []
     for input_id, output_id, rate, frames, monitor, latency in _capture_attempts(
-        device_id, output_device_id, sample_rate, blocksize, monitoring_enabled
+        device_id, output_device_id, sample_rate, blocksize,
+        monitoring_enabled or (monitor_owner == "recording" and monitor_mode is not None)
     ):
         try:
             session = RecordingSession(
@@ -386,7 +477,7 @@ def start_recording(
                 rate,
                 channels,
                 gain,
-                monitor,
+                monitoring_enabled,
                 playback_offset_sec,
                 playback_latency_sec,
                 frames,
@@ -394,6 +485,8 @@ def start_recording(
                 effects,
                 noise_suppression,
                 latency,
+                monitor_mode=monitor_mode,
+                monitor_owner=monitor_owner,
             )
             session.start()
             logger.info(
@@ -475,11 +568,12 @@ def sync_recording(session_id: str, position_sec: float) -> None:
 
 
 def stop_recording(session_id: str) -> models.Recording:
-    with _sessions_lock:
+    with hardware_lock, _sessions_lock:
         session = _sessions.pop(session_id, None)
         completed_id = _completed_recordings.get(session_id)
         finalizing = _finalizing_recordings.get(session_id)
         if session is not None:
+            session.stop_capture()
             finalizing = threading.Event()
             _finalizing_recordings[session_id] = finalizing
     if session is None:

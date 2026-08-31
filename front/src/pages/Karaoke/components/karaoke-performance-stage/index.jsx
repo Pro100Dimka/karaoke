@@ -21,6 +21,7 @@ export default function KaraokePerformanceStage({
   keyShift,
   monitorInputDeviceId,
   monitoringEnabled,
+  getLocalVoiceStream,
   hasSongClip = false,
   showLyrics,
   showNotes,
@@ -35,7 +36,8 @@ export default function KaraokePerformanceStage({
   const { sungMidi, isPitchDetected } = usePitchDetection({
     isPlaying,
     monitorInputDeviceId,
-    monitoringEnabled
+    monitoringEnabled,
+    getLocalVoiceStream
   });
   const videoRef = useRef(null);
   const timerRef = useRef(null);

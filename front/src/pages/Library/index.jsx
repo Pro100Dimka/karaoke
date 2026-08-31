@@ -13,18 +13,14 @@ const SongSettings = lazy(() => import("./song-settings"));
 
 export default function Library() {
   const state = useLibrary();
-  const { fileImport, online, processing, recordings } = state;
+  const { fileImport, online, processing, recordings, analysis } = state;
   return (
     <Stack
       align="center"
-      sx={{
-        position: "relative",
-        minBlockSize: "100vh",
-        backgroundColor: "var(--color-bg-deep)"
-      }}
+      sx={{ position: "relative", minBlockSize: "100vh", backgroundColor: "var(--color-bg-deep)" }}
     >
       <LibraryParallaxBackground />
-      {!state.processing.active && <QuantumFieldBackdrop />}
+      {!processing.active && <QuantumFieldBackdrop />}
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
           songCount={state.totalCount}
@@ -50,7 +46,7 @@ export default function Library() {
         />
       </Stack>
       <Box
-        aria-hidden="true"
+        aria-hidden
         data-role="library-transition-blackout"
         sx={{
           position: "fixed",
@@ -58,7 +54,7 @@ export default function Library() {
           zIndex: 1000,
           pointerEvents: "none",
           background: "#000",
-          opacity: state.transitioning ? 1 : 0,
+          opacity: +state.transitioning,
           transition: "opacity 180ms ease"
         }}
       />
@@ -90,17 +86,17 @@ export default function Library() {
         onUpdate={fileImport.updateDraft}
       />
       {state.settingsSongId && (
-        <Suspense fallback={null}>
+        <Suspense>
           <SongSettings
             songId={state.settingsSongId}
             onClose={() => state.setSettingsSongId(null)}
           />
         </Suspense>
       )}
-      {state.analysis.analysisRecordingId && (
+      {analysis.analysisRecordingId && (
         <PerformanceAnalysisModal
-          recordingId={state.analysis.analysisRecordingId}
-          recordings={state.analysis.analysisRecordings}
+          recordingId={analysis.analysisRecordingId}
+          recordings={analysis.analysisRecordings}
           onClose={state.closeAnalysis}
           onDone={state.closeAnalysis}
           onDeleted={state.closeAnalysis}
