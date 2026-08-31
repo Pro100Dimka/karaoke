@@ -24,7 +24,8 @@ const HOST_RECONNECT_GRACE_MS = 45_000;
 // talking to a newer worker (or vice versa) after such a change would just
 // silently drop/misinterpret messages instead of failing the connection with
 // an explicit reason.
-export const ROOM_PROTOCOL_VERSION = 1;
+export const ROOM_PROTOCOL_VERSION = 2;
+const HOST_AUTH_TIMEOUT_MS = 10_000;
 export const EFFECT_LIMITS = Object.freeze({
   volume: 2,
   reverb: 1,
@@ -170,7 +171,7 @@ export class KaraokeRoom {
     const connected = this.ctx
       .getWebSockets()
       .map(participantFromSocket)
-      .filter(Boolean)
+      .filter((participant) => participant?.role === "host" || participant?.role === "guest")
       .map(({ id, name, role, micMuted = false, effectsLocked = false }) => ({
         id,
         name,
@@ -191,7 +192,7 @@ export class KaraokeRoom {
   broadcast(type, payload, exceptId = null) {
     for (const socket of this.ctx.getWebSockets()) {
       const participant = participantFromSocket(socket);
-      if (!participant || participant.id === exceptId) continue;
+      if (!participant || !["host", "guest"].includes(participant.role) || participant.id === exceptId) continue;
       this.send(socket, type, payload);
     }
   }
@@ -220,20 +221,36 @@ export class KaraokeRoom {
       return json({ error: "Unsupported room protocol version", expected: ROOM_PROTOCOL_VERSION }, 400);
     }
     const requestedRole = url.searchParams.get("role") === "host" ? "host" : "guest";
+    for (const socket of this.ctx.getWebSockets()) {
+      const participant = participantFromSocket(socket);
+      if (participant?.role === "pending-host" && participant.authDeadline <= Date.now()) {
+        try { socket.close(1008, "Host authentication timed out"); } catch { /* Already closed. */ }
+      }
+    }
+    const connectedSockets = this.ctx.getWebSockets().filter((socket) => {
+      const participant = participantFromSocket(socket);
+      return participant?.role !== "pending-host" || participant.authDeadline > Date.now();
+    });
     const currentParticipants = this.participants();
     const resumingHost = requestedRole === "host" && this.hostDeadline;
-    if (currentParticipants.length >= MAX_PARTICIPANTS && !resumingHost) return json({ error: "Room is full" }, 429);
+    if (connectedSockets.length >= MAX_PARTICIPANTS && !resumingHost) return json({ error: "Room is full" }, 429);
     let role = "guest";
     if (requestedRole === "host") {
-      const suppliedToken = url.searchParams.get("hostToken") || "";
-      let ownerToken = await this.ctx.storage.get("hostToken");
-      if (!ownerToken && url.searchParams.get("create") === "1" && currentParticipants.length === 0 && suppliedToken.length >= 32) {
-        ownerToken = suppliedToken;
-        await this.ctx.storage.put("hostToken", ownerToken);
-      }
-      if (!ownerToken || suppliedToken !== ownerToken) return json({ error: "Invalid room host capability" }, 403);
-      if (currentParticipants.some((participant) => participant.role === "host" && !participant.reconnecting)) return json({ error: "Host is already connected" }, 409);
-      role = "host";
+      if (connectedSockets.some((socket) => ["host", "pending-host"].includes(participantFromSocket(socket)?.role)))
+        return json({ error: "Host is already connected" }, 409);
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      server.serializeAttachment({
+        id: crypto.randomUUID(),
+        name: normalizeName(url.searchParams.get("name")),
+        role: "pending-host",
+        create: url.searchParams.get("create") === "1",
+        resumingHost: Boolean(resumingHost),
+        authDeadline: Date.now() + HOST_AUTH_TIMEOUT_MS,
+      });
+      this.ctx.acceptWebSocket(server);
+      this.send(server, "host-auth-required", {});
+      return new Response(null, { status: 101, webSocket: client });
     } else if (!(await this.ctx.storage.get("hostToken"))) {
       return json({ error: "Room is closed" }, 404);
     }
@@ -314,6 +331,53 @@ export class KaraokeRoom {
     catch { this.reject(socket); return; }
     const sender = participantFromSocket(socket);
     if (!sender || typeof message?.type !== "string") return;
+    if (sender.role === "pending-host") {
+      if (message.type !== "host-auth" || typeof message.hostToken !== "string" || sender.authDeadline <= Date.now()) {
+        this.reject(socket, "Invalid room host capability");
+        return;
+      }
+      const suppliedToken = message.hostToken;
+      let ownerToken = await this.ctx.storage.get("hostToken");
+      if (!ownerToken && sender.create && this.participants().length === 0 && suppliedToken.length >= 32 && suppliedToken.length <= 128) {
+        ownerToken = suppliedToken;
+        await this.ctx.storage.put("hostToken", ownerToken);
+      }
+      if (!ownerToken || suppliedToken !== ownerToken) {
+        this.reject(socket, "Invalid room host capability");
+        return;
+      }
+      if (this.ctx.getWebSockets().some((other) => other !== socket && participantFromSocket(other)?.role === "host")) {
+        this.reject(socket, "Host is already connected");
+        return;
+      }
+      const publicParticipant = {
+        id: this.hostParticipant?.id || sender.id,
+        name: sender.name,
+        role: "host",
+        micMuted: Boolean(this.hostParticipant?.micMuted),
+        effectsLocked: Boolean(this.hostParticipant?.effectsLocked),
+      };
+      socket.serializeAttachment(publicParticipant);
+      this.hostParticipant = publicParticipant;
+      const resumed = Boolean(sender.resumingHost);
+      this.hostDeadline = null;
+      await this.ctx.storage.put("hostParticipant", publicParticipant);
+      await this.ctx.storage.delete("hostDeadline");
+      await this.ctx.storage.deleteAlarm();
+      this.send(socket, "room-state", {
+        self: publicParticipant,
+        resumed,
+        participants: this.participants(),
+        sharedUi: this.sharedUi,
+        hostReconnectDeadline: null,
+        ...(this.playbackState
+          ? { playbackState: this.playbackState.state, playbackSentAt: this.playbackState.sentAt }
+          : {}),
+      });
+      this.broadcast("participant-joined", { participant: publicParticipant, resumed }, publicParticipant.id);
+      if (resumed) this.broadcast("host-reconnected", { participant: publicParticipant }, publicParticipant.id);
+      return;
+    }
     if (!this.withinRate(sender.id, sender.role, message.type)) {
       this.send(socket, "error", { code: "rate-limit", message: "Слишком много команд. Повторите действие через несколько секунд." });
       return;
@@ -534,7 +598,7 @@ export class KaraokeRoom {
         await this.ctx.storage.put("hostDeadline", this.hostDeadline);
         await this.ctx.storage.setAlarm(this.hostDeadline);
         this.broadcast("host-reconnecting", { participantId: participant.id, deadline: this.hostDeadline });
-      } else {
+      } else if (participant.role === "guest") {
         if (participant.sessionToken) {
           this.recentGuests.set(participant.sessionToken, {
             id: participant.id,

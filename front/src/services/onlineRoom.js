@@ -247,7 +247,6 @@ export class OnlineRoomClient {
     if (host) {
       // A reconnect may resume an existing room, never resurrect an expired one.
       if (!reconnect) query.set("create", "1");
-      query.set("hostToken", String(hostToken));
     } else {
       const sessionId = this.guestSessionId || getOrCreateGuestSessionId();
       this.guestSessionId = sessionId;
@@ -286,10 +285,7 @@ export class OnlineRoomClient {
       );
       socket.onopen = () => {
         if (!current()) return socket.close(1000, "Stale connection");
-        this.stopPing();
-        this.sendClockProbe();
-        this.pingTimer = setInterval(() => this.sendClockProbe(), LIMITS.ping);
-        if (!reconnect) settle(resolve, roomId);
+        if (host) socket.send(JSON.stringify({ type: "host-auth", hostToken: String(hostToken) }));
       };
       socket.onmessage = ({ data }) => {
         if (!current() || typeof data !== "string") return;
@@ -328,6 +324,9 @@ export class OnlineRoomClient {
           this.emit(message);
           if (message.type === "room-state") {
             this.joined = true;
+            this.stopPing();
+            this.sendClockProbe();
+            this.pingTimer = setInterval(() => this.sendClockProbe(), LIMITS.ping);
             if (reconnect) {
               this.reconnectDeadline = 0;
               this.reconnectAttempt = 0;
@@ -337,8 +336,8 @@ export class OnlineRoomClient {
               for (const payload of this.pendingControl.values()) this.send("sync", payload);
               this.pendingControl.clear();
               this.emit({ type: "connection-restored" });
-              settle(resolve, roomId);
             }
+            settle(resolve, roomId);
           }
         } catch {
           // Malformed packets do not own the room connection.

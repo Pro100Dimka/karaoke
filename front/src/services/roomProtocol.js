@@ -1,1 +1,1 @@
-export const ROOM_PROTOCOL_VERSION = 1;
+export const ROOM_PROTOCOL_VERSION = 2;
