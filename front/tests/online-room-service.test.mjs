@@ -28,6 +28,8 @@ const installSocket = () => {
   FakeSocket.instances = [];
   globalThis.WebSocket = FakeSocket;
 };
+const admit = (socket, self = { id: "guest", role: "guest" }) =>
+  socket.onmessage({ data: JSON.stringify({ type: "room-state", self, participants: [self] }) });
 const loadOnlineRoomService = async () => {
   vi.resetModules();
   return import("../src/services/onlineRoom.js");
@@ -48,6 +50,7 @@ describe("online room service", () => {
     expect(new URL(socket.url).searchParams.get("v")).toBe(String(service.ROOM_PROTOCOL_VERSION));
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(client.send("message", { text: "x".repeat(1024) })).toBe(true);
     client.disconnect();
@@ -111,7 +114,11 @@ describe("online room service", () => {
     );
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    expect(new URL(socket.url).searchParams.has("hostToken")).toBe(false);
+    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({ type: "host-auth", hostToken: "" });
+    admit(socket, { id: "host", role: "host" });
     await expect(connection).resolves.toBe("ROOM-1");
+    listener.mockClear();
     socket.onopen();
     expect(() => socket.onerror(new Event("error"))).not.toThrow();
     socket.onmessage({ data: JSON.stringify({ type: "state" }) });
@@ -134,6 +141,7 @@ describe("online room service", () => {
     const socket = FakeSocket.instances[0];
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
       type: "ping",
@@ -156,6 +164,7 @@ describe("online room service", () => {
     const socket = FakeSocket.instances[0];
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
 
     now.mockReturnValue(1_100);
@@ -203,13 +212,17 @@ describe("online room service", () => {
     expect(new URL(guestSocket.url).searchParams.get("sessionId")).toBeTruthy();
     guestSocket.readyState = FakeSocket.OPEN;
     guestSocket.onopen();
+    admit(guestSocket);
     await guestConnection;
 
     const hostConnection = client.connect({ id: "EFGH", host: true, hostToken: "x".repeat(32) });
     const hostSocket = FakeSocket.instances.at(-1);
     expect(new URL(hostSocket.url).searchParams.has("sessionId")).toBe(false);
+    expect(new URL(hostSocket.url).searchParams.has("hostToken")).toBe(false);
     hostSocket.readyState = FakeSocket.OPEN;
     hostSocket.onopen();
+    expect(JSON.parse(hostSocket.send.mock.calls[0][0])).toEqual({ type: "host-auth", hostToken: "x".repeat(32) });
+    admit(hostSocket, { id: "host", role: "host" });
     await hostConnection;
   });
   test("uses the guest fallback, sends bounded objects and disconnects", async () => {
@@ -222,6 +235,7 @@ describe("online room service", () => {
     expect(socket.send).not.toHaveBeenCalled();
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(client.send(" update ", { value: 1 })).toBe(true);
     expect(socket.send.mock.calls.map(([message]) => JSON.parse(message))).toContainEqual({
@@ -250,6 +264,7 @@ describe("online room service", () => {
     expect(new URL(longSocket.url).searchParams.get("name")).toBe(`A${"b".repeat(39)}`);
     longSocket.readyState = FakeSocket.OPEN;
     longSocket.onopen();
+    admit(longSocket);
     await longConnection;
     client.disconnect();
   });
@@ -260,6 +275,7 @@ describe("online room service", () => {
     const socket = FakeSocket.instances[0];
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(client.send("x", { value: "я".repeat(130_000) })).toBe(true);
     expect(client.send("x", { value: "я".repeat(132_000) })).toBe(false);

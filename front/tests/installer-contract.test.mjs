@@ -63,6 +63,16 @@ test("installer updates preserve preferences and skip first-install choices", ()
   const initializeWizard = installer.match(/procedure InitializeWizard;[\s\S]*?\nend;/)?.[0] || "";
   assert.doesNotMatch(initializeWizard, /ExpandConstant\('\{app\}/);
 });
+test("uninstall removes every runtime entry while preserving user data by default", () => {
+  matches(installer, [
+    /procedure DeleteApplicationFilesExceptData;/,
+    /CompareText\(FindRec\.Name, 'data'\) <> 0/,
+    /DelTree\(EntryPath, True, True, True\)/,
+    /if RemoveUserData then\s+DelTree\(ExpandConstant\('\{app\}\\data'\), True, True, True\);/,
+    /DeleteApplicationFilesExceptData;/
+  ]);
+  excludes(installer, [/^\[UninstallDelete\]$/m, /Name: "\{app\}\\chrome_100_percent\.pak"/]);
+});
 test("installer run changes keep every generated report in the current run", () => {
   matches(installerBuilder, [
     /\$script:ManifestFile = Join-Path \$resolved "release-manifest\.json"/,

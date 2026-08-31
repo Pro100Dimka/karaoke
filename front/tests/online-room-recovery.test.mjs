@@ -31,8 +31,8 @@ async function join(host = true) {
   const joined = client.connect({ id: "ROOM", name: "Alice", host, hostToken: "secret" });
   const socket = Socket.instances.at(-1);
   socket.open();
-  await joined;
   socket.receive({ type: "room-state", self: { id: host ? "host" : "guest", role: host ? "host" : "guest" }, participants: [] });
+  await joined;
   return { client, socket, events };
 }
 
@@ -48,9 +48,13 @@ test.each([true, false])("reconnects host=%s without emitting terminal disconnec
   await vi.advanceTimersByTimeAsync(500);
   const next = Socket.instances.at(-1);
   expect(new URL(next.url).searchParams.has("create")).toBe(false);
-  if (host) expect(new URL(next.url).searchParams.get("hostToken")).toBe("secret");
+  if (host) {
+    expect(new URL(next.url).searchParams.has("hostToken")).toBe(false);
+    expect(next.packets).toEqual([]);
+  }
   else expect(new URL(next.url).searchParams.get("sessionId")).toBe(new URL(socket.url).searchParams.get("sessionId"));
   next.open();
+  if (host) expect(next.packets[0]).toEqual({ type: "host-auth", hostToken: "secret" });
   expect(events.some(({ type }) => type === "connection-restored")).toBe(false);
   next.receive({ type: "room-state", self: { id: host ? "host" : "guest" }, sharedUi: { query: "new query" } });
   await Promise.resolve();

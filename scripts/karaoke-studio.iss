@@ -74,33 +74,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: EnsureApplicationExecutable
 
-[UninstallDelete]
-; app-runtime.zip is extracted by tar, so register every installer-owned root
-; explicitly. Writable application data stays under {app}\data and is preserved unless requested.
-Type: filesandordirs; Name: "{app}\locales"
-Type: filesandordirs; Name: "{app}\resources"
-Type: files; Name: "{app}\{#MyAppExeName}"
-Type: files; Name: "{app}\chrome_100_percent.pak"
-Type: files; Name: "{app}\chrome_200_percent.pak"
-Type: files; Name: "{app}\d3dcompiler_47.dll"
-Type: files; Name: "{app}\dxcompiler.dll"
-Type: files; Name: "{app}\dxil.dll"
-Type: files; Name: "{app}\ffmpeg.dll"
-Type: files; Name: "{app}\icudtl.dat"
-Type: files; Name: "{app}\libEGL.dll"
-Type: files; Name: "{app}\libGLESv2.dll"
-Type: files; Name: "{app}\LICENSE.electron.txt"
-Type: files; Name: "{app}\LICENSES.chromium.html"
-Type: files; Name: "{app}\resources.pak"
-Type: files; Name: "{app}\snapshot_blob.bin"
-Type: files; Name: "{app}\v8_context_snapshot.bin"
-Type: files; Name: "{app}\vk_swiftshader.dll"
-Type: files; Name: "{app}\vk_swiftshader_icd.json"
-Type: files; Name: "{app}\vulkan-1.dll"
-; Remove any generated logs, update remnants or files created after setup.
-; {app} is the dedicated application directory selected by the user.
-Type: filesandordirs; Name: "{app}\.install"
-
 [Code]
 var
   PreferencesPage: TWizardPage;
@@ -151,11 +124,41 @@ begin
   Result := True;
 end;
 
+procedure DeleteApplicationFilesExceptData;
+var
+  FindRec: TFindRec;
+  EntryPath: String;
+begin
+  { The runtime is extracted from app-runtime.zip, so Inno does not know every
+    installed filename. Delete every top-level entry except the only
+    user-owned root. This also removes files introduced by newer releases. }
+  if FindFirst(AddBackslash(ExpandConstant('{app}')) + '*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') and
+           (CompareText(FindRec.Name, 'data') <> 0) then
+        begin
+          EntryPath := AddBackslash(ExpandConstant('{app}')) + FindRec.Name;
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+            DelTree(EntryPath, True, True, True)
+          else
+            DeleteFile(EntryPath);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if (CurUninstallStep = usPostUninstall) and RemoveUserData then
+  if CurUninstallStep = usPostUninstall then
   begin
-    DelTree(ExpandConstant('{app}\data'), True, True, True);
+    if RemoveUserData then
+      DelTree(ExpandConstant('{app}\data'), True, True, True);
+    DeleteApplicationFilesExceptData;
   end;
 end;
 

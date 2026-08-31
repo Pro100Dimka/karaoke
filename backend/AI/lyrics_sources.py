@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import html
 import json
+import queue
 import re
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -70,6 +72,31 @@ def _request(url: str, encoding: str = "utf-8") -> str:
         return response.read().decode(encoding, errors="replace")
 
 
+def _request_before(url: str, encoding: str, deadline: float) -> str:
+    """Return a response before the lookup deadline, even on a stalled socket."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Lyrics lookup deadline expired")
+    result: queue.Queue[tuple[bool, object]] = queue.Queue(maxsize=1)
+
+    def run() -> None:
+        try:
+            result.put((True, _request(url, encoding)))
+        except Exception as exc:  # Propagate the request failure on the caller thread.
+            result.put((False, exc))
+
+    threading.Thread(target=run, name="lyrics-http", daemon=True).start()
+    try:
+        succeeded, value = result.get(timeout=remaining)
+    except queue.Empty as exc:
+        raise TimeoutError("Lyrics lookup deadline expired") from exc
+    if not succeeded:
+        if isinstance(value, BaseException):
+            raise value
+        raise RuntimeError("Lyrics request failed without an exception")
+    return str(value)
+
+
 def _expand_notation(value: str) -> str:
     lines, chorus, output, collecting = value.splitlines(), [], [], False
     for raw in lines:
@@ -97,14 +124,14 @@ def _expand_notation(value: str) -> str:
 def _pisni(artist: str, track: str, query: str, deadline: float) -> LyricsDiscovery | None:
     try:
         encoded = urllib.parse.quote_from_bytes(track.encode("cp1251"))
-        page = _request(
-            f"https://www.pisni.org.ua/search.php?phrase={encoded}&obj=s", "cp1251"
+        page = _request_before(
+            f"https://www.pisni.org.ua/search.php?phrase={encoded}&obj=s", "cp1251", deadline
         )
         links = dict.fromkeys(re.findall(r'href=["\'](/songs/\d+\.html)["\']', page, re.I))
         for link in list(links)[:8]:
             if time.monotonic() >= deadline:
                 break
-            detail = _request(f"https://www.pisni.org.ua{link}", "cp1251")
+            detail = _request_before(f"https://www.pisni.org.ua{link}", "cp1251", deadline)
             title = re.search(r'<h1[^>]*>(.*?)</h1>', detail, re.I | re.S)
             performer = re.search(r'<a href=["\']/persons/[^"\']+["\'][^>]*>(.*?)</a>', detail, re.I | re.S)
             lyrics = re.search(r'<pre class=["\']songwords["\']>(.*?)</pre>', detail, re.I | re.S)
@@ -131,7 +158,7 @@ def discover_lyrics(title: str | None, *_args, **_kwargs) -> LyricsDiscovery | N
     params = {"track_name": track, "artist_name": artist} if artist else {"q": query}
     url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(params)
     try:
-        rows = json.loads(_request(url))
+        rows = json.loads(_request_before(url, "utf-8", deadline))
     except (OSError, ValueError):
         rows = []
     for row in rows if isinstance(rows, list) else []:

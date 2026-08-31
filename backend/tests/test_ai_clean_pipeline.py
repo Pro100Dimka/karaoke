@@ -1,4 +1,6 @@
 import sys
+import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -323,7 +325,7 @@ def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
 def test_lrclib_synced_text_is_kept_with_its_line_timestamps(monkeypatch):
     monkeypatch.setattr(
         "AI.lyrics_sources._request",
-        lambda _url: """[{"trackName":"Song","artistName":"Artist","plainLyrics":"wrong text","syncedLyrics":"[00:01.00]right line\\n[00:03.00]next line"}]""",
+        lambda _url, _encoding="utf-8": """[{"trackName":"Song","artistName":"Artist","plainLyrics":"wrong text","syncedLyrics":"[00:01.00]right line\\n[00:03.00]next line"}]""",
     )
 
     result = discover_lyrics("Artist - Song")
@@ -387,7 +389,7 @@ def test_lyrics_discovery_skips_pisni_once_the_lookup_budget_is_spent(monkeypatc
     # The whole lookup already ran out its budget by the time LRCLIB replied
     # (a slow/hanging network, not a fast failure) -- pisni.org.ua must not
     # be attempted at all rather than adding its own request chain on top.
-    clock = iter([0.0, lyrics_sources.LOOKUP_BUDGET_SECONDS + 1])
+    clock = iter([0.0, 0.0, lyrics_sources.LOOKUP_BUDGET_SECONDS + 1])
     monkeypatch.setattr(lyrics_sources.time, "monotonic", lambda: next(clock))
     pisni_called = []
     monkeypatch.setattr(
@@ -410,12 +412,29 @@ def test_pisni_stops_walking_candidate_links_once_the_deadline_passes(monkeypatc
         return search if "search.php" in url else "<h1></h1>"
 
     monkeypatch.setattr(lyrics_sources, "_request", response)
-    # Budget expires the moment the search page comes back, before the first
-    # candidate detail page would be fetched.
+    # An already-expired budget must not start even the search request.
     result = lyrics_sources._pisni("Антитіла", "Лови момент", "query", deadline=0.0)
 
     assert result is None
-    assert len(requested) == 1 and "search.php" in requested[0]
+    assert requested == []
+
+
+def test_lyrics_request_returns_at_the_global_deadline_when_transport_stalls(monkeypatch):
+    import AI.lyrics_sources as lyrics_sources
+
+    release = threading.Event()
+    monkeypatch.setattr(
+        lyrics_sources,
+        "_request",
+        lambda *_args: release.wait(1) or "[]",
+    )
+    started = time.monotonic()
+    try:
+        with pytest.raises(TimeoutError, match="deadline"):
+            lyrics_sources._request_before("https://lyrics.test", "utf-8", started + 0.03)
+        assert time.monotonic() - started < 0.2
+    finally:
+        release.set()
 
 
 def test_source_repeat_notation_is_expanded_without_leaking_markers():

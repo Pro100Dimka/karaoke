@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { KaraokeRoom, normalizeRoomUi } from "../src/worker.js";
+import { KaraokeRoom, ROOM_PROTOCOL_VERSION, normalizeRoomUi } from "../src/worker.js";
 import { generateRoomIce } from "../src/roomIce.js";
 
 class Socket {
@@ -26,6 +26,10 @@ function harness() {
   const ctx = { storage, getWebSockets: () => sockets, acceptWebSocket: (socket) => sockets.push(socket) };
   return { room: new KaraokeRoom(ctx), ctx, storage, host, guest, sockets, data, token };
 }
+const hostUrl = (create = false) =>
+  `https://worker.test/rooms/ROOM?v=${ROOM_PROTOCOL_VERSION}&role=host${create ? "&create=1" : ""}`;
+const authenticateHost = (room, socket, hostToken) =>
+  room.webSocketMessage(socket, JSON.stringify({ type: "host-auth", hostToken }));
 
 test("host network loss preserves peers and persists the 45-second grace through hibernation", async () => {
   const h = harness();
@@ -59,11 +63,14 @@ test("the same host token restores identity, permissions, snapshot and cancels e
   globalThis.WebSocketPair = class { constructor() { this[0] = {}; this[1] = socket; } };
   globalThis.Response = class { constructor(body, options) { Object.assign(this, options); } };
   try {
-    const result = await room.fetch(new Request(`https://worker.test/rooms/ROOM?v=1&role=host&hostToken=${h.token}`, { headers: { Upgrade: "websocket" } }));
+    const result = await room.fetch(new Request(hostUrl(), { headers: { Upgrade: "websocket" } }));
     assert.equal(result.status, 101);
-    assert.deepEqual(socket.messages[0].self, { id: "host", name: "Гость", role: "host", micMuted: true, effectsLocked: true });
-    assert.equal(socket.messages[0].sharedUi.query, "Ария");
-    assert.equal(socket.messages[0].sharedUi.karaoke.speed, 1.2);
+    assert.equal(socket.messages[0].type, "host-auth-required");
+    await authenticateHost(room, socket, h.token);
+    const snapshot = socket.messages.find(({ type }) => type === "room-state");
+    assert.deepEqual(snapshot.self, { id: "host", name: "Гость", role: "host", micMuted: true, effectsLocked: true });
+    assert.equal(snapshot.sharedUi.query, "Ария");
+    assert.equal(snapshot.sharedUi.karaoke.speed, 1.2);
     assert.equal(h.storage.alarm, null);
     await room.alarm();
     assert.equal(h.guest.closed, undefined);
@@ -75,13 +82,25 @@ test("the same host token restores identity, permissions, snapshot and cancels e
 
 test("only the owner can resume; a vanished room is not recreated by reconnect", async () => {
   const h = harness();
-  await h.room.webSocketClose(h.host, 1006, "");
-  let result = await h.room.fetch(new Request("https://worker.test/rooms/ROOM?v=1&role=host&hostToken=wrong", { headers: { Upgrade: "websocket" } }));
-  assert.equal(result.status, 403);
-  await h.room.closeRoom("host-left");
-  h.sockets.length = 0;
-  result = await h.room.fetch(new Request(`https://worker.test/rooms/ROOM?v=1&role=host&hostToken=${h.token}`, { headers: { Upgrade: "websocket" } }));
-  assert.equal(result.status, 403);
+  const oldPair = globalThis.WebSocketPair;
+  const oldResponse = globalThis.Response;
+  globalThis.WebSocketPair = class { constructor() { this[0] = {}; this[1] = new Socket(null); } };
+  globalThis.Response = class { constructor(body, options) { Object.assign(this, options); } };
+  try {
+    await h.room.webSocketClose(h.host, 1006, "");
+    let result = await h.room.fetch(new Request(hostUrl(), { headers: { Upgrade: "websocket" } }));
+    assert.equal(result.status, 101);
+    const wrongSocket = h.sockets.at(-1);
+    await authenticateHost(h.room, wrongSocket, "wrong");
+    assert.equal(wrongSocket.closed.code, 1008);
+    await h.room.closeRoom("host-left");
+    h.sockets.length = 0;
+    result = await h.room.fetch(new Request(hostUrl(), { headers: { Upgrade: "websocket" } }));
+    assert.equal(result.status, 101);
+    const vanishedSocket = h.sockets.at(-1);
+    await authenticateHost(h.room, vanishedSocket, h.token);
+    assert.equal(vanishedSocket.closed.code, 1008);
+  } finally { globalThis.WebSocketPair = oldPair; globalThis.Response = oldResponse; }
 });
 
 test("concurrent guest admissions cannot exceed room capacity", async () => {
@@ -97,7 +116,7 @@ test("concurrent guest admissions cannot exceed room capacity", async () => {
     const results = await Promise.all(
       Array.from({ length: 13 }, (_, index) =>
         h.room.fetch(new Request(
-          `https://worker.test/rooms/ROOM?v=1&role=guest&sessionId=guest-${index}`,
+          `https://worker.test/rooms/ROOM?v=${ROOM_PROTOCOL_VERSION}&role=guest&sessionId=guest-${index}`,
           { headers: { Upgrade: "websocket" } },
         ))
       )
