@@ -59,7 +59,8 @@ const Empty = ({ children }) => <Typography tone="muted">{children}</Typography>
 
 function About() {
   const { t } = useI18n();
-  const { data = {}, error } = usePolling(api.getAbout, POLL.about, []);
+  const { data: response, error } = usePolling(api.getAbout, POLL.about, []);
+  const data = response ?? {};
   const fields = ["backendVersion", "frontendVersion", "aiVersion", "dataPath"];
   const values = [data.backend_version, data.frontend_version, data.ai_version, data.data_dir];
 
@@ -132,7 +133,8 @@ export const formatDate = (value, language) => {
 
 function History() {
   const { language, t } = useI18n();
-  const { data = [], error } = usePolling(api.getHistory, POLL.history, []);
+  const { data: response, error } = usePolling(api.getHistory, POLL.history, []);
+  const data = response ?? [];
 
   return (
     <Stack gap={0.75}>

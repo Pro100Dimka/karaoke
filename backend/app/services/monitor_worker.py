@@ -8,14 +8,24 @@ import sys
 import threading
 import time
 
+def _stage(name: str) -> None:
+    print(json.dumps({"event": "stage", "stage": name}), flush=True)
+
+
+if __name__ == "__main__":
+    _stage("import numpy")
 import numpy as np
 
+if __name__ == "__main__":
+    _stage("import sounddevice / initialize PortAudio")
 try:
     import sounddevice as sd
 except Exception:  # PortAudio may be unavailable in CI/diagnostics.
     from types import SimpleNamespace
     sd = SimpleNamespace(Stream=None, WasapiSettings=lambda **kwargs: kwargs)
 
+if __name__ == "__main__":
+    _stage("import microphone DSP")
 from app.services.microphone_quality import (
     MonitorEffectsChain,
     RealtimePitchShifter,
@@ -152,8 +162,10 @@ def main() -> int:
         mode = candidate.pop("_mode")
         engine = candidate.pop("_engine", "duplex")
         if engine == "wasapi-native-shared":
+            _stage("load native WASAPI and open shared endpoints")
             from app.services.native_wasapi import NativeWasapiStream
             stream = NativeWasapiStream(options, statistics)
+        _stage("initialize microphone DSP")
         process = _audio_callback(gain, stream.info.sample_rate if stream else float(options["sample_rate"]), statistics)
 
         def callback(*args):
@@ -164,11 +176,14 @@ def main() -> int:
                 failed.set()
 
         if engine == "wasapi-native-shared":
+            _stage("start native shared audio stream")
             stream.start(process)
             details = stream.diagnostics()
         else:
+            _stage("open PortAudio stream")
             stream = (WasapiMonitorStream(sd, candidate, callback, statistics, failed)
                       if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
+            _stage("start PortAudio stream")
             stream.start()
             details = _stream_diagnostics(stream, candidate, options, mode)
         _emit({"event": "started", **details})

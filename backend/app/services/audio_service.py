@@ -781,7 +781,8 @@ def _start_monitor_worker(worker_options: dict) -> None:
 def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
     global _monitor_process, _monitor_reader
     ready = threading.Event()
-    state: dict[str, str | None] = {"error": None}
+    state: dict[str, str | None] = {"error": None, "stage": "process bootstrap (before Python entry point)"}
+    launched_at = time.monotonic()
     _monitor_control.check()
     token = getattr(_monitor_control.local, "token", None)
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
@@ -799,6 +800,7 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
+            errors="replace",
             creationflags=creationflags,
         )
         _monitor_process = process
@@ -812,7 +814,12 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
             except json.JSONDecodeError:
                 logger.warning("Audio monitor worker: %s", line.rstrip())
                 continue
+            if not isinstance(message, dict):
+                continue
             event = message.get("event")
+            if event == "stage":
+                state["stage"] = str(message.get("stage") or "unknown")[:200]
+                logger.info("Audio monitor startup: stage=%s elapsed_sec=%.2f", state["stage"], time.monotonic() - launched_at)
             with _monitor_lock:
                 current = _monitor_process is process
             if current:
@@ -869,7 +876,11 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
                     break
         _monitor_control.check()
         if not started:
-            raise RuntimeError("Timed out starting direct microphone monitoring")
+            raise RuntimeError(
+                "Timed out starting direct microphone monitoring: "
+                f"stage={state['stage']}; elapsed_sec={time.monotonic() - launched_at:.2f}; "
+                f"worker={Path(command[0]).name}; exit_code={process.poll()}"
+            )
         if state["error"]:
             raise RuntimeError(f"Could not start direct microphone monitoring: {state['error']}")
     except Exception:

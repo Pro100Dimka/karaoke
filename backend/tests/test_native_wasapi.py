@@ -12,6 +12,26 @@ def options():
     return {"input_device_name": "Chosen microphone", "output_device_name": "Chosen speakers", "blocksize": 64}
 
 
+def test_native_module_does_not_import_song_pipeline():
+    import subprocess
+    import sys
+    from pathlib import Path
+    check = subprocess.run([sys.executable, "-c",
+        "import sys; from app.services import native_wasapi; "
+        "assert 'config' not in sys.modules; assert 'AI' not in sys.modules; "
+        "assert 'AI.pipeline' not in sys.modules"],
+        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=15)
+    assert check.returncode == 0, check.stderr
+
+
+def test_packaged_library_stays_beside_worker(monkeypatch, tmp_path):
+    import sys
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeAudioMonitor.exe"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "audio-monitor-runtime"), raising=False)
+    assert native_wasapi.library_path() == tmp_path / "KaraokeWasapi.dll"
+
+
 @pytest.fixture
 def dll(monkeypatch):
     library = SimpleNamespace(wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1))
@@ -191,6 +211,6 @@ def test_worker_uses_native_event_pump_and_native_rate(monkeypatch, dll, capsys)
     dll.wm_pump.assert_called_once()
     dll.wm_close.assert_called_once_with(42)
     legacy.assert_not_called()
-    started = json.loads(capsys.readouterr().out.splitlines()[0])
+    started = next(event for event in map(json.loads, capsys.readouterr().out.splitlines()) if event["event"] == "started")
     assert started["engine"] == "wasapi-native-shared"
     assert started["input_period_frames"] == 441

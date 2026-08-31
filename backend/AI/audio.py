@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import contextvars
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,8 +15,28 @@ import soundfile as sf
 from .errors import AICoreError
 
 
+def resolve_ffmpeg() -> str:
+    configured = os.getenv("FFMPEG_BINARY", "").strip()
+    if configured:
+        candidate = Path(configured)
+        executable = str(candidate.resolve()) if candidate.is_file() else shutil.which(configured)
+        if executable:
+            return executable
+        raise AICoreError("FFMPEG_BINARY points to an unavailable FFmpeg executable")
+    if getattr(sys, "frozen", False):
+        root = Path(sys.executable).resolve().parent
+        for directory in (Path(getattr(sys, "_MEIPASS", root / "_internal")), root, root / "_internal"):
+            candidate = directory / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+            if candidate.is_file():
+                return str(candidate)
+    executable = shutil.which("ffmpeg")
+    if executable:
+        return executable
+    raise AICoreError("FFmpeg executable not found in the application or PATH; repair the installation")
+
+
 def run_ffmpeg(arguments: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess:
-    command = [os.getenv("FFMPEG_BINARY", "ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", *arguments]
+    command = [resolve_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", *arguments]
     result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
     if result.returncode:
         raise AICoreError(result.stderr.strip() or f"ffmpeg exited with {result.returncode}")

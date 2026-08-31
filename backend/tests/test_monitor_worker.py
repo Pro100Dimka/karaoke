@@ -152,7 +152,7 @@ def test_main_starts_and_stops_first_candidate(monkeypatch, capsys):
 
     assert monitor_worker.main() == 0
     events = [json.loads(line)["event"] for line in capsys.readouterr().out.splitlines()]
-    assert events == ["started"]
+    assert events == ["stage", "stage", "stage", "started"]
     stream.start.assert_called_once_with()
     stream.abort.assert_called_once_with()
     stream.close.assert_called_once_with()
@@ -167,7 +167,7 @@ def test_main_does_not_retry_after_driver_rejection(monkeypatch, capsys):
     assert monitor_worker.main() == 1
     monitor_worker.sd.Stream.assert_called_once()
     assert monitor_worker.sd.Stream.call_args.kwargs["blocksize"] == 64
-    assert json.loads(capsys.readouterr().out) == {"event": "error", "message": "selected settings rejected"}
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {"event": "error", "message": "selected settings rejected"}
     failed.abort.assert_called_once()
     failed.close.assert_called_once()
 
@@ -180,7 +180,7 @@ def test_main_reports_device_error_and_closes_even_if_abort_fails(monkeypatch, c
     broken.abort.side_effect = RuntimeError("abort failed")
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=broken))
     assert monitor_worker.main() == 1
-    assert json.loads(capsys.readouterr().out)["message"] == "device busy"
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["message"] == "device busy"
     broken.close.assert_called_once()
 
 
@@ -242,7 +242,7 @@ def test_main_emits_level_while_running(monkeypatch, capsys):
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
     assert monitor_worker.main() == 0
     events = [json.loads(line)["event"] for line in capsys.readouterr().out.splitlines()]
-    assert events == ["started", "level"]
+    assert events == ["stage", "stage", "stage", "started", "level"]
 
 
 def test_main_finalizer_suppresses_stream_cleanup_failure(monkeypatch, capsys):

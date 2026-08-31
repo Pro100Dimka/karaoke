@@ -170,7 +170,7 @@ $LegacyV23SchemaVersion = "2026.08.11-v23-parallel-safe"
 
 # Increment ONLY the component whose OUTPUT FORMAT/BUILD RULES changed.
 # Never bump all of these just because build-installer.ps1 itself changed.
-$BackendSchemaVersion   = "backend-v5-parselmouth-psola"
+$BackendSchemaVersion   = "backend-v5-parselmouth-psola-monitor-onedir-v1"
 $AsioSchemaVersion      = "asio-v1"
 $FrontendSchemaVersion  = "frontend-v1"
 $ModelsSchemaVersion    = "models-7z-v2"
@@ -1863,9 +1863,12 @@ function Build-Backend {
         }
 
         $monitorArgs += @(
-            "--onefile",
+            # Keep runtime beside the worker: onefile unpacked a large archive
+            # on every monitoring start, consuming the audio startup deadline.
+            "--onedir",
+            "--contents-directory","audio-monitor-runtime",
             "--name","KaraokeAudioMonitor",
-            "--distpath",$BackendDist,
+            "--distpath",(Join-Path $Build "backend\monitor-dist"),
             "--workpath",(Join-Path $Build "backend\audio-monitor"),
             "--specpath",(Join-Path $Build "backend\spec"),
             "--paths",$Backend,
@@ -1890,6 +1893,9 @@ function Build-Backend {
         if ($LASTEXITCODE -ne 0) {
             throw "KaraokeAudioMonitor build failed."
         }
+        $monitorDist = Join-Path $Build "backend\monitor-dist\KaraokeAudioMonitor"
+        Copy-Item -LiteralPath (Join-Path $monitorDist "KaraokeAudioMonitor.exe") -Destination $BackendDist -Force
+        Copy-Item -LiteralPath (Join-Path $monitorDist "audio-monitor-runtime") -Destination $BackendDist -Recurse -Force
     }
     finally {
         Pop-Location
@@ -1898,6 +1904,7 @@ function Build-Backend {
     Remove-LegacyEmbeddedAI
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
+    Require-File (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip") "Audio monitor runtime"
 }
 
 function Build-Asio {
@@ -1972,6 +1979,8 @@ function Get-TreeSignature([string]$Path) {
 function Verify-BackendBase {
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
+    Require-File (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip") "Audio monitor runtime"
+    Require-File (Join-Path $BackendDist "_internal\ffmpeg.exe") "Bundled FFmpeg"
     Require-File (Join-Path $BackendDist "KaraokeAsioBridge.exe") "KaraokeAsioBridge.exe"
     Require-File (Join-Path $BackendDist "KaraokeWasapi.dll") "KaraokeWasapi.dll"
     Require-Directory (Join-Path $BackendDist "_internal") "PyInstaller internal directory"
@@ -2012,6 +2021,7 @@ function Verify-Unpacked {
     }
     Require-File (Join-Path $PackagedBackend "KaraokeBackend.exe") "Electron backend"
     Require-File (Join-Path $PackagedBackend "KaraokeAudioMonitor.exe") "Electron audio monitor"
+    Require-File (Join-Path $PackagedBackend "audio-monitor-runtime\base_library.zip") "Electron audio monitor runtime"
     Require-File (Join-Path $PackagedBackend "KaraokeAsioBridge.exe") "Electron ASIO bridge"
     Require-File (Join-Path $PackagedBackend "KaraokeWasapi.dll") "Electron shared WASAPI library"
 
@@ -2836,7 +2846,8 @@ function Parallel-FullBuild {
         $script:BackendFingerprint `
         @(
             (Join-Path $BackendDist "KaraokeBackend.exe"),
-            (Join-Path $BackendDist "KaraokeAudioMonitor.exe")
+            (Join-Path $BackendDist "KaraokeAudioMonitor.exe"),
+            (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip")
         ) `
         -Force:$force
 
@@ -3046,7 +3057,8 @@ try {
         @($legacyBackendFp) `
         @(
             (Join-Path $BackendDist "KaraokeBackend.exe"),
-            (Join-Path $BackendDist "KaraokeAudioMonitor.exe")
+            (Join-Path $BackendDist "KaraokeAudioMonitor.exe"),
+            (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip")
         ))
 
     [void](Migrate-StateIfCompatible `

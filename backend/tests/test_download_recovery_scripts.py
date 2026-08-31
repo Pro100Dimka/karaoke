@@ -141,6 +141,9 @@ def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen():
 
 def test_audio_monitor_packaging_excludes_unused_ai_frameworks():
     builder = project_text("scripts/build-installer.ps1", encoding="utf-8-sig")
+    assert '"--contents-directory","audio-monitor-runtime"' in builder
+    assert '"--onefile"' not in builder
+    assert "audio-monitor-runtime\\base_library.zip" in builder
     monitor = builder.split('$monitorArgs += @(', 1)[1].split('"app\\services\\monitor_worker.py"', 1)[0]
     assert_contains(
         monitor,

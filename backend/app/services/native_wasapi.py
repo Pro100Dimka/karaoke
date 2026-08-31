@@ -6,8 +6,6 @@ import sys
 
 import numpy as np
 
-import config
-
 
 class Info(ct.Structure):
     _fields_ = [(name, ct.c_uint32) for name in (
@@ -29,7 +27,11 @@ Process = ct.CFUNCTYPE(ct.c_int, ct.POINTER(ct.c_float), ct.POINTER(ct.c_float),
 
 
 def library_path():
-    return (Path(sys.executable).parent if config.IS_FROZEN else Path(config.PROJECT_ROOT) / "generated/build/asio") / "KaraokeWasapi.dll"
+    # Do not import application config here: it imports AI.__init__ and the
+    # entire song pipeline into the latency-sensitive microphone worker.
+    root = (Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
+            else Path(__file__).resolve().parents[3] / "generated/build/asio")
+    return root / "KaraokeWasapi.dll"
 
 
 def load_library():

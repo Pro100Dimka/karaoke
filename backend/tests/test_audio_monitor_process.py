@@ -69,6 +69,9 @@ def test_frozen_monitor_worker_requires_packaged_binary(monkeypatch, tmp_path):
 def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch, tmp_path):
     worker = process(
         "not-json\n",
+        '[]\n',
+        'null\n',
+        '{"event":"stage","stage":"open shared endpoints"}\n',
         '{"event":"started"}\n',
         '{"event":"level","rms_db":-8,"clipping":true,"extra":1}\n',
         poll=None,
@@ -137,3 +140,44 @@ def test_stop_monitoring_does_not_join_current_reader(monkeypatch):
     running, current = process(poll=None), threading.current_thread()
     patch_attrs(monkeypatch, audio_service, _monitor_process=running, _monitor_reader=current)
     audio_service.stop_monitoring()
+
+
+def test_timeout_identifies_last_startup_stage(monkeypatch, tmp_path):
+    released = threading.Event()
+    class StalledOutput(OutputLines):
+        def __iter__(self):
+            yield '{"event":"stage","stage":"initialize microphone DSP"}\n'
+            released.wait(2)
+    worker = process()
+    worker.stdout = StalledOutput()
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+    monkeypatch.setattr(audio_service, "_MONITOR_START_TIMEOUT_SECONDS", .1)
+    monkeypatch.setattr(audio_service, "_stop_monitoring_process", Mock())
+    try:
+        raises(RuntimeError, lambda: audio_service._launch_monitor_process(["worker"], cwd=tmp_path),
+               match="stage=initialize microphone DSP")
+    finally:
+        released.set()
+        audio_service._monitor_reader.join(2)
+
+
+def test_built_worker_reaches_native_device_validation_without_ai():
+    from pathlib import Path
+    import pytest
+    executable = (Path(__file__).resolve().parents[2] /
+                  "generated/diagnostics/monitor-startup/dist/KaraokeAudioMonitor/KaraokeAudioMonitor.exe")
+    if not executable.is_file() or not executable.with_name("KaraokeWasapi.dll").is_file():
+        pytest.skip("Packaged monitor smoke artifact not built")
+    # Deliberately nonexistent endpoints: exercise packaged imports + native
+    # startup without recording audio or playing anything on the user's device.
+    config = {"sample_rate": 48000, "output_channels": 2, "input_device_id": 0,
+              "output_device_id": 0, "blocksize": 64, "gain": 0, "wasapi_mode": "shared",
+              "native_shared": True, "input_device_name": "__missing_test_microphone_76c22__",
+              "output_device_name": "__missing_test_speakers_76c22__"}
+    result = subprocess.run([str(executable), "--config", json.dumps(config)],
+                            capture_output=True, text=True, encoding="utf-8", timeout=12)
+    events = [json.loads(line) for line in result.stdout.splitlines()]
+    assert result.returncode == 1
+    assert any(event.get("stage") == "load native WASAPI and open shared endpoints" for event in events)
+    assert events[-1]["event"] == "error"
+    assert events[-1]["message"] == "Selected audio endpoint is unavailable; no default-device substitution"
