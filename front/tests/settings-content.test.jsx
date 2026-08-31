@@ -14,7 +14,7 @@ test("appearance rows only override saving for custom radio actions", async () =
   for (const row of rows) {
     expect(row.onChange).toBeUndefined();
     expect(row.onBlur).toBeUndefined();
-    if (!row.tag.startsWith("radio.")) expect(row.onSave).toBeUndefined();
+    if (!row.tag?.startsWith("radio.")) expect(row.onSave).toBeUndefined();
   }
   const toggle = rows.find(({ tag }) => tag === "radio.enabled");
   toggle.onSave(true);

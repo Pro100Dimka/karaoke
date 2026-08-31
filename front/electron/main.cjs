@@ -26,6 +26,7 @@ const {
 
 const { installBackendFileAuthentication } = require("./backend-media-auth.cjs");
 const { createBackendProcess } = require("./backend-process.cjs");
+const { LightingController, loadWindows } = require("./rgb/controller.cjs");
 const { DEV_RENDERER_ORIGIN } = require("./runtime-config.cjs");
 const {
   getPackagedRendererUrl,
@@ -37,7 +38,6 @@ const {
 const { findMatchingSongFolder } = require("./song-folders.cjs");
 const { readThemeBackgrounds } = require("./theme-backgrounds.cjs");
 const { createThemeIcons } = require("./theme-icons.cjs");
-const { LightingController, loadWindows } = require("./rgb/controller.cjs");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -268,7 +268,9 @@ function handleTrustedIpc(channel, handler) {
   registerTrustedIpc(ipcMain, channel, () => mainWindow?.webContents, handler);
 }
 
-const lighting = new LightingController({ windows: loadWindows(app.isPackaged ? process.resourcesPath : null) });
+const lighting = new LightingController({
+  windows: loadWindows(app.isPackaged ? process.resourcesPath : null)
+});
 handleTrustedIpc("lighting:configure", (enabled) => lighting.configure(enabled));
 handleTrustedIpc("lighting:frame", (frame) => lighting.frame(frame));
 handleTrustedIpc("lighting:status", () => lighting.status);

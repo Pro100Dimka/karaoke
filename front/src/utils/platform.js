@@ -13,7 +13,8 @@ export const clipboard = copyText;
 
 export const isElectron = () => electronAPI()?.isElectron === true;
 export const configureLighting = (enabled) =>
-  electronAPI()?.configureLighting?.(enabled) ?? Promise.resolve({ state: "desktop_only", count: 0 });
+  electronAPI()?.configureLighting?.(enabled) ??
+  Promise.resolve({ state: "desktop_only", count: 0 });
 export const sendLightingFrame = (frame) =>
   electronAPI()?.sendLightingFrame?.(frame) ?? Promise.resolve({ state: "desktop_only", count: 0 });
 export const getLightingStatus = () =>
@@ -43,7 +44,9 @@ export function openApplicationLog() {
 // Fire-and-forget: lets Electron's startup-timeline log (see main.cjs) record
 // renderer-side milestones the main process can't observe on its own.
 export function recordStartupMilestone(name) {
-  electronAPI()?.recordStartupMilestone?.(name)?.catch?.(() => {});
+  electronAPI()
+    ?.recordStartupMilestone?.(name)
+    ?.catch?.(() => {});
 }
 
 // The scene backdrop video is the only "media URL" this bridge exposes today;

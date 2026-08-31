@@ -1,11 +1,18 @@
 const sources = new Map();
 export function registerLightingSource(name, read) {
   sources.set(name, read);
-  return () => { if (sources.get(name) === read) sources.delete(name); };
+  return () => {
+    if (sources.get(name) === read) sources.delete(name);
+  };
 }
 export function readLightingMusic() {
   for (const name of ["karaoke", "radio"]) {
-    try { const sample = sources.get(name)?.(); if (sample?.active) return sample; } catch { /* Visuals must not interrupt playback. */ }
+    try {
+      const sample = sources.get(name)?.();
+      if (sample?.active) return sample;
+    } catch {
+      /* Visuals must not interrupt playback. */
+    }
   }
   return { active: false, level: 0 };
 }
@@ -21,12 +28,22 @@ export function lightingColor(hex, brightness, level, mode) {
 export function observeLightingMedia(media, register = registerLightingSource) {
   const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!media?.captureStream || !AudioContext) return () => {};
-  let context, stream, source, analyser, samples, silent, disposed = false;
+  let context,
+    stream,
+    source,
+    analyser,
+    samples,
+    silent,
+    disposed = false;
   const unregister = register("karaoke", () => {
-    if (!analyser || media.paused || media.ended || context?.state !== "running") return { active: false, level: 0 };
+    if (!analyser || media.paused || media.ended || context?.state !== "running")
+      return { active: false, level: 0 };
     analyser.getByteFrequencyData(samples);
     let sum = 0;
-    const end = Math.min(samples.length, Math.max(2, Math.ceil(250 * analyser.fftSize / context.sampleRate)));
+    const end = Math.min(
+      samples.length,
+      Math.max(2, Math.ceil((250 * analyser.fftSize) / context.sampleRate))
+    );
     for (let i = 1; i < end; i++) sum += samples[i] / 255;
     return { active: true, level: Math.min(1, (sum / (end - 1)) ** 1.8) };
   });
@@ -35,30 +52,50 @@ export function observeLightingMedia(media, register = registerLightingSource) {
     try {
       context = new AudioContext();
       source = context.createMediaStreamSource(stream);
-      analyser = context.createAnalyser(); analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.6;
+      analyser = context.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.6;
       samples = new Uint8Array(analyser.frequencyBinCount);
-      silent = context.createGain(); silent.gain.value = 0;
-      source.connect(analyser); analyser.connect(silent); silent.connect(context.destination);
+      silent = context.createGain();
+      silent.gain.value = 0;
+      source.connect(analyser);
+      analyser.connect(silent);
+      silent.connect(context.destination);
       context.resume().catch(() => {});
-    } catch { cleanupAudio(); }
+    } catch {
+      cleanupAudio();
+    }
   };
   const cleanupAudio = () => {
-    source?.disconnect(); analyser?.disconnect(); silent?.disconnect();
+    source?.disconnect();
+    analyser?.disconnect();
+    silent?.disconnect();
     context?.close().catch(() => {});
-    source = null; analyser = null; context = null;
+    source = null;
+    analyser = null;
+    context = null;
   };
   const start = () => {
     if (disposed) return;
     try {
-      if (!stream) { stream = media.captureStream(); stream.addEventListener("addtrack", attach); }
-      attach(); context?.resume().catch(() => {});
-    } catch { /* Unsupported/cross-origin capture: leave audio unchanged. */ }
+      if (!stream) {
+        stream = media.captureStream();
+        stream.addEventListener("addtrack", attach);
+      }
+      attach();
+      context?.resume().catch(() => {});
+    } catch {
+      /* Unsupported/cross-origin capture: leave audio unchanged. */
+    }
   };
   media.addEventListener("playing", start);
   if (!media.paused) start();
   return () => {
-    disposed = true; unregister(); media.removeEventListener("playing", start);
+    disposed = true;
+    unregister();
+    media.removeEventListener("playing", start);
     stream?.removeEventListener("addtrack", attach);
-    stream?.getTracks().forEach((track) => track.stop()); cleanupAudio();
+    stream?.getTracks().forEach((track) => track.stop());
+    cleanupAudio();
   };
 }

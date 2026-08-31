@@ -1,5 +1,6 @@
 /* Stryker disable all */
 export const ukMessages = {
+  "settings.appearance.keyboard_lighting_status.unsupported": "Клавіатуру знайдено, але OpenRGB не надає режим Direct для синхронізації з музикою. Вбудовані ефекти підсвічування не означають підтримку частого оновлення кольорів.",
   "settings.appearance.keyboard_lighting_enabled.label": "Підсвічування клавіатури",
   "settings.appearance.keyboard_lighting_enabled.tooltip": "Автоматично: Windows Dynamic Lighting або локальний OpenRGB з увімкненим SDK Server (порт 6742). Лише сумісні клавіатури. Windows може обмежувати керування, коли програма не на передньому плані.",
   "settings.appearance.keyboard_lighting_mode.label": "Ефект підсвічування",

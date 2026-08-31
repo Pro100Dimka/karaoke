@@ -73,18 +73,28 @@ const appearanceRows = ({ settings: { radio, lighting }, tr = translateSaved }) 
     type: "SelectField",
     tag: "keyboard_lighting_mode",
     label: tr("settings.appearance.keyboard_lighting_mode.label"),
-    options: ["music", "theme"].map((value) => ({ value, label: tr(`settings.appearance.keyboard_lighting_mode.${value}`) }))
+    options: ["music", "theme"].map((value) => ({
+      value,
+      label: tr(`settings.appearance.keyboard_lighting_mode.${value}`)
+    }))
   },
   {
     type: "Slider",
     tag: "keyboard_lighting_brightness",
     label: tr("settings.appearance.keyboard_lighting_brightness.label"),
-    min: 0, max: 1, step: 0.05,
+    min: 0,
+    max: 1,
+    step: 0.05,
     formatValue: (value) => `${Math.round(value * 100)}%`
   },
   {
-    type: "Label", md: 12, variant: "caption",
-    text: tr(`settings.appearance.keyboard_lighting_status.${lighting?.state || "disabled"}`, { count: lighting?.count || 0, provider: lighting?.provider === "windows" ? "Windows Dynamic Lighting" : "OpenRGB" })
+    type: "Label",
+    md: 12,
+    variant: "caption",
+    text: tr(`settings.appearance.keyboard_lighting_status.${lighting?.state || "disabled"}`, {
+      count: lighting?.count || 0,
+      provider: lighting?.provider === "windows" ? "Windows Dynamic Lighting" : "OpenRGB"
+    })
   }
 ];
 export default appearanceRows;

@@ -8,8 +8,8 @@ import { translateSaved as tr } from "../../i18n/runtime";
 import { POLLING_INTERVALS as POLL } from "../../runtime-config";
 import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
-import { applyTheme } from "../../utils/theme";
 import { getLightingStatus } from "../../utils/platform";
+import { applyTheme } from "../../utils/theme";
 import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/utils/devices";
 
 const emit = (detail) => dispatchEvent(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
@@ -170,5 +170,10 @@ function useAudio(open) {
 
 export default function useSettings(open) {
   const lighting = useOpenPoll(open, getLightingStatus, 1500, null);
-  return { app: useAppActions(), audio: useAudio(open), radio: useRadio(), lighting: lighting.data };
+  return {
+    app: useAppActions(),
+    audio: useAudio(open),
+    radio: useRadio(),
+    lighting: lighting.data
+  };
 }

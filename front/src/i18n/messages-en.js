@@ -1,5 +1,6 @@
 /* Stryker disable all */
 export const enMessages = {
+  "settings.appearance.keyboard_lighting_status.unsupported": "Keyboard found, but OpenRGB does not expose a Direct mode for music synchronization. Built-in lighting effects do not imply support for frequent color updates.",
   "settings.appearance.keyboard_lighting_enabled.label": "Keyboard lighting",
   "settings.appearance.keyboard_lighting_enabled.tooltip": "Automatic: Windows Dynamic Lighting or local OpenRGB with SDK Server enabled (port 6742). Compatible keyboards only. Windows may restrict control while the app is not in the foreground.",
   "settings.appearance.keyboard_lighting_mode.label": "Lighting effect",

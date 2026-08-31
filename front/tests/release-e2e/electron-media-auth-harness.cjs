@@ -17,6 +17,11 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("remote-debugging-port", "0");
 
 app.whenReady().then(async () => {
+  if (lightingTest && process.platform === "win32") {
+    const bridge = require(path.resolve(__dirname, "../../../generated/build/lighting/KeyboardLighting.node"));
+    app.lightingProbe = await bridge.request(0);
+    await bridge.request(2);
+  }
   installBackendFileAuthentication(session.defaultSession.webRequest, backendBase, token);
   const window = new BrowserWindow({
     show: !lightingTest,
@@ -28,7 +33,9 @@ app.whenReady().then(async () => {
   });
   if (lightingTest) window.webContents.setAudioMuted(true);
   const src = `${backendBase}/songs/release-song/audio/instrumental`;
-  const lightingSource = lightingTest ? fs.readFileSync(path.resolve(__dirname, "../../src/services/keyboardLighting.js"), "utf8").replaceAll("export ", "") : "";
+  const lightingSource = lightingTest
+    ? fs.readFileSync(path.resolve(__dirname, "../../src/services/keyboardLighting.js"), "utf8").replaceAll("export ", "")
+    : "";
   const html = `<!doctype html><meta charset="utf-8"><div id="status">boot</div><audio id="a" crossorigin="anonymous" preload="auto" src="${src}"></audio><script>
     ${lightingSource}
     const a = document.getElementById('a');

@@ -10,7 +10,7 @@ const harness = path.join(dirname, "electron-media-auth-harness.cjs");
 function waveBuffer() {
   const samples = 80_000;
   const pcm = Buffer.alloc(samples * 2);
-  for (let i = 0; i < samples; i++) pcm.writeInt16LE(Math.round(Math.sin(i * 2 * Math.PI * 120 / 8000) * 8000), i * 2);
+  for (let i = 0; i < samples; i++) pcm.writeInt16LE(Math.round(Math.sin((i * 2 * Math.PI * 120) / 8000) * 8000), i * 2);
   const header = Buffer.alloc(44);
   header.write("RIFF", 0);
   header.writeUInt32LE(36 + pcm.length, 4);
@@ -85,11 +85,16 @@ test("real Electron media element authenticates localhost playback and preserves
       env: {
         ...process.env,
         ADVOICE_E2E_BACKEND: backendBase,
-        ADVOICE_E2E_TOKEN: token
-        ,ADVOICE_E2E_LIGHTING: "1"
+        ADVOICE_E2E_TOKEN: token,
+        ADVOICE_E2E_LIGHTING: "1"
       }
     });
     const window = await app.firstWindow();
+    if (process.platform === "win32") {
+      const native = await app.evaluate(({ app }) => app.lightingProbe);
+      expect(["ready", "no_devices", "blocked"]).toContain(native.state);
+      expect(Number.isInteger(native.count)).toBe(true);
+    }
     await expect(window.locator("#status")).toHaveText(/playing|loaded/, { timeout: 15_000 });
     const observed = await Promise.race([
       requestSeen,
@@ -99,7 +104,12 @@ test("real Electron media element authenticates localhost playback and preserves
     expect(observed.token).toBe(token);
     expect(observed.range).toMatch(/^bytes=/);
     await expect.poll(() => window.evaluate(() => window.readLighting?.().level ?? 0), { timeout: 10000 }).toBeGreaterThan(0);
-    expect(await window.evaluate(() => { window.stopLighting(); return { paused: document.getElementById("a").paused, sample: window.readLighting() }; })).toEqual({ paused: false, sample: { active: false, level: 0 } });
+    expect(
+      await window.evaluate(() => {
+        window.stopLighting();
+        return { paused: document.getElementById("a").paused, sample: window.readLighting() };
+      })
+    ).toEqual({ paused: false, sample: { active: false, level: 0 } });
   } finally {
     if (app) await app.close();
     await new Promise((resolve) => server.close(resolve));

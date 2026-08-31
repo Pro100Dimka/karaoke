@@ -1,5 +1,6 @@
 /* Stryker disable all */
 export const ruMessages = {
+  "settings.appearance.keyboard_lighting_status.unsupported": "Клавиатура найдена, но OpenRGB не предоставляет режим Direct для синхронизации с музыкой. Встроенные эффекты подсветки не означают поддержку частого обновления цветов.",
   "settings.appearance.keyboard_lighting_enabled.label": "Подсветка клавиатуры",
   "settings.appearance.keyboard_lighting_enabled.tooltip": "Автоматически: Windows Dynamic Lighting или локальный OpenRGB с включённым SDK Server (порт 6742). Только совместимые клавиатуры. Windows может ограничивать управление, когда приложение не на переднем плане.",
   "settings.appearance.keyboard_lighting_mode.label": "Эффект подсветки",
