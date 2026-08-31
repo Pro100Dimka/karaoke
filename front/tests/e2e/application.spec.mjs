@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+test.skip(process.env.VITE_USE_MOCK_API === "false", "Mock-API browser scenarios");
+
 test.beforeEach(async ({ page }, testInfo) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));

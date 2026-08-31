@@ -7,19 +7,32 @@ if (process.platform === "win32") {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const programFiles = process.env["ProgramFiles(x86)"] || "C:/Program Files (x86)";
   const vswhere = path.join(programFiles, "Microsoft Visual Studio/Installer/vswhere.exe");
-  const vs = execFileSync(
-    vswhere,
-    [
-      "-latest",
-      "-products",
-      "*",
-      "-requires",
-      "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-      "-property",
-      "installationPath"
-    ],
-    { encoding: "utf8", windowsHide: true }
-  ).trim();
+  if (!existsSync(vswhere))
+    throw new Error(
+      "Keyboard lighting is a required build component. Install Visual Studio 2022 " +
+        "Build Tools with 'Desktop development with C++' and CMake."
+    );
+  let vs;
+  try {
+    vs = execFileSync(
+      vswhere,
+      [
+        "-latest",
+        "-products",
+        "*",
+        "-requires",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property",
+        "installationPath"
+      ],
+      { encoding: "utf8", windowsHide: true }
+    ).trim();
+  } catch (error) {
+    throw new Error(
+      "Could not locate Visual Studio C++ Build Tools required for keyboard lighting.",
+      { cause: error }
+    );
+  }
   const vcvars = path.join(vs, "VC/Auxiliary/Build/vcvars64.bat");
   const cmake = path.join(vs, "Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe");
   if (!vs || !existsSync(cmake))

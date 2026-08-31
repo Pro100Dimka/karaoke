@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 import config
 import models
 import schemas
+from AI.artifacts import recover_orphaned_backups
 from app.api.dependencies import SongDependency
 from app.api.errors import http_error
 from app.services import (
@@ -603,7 +604,9 @@ def get_result(song: SongDependency, response: Response):
     if not song_service.is_done(song) or not song.output_dir: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
     out_dir = song_service.resolve_output_dir(song)
-    lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
+    with song_service.song_content_lock(song.id):
+        recover_orphaned_backups(out_dir)
+        lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
     if not isinstance(lyrics_sync, dict): lyrics_sync = {}
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
