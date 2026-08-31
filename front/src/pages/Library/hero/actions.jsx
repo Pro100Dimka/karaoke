@@ -22,10 +22,10 @@ import {
 import { defaultLibraryFilters as defaults } from "../utils";
 
 const sorts = [
-  ["relevance", "По умолчанию"],
-  ["title", "Название"],
-  ["artist", "Исполнитель"],
-  ["recent", "Недавно добавленные"]
+  ["relevance", "library.sort.relevance"],
+  ["title", "library.sort.title"],
+  ["artist", "library.sort.artist"],
+  ["recent", "library.sort.recent"]
 ];
 
 const opts = (all, items = []) => [
@@ -66,24 +66,24 @@ export default function LibraryActions({
   const set = (key, value) => setDraft((x) => ({ ...x, [key]: value }));
 
   const fields = [
-    ["genre", "Жанр", Headphones, o.genres, "Все жанры"],
-    ["key", "Тональность", Music2, o.keys, "Все тональности"],
+    ["genre", "library.genre", Headphones, o.genres, "library.allGenres"],
+    ["key", "karaoke.key", Music2, o.keys, "library.allKeys"],
     [
       "status",
-      "Статус",
+      "settings.history.status",
       CircleCheck,
       [
-        ["done", "Готово"],
-        ["active", "Обрабатывается"],
-        ["error", "Ошибка"]
+        ["done", "status.done"],
+        ["active", "status.processing"],
+        ["error", "status.error"]
       ].map(([value, label]) => ({ value, label: tr(label) })),
-      "Все статусы"
+      "library.allStatuses"
     ]
   ];
 
   const buttons = [
-    [!roomActive, UsersRound, "Пить вместе", "outlined", onOpenRoom],
-    [can, Plus, "Добавить песню", undefined, onAdd, importing]
+    [!roomActive, UsersRound, "library.singAlong", "outlined", onOpenRoom],
+    [can, Plus, "library.addASong", undefined, onAdd, importing]
   ];
 
   return (
@@ -99,14 +99,15 @@ export default function LibraryActions({
         size="lg"
         value={query}
         onChange={setQuery}
-        placeholder={tr("Поиск песен, исполнителей, жанров…")}
+        placeholder={tr("library.searchSongsArtistsGenres")}
+        aria-label={tr("common.search")}
         startAdornment={<Search />}
         endAdornment={
           <IconButton
             ref={anchor}
             icon={SlidersHorizontal}
             size="sm"
-            label={tr("Фильтры и сортировка")}
+            label={tr("library.filtersAndSorting")}
             variant={open ? "contained" : "outline"}
             onClick={() => {
               !open && setDraft(filters);
@@ -136,7 +137,7 @@ export default function LibraryActions({
 
       <Popover open={open} anchorRef={anchor} placement="bottom-end" onClose={() => setOpen(false)}>
         <Stack gap="var(--space-4)">
-          <Typography tone="muted">{tr("Сортировка")}</Typography>
+          <Typography tone="muted">{tr("library.sorting")}</Typography>
 
           <Stack direction="row" gap="var(--space-2)" wrap>
             {sorts.map(([value, label]) => (
@@ -165,8 +166,8 @@ export default function LibraryActions({
 
           <Stack direction="row" gap="var(--space-2)">
             {[
-              ["Применить", undefined, () => (setFilters?.(draft), setOpen(false))],
-              ["Сбросить", "outlined", () => setDraft(defaults)]
+              ["library.apply", undefined, () => (setFilters?.(draft), setOpen(false))],
+              ["library.reset", "outlined", () => setDraft(defaults)]
             ].map(([label, variant, onClick]) => (
               <Button key={label} fullWidth variant={variant} onClick={onClick}>
                 {tr(label)}

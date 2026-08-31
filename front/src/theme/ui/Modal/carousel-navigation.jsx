@@ -1,3 +1,4 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import IconButton from "../IconButton";
 import Stack from "../Stack";
@@ -9,8 +10,8 @@ export default function ModalCarouselNavigation({
   count,
   title,
   subtitle,
-  previousLabel = "Назад",
-  nextLabel = "Вперёд",
+  previousLabel = tr("room.back"),
+  nextLabel = tr("common.next"),
   onPrevious,
   onNext
 }) {

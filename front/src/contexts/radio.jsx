@@ -275,8 +275,8 @@ export function RadioProvider({ children }) {
         setPlaying(false);
         setError(
           reason.message
-            ? translateSaved("Не удалось запустить радио: {0}", { 0: reason.message })
-            : translateSaved("Не удалось запустить радио")
+            ? translateSaved("radio.failedToStartRadio", { 0: reason.message })
+            : translateSaved("radio.failedToStartRadio2")
         );
         return false;
       } finally {
@@ -372,7 +372,7 @@ export function RadioProvider({ children }) {
     }
     setPlaying(false);
     setLoading(false);
-    setError(translateSaved("{0} временно недоступна", { 0: station.name }));
+    setError(translateSaved("radio.temporarilyUnavailable", { 0: station.name }));
     stopAnalysis();
   }, [isPlaying, station, stopAnalysis, turnOn]);
   const turnOnRef = useRef(turnOn);

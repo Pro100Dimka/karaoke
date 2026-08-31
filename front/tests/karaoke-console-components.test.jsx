@@ -315,14 +315,14 @@ test("center controls transport, tempo and bounded key changes", () => {
     />
   );
   fireEvent.click(result.getByLabelText("Назад на 5 секунд"));
-  fireEvent.click(result.getByLabelText("Вперед на 5 секунд"));
-  fireEvent.click(result.getByLabelText("Відтворити"));
-  fireEvent.click(result.getByLabelText("Зупинити"));
-  fireEvent.click(result.getByLabelText("Зменшити темп на 1 BPM"));
-  fireEvent.click(result.getByLabelText("Збільшити темп на 1 BPM"));
-  fireEvent.click(result.getByLabelText("Зменшити тональність"));
-  fireEvent.click(result.getByLabelText("Підвищити тональність"));
-  fireEvent.change(result.getByLabelText("Зсув слів у секундах"), {
+  fireEvent.click(result.getByLabelText("Вперёд на 5 секунд"));
+  fireEvent.click(result.getByLabelText("Воспроизвести"));
+  fireEvent.click(result.getByLabelText("Остановить"));
+  fireEvent.click(result.getByLabelText("Уменьшить темп на 1 BPM"));
+  fireEvent.click(result.getByLabelText("Увеличить темп на 1 BPM"));
+  fireEvent.click(result.getByLabelText("Понизить тональность"));
+  fireEvent.click(result.getByLabelText("Повысить тональность"));
+  fireEvent.change(result.getByLabelText("Сдвиг слов в секундах"), {
     target: { value: "-2.9" }
   });
   expect(handlers.onSkip.mock.calls).toEqual([[-5], [5]]);
@@ -347,7 +347,7 @@ test("center uses fallback note range and pause state", () => {
       onKeyShiftChange={vi.fn()}
     />
   );
-  fireEvent.click(result.getByLabelText("Зменшити тональність"));
+  fireEvent.click(result.getByLabelText("Понизить тональность"));
   verify([result.getByLabelText("Пауза"), "toBeTruthy"], [result.container.textContent, "toContain", "C2 – C5"]);
 });
 test("formats numeric MIDI range as musical note names", () => {

@@ -12,13 +12,13 @@ export default function ProcessingSignal({ progress = 0, compact = false, url, f
       className="ui-processing-signal"
       data-compact={compact || undefined}
       role="progressbar"
-      aria-label={tr("Обработка: {0}%", { 0: rounded })}
+      aria-label={tr("common.processing", { 0: rounded })}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={rounded}
     >
       <Waveform
-        label={tr("Обработка: {0}%", { 0: rounded })}
+        label={tr("common.processing", { 0: rounded })}
         progress={value / 100}
         url={url}
         fetchParams={fetchParams}

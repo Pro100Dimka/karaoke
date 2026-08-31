@@ -13,7 +13,6 @@ vi.mock("../src/theme/ui", () => ({
 vi.mock("../src/theme/ui/_internal/Field", () => ({
   default: ({ children, label }) => <section aria-label={label}>{children({ id: "range" })}</section>
 }));
-vi.mock("../src/i18n/runtime", () => ({ translateSaved: (value) => value }));
 let schema;
 beforeEach(async () => {
   vi.resetModules();

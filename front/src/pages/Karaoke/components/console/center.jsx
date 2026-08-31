@@ -81,47 +81,47 @@ export default function ConsoleCenter({
       <Stack direction="row" align="center" justify="center" gap="var(--space-2)">
         <IconButton
           icon={SkipBack}
-          label={t("Назад на 5 секунд")}
+          label={t("karaoke.back5Seconds")}
           variant="outline"
           onClick={() => onSkip(-5)}
         />
         <IconButton
           icon={isPlaying ? Pause : Play}
-          label={t(isPlaying ? "Пауза" : "Воспроизвести")}
+          label={t(isPlaying ? "audio.pause" : "karaoke.play")}
           iconSize={60}
           onClick={onTogglePlay}
         />
-        <IconButton icon={Square} label={t("Остановить")} variant="outline" onClick={onStop} />
+        <IconButton icon={Square} label={t("karaoke.stop")} variant="outline" onClick={onStop} />
         <IconButton
           icon={SkipForward}
-          label={t("Вперёд на 5 секунд")}
+          label={t("karaoke.forward5Seconds")}
           variant="outline"
           onClick={() => onSkip(5)}
         />
       </Stack>
       <Grid columns={4} gap="var(--space-2)">
         <Metric
-          label={t("Темп")}
+          label={t("karaoke.pace")}
           value={`${currentTempo} BPM`}
           tone="var(--color-primary)"
-          previousLabel={t("Уменьшить темп на 1 BPM")}
-          nextLabel={t("Увеличить темп на 1 BPM")}
+          previousLabel={t("karaoke.decreaseTempoBy1Bpm")}
+          nextLabel={t("karaoke.increaseTempoBy1Bpm")}
           onPrevious={() => onTempoChange(-1)}
           onNext={() => onTempoChange(1)}
         />
         <Metric
-          label={t("Тональность")}
+          label={t("karaoke.key")}
           value={compactKey}
           tone="var(--color-success)"
           previous={ChevronLeft}
           next={ChevronRight}
-          previousLabel={t("Понизить тональность")}
-          nextLabel={t("Повысить тональность")}
+          previousLabel={t("karaoke.lowerKey")}
+          nextLabel={t("karaoke.raiseTheKey")}
           onPrevious={() => onKeyShiftChange(clamp(keyShift - 1, -12, 12))}
           onNext={() => onKeyShiftChange(clamp(keyShift + 1, -12, 12))}
         />
         <Metric
-          label={t("Диапазон")}
+          label={t("karaoke.range")}
           value={`${noteRangeLabel(song.note_range_min, "C2", keyShift)} – ${noteRangeLabel(
             song.note_range_max,
             "C5",
@@ -132,10 +132,10 @@ export default function ConsoleCenter({
         <Card tilt={false} style={{ "--card-border": "var(--color-info)" }}>
           <Stack align="center" gap="var(--space-1)" sx={{ padding: "var(--space-2)" }}>
             <Typography variant="caption" style={{ color: "var(--color-info)" }}>
-              {t("Сдвиг слов")}
+              {t("karaoke.lyricsOffset")}
             </Typography>
             <NumberField
-              aria-label={t("Сдвиг слов в секундах")}
+              aria-label={t("karaoke.lyricsOffsetInSeconds")}
               min={-10}
               max={10}
               step={0.1}
@@ -147,7 +147,7 @@ export default function ConsoleCenter({
               }}
             />
             <Typography variant="caption" tone="muted">
-              {t("− раньше · + позже")}
+              {t("karaoke.earlierLater")}
             </Typography>
           </Stack>
         </Card>

@@ -10,7 +10,7 @@ const wait = (delayMs) =>
 const waitAbortable = (delayMs, signal) =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new Error(translateSaved("Передача файла отменена")));
+      reject(new Error(translateSaved("room.fileTransferCanceled")));
       return;
     }
     const timer = globalThis.setTimeout(done, delayMs);
@@ -21,7 +21,7 @@ const waitAbortable = (delayMs, signal) =>
     function aborted() {
       globalThis.clearTimeout(timer);
       signal?.removeEventListener?.("abort", aborted);
-      reject(new Error(translateSaved("Передача файла отменена")));
+      reject(new Error(translateSaved("room.fileTransferCanceled")));
     }
     signal?.addEventListener?.("abort", aborted, { once: true });
   });
@@ -59,7 +59,7 @@ export function cancelOutboundTransfers(
   mesh,
   participantId,
   channel,
-  error = new Error(translateSaved("Канал передачи песни закрыт"))
+  error = new Error(translateSaved("room.theSongTransmissionChannelIsClosed"))
 ) {
   const matches = (entry) =>
     (!participantId || entry.participantId === participantId) &&
@@ -123,7 +123,7 @@ function cancelIncomingByTransferId(mesh, participantId, channel, transferId) {
 export function cancelTransfersByCommandId(
   mesh,
   commandId,
-  error = new Error(translateSaved("Передача файла отменена"))
+  error = new Error(translateSaved("room.fileTransferCanceled"))
 ) {
   if (!commandId) return;
   for (const [transferId, active] of mesh.outboundTransfers) {
@@ -158,7 +158,7 @@ function rejectPendingTransfer(mesh, participantId, channel, message) {
   const error = new Error(
     typeof message.error === "string" && message.error
       ? message.error.slice(0, 500)
-      : translateSaved("Получатель не смог принять песню")
+      : translateSaved("room.receiverCouldNotReceiveTheSong")
   );
   const flow = mesh.pendingTransferCredits.get(message.transferId);
   if (flow?.participantId === participantId && flow.channel === channel) {
@@ -248,7 +248,7 @@ function handleFileStart(mesh, participantId, channel, message) {
     sendTransferStatus(channel, {
       type: "file-error",
       transferId: metadata.transferId,
-      error: translateSaved("Получатель уже принимает другой файл")
+      error: translateSaved("room.receiverIsAlreadyReceivingAnotherFile")
     });
     return;
   }
@@ -279,7 +279,7 @@ function handleFileStart(mesh, participantId, channel, message) {
       mesh.incomingFiles.has(participantId)
     ) {
       sink.cleanup();
-      throw new Error(translateSaved("Передача файла больше не может быть принята"));
+      throw new Error(translateSaved("room.fileTransferCanNoLongerBeAccepted"));
     }
     mesh.incomingFiles.set(participantId, {
       metadata,
@@ -310,7 +310,7 @@ function handleFileStart(mesh, participantId, channel, message) {
   };
   const createAndAcceptSink = () => {
     if (admission.cancelled)
-      throw new Error(translateSaved("Передача файла больше не может быть принята"));
+      throw new Error(translateSaved("room.fileTransferCanNoLongerBeAccepted"));
     const sink = createTransferSink(participantId, metadata);
     if (sink && typeof sink.then === "function") {
       Promise.resolve(sink).then(accept).catch(failAdmission);
@@ -320,7 +320,7 @@ function handleFileStart(mesh, participantId, channel, message) {
   };
   const admitAsync = async (accepted) => {
     try {
-      if ((await accepted) !== true) throw new Error(translateSaved("Получение файла отклонено"));
+      if ((await accepted) !== true) throw new Error(translateSaved("room.fileReceptionRejected"));
       createAndAcceptSink();
     } catch (error) {
       failAdmission(error);
@@ -333,11 +333,11 @@ function handleFileStart(mesh, participantId, channel, message) {
       if (mesh.incomingFileAdmissions.get(participantId) !== admission) return;
       admission.cancelled = true;
       mesh.incomingFileAdmissions.delete(participantId);
-      reject(new Error(translateSaved("Подготовка хранилища для песни превысила время ожидания")));
+      reject(new Error(translateSaved("room.songStoragePreparationTimedOut")));
     }, TRANSFER_ADMISSION_TIMEOUT_MS);
     if (accepted && typeof accepted.then === "function") admitAsync(accepted);
     else if (accepted === true) createAndAcceptSink();
-    else failAdmission(new Error(translateSaved("Получение файла отклонено")));
+    else failAdmission(new Error(translateSaved("room.fileReceptionRejected")));
   } catch (error) {
     failAdmission(error);
   }
@@ -394,7 +394,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
       sendTransferStatus(channel, {
         type: "file-error",
         transferId: message.transferId,
-        error: translateSaved("Получен неполный файл песни")
+        error: translateSaved("room.theSongFileWasIncomplete")
       });
     return;
   }
@@ -403,7 +403,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
     sendTransferStatus(channel, {
       type: "file-error",
       transferId: message.transferId,
-      error: translateSaved("Получен неизвестный идентификатор передачи")
+      error: translateSaved("room.unknownTransferIdentifierReceived")
     });
     return;
   }
@@ -413,7 +413,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
       participantId,
       channel,
       transfer,
-      translateSaved("Получен неполный файл песни")
+      translateSaved("room.theSongFileWasIncomplete")
     );
     return;
   }
@@ -425,7 +425,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
   });
   const cancelled = () => !incomingTransferActive(mesh, participantId, channel, transfer);
   const ensureActive = () => {
-    if (cancelled()) throw new Error(translateSaved("Передача файла отменена"));
+    if (cancelled()) throw new Error(translateSaved("room.fileTransferCanceled"));
   };
   const step = (promise, timeoutMs, timeoutMessage) => {
     let timer;
@@ -435,7 +435,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
     return Promise.race([
       Promise.resolve(promise),
       cancellation.then(() => {
-        throw new Error(translateSaved("Передача файла отменена"));
+        throw new Error(translateSaved("room.fileTransferCanceled"));
       }),
       timeout
     ])
@@ -449,7 +449,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
   step(
     transfer.writes,
     TRANSFER_FLUSH_TIMEOUT_MS,
-    translateSaved("Запись полученной песни на диск превысила время ожидания")
+    translateSaved("room.writingReceivedSongToDiskTimedOut")
   )
     .then(async () => {
       if (transfer.writeError) throw transfer.writeError;
@@ -457,7 +457,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
       const file = await step(
         transfer.sink.finish(),
         TRANSFER_CLOSE_TIMEOUT_MS,
-        translateSaved("Закрытие временного файла песни превысило время ожидания")
+        translateSaved("room.closingTemporarySongFileTimedOut")
       );
       transfer.phase = "importing";
       transfer.lastPercent = 100;
@@ -465,9 +465,9 @@ function handleFileEnd(mesh, participantId, channel, message) {
       const accepted = await step(
         mesh.onFile?.(participantId, file, transfer.metadata, transfer.controller?.signal),
         TRANSFER_IMPORT_TIMEOUT_MS,
-        translateSaved("Импорт песни превысил время ожидания")
+        translateSaved("room.songImportTimedOut")
       );
-      if (accepted !== true) throw new Error(translateSaved("Полученный файл не был принят"));
+      if (accepted !== true) throw new Error(translateSaved("room.receivedFileWasNotAccepted"));
     })
     .then(() => {
       if (!incomingTransferActive(mesh, participantId, channel, transfer)) return;
@@ -554,7 +554,7 @@ function handleBinaryChunk(mesh, participantId, channel, data) {
       participantId,
       channel,
       transfer,
-      translateSaved("Получен некорректный размер файла песни")
+      translateSaved("room.invalidSongFileSizeReceived")
     );
     return;
   }
@@ -652,7 +652,11 @@ export function setupDataChannel(mesh, participantId, channel) {
     clearChannel();
   };
   channel.onerror = (event) => {
-    console.error("WebRTC data channel error", { participantId, label: channel.label, error: event?.error });
+    console.error("WebRTC data channel error", {
+      participantId,
+      label: channel.label,
+      error: event?.error
+    });
     clearChannel();
   };
   mesh.channels.set(participantId, channel);
@@ -673,7 +677,7 @@ export function createIncomingTransferTimer(mesh, participantId, transferId) {
       sendTransferStatus(channel, {
         type: "file-error",
         transferId,
-        error: translateSaved("Передача песни остановилась")
+        error: translateSaved("room.songTransferStopped")
       });
     mesh.emitTransferProgress(participantId, TRANSFER_STAGES.ERROR, 0, transfer.metadata);
   }, TRANSFER_STALL_TIMEOUT_MS);
@@ -687,15 +691,15 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
     : 15_000;
   const startedAt = Date.now();
   while (Date.now() - startedAt < safeTimeout) {
-    if (signal?.aborted) throw new Error(translateSaved("Передача файла отменена"));
+    if (signal?.aborted) throw new Error(translateSaved("room.fileTransferCanceled"));
     if (resolvedLifecycleVersion !== mesh.lifecycleVersion) {
-      throw new Error(translateSaved("Передача файла отменена"));
+      throw new Error(translateSaved("room.fileTransferCanceled"));
     }
     const channel = mesh.channels.get(participantId);
     if (channel?.readyState === "open") return channel;
     if (CLOSED_CHANNEL_STATES.includes(channel?.readyState)) {
       if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
-      throw new Error(translateSaved("Канал передачи песни закрыт"));
+      throw new Error(translateSaved("room.theSongTransmissionChannelIsClosed"));
     }
     if (!mesh.channels.get(participantId) && mesh.peers.has(participantId)) {
       // Re-negotiate a fresh ordered channel after a transient close instead
@@ -707,8 +711,8 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
     // eslint-disable-next-line no-await-in-loop
     await waitAbortable(50, signal);
   }
-  if (signal?.aborted) throw new Error(translateSaved("Передача файла отменена"));
-  throw new Error(translateSaved("Канал передачи песни не готов"));
+  if (signal?.aborted) throw new Error(translateSaved("room.fileTransferCanceled"));
+  throw new Error(translateSaved("room.theSongTransmissionChannelIsNotReady"));
 }
 
 export async function sendFile(mesh, participantId, blob, metadata = {}, options = {}) {
@@ -720,10 +724,10 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     typeof BlobClass !== "function" ||
     !(blob instanceof BlobClass)
   ) {
-    throw new TypeError(translateSaved("Для передачи нужны участник и файл"));
+    throw new TypeError(translateSaved("room.toTransferYouNeedAParticipantAndAFile"));
   }
   if (blob.size > MAX_INCOMING_FILE_BYTES) {
-    throw new RangeError(translateSaved("Файл слишком большой для передачи через комнату"));
+    throw new RangeError(translateSaved("room.theFileIsTooLargeToTransmitAcrossThe"));
   }
   const { lifecycleVersion } = mesh;
   const transferId =
@@ -748,7 +752,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     cancelOutboundTransferById(
       mesh,
       transferId,
-      new Error(translateSaved("Передача файла отменена"))
+      new Error(translateSaved("room.fileTransferCanceled"))
     );
   };
   if (options.signal?.aborted) abort();
@@ -770,9 +774,10 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
   if (active.cancelled || options.signal?.aborted) {
     mesh.outboundTransfers.delete(transferId);
     options.signal?.removeEventListener?.("abort", abort);
-    throw new Error(translateSaved("Передача файла отменена"));
+    throw new Error(translateSaved("room.fileTransferCanceled"));
   }
-  if (channel.readyState !== "open") throw new Error(translateSaved("Канал передачи песни закрыт"));
+  if (channel.readyState !== "open")
+    throw new Error(translateSaved("room.theSongTransmissionChannelIsClosed"));
   const cancelled = () =>
     active.cancelled ||
     options.signal?.aborted ||
@@ -782,7 +787,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       mesh.pendingTransferAdmissions.delete(transferId);
       if (channel.readyState === "open")
         sendTransferStatus(channel, { type: "file-cancel", transferId });
-      reject(new Error(translateSaved("Получатель не подтвердил готовность принять песню")));
+      reject(new Error(translateSaved("room.receiverDidNotConfirmReadinessToReceiveTheSong")));
     }, TRANSFER_ADMISSION_TIMEOUT_MS);
     mesh.pendingTransferAdmissions.set(transferId, {
       participantId,
@@ -827,7 +832,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       sendTransferStatus(channel, { type: "file-cancel", transferId });
     mesh.outboundTransfers.delete(transferId);
     options.signal?.removeEventListener?.("abort", abort);
-    throw new Error(translateSaved("Передача файла отменена"));
+    throw new Error(translateSaved("room.fileTransferCanceled"));
   }
   let ready;
   try {
@@ -848,7 +853,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     waiters: []
   });
   try {
-    if (cancelled()) throw new Error(translateSaved("Передача файла отменена"));
+    if (cancelled()) throw new Error(translateSaved("room.fileTransferCanceled"));
     mesh.emitTransferProgress(participantId, TRANSFER_STAGES.SENDING, 0, metadata);
     const chunkSize = 32 * 1024;
     let lastProgressAt = Date.now();
@@ -856,26 +861,26 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     for (let offset = 0; offset < blob.size; offset += chunkSize) {
       while (channel.bufferedAmount > 512 * 1024) {
         if (cancelled()) {
-          throw new Error(translateSaved("Передача файла отменена"));
+          throw new Error(translateSaved("room.fileTransferCanceled"));
         }
         if (Date.now() - lastProgressAt > TRANSFER_STALL_TIMEOUT_MS) {
-          throw new Error(translateSaved("Передача песни остановилась: нет ответа от участника"));
+          throw new Error(translateSaved("room.songTransferStoppedTheParticipantIsNotResponding"));
         }
         // Backpressure must be checked before each ordered chunk.
         // eslint-disable-next-line no-await-in-loop
         await wait(20);
       }
       if (cancelled()) {
-        throw new Error(translateSaved("Передача файла отменена"));
+        throw new Error(translateSaved("room.fileTransferCanceled"));
       }
       // Preserve chunk order on the RTC data channel.
       // eslint-disable-next-line no-await-in-loop
       const chunk = await blob.slice(offset, offset + chunkSize).arrayBuffer();
       if (cancelled()) {
-        throw new Error(translateSaved("Передача файла отменена"));
+        throw new Error(translateSaved("room.fileTransferCanceled"));
       }
       const flow = mesh.pendingTransferCredits.get(transferId);
-      if (!flow) throw new Error(translateSaved("Передача файла отменена"));
+      if (!flow) throw new Error(translateSaved("room.fileTransferCanceled"));
       if (flow.available >= chunk.byteLength) flow.available -= chunk.byteLength;
       else {
         // eslint-disable-next-line no-await-in-loop
@@ -884,12 +889,12 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
           waiter.timer = globalThis.setTimeout(() => {
             const index = flow.waiters.indexOf(waiter);
             if (index >= 0) flow.waiters.splice(index, 1);
-            reject(new Error(translateSaved("Получатель слишком медленно сохраняет песню")));
+            reject(new Error(translateSaved("room.receiverIsSavingTheSongTooSlowly")));
           }, TRANSFER_STALL_TIMEOUT_MS);
           flow.waiters.push(waiter);
         });
       }
-      if (cancelled()) throw new Error(translateSaved("Передача файла отменена"));
+      if (cancelled()) throw new Error(translateSaved("room.fileTransferCanceled"));
       channel.send(chunk);
       lastProgressAt = Date.now();
       const percent = Math.min(
@@ -902,12 +907,12 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       }
     }
     if (cancelled()) {
-      throw new Error(translateSaved("Передача файла отменена"));
+      throw new Error(translateSaved("room.fileTransferCanceled"));
     }
     await new Promise((resolve, reject) => {
       const timer = globalThis.setTimeout(() => {
         mesh.pendingTransferConfirmations.delete(transferId);
-        reject(new Error(translateSaved("Участник не подтвердил получение песни")));
+        reject(new Error(translateSaved("room.theParticipantDidNotConfirmReceivingTheSong")));
       }, TRANSFER_CONFIRM_TIMEOUT_MS);
       mesh.pendingTransferConfirmations.set(transferId, {
         participantId,
@@ -928,7 +933,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
   } finally {
     const flow = mesh.pendingTransferCredits.get(transferId);
     if (flow) {
-      const error = new Error(translateSaved("Передача файла завершена"));
+      const error = new Error(translateSaved("room.fileTransferCompleted"));
       flow.waiters.forEach((waiter) => {
         globalThis.clearTimeout(waiter.timer);
         waiter.reject(error);

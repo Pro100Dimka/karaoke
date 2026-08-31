@@ -390,7 +390,7 @@ describe("API domains", () => {
       await songsApi.getSong(" a/b "),
       {
         id: "a/b",
-        title: "Без назви",
+        title: "Без названия",
         status: "pending",
         progress_percent: 0,
         progress_step: "",

@@ -31,7 +31,7 @@ export function normalizeSong(song) {
   return {
     ...source,
     id: normalizeString(source.id),
-    title: normalizeString(source.title, translateSaved("Без названия")),
+    title: normalizeString(source.title, translateSaved("api.untitled")),
     status: SONG_STATUSES.includes(rawStatus) ? rawStatus : "pending",
     progress_percent: clampNumber(source.progress_percent, 0, 100, 0),
     progress_step: normalizeString(source.progress_step),

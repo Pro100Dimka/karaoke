@@ -17,10 +17,13 @@ function mapDeviceOptions(devices, getValue, fallbackLabel) {
       return true;
     });
 }
-export function createIndexedDeviceOptions(devices, defaultLabel = translateSaved("По умолчанию")) {
+export function createIndexedDeviceOptions(
+  devices,
+  defaultLabel = translateSaved("library.sort.relevance")
+) {
   return [
     { value: "", label: defaultLabel },
-    ...mapDeviceOptions(devices, (device) => device.index, translateSaved("Устройство"))
+    ...mapDeviceOptions(devices, (device) => device.index, translateSaved("karaoke.device"))
   ];
 }
 
@@ -43,7 +46,7 @@ function hostPriority(device) {
 export function createInputDeviceOptions(
   devices,
   selectedDeviceId,
-  defaultLabel = translateSaved("По умолчанию")
+  defaultLabel = translateSaved("library.sort.relevance")
 ) {
   const selected = Number(selectedDeviceId);
   const hasSelected =
@@ -71,7 +74,7 @@ export function createInputDeviceOptions(
       isSelected ||
       (!currentSelected && hostPriority(device) < hostPriority(current))
     ) {
-      choices.set(key, { ...device, index, name: label || translateSaved("Устройство") });
+      choices.set(key, { ...device, index, name: label || translateSaved("karaoke.device") });
     }
   });
 
@@ -82,7 +85,7 @@ export function createOutputDeviceOptions(
   devices,
   selectedDeviceId,
   driver = "auto",
-  defaultLabel = translateSaved("Системное устройство")
+  defaultLabel = translateSaved("karaoke.systemDevice")
 ) {
   const selected = Number(selectedDeviceId);
   const hasSelected =
@@ -140,7 +143,7 @@ export function createOutputDeviceOptions(
     ) {
       choices.set(key, {
         ...device,
-        name: device.name || translateSaved("Устройство")
+        name: device.name || translateSaved("karaoke.device")
       });
     }
   });
@@ -150,7 +153,7 @@ export function createOutputDeviceOptions(
 export function createBrowserDeviceOptions(
   devices,
   fallbackLabel,
-  defaultLabel = translateSaved("Системное по умолчанию")
+  defaultLabel = translateSaved("karaoke.systemDefault")
 ) {
   return [
     { value: "default", label: defaultLabel },

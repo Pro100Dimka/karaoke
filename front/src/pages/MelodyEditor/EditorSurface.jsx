@@ -214,7 +214,7 @@ function EditorSurface({ controller, transport }) {
             />
           </Box>
           <Box
-            aria-label={t("Слова песни")}
+            aria-label={t("editor.songLyrics")}
             sx={{
               position: "sticky",
               inset: "0 0 auto",
@@ -326,7 +326,7 @@ function EditorSurface({ controller, transport }) {
             ref={controller.playheadRef}
             data-role="editor-playhead"
             role="slider"
-            aria-label={t("Позиция воспроизведения")}
+            aria-label={t("editor.playbackPosition")}
             aria-valuemin={0}
             aria-valuemax={controller.duration}
             aria-valuenow={transport.timeRef.current}

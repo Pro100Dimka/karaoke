@@ -57,8 +57,8 @@ export function SelectedFilePreview({ file }) {
   }, [file]);
   const Icon = playing ? Pause : Play;
   const label = playing
-    ? tr("Приостановить выбранный аудиофайл")
-    : tr("Прослушать выбранный аудиофайл");
+    ? tr("library.pauseSelectedAudioFile")
+    : tr("library.previewSelectedAudioFile");
   return (
     <>
       <IconButton
@@ -88,19 +88,17 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
     <Modal
       isOpen={Boolean(item)}
       onClose={onCancel}
-      ariaLabel={tr("Подтверждение добавления песни")}
+      ariaLabel={tr("library.confirmAddingSong")}
       titleProps={{
         icon: Music2,
         image: item?.coverUrl || undefined,
-        eyebrow: item
-          ? tr("Песня {0} из {1}", { 0: review.index + 1, 1: review.items.length })
-          : "",
-        title: tr("Проверьте данные песни"),
-        description: tr("Обработка начнётся только после подтверждения всех файлов"),
+        eyebrow: item ? tr("library.songOf", { 0: review.index + 1, 1: review.items.length }) : "",
+        title: tr("library.checkSongDetails"),
+        description: tr("library.processingStartsOnlyAfterAllFilesAreConfirmed"),
         actions: item ? (
           <>
             <Button variant="outlined" type="button" onClick={onCancel}>
-              {tr("Пропустить")}
+              {tr("library.skip")}
             </Button>
             <Button
               variant="contained"
@@ -108,7 +106,7 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
               disabled={!item.title.trim()}
               onClick={onConfirm}
             >
-              {tr("Подтвердить")}
+              {tr("common.confirm")}
             </Button>
           </>
         ) : undefined
@@ -125,7 +123,7 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
         >
           <Stack direction="row" align="center" gap="var(--space-5)">
             <TextField
-              label={tr("Исполнитель")}
+              label={tr("library.sort.artist")}
               value={item.artist}
               size="lg"
               required
@@ -133,7 +131,7 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
               onChange={(artist) => onUpdate({ artist })}
             />
             <TextField
-              label={tr("Название песни")}
+              label={tr("library.songTitle")}
               required
               fullWidth
               size="lg"
@@ -141,7 +139,7 @@ export function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
               onChange={(title) => onUpdate({ title })}
             />
             <Select
-              label={tr("Режим обработки")}
+              label={tr("library.processingMode")}
               size="lg"
               value={item.processingMode}
               options={getProcessingModeOptions()}
@@ -161,27 +159,26 @@ export function getProcessingFailureInfo(message) {
   const normalized = raw.toLowerCase();
   const hint =
     normalized.includes("ctc") || normalized.includes("model unavailable")
-      ? tr("Модель синхронизации недоступна. Проверьте установку AI-моделей и повторите обработку.")
+      ? tr("library.alignmentModelUnavailableCheckTheAiModelInstallationAnd")
       : normalized.includes("timestamp") || normalized.includes("interval")
-        ? tr(
-            "Не удалось построить корректные интервалы слов по вокалу. Проверьте текст и повторите обработку."
-          )
-        : tr("Повторите обработку. Если ошибка повторится, откройте журнал выполнения ниже.");
+        ? tr("library.couldNotAlignWordIntervalsToVocalsCheckThe")
+        : tr("library.retryProcessingIfTheErrorPersistsOpenTheExecution");
   return {
     type: separator > 0 ? raw.slice(0, separator).trim() : "ProcessingError",
     reason:
-      (separator > 0 ? raw.slice(separator + 1).trim() : raw) || tr("Причина не передана backend"),
+      (separator > 0 ? raw.slice(separator + 1).trim() : raw) ||
+      tr("library.backendDidNotProvideAReason"),
     hint
   };
 }
 
 const statusLabels = {
-  done: () => tr("Готово"),
-  error: () => tr("Ошибка"),
-  cancelled: () => tr("Отменено"),
-  processing: () => tr("Обрабатывается"),
-  queued: () => tr("В очереди"),
-  cancelling: () => tr("Отменяется")
+  done: () => tr("status.done"),
+  error: () => tr("status.error"),
+  cancelled: () => tr("status.cancelled"),
+  processing: () => tr("status.processing"),
+  queued: () => tr("status.queued"),
+  cancelling: () => tr("library.cancelling")
 };
 
 export function ProcessingModal({
@@ -217,12 +214,12 @@ export function ProcessingModal({
   const actions = [
     active && (
       <Button key="cancel" variant="contained" startIcon={<OctagonX />} onClick={onCancel}>
-        {tr("Отменить")}
+        {tr("library.cancel")}
       </Button>
     ),
     state === "done" && (
       <Button key="library" variant="outlined" startIcon={<Library />} onClick={onClose}>
-        {tr("В библиотеку")}
+        {tr("library.toTheLibrary")}
       </Button>
     ),
     state === "done" && (
@@ -232,7 +229,7 @@ export function ProcessingModal({
         startIcon={<Play />}
         onClick={() => onOpenKaraoke(song.id)}
       >
-        {tr("Открыть")}
+        {tr("library.open")}
       </Button>
     )
   ].filter(Boolean);
@@ -240,14 +237,14 @@ export function ProcessingModal({
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={tr("Обработка песни {0}", { 0: song.title })}
+      ariaLabel={tr("library.songProcessing", { 0: song.title })}
       titleProps={{
         icon: CircleDot,
         image: hasCover ? coverUrl : undefined,
         onImageError: handleCoverError,
-        eyebrow: tr("ОБРАБОТКА ПЕСНИ"),
+        eyebrow: tr("library.songProcessing2"),
         title: song.title,
-        description: tr("Следите за этапами подготовки и управляйте обработкой песни."),
+        description: tr("library.followThePreparationStagesAndManageTheSongProcessing"),
         actions
       }}
     >
@@ -255,7 +252,7 @@ export function ProcessingModal({
         {queue.length > 1 && (
           <Stack direction="row" align="center" justify="space-between" gap={1}>
             <IconButton
-              label={tr("Предыдущая песня")}
+              label={tr("library.previousSong")}
               variant="outline"
               disabled={index <= 0}
               onClick={() => onSelectSong(queue[index - 1])}
@@ -264,14 +261,14 @@ export function ProcessingModal({
             </IconButton>
             <Stack align="center" gap={0.1}>
               <Typography sx={{ fontWeight: 750 }}>
-                {tr("Песня {0} из {1}", { 0: index + 1, 1: queue.length })}
+                {tr("library.songOf", { 0: index + 1, 1: queue.length })}
               </Typography>
               <Typography variant="caption" tone="muted">
-                {song.artist || tr("Исполнитель не указан")}
+                {song.artist || tr("library.artistNotSpecified")}
               </Typography>
             </Stack>
             <IconButton
-              label={tr("Следующая песня")}
+              label={tr("library.nextSong")}
               variant="outline"
               disabled={index >= queue.length - 1}
               onClick={() => onSelectSong(queue[index + 1])}
@@ -284,7 +281,7 @@ export function ProcessingModal({
           tone={failed ? "danger" : state === "done" ? "success" : "default"}
           sx={{ alignSelf: "flex-start" }}
         >
-          {statusLabels[state]?.() || state || tr("Ожидание")}
+          {statusLabels[state]?.() || state || tr("status.pending")}
         </Chip>
         {!failed && !cancelled && (
           <ProcessingSignal
@@ -301,27 +298,27 @@ export function ProcessingModal({
             <Stack gap={0.75}>
               <Stack direction="row" align="center" gap={0.5}>
                 <CircleAlert size={20} />
-                <Typography sx={{ fontWeight: 800 }}>{tr("Обработка остановлена")}</Typography>
+                <Typography sx={{ fontWeight: 800 }}>{tr("library.processingStopped")}</Typography>
               </Stack>
               <Typography tone="danger">{failure.reason}</Typography>
               <GridInfo
                 items={[
-                  [tr("Тип ошибки"), failure.type],
+                  [tr("library.errorType"), failure.type],
                   [
-                    tr("Этап"),
+                    tr("library.stage"),
                     current?.progress_detail ??
                       current?.progress_step ??
                       song.progress_step ??
-                      tr("Не указан")
+                      tr("library.notSpecified")
                   ],
-                  [tr("Выполнено"), `${Math.round(progress)}%`]
+                  [tr("library.completed"), `${Math.round(progress)}%`]
                 ]}
               />
               <Typography variant="body2" tone="muted">
                 {failure.hint}
               </Typography>
               <Button variant="outlined" onClick={() => platform.openApplicationLog()}>
-                {tr("Открыть журнал выполнения")}
+                {tr("library.openExecutionLog")}
               </Button>
             </Stack>
           </Card>
@@ -330,26 +327,26 @@ export function ProcessingModal({
             <Stack direction="row" justify="space-between" gap={1}>
               <Typography>
                 {state === "done"
-                  ? tr("Песня готова к караоке")
+                  ? tr("library.theSongIsReadyForKaraoke")
                   : cancelled
-                    ? tr("Обработка отменена")
+                    ? tr("library.processingCancelled")
                     : (current?.progress_detail ??
                       current?.progress_step ??
-                      tr("Подготавливаем обработку песни"))}
+                      tr("library.preparingTheSongProcessing"))}
               </Typography>
               {active && (
                 <Typography sx={{ fontWeight: 800 }}>
                   {current?.eta_seconds == null
-                    ? tr("Уточняем время…")
-                    : `${tr("Осталось:")} ${formatEta(current.eta_seconds)}`}
+                    ? tr("library.estimatingTime")
+                    : `${tr("library.left")} ${formatEta(current.eta_seconds)}`}
                 </Typography>
               )}
             </Stack>
             {active && current?.stage_elapsed_seconds != null && (
               <Typography variant="caption" tone="muted">
-                {tr("Текущий этап:")} {formatEta(current.stage_elapsed_seconds)} · {tr("Всего:")}{" "}
-                {formatEta(current.total_elapsed_seconds)} · {tr("Ориентировочно до:")}{" "}
-                {formatFinishTime(current.estimated_finish_at)}
+                {tr("library.currentStage")} {formatEta(current.stage_elapsed_seconds)} ·{" "}
+                {tr("library.total")} {formatEta(current.total_elapsed_seconds)} ·{" "}
+                {tr("library.estimatedCompletion")} {formatFinishTime(current.estimated_finish_at)}
               </Typography>
             )}
           </Stack>
@@ -378,12 +375,12 @@ export function RecordingsModal({ song, recordings = [], error, onAnalyze, onClo
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={tr("Исполнения песни {0}", { 0: song.title })}
+      ariaLabel={tr("library.songPerformances", { 0: song.title })}
       titleProps={{
         icon: Music2,
-        eyebrow: tr("ИСПОЛНЕНИЯ ПЕСНИ"),
+        eyebrow: tr("library.songPerformances2"),
         title: song.title,
-        description: tr("Прослушивайте исполнения, запускайте анализ и управляйте записями.")
+        description: tr("library.listenToPerformancesRunAnalyzesAndManageRecordings")
       }}
     >
       <Stack gap={0.75} sx={{ padding: "var(--space-5)" }}>
@@ -406,14 +403,14 @@ export function RecordingsModal({ song, recordings = [], error, onAnalyze, onClo
                 />
               </Box>
               <IconButton
-                label={tr("Анализировать запись")}
+                label={tr("library.analyzeRecord")}
                 variant="outline"
                 onClick={() => onAnalyze(recording)}
               >
                 <BarChart3 />
               </IconButton>
               <IconButton
-                label={tr("Удалить запись")}
+                label={tr("karaoke.deleteEntry")}
                 variant="danger"
                 onClick={() => onDelete(recording)}
               >
@@ -424,7 +421,7 @@ export function RecordingsModal({ song, recordings = [], error, onAnalyze, onClo
         ))}
         {!recordings.length && !error && (
           <Typography tone="muted" sx={{ textAlign: "center", padding: "var(--space-8)" }}>
-            {tr("Для этой песни пока нет записанных исполнений.")}
+            {tr("library.thereAreNoRecordedPerformancesForThisSongYet")}
           </Typography>
         )}
         {error && (

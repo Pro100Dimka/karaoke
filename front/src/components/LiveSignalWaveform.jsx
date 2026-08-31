@@ -31,7 +31,7 @@ export default function LiveSignalWaveform({
   level,
   max = 100,
   compact = false,
-  ariaLabel = tr("Уровень микрофона"),
+  ariaLabel = tr("settings.audio.microphoneLevel"),
   title
 }) {
   const gradientId = `live-wave-${useId().replace(/:/g, "")}`;

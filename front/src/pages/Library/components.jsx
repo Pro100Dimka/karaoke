@@ -93,22 +93,33 @@ export function getSongActions({
   return [
     ...(isReady
       ? [
-          [Play, tr("Воспроизвести"), "contained", activate],
-          [Headphones, tr("Прослушать записи"), "contained", () => onOpenRecordings(song)]
+          [Play, tr("karaoke.play"), "contained", activate],
+          [Headphones, tr("library.listenToRecordings"), "contained", () => onOpenRecordings(song)]
         ]
       : (canManageLibrary && [
-          [AudioWaveform, tr("Обработать песню"), "contained", () => onProcess(song), isWorking]
+          [
+            AudioWaveform,
+            tr("library.processTheSong"),
+            "contained",
+            () => onProcess(song),
+            isWorking
+          ]
         ]) ||
         []),
     canManageLibrary && [
       Settings2,
-      tr("Настройки песни"),
+      tr("library.songSettings"),
       "contained",
       () => onOpenSettings(song.id)
     ],
-    canManageLibrary && [FolderOpen, tr("Открыть папку"), "contained", () => onOpenFolder(song)],
+    canManageLibrary && [
+      FolderOpen,
+      tr("library.openFolder"),
+      "contained",
+      () => onOpenFolder(song)
+    ],
     canManageLibrary &&
-      isReady && [RotateCcw, tr("Переобработать мелодию"), "contained", () => onReprocess(song)],
-    canManageLibrary && [Trash2, tr("Удалить песню"), "danger", () => onDelete(song)]
+      isReady && [RotateCcw, tr("library.reprocessMelody"), "contained", () => onReprocess(song)],
+    canManageLibrary && [Trash2, tr("library.deleteSong"), "danger", () => onDelete(song)]
   ].filter(Boolean);
 }

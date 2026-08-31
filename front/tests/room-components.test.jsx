@@ -104,7 +104,7 @@ describe("online room participants", () => {
     expect(interval).toHaveBeenCalledWith(expect.any(Function), 28);
     fireEvent.click(screen.getByLabelText("room.microphone.disable"));
     fireEvent.click(screen.getByLabelText("room.sound.disable"));
-    fireEvent.click(screen.getByLabelText("Запретить управление эффектами"));
+    fireEvent.click(screen.getByLabelText("room.effects.deny"));
     fireEvent.click(screen.getByLabelText("room.leave"));
     calledWith([props.onSetMicrophoneMuted, [true]], [props.onSetRoomSoundMuted, [true]]);
     expect(props.onLeave).toHaveBeenCalledOnce();
@@ -135,10 +135,10 @@ describe("online room participants", () => {
     fireEvent.click(screen.getByLabelText(/room.person.effects.disable/));
     fireEvent.mouseEnter(screen.getByLabelText(/room.person.effects.disable/).parentElement);
     expect(document.querySelectorAll(".karaoke-effect-dial")).toHaveLength(6);
-    const reverb = screen.getByRole("slider", { name: "Реверб" });
+    const reverb = screen.getByRole("slider", { name: "karaoke.reverb" });
     fireEvent.change(reverb, { target: { value: "0.7" } });
     fireEvent.pointerUp(reverb);
-    const octave = screen.getByRole("slider", { name: "Октава голоса" });
+    const octave = screen.getByRole("slider", { name: "karaoke.voiceOctave" });
     fireEvent.change(octave, { target: { value: "0.5" } });
     fireEvent.pointerUp(octave);
     fireEvent.click(screen.getByLabelText(/room.person.enable/));

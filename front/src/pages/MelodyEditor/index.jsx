@@ -40,7 +40,7 @@ export default function MelodyEditor() {
   if (!editor.song)
     return (
       <Stack align="center" justify="center" sx={{ position: "absolute", inset: 0 }}>
-        <Typography tone="muted">{t("Открываем редактор…")}</Typography>
+        <Typography tone="muted">{t("editor.openingTheEditor")}</Typography>
         <Progress />
       </Stack>
     );
@@ -53,7 +53,7 @@ export default function MelodyEditor() {
   return (
     <Stack
       as="main"
-      aria-label={t("Редактор мелодии {0}", { 0: editor.song.title || "" })}
+      aria-label={t("editor.melodyEditor", { 0: editor.song.title || "" })}
       gap={0}
       sx={{
         position: "absolute",
@@ -89,14 +89,14 @@ export default function MelodyEditor() {
       />
       {editor.loading ? (
         <Stack align="center" justify="center" sx={{ flex: 1 }}>
-          <Typography tone="muted">{t("Загружаем lyricsSync.json…")}</Typography>
+          <Typography tone="muted">{t("editor.loadingLyricssyncJson")}</Typography>
           <Progress />
         </Stack>
       ) : editor.payload ? (
         <EditorSurface controller={controller} transport={transport} />
       ) : (
         <Stack align="center" justify="center" sx={{ flex: 1 }}>
-          <Typography tone="muted">{t("Не удалось загрузить данные редактора")}</Typography>
+          <Typography tone="muted">{t("editor.couldNotLoadEditorData")}</Typography>
         </Stack>
       )}
     </Stack>

@@ -25,22 +25,19 @@ export default function useKarDatasetImport({ notify }) {
             .join("\n");
           const detailBlocks = [skippedDetails, details].filter(Boolean);
           return notify(
-            tr(
-              "Подготовка .kar/.mid/.kfn завершена. Готово: {0}, требует проверки: {1}, пропущено: {2}, ошибок: {3}. Папка: {4}{5}",
-              {
-                0: ready,
-                1: review,
-                2: skipped.length,
-                3: failed.length,
-                4: result.output_root,
-                5: detailBlocks.length ? `\n\n${detailBlocks.join("\n\n")}` : ""
-              }
-            )
+            tr("library.karMidKfnPreparationCompletedReadyNeedsReviewSkipped", {
+              0: ready,
+              1: review,
+              2: skipped.length,
+              3: failed.length,
+              4: result.output_root,
+              5: detailBlocks.length ? `\n\n${detailBlocks.join("\n\n")}` : ""
+            })
           );
         },
         (error) =>
           notify(
-            tr("Не удалось подготовить данные из .kar/.mid/.kfn: {0}", {
+            tr("library.couldNotPrepareDataFromKarMidKfn", {
               0: getErrorMessage(error)
             })
           )

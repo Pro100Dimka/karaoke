@@ -12,7 +12,7 @@ export default function WaveformTimeline({ songId, value, duration, onChange }) 
   );
   return (
     <Waveform
-      label={t("Позиция песни")}
+      label={t("karaoke.songPosition")}
       value={value}
       duration={duration}
       onChange={onChange}

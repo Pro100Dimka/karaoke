@@ -1,16 +1,11 @@
+import { translateSaved as tr } from "../../../../i18n/runtime";
 import { Info } from "lucide-react";
 import IconButton from "../../IconButton";
 import Tooltip from "../../Tooltip";
 import cx from "../cx";
 import "./field-label.css";
 
-export default function FieldLabel({
-  htmlFor,
-  label,
-  tooltip,
-  required = false,
-  className
-}) {
+export default function FieldLabel({ htmlFor, label, tooltip, required = false, className }) {
   if (!label) return null;
 
   return (
@@ -19,7 +14,8 @@ export default function FieldLabel({
         {label}
         {required && (
           <span className="ui-field-required" aria-hidden="true">
-            {" "}*
+            {" "}
+            *
           </span>
         )}
       </label>
@@ -30,7 +26,7 @@ export default function FieldLabel({
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Подробнее"
+            aria-label={tr("common.field.more")}
             onMouseDown={(event) => event.preventDefault()}
           >
             <Info size={14} />

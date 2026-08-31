@@ -41,7 +41,7 @@ export const wait = (delayMs) =>
   });
 export const waitAbortable = (delayMs, signal) =>
   new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new Error(translateSaved("Передача файла отменена")));
+    if (signal?.aborted) return reject(new Error(translateSaved("room.fileTransferCanceled")));
     const done = () => {
       signal?.removeEventListener?.("abort", aborted);
       resolve();
@@ -49,7 +49,7 @@ export const waitAbortable = (delayMs, signal) =>
     const aborted = () => {
       globalThis.clearTimeout(timer);
       signal?.removeEventListener?.("abort", aborted);
-      reject(new Error(translateSaved("Передача файла отменена")));
+      reject(new Error(translateSaved("room.fileTransferCanceled")));
     };
     const timer = globalThis.setTimeout(done, delayMs);
     signal?.addEventListener?.("abort", aborted, { once: true });

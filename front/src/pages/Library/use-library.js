@@ -212,7 +212,7 @@ export default function useLibrary() {
       settings = await app.reloadSettings();
     } catch (error) {
       await dialog.alert(
-        tr("Не удалось проверить настройки онлайн-режима: {0}", {
+        tr("library.failedToCheckOnlineModeSettings", {
           0: getErrorMessage(error)
         })
       );
@@ -243,10 +243,8 @@ export default function useLibrary() {
           if (match?.song_id) {
             localSongId = match.song_id;
           } else {
-            if (
-              !(await room.requestSongSync(song.id, song.__roomOwnerId, { roomWide: true }))
-            )
-              throw new Error(tr("Не удалось получить песню от участника"));
+            if (!(await room.requestSongSync(song.id, song.__roomOwnerId, { roomWide: true })))
+              throw new Error(tr("library.couldNotReceiveSongFromParticipant"));
             await songsQuery.refresh();
             if (!room.room.host) {
               transition.current = false;
@@ -266,7 +264,7 @@ export default function useLibrary() {
         transition.current = false;
         setTransitioning(false);
         setGlobalRouteBlackout(false);
-        await dialog.alert(tr("Не удалось открыть песню: {0}", { 0: getErrorMessage(error) }));
+        await dialog.alert(tr("library.failedToOpenSong", { 0: getErrorMessage(error) }));
       }
     },
     [dialog.alert, localSongs, navigate, room, songsQuery.refresh]
@@ -283,38 +281,38 @@ export default function useLibrary() {
     )
       return;
     handledKaraokeRequest.current = command.__eventId;
-    const song =
-      visibleSongs.find(
-        (candidate) =>
-          candidate?.id === command.songId ||
-          (command.revision && candidate?.__roomRevision === command.revision)
-      ) || {
-        id: command.songId,
-        __roomOwnerId: command.ownerId,
-        __roomRevision: command.revision
-      };
+    const song = visibleSongs.find(
+      (candidate) =>
+        candidate?.id === command.songId ||
+        (command.revision && candidate?.__roomRevision === command.revision)
+    ) || {
+      id: command.songId,
+      __roomOwnerId: command.ownerId,
+      __roomRevision: command.revision
+    };
     openKaraoke(song);
   }, [openKaraoke, room?.room?.host, room?.roomCommand, visibleSongs]);
 
   const deleteRecording = useCallback(
     async (recording) => {
-      if (!(await dialog.confirm(tr("Удалить это записанное исполнение?")))) return;
+      if (!(await dialog.confirm(tr("karaoke.shouldIDeleteThisRecordedPerformance")))) return;
       try {
         await api.deleteRecording(recording.id);
         recordingsQuery.refresh();
       } catch (error) {
-        await dialog.alert(tr("Не удалось удалить запись: {0}", { 0: getErrorMessage(error) }));
+        await dialog.alert(tr("karaoke.failedToDeleteEntry", { 0: getErrorMessage(error) }));
       }
     },
     [dialog, recordingsQuery]
   );
   const cancelProcessing = useCallback(async () => {
-    if (!processingSong || !(await dialog.confirm(tr("Отменить обработку этой песни?")))) return;
+    if (!processingSong || !(await dialog.confirm(tr("library.cancelProcessingOfThisSong"))))
+      return;
     try {
       await api.cancelProcessing(processingSong.id);
       songsQuery.refresh();
     } catch (error) {
-      await dialog.alert(tr("Не удалось отменить обработку: {0}", { 0: getErrorMessage(error) }));
+      await dialog.alert(tr("library.failedToCancelProcessing", { 0: getErrorMessage(error) }));
     }
   }, [dialog, processingSong, songsQuery]);
 

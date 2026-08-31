@@ -22,11 +22,11 @@ export default function useEditorDocument({ songId, confirm, notify }) {
         setSong(
           (songs || []).find(({ id }) => String(id) === String(songId)) || {
             id: songId,
-            title: t("Редактор мелодии")
+            title: t("editor.melodyEditor2")
           }
         );
       })
-      .catch(() => active && setSong({ id: songId, title: t("Редактор мелодии") }));
+      .catch(() => active && setSong({ id: songId, title: t("editor.melodyEditor2") }));
     return () => {
       active = false;
     };
@@ -47,7 +47,7 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     try {
       await accept(await api.getSongEditor(song.id));
     } catch (error) {
-      await notify(t("Не удалось открыть редактор: {0}", { 0: getErrorMessage(error) }));
+      await notify(t("editor.failedToOpenEditor", { 0: getErrorMessage(error) }));
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export default function useEditorDocument({ songId, confirm, notify }) {
         )
       );
     } catch (error) {
-      await notify(t("Не удалось сохранить редактор: {0}", { 0: getErrorMessage(error) }));
+      await notify(t("editor.failedToSaveEditor", { 0: getErrorMessage(error) }));
     } finally {
       setSaving(false);
     }
@@ -81,13 +81,13 @@ export default function useEditorDocument({ songId, confirm, notify }) {
     if (
       !song?.id ||
       !payload?.ai_backup_exists ||
-      !(await confirm(t("Вернуть исходный результат AI? Ручные изменения будут потеряны.")))
+      !(await confirm(t("editor.returnOriginalAiResultManualChangesWillBeLost")))
     )
       return;
     try {
       await accept(await api.resetSongEditor(song.id));
     } catch (error) {
-      await notify(t("Не удалось восстановить AI: {0}", { 0: getErrorMessage(error) }));
+      await notify(t("editor.failedToRestoreAi", { 0: getErrorMessage(error) }));
     }
   }, [accept, confirm, notify, payload?.ai_backup_exists, song?.id]);
 

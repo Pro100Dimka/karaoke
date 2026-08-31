@@ -1,14 +1,14 @@
 import { translateSaved as t } from "../../../../i18n/runtime";
 
 export const MIXER_FIELDS = [
-  ["microphone", t("Мик"), "var(--color-primary)"],
-  ["music", t("Музыка"), "var(--color-success)"],
-  ["vocal", t("Вокал"), "var(--color-warning)"],
-  ["melody", t("Мелодия"), "var(--color-secondary)"]
+  ["microphone", t("karaoke.mick"), "var(--color-primary)"],
+  ["music", t("karaoke.music"), "var(--color-success)"],
+  ["vocal", t("karaoke.vocals"), "var(--color-warning)"],
+  ["melody", t("karaoke.melody"), "var(--color-secondary)"]
 ];
 export const EFFECT_FIELDS = [
-  ["echo", t("Эхо")],
-  ["reverb", t("Реверб"), "secondary"],
-  ["delay", t("Дилей")],
-  ["noise_suppression", t("Шум")]
+  ["echo", t("karaoke.echo")],
+  ["reverb", t("karaoke.reverb"), "secondary"],
+  ["delay", t("karaoke.delay")],
+  ["noise_suppression", t("karaoke.noise")]
 ];

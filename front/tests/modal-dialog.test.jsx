@@ -157,7 +157,7 @@ describe("application dialog provider", () => {
   });
   test("requires the application dialog provider", () => {
     const { log, restore } = suppressWindowErrors();
-    verify([() => renderHook(() => useAppDialog()), "toThrow", "useAppDialog повинен використовуватися всередині AppDialogProvider"]);
+    verify([() => renderHook(() => useAppDialog()), "toThrow", "useAppDialog должен использоваться внутри AppDialogProvider"]);
     restore();
   });
   test("resolves confirmation cancellation and replacement", async () => {

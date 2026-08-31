@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useRadio } from "../../contexts/radio";
@@ -18,53 +18,31 @@ export const signalLevel = (signal) => {
 const useConditionalPolling = (open, fetcher, interval, fallback) =>
   usePolling(() => (open ? fetcher() : Promise.resolve(fallback)), open ? interval : 0, [open]);
 
-function useAppForm() {
-  const { alert } = useAppDialog();
-  const { updateSettings } = useAppSettings();
-  const [form, setForm] = useState(null);
-  const writes = useRef(new Map());
+function useAppActions() {
+  const { settings: form, error, updateSettings } = useAppSettings();
   const queue = useRef(Promise.resolve());
-
-  useEffect(() => {
-    let active = true;
-    api
-      .getAppSettings()
-      .then((value) => active && setForm(value))
-      .catch((error) => {
-        if (active) alert(tr("Не удалось загрузить настройки: {0}", { 0: getErrorMessage(error) }));
+  const writes = useRef(new Map());
+  const save = (name, value) => {
+    const token = Symbol(name);
+    writes.current.set(name, token);
+    queue.current = queue.current
+      .catch(() => {})
+      .then(async () => {
+        const saved = await api.updateAppSettings({ [name]: value === "" ? null : value });
+        if (writes.current.get(name) === token) {
+          updateSettings((current) => ({ ...current, [name]: saved[name] }));
+        }
       });
-    return () => {
-      active = false;
-    };
-  }, [alert]);
-
-  const change = useCallback((name, value) => {
-    setForm((current) => ({ ...current, [name]: value }));
-    if (name === "theme") applyTheme(value);
-  }, []);
-
-  const save = useCallback(
-    (name, value) => {
-      const token = Symbol(name);
-      writes.current.set(name, token);
-      queue.current = queue.current
-        .catch(() => {})
-        .then(async () => {
-          try {
-            const saved = await api.updateAppSettings({ [name]: value === "" ? null : value });
-            if (writes.current.get(name) !== token) return;
-            setForm((current) => ({ ...current, ...saved }));
-            updateSettings((current) => ({ ...current, ...saved }));
-          } catch (error) {
-            await alert(tr("Не удалось сохранить настройку: {0}", { 0: getErrorMessage(error) }));
-          }
-        });
-      return queue.current;
-    },
-    [alert, updateSettings]
-  );
-
-  return { form, change, save };
+    return queue.current;
+  };
+  return {
+    form,
+    error,
+    save,
+    change: (name, value) => {
+      if (name === "theme") applyTheme(value);
+    }
+  };
 }
 
 function useAudio(open) {
@@ -118,9 +96,7 @@ function useAudio(open) {
           globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: saved }));
           await settings.refresh();
         } catch (error) {
-          await alert(
-            tr("Не удалось сохранить аудионастройки: {0}", { 0: getErrorMessage(error) })
-          );
+          await alert(tr("settings.couldNotSaveAudioSettings", { 0: getErrorMessage(error) }));
         }
       });
     return queue.current;
@@ -138,7 +114,7 @@ function useAudio(open) {
       await monitorStatus.refresh();
       await settings.refresh();
     } catch (error) {
-      await alert(tr("Не удалось изменить прослушивание: {0}", { 0: getErrorMessage(error) }));
+      await alert(tr("settings.couldNotChangeMonitoring", { 0: getErrorMessage(error) }));
     } finally {
       setBusy(false);
     }
@@ -160,7 +136,7 @@ function useAudio(open) {
       oscillator.stop(context.currentTime + 0.7);
       await new Promise((resolve) => setTimeout(resolve, 800));
     } catch (error) {
-      await alert(tr("Не удалось проверить динамики: {0}", { 0: getErrorMessage(error) }));
+      await alert(tr("settings.failedToCheckSpeakers", { 0: getErrorMessage(error) }));
     } finally {
       await context?.close?.();
       setBusy(false);
@@ -180,7 +156,7 @@ function useAudio(open) {
         outputs.data,
         values.output_device_id,
         values.audio_driver,
-        tr("Системное устройство")
+        tr("karaoke.systemDevice")
       )
     },
     level: values.monitoring_enabled ? signalLevel(signal.data) : 0,
@@ -192,7 +168,7 @@ function useAudio(open) {
 }
 
 export default function useSettings(open) {
-  const app = useAppForm();
+  const app = useAppActions();
   const audio = useAudio(open);
   const radio = useRadio();
   return { app, audio, radio };

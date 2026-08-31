@@ -1,3 +1,4 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -35,8 +36,8 @@ export default function Modal({
   children,
   isOpen,
   onClose,
-  ariaLabel = "Диалог",
-  closeAriaLabel = "Закрыть",
+  ariaLabel = tr("common.dialog"),
+  closeAriaLabel = tr("common.close"),
   closeIconSize = 58,
   portal = false,
   tilt = true,
@@ -137,10 +138,8 @@ export default function Modal({
         </Primitive>
         {titleProps && <ModalTitle {...titleProps} />}
         <Primitive className="ui-modal-body">{children}</Primitive>
-         {titleProps?.actions && (
-          <Primitive className={cx("ui-modal-actions", )}>
-            {titleProps?.actions}
-          </Primitive>
+        {titleProps?.actions && (
+          <Primitive className={cx("ui-modal-actions")}>{titleProps?.actions}</Primitive>
         )}
       </Card>
     </Primitive>
@@ -150,4 +149,3 @@ export default function Modal({
 
 export { default as ModalCarouselNavigation } from "./carousel-navigation";
 export { default as ModalTitle } from "./title";
-

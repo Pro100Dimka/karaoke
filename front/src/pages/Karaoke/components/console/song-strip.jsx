@@ -62,7 +62,7 @@ export default function SongStrip({ song, currentTime, duration, onSeek, disable
               {song.title}
             </Typography>
             <Typography variant="caption" tone="muted" noWrap>
-              {song.artist || song.performer || t("Караоке")}
+              {song.artist || song.performer || t("karaoke.karaoke")}
             </Typography>
           </Stack>
         </>

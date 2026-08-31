@@ -18,7 +18,7 @@ export default function MixerPanel({
       <Stack direction="row" align="center" gap="var(--space-2)">
         <Mic aria-hidden="true" />
         <Typography variant="caption">
-          <strong>{t("Микшер")}</strong>
+          <strong>{t("karaoke.mixer")}</strong>
         </Typography>
         <Typography variant="caption" tone="muted">
           {Math.round(Math.max(0, Math.min(1, microphoneLevel)) * 100)}%
@@ -26,7 +26,7 @@ export default function MixerPanel({
         <Switch
           size="sm"
           variant="plain"
-          label={t("Слышу себя")}
+          label={t("karaoke.iHearMyself")}
           checked={monitoringEnabled}
           onChange={onMonitoringChange}
         />
@@ -75,7 +75,7 @@ export default function MixerPanel({
       </Grid>
       <Stack direction="row" justify="center">
         <RotaryKnob
-          label={t("Октава голоса")}
+          label={t("karaoke.voiceOctave")}
           min={-1}
           max={1}
           step={0.1}

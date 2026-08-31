@@ -84,7 +84,7 @@ async function readErrorDetail(response) {
 }
 async function withSuccessfulResponse(path, options, consume) {
   if (typeof globalThis.fetch !== "function")
-    throw new Error(translateSaved("Fetch API недоступен в текущем окружении"));
+    throw new Error(translateSaved("api.fetchApiIsNotAvailableInTheCurrentEnvironment"));
   const normalizedPath = String(path || "");
   const requestPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
   const deadline = createDeadlineSignal(options?.signal, options?.timeoutMs);
@@ -102,7 +102,7 @@ async function withSuccessfulResponse(path, options, consume) {
     return await consume(response);
   } catch (error) {
     if (!deadline.timedOut()) throw error;
-    const timeoutError = new Error(translateSaved("Превышено время ожидания ответа backend"));
+    const timeoutError = new Error(translateSaved("api.backendResponseTimedOut"));
     timeoutError.name = "TimeoutError";
     throw timeoutError;
   } finally {
@@ -147,9 +147,7 @@ async function readBlobResponse(response) {
       size += value.byteLength;
       if (size > MAX_MEMORY_BLOB_BYTES) {
         await reader.cancel().catch(() => {});
-        throw new Error(
-          translateSaved("Файл слишком большой для загрузки без дискового хранилища браузера")
-        );
+        throw new Error(translateSaved("api.fileIsTooLargeToUploadWithoutBrowserDisk"));
       }
       chunks.push(value);
     }
@@ -162,7 +160,7 @@ async function readBlobResponse(response) {
 
 export function encodePathSegment(value) {
   const segment = String(value ?? "").trim();
-  if (!segment) throw new TypeError(translateSaved("Пустой идентификатор API-ресурса"));
+  if (!segment) throw new TypeError(translateSaved("api.emptyApiResourceId"));
   return encodeURIComponent(segment);
 }
 export async function request(path, options = {}) {
@@ -174,9 +172,7 @@ export async function request(path, options = {}) {
     try {
       return JSON.parse(text);
     } catch {
-      throw new Error(
-        translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })
-      );
+      throw new Error(translateSaved("api.incorrectJsonInResponse", { 0: response.url || path }));
     }
   });
 }
@@ -189,7 +185,7 @@ export function createFileUrl(path) {
   const normalizedPath = String(path || "").trim();
   if (!normalizedPath) return BASE_URL;
   if (/^[a-z][a-z\d+.-]*:/i.test(normalizedPath)) {
-    throw new TypeError(translateSaved("Ожидался локальный путь к файлу API"));
+    throw new TypeError(translateSaved("api.expectedLocalPathToApiFile"));
   }
   const requestPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
   return `${BASE_URL}${requestPath}`;

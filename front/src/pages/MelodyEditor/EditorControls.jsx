@@ -81,23 +81,23 @@ function ActionGroup({ actions, color = "var(--color-primary)" }) {
 
 export default function EditorControls({ controller, onBack, save, saving, transport }) {
   const navigation = [
-    { Icon: ArrowLeft, label: t("Назад"), onClick: onBack },
+    { Icon: ArrowLeft, label: t("room.back"), onClick: onBack },
     {
       Icon: Save,
-      label: t("Сохранить"),
+      label: t("library.save"),
       disabled: saving,
       variant: "solid",
       onClick: save
     }
   ];
   const history = [
-    { Icon: Undo2, label: t("Отменить"), tone: "secondary", onClick: controller.undo },
-    { Icon: Redo2, label: t("Вернуть"), tone: "secondary", onClick: controller.redo }
+    { Icon: Undo2, label: t("library.cancel"), tone: "secondary", onClick: controller.undo },
+    { Icon: Redo2, label: t("editor.redo"), tone: "secondary", onClick: controller.redo }
   ];
   const follow = [
     {
       Icon: Crosshair,
-      label: t("Автопрокрутка"),
+      label: t("editor.autoScroll"),
       variant: controller.autoScroll ? "solid" : "outline",
       onClick: () => controller.setAutoScroll((value) => !value)
     }
@@ -105,7 +105,7 @@ export default function EditorControls({ controller, onBack, save, saving, trans
   const playback = [
     {
       Icon: transport.playing ? Pause : Play,
-      label: transport.playing ? t("Пауза") : t("Слушать"),
+      label: transport.playing ? t("audio.pause") : t("editor.listen"),
       variant: transport.playing ? "solid" : "outline",
       onClick: transport.playing ? transport.pause : transport.play
     }
@@ -113,14 +113,14 @@ export default function EditorControls({ controller, onBack, save, saving, trans
   const edit = [
     {
       Icon: Merge,
-      label: t("Объединить"),
+      label: t("editor.merge"),
       tone: "warning",
       disabled: !controller.canMerge,
       onClick: controller.merge
     },
     {
       Icon: Trash2,
-      label: t("Удалить"),
+      label: t("editor.delete"),
       tone: "danger",
       disabled: !controller.selected.length,
       onClick: controller.remove
@@ -129,21 +129,21 @@ export default function EditorControls({ controller, onBack, save, saving, trans
   const lyrics = [
     {
       Icon: ArrowLeftToLine,
-      label: t("Сдвинуть текст назад (Alt+←)"),
+      label: t("editor.shiftLyricsBackAlt"),
       disabled: !controller.selectedWords.length,
       onClick: () => controller.shiftWords(-1)
     },
     {
       Icon: ArrowRightToLine,
-      label: t("Сдвинуть текст вперёд (Alt+→)"),
+      label: t("editor.shiftLyricsForwardAlt"),
       disabled: !controller.selectedWords.length,
       onClick: () => controller.shiftWords(1)
     }
   ];
   const volumes = [
-    ["vocals", t("Вокал")],
-    ["melody", t("Мелодия"), "secondary"],
-    ["instrumental", t("Минус")]
+    ["vocals", t("karaoke.vocals")],
+    ["melody", t("karaoke.melody"), "secondary"],
+    ["instrumental", t("editor.minus")]
   ];
   return (
     <Stack
@@ -183,9 +183,9 @@ export default function EditorControls({ controller, onBack, save, saving, trans
           }}
         >
           <Select
-            aria-label={t("Скорость")}
+            aria-label={t("editor.speed")}
             options={rates}
-            label={t("Скорость")}
+            label={t("editor.speed")}
             value={controller.playbackRate}
             onChange={(value) => controller.setPlaybackRate(Number(value))}
             sx={{ "--control-pad": "var(--space-1)" }}
@@ -224,7 +224,7 @@ export default function EditorControls({ controller, onBack, save, saving, trans
         {formatClockTime(transport.time)}
       </Typography>
       <Waveform
-        label={t("Позиция песни")}
+        label={t("karaoke.songPosition")}
         value={transport.time}
         duration={controller.duration}
         onChange={transport.seek}

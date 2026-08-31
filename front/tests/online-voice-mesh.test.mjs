@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { FakeChannel, FakePeer, stream, track } from "./helpers/webrtc.mjs";
 
-vi.mock("../src/i18n/runtime.js", () => ({ translateSaved: (value) => value }));
 let OnlineVoiceMesh;
 let preferLowLatencyOpus;
 const makeMesh = () => new OnlineVoiceMesh({ send: vi.fn(() => true) });

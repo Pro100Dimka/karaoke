@@ -14,8 +14,7 @@ const DEFAULT_PARSERS = {
 
   number: (value) => (value === "" || value == null ? "" : Number(value)),
 
-  "nullable-number": (value) =>
-    value === "" || value == null ? null : Number(value)
+  "nullable-number": (value) => (value === "" || value == null ? null : Number(value))
 };
 
 const inputRenderer =
@@ -31,13 +30,9 @@ const inputRenderer =
   );
 
 const DEFAULT_RENDERERS = {
-  select: ({ props, value, change }) => (
-    <Select {...props} value={value ?? ""} onChange={change} />
-  ),
+  select: ({ props, value, change }) => <Select {...props} value={value ?? ""} onChange={change} />,
 
-  slider: ({ props, value, change }) => (
-    <Slider {...props} value={value ?? 0} onChange={change} />
-  ),
+  slider: ({ props, value, change }) => <Slider {...props} value={value ?? 0} onChange={change} />,
 
   text: inputRenderer("text"),
 
@@ -50,9 +45,7 @@ const DEFAULT_RENDERERS = {
     />
   ),
 
-  readonly: ({ props, value }) => (
-    <TextField {...props} value={value ?? ""} readOnly />
-  ),
+  readonly: ({ props, value }) => <TextField {...props} value={value ?? ""} readOnly />,
 
   folder: ({ props, value, change, blur, field, context }) => (
     <FolderField
@@ -83,7 +76,11 @@ const DEFAULT_RENDERERS = {
     const pending = field.isPending?.(context) ?? false;
 
     return (
-      <Button variant={field.variant ?? "contained"} {...props} onClick={() => field.run?.(context)}>
+      <Button
+        variant={field.variant ?? "contained"}
+        {...props}
+        onClick={() => field.run?.(context)}
+      >
         {pending ? field.pendingText : (field.idleText ?? field.label)}
       </Button>
     );
@@ -194,10 +191,7 @@ function ConfigField({ field, context, renderers, parsers, columns }) {
     <div
       className="ui-config-form-field"
       style={{
-        "--config-field-span": Math.max(
-          1,
-          Math.min(columns, Number(span) || columns)
-        )
+        "--config-field-span": Math.max(1, Math.min(columns, Number(span) || columns))
       }}
     >
       {renderer({
@@ -233,15 +227,11 @@ function ConfigField({ field, context, renderers, parsers, columns }) {
 export default function ConfigForm({
   fields = [],
   context = {},
-
   renderers = {},
   parsers = {},
-
   columns = 12,
   gap = 2,
-
   className = "",
-
   sx,
   style
 }) {

@@ -14,11 +14,11 @@ export default function KaraokeStageActions({
   toggleRadio
 }) {
   const actions = [
-    ["back", ArrowLeft, t("Назад в библиотеку"), false, returnToLibrary, true],
+    ["back", ArrowLeft, t("karaoke.backToTheLibrary"), false, returnToLibrary, true],
     [
       "console",
       SlidersHorizontal,
-      controlsVisible ? t("Скрыть консоль") : t("Показать консоль"),
+      controlsVisible ? t("karaoke.hideConsole") : t("karaoke.showConsole"),
       controlsVisible,
       controlsVisible ? () => hideControls(true) : () => showControls(true),
       true
@@ -26,7 +26,7 @@ export default function KaraokeStageActions({
     [
       "radio",
       Radio,
-      isRadioPlaying ? t("Выключить радио") : t("Включить радио"),
+      isRadioPlaying ? t("karaoke.turnOffTheRadio") : t("karaoke.turnOnTheRadio"),
       isRadioPlaying,
       toggleRadio,
       !isPlaying
@@ -38,7 +38,7 @@ export default function KaraokeStageActions({
       data-role="stage-actions"
       direction="row"
       gap="var(--space-3)"
-      aria-label={t("Навигация караоке")}
+      aria-label={t("karaoke.karaokeNavigation")}
       sx={{
         position: "absolute",
         inset: "var(--space-4) auto auto var(--space-4)",

@@ -22,12 +22,10 @@ export async function openKaraokeInRoom({
   voice
 }) {
   if (!isCurrentConnection()) return true;
-  const revisionPayload = suppliedRevision
-    ? null
-    : await roomApi?.getSongRevision?.(songId);
+  const revisionPayload = suppliedRevision ? null : await roomApi?.getSongRevision?.(songId);
   const revision = suppliedRevision || revisionPayload?.revision;
   if (typeof revision !== "string" || !revision.startsWith("sha256:"))
-    throw new Error(translateSaved("Не удалось определить версию содержимого песни"));
+    throw new Error(translateSaved("room.couldNotDetermineTheSongContentVersion"));
   if (!isCurrentConnection()) return false;
 
   if (room && !room.host) {
@@ -76,7 +74,7 @@ export async function openKaraokeInRoom({
   const timer = globalThis.setTimeout(
     () =>
       rejectReady(
-        new Error(translateSaved("Передача песни остановилась: нет ответа от участника"))
+        new Error(translateSaved("room.songTransferStoppedTheParticipantIsNotResponding"))
       ),
     SONG_READY_TIMEOUT_MS
   );

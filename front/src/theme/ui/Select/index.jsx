@@ -1,12 +1,6 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { Check, ChevronDown } from "lucide-react";
-import {
-  Fragment,
-  forwardRef,
-  useEffect,
-  useId,
-  useRef,
-  useState
-} from "react";
+import { Fragment, forwardRef, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import Button from "../Button";
@@ -37,7 +31,7 @@ const Select = forwardRef(
       value,
       defaultValue,
       onChange,
-      placeholder = "Выберите значение",
+      placeholder = tr("common.field.selectPlaceholder"),
       startIcon,
       endIcon,
       className = "",
@@ -58,16 +52,10 @@ const Select = forwardRef(
     const [open, setOpen] = useState(false);
     const [position, setPosition] = useState(null);
 
-    const [current, setCurrent] = useControllable(
-      value,
-      defaultValue,
-      onChange
-    );
+    const [current, setCurrent] = useControllable(value, defaultValue, onChange);
 
     const normalizedOptions = options.map(optionItem);
-    const selected = normalizedOptions.find(
-      (item) => String(item.value) === String(current)
-    );
+    const selected = normalizedOptions.find((item) => String(item.value) === String(current));
 
     const controlId = id || `ui-select-${uid}`;
     const listboxId = `${controlId}-listbox`;
@@ -101,9 +89,7 @@ const Select = forwardRef(
     };
 
     const focusOption = (index) => {
-      const buttons = popoverRef.current?.querySelectorAll(
-        '.ui-select-option:not(:disabled)'
-      );
+      const buttons = popoverRef.current?.querySelectorAll(".ui-select-option:not(:disabled)");
       buttons?.[index]?.focus();
     };
 
@@ -139,11 +125,9 @@ const Select = forwardRef(
       if (!open) return;
 
       requestAnimationFrame(() => {
-        const enabled = [...(
-          popoverRef.current?.querySelectorAll(
-            '.ui-select-option:not(:disabled)'
-          ) || []
-        )];
+        const enabled = [
+          ...(popoverRef.current?.querySelectorAll(".ui-select-option:not(:disabled)") || [])
+        ];
 
         const selectedIndex = enabled.findIndex(
           (button) => button.dataset.value === String(current)
@@ -162,12 +146,7 @@ const Select = forwardRef(
             label={label}
             labelAccessory={Boolean(tooltip)}
             labelNode={
-              <FloatingLabel
-                id={controlId}
-                label={label}
-                required={required}
-                tooltip={tooltip}
-              />
+              <FloatingLabel id={controlId} label={label} required={required} tooltip={tooltip} />
             }
             required={required}
             disabled={disabled}
@@ -193,23 +172,23 @@ const Select = forwardRef(
               aria-controls={open ? listboxId : undefined}
               onClick={toggle}
               onKeyDown={(event) => {
-              if (disabled) return;
+                if (disabled) return;
 
-              if (
-                event.key === "ArrowDown" ||
-                event.key === "ArrowUp" ||
-                event.key === "Enter" ||
-                event.key === " "
-              ) {
-                event.preventDefault();
+                if (
+                  event.key === "ArrowDown" ||
+                  event.key === "ArrowUp" ||
+                  event.key === "Enter" ||
+                  event.key === " "
+                ) {
+                  event.preventDefault();
 
-                if (!open) {
-                  updatePosition();
-                  setOpen(true);
+                  if (!open) {
+                    updatePosition();
+                    setOpen(true);
+                  }
+                } else if (event.key === "Escape") {
+                  close();
                 }
-              } else if (event.key === "Escape") {
-                close();
-              }
               }}
               {...ariaProps}
               {...props}
@@ -220,22 +199,15 @@ const Select = forwardRef(
                 </span>
               )}
 
-            <span
-              className="ui-select-value"
-              data-placeholder={!selected || undefined}
-            >
-              {selected?.label ?? placeholder}
-            </span>
+              <span className="ui-select-value" data-placeholder={!selected || undefined}>
+                {selected?.label ?? placeholder}
+              </span>
 
-            <span className="ui-select-actions" aria-hidden="true">
-              {endIcon && (
-                <span className="ui-select-end-icon">
-                  {endIcon}
-                </span>
-              )}
+              <span className="ui-select-actions" aria-hidden="true">
+                {endIcon && <span className="ui-select-end-icon">{endIcon}</span>}
 
-              <ChevronDown className="ui-select-chevron" size={16} />
-            </span>
+                <ChevronDown className="ui-select-chevron" size={16} />
+              </span>
             </InputBase>
           </OutlinedInput>
 
@@ -257,25 +229,19 @@ const Select = forwardRef(
                   width: position.width
                 }}
                 onKeyDown={(event) => {
-                  const buttons = [...(
-                    popoverRef.current?.querySelectorAll(
-                      '.ui-select-option:not(:disabled)'
-                    ) || []
-                  )];
+                  const buttons = [
+                    ...(popoverRef.current?.querySelectorAll(".ui-select-option:not(:disabled)") ||
+                      [])
+                  ];
 
-                  const currentIndex = Math.max(
-                    0,
-                    buttons.indexOf(document.activeElement)
-                  );
+                  const currentIndex = Math.max(0, buttons.indexOf(document.activeElement));
 
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
                     focusOption((currentIndex + 1) % buttons.length);
                   } else if (event.key === "ArrowUp") {
                     event.preventDefault();
-                    focusOption(
-                      (currentIndex - 1 + buttons.length) % buttons.length
-                    );
+                    focusOption((currentIndex - 1 + buttons.length) % buttons.length);
                   } else if (event.key === "Home") {
                     event.preventDefault();
                     focusOption(0);
@@ -293,8 +259,7 @@ const Select = forwardRef(
               >
                 <div className="ui-select-options">
                   {normalizedOptions.map((item, index) => {
-                    const active =
-                      String(item.value) === String(current);
+                    const active = String(item.value) === String(current);
                     const showGroup =
                       item.group && item.group !== normalizedOptions[index - 1]?.group;
 
@@ -317,23 +282,16 @@ const Select = forwardRef(
                           className="ui-select-option ui-control"
                           onClick={(event) => selectOption(item, event)}
                         >
-                          <span className="ui-select-option-mark">
-                            {active && <Check />}
-                          </span>
+                          <span className="ui-select-option-mark">{active && <Check />}</span>
 
                           {item.icon && (
-                            <span
-                              className="ui-select-option-icon"
-                              aria-hidden="true"
-                            >
+                            <span className="ui-select-option-icon" aria-hidden="true">
                               {item.icon}
                             </span>
                           )}
 
                           <span className="ui-select-option-content">
-                            <span className="ui-select-option-label">
-                              {item.label}
-                            </span>
+                            <span className="ui-select-option-label">{item.label}</span>
 
                             {item.description && (
                               <span className="ui-select-option-description">
@@ -365,9 +323,13 @@ const Select = forwardRef(
       >
         {rendered}
         {error ? (
-          <small id={errorId} className="ui-field-message" data-error>{error}</small>
+          <small id={errorId} className="ui-field-message" data-error>
+            {error}
+          </small>
         ) : hint ? (
-          <small id={hintId} className="ui-field-message">{hint}</small>
+          <small id={hintId} className="ui-field-message">
+            {hint}
+          </small>
         ) : null}
       </div>
     );

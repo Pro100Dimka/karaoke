@@ -1,6 +1,6 @@
 {
   "name": "a-and-d-voice",
-  "version": "0.3.37",
+  "version": "0.3.38",
   "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
   "author": "A&D Voice",
   "private": true,
@@ -61,6 +61,7 @@
     "@tanstack/react-virtual": "^3.14.10",
     "@xstate/react": "^6.1.0",
     "comlink": "^4.4.2",
+    "formik": "^2.4.9",
     "lucide-react": "^0.383.0",
     "pixi.js": "^7.4.3",
     "react": "^18.3.1",

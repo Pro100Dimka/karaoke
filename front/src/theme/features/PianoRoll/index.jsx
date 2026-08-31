@@ -58,24 +58,27 @@ function PianoRoll({
       ),
     [currentTime, currentTimeRef, normalized, pitchRange, size]
   );
-  const draw = useCallback((time) => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext?.("2d");
-    if (!canvas || !context) return;
-    const ratio = globalThis.devicePixelRatio || 1;
-    if (
-      canvas.width !== Math.round(size.width * ratio) ||
-      canvas.height !== Math.round(size.height * ratio)
-    ) {
-      canvas.width = Math.round(size.width * ratio);
-      canvas.height = Math.round(size.height * ratio);
-    }
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    drawPianoRoll(context, pianoRollFrame(normalized, time, size, pitchRange), palette, {
-      detected: isPitchDetected,
-      midi: sung
-    });
-  }, [isPitchDetected, normalized, palette, pitchRange, size, sung]);
+  const draw = useCallback(
+    (time) => {
+      const canvas = canvasRef.current;
+      const context = canvas?.getContext?.("2d");
+      if (!canvas || !context) return;
+      const ratio = globalThis.devicePixelRatio || 1;
+      if (
+        canvas.width !== Math.round(size.width * ratio) ||
+        canvas.height !== Math.round(size.height * ratio)
+      ) {
+        canvas.width = Math.round(size.width * ratio);
+        canvas.height = Math.round(size.height * ratio);
+      }
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawPianoRoll(context, pianoRollFrame(normalized, time, size, pitchRange), palette, {
+        detected: isPitchDetected,
+        midi: sung
+      });
+    },
+    [isPitchDetected, normalized, palette, pitchRange, size, sung]
+  );
 
   useLayoutEffect(
     () => draw(Number(currentTimeRef?.current ?? currentTime) || 0),
@@ -130,7 +133,7 @@ function PianoRoll({
     >
       <Box
         data-role="piano-roll-canvas"
-        aria-label={t("Ноты мелодии")}
+        aria-label={t("common.melodyNotes")}
         sx={{ position: "absolute", inset: 0 }}
       >
         {usePixi ? (

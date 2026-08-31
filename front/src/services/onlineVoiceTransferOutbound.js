@@ -12,7 +12,7 @@ import {
 
 const CLOSED = new Set(["closing", "closed"]);
 const STALE_CONNECTING_MS = 8_000;
-const cancelledError = () => new Error(translateSaved("Передача файла отменена"));
+const cancelledError = () => new Error(translateSaved("room.fileTransferCanceled"));
 const isCancelled = (mesh, channel, lifecycle, active, signal) =>
   active.cancelled ||
   signal?.aborted ||
@@ -34,7 +34,7 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
     if (CLOSED.has(channel?.readyState)) {
       if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
       if (!mesh.peers.has(participantId))
-        throw new Error(translateSaved("Канал передачи песни закрыт"));
+        throw new Error(translateSaved("room.theSongTransmissionChannelIsClosed"));
       connectingSince = null;
     } else if (channel?.readyState === "connecting") {
       connectingSince ??= Date.now();
@@ -59,7 +59,7 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
     await waitAbortable(50, signal);
   }
   if (signal?.aborted) throw cancelledError();
-  throw new Error(translateSaved("Канал передачи песни не готов"));
+  throw new Error(translateSaved("room.theSongTransmissionChannelIsNotReady"));
 }
 
 const transferMetadata = (transferId, blob, metadata) => ({
@@ -99,7 +99,7 @@ async function reserveCredit(mesh, transferId, bytes) {
     waiter.timer = globalThis.setTimeout(() => {
       const index = flow.waiters.indexOf(waiter);
       if (index >= 0) flow.waiters.splice(index, 1);
-      reject(new Error(translateSaved("Получатель слишком медленно сохраняет песню")));
+      reject(new Error(translateSaved("room.receiverIsSavingTheSongTooSlowly")));
     }, TRANSFER_TIMEOUTS.stall);
     flow.waiters.push(waiter);
   });
@@ -115,7 +115,7 @@ async function streamFile(mesh, transfer, blob, metadata, signal) {
     while (channel.bufferedAmount > 512 * 1024) {
       if (cancelled()) throw cancelledError();
       if (Date.now() - lastProgressAt > TRANSFER_TIMEOUTS.stall)
-        throw new Error(translateSaved("Передача песни остановилась: нет ответа от участника"));
+        throw new Error(translateSaved("room.songTransferStoppedTheParticipantIsNotResponding"));
       // eslint-disable-next-line no-await-in-loop
       await wait(20);
     }
@@ -146,9 +146,9 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     typeof BlobClass !== "function" ||
     !(blob instanceof BlobClass)
   )
-    throw new TypeError(translateSaved("Для передачи нужны участник и файл"));
+    throw new TypeError(translateSaved("room.toTransferYouNeedAParticipantAndAFile"));
   if (blob.size > TRANSFER_LIMITS.fileBytes)
-    throw new RangeError(translateSaved("Файл слишком большой для передачи через комнату"));
+    throw new RangeError(translateSaved("room.theFileIsTooLargeToTransmitAcrossThe"));
 
   const lifecycle = mesh.lifecycleVersion;
   const transferId = generateId();
@@ -183,7 +183,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     );
     active.channel = channel;
     if (channel.readyState !== "open")
-      throw new Error(translateSaved("Канал передачи песни закрыт"));
+      throw new Error(translateSaved("room.theSongTransmissionChannelIsClosed"));
     if (isCancelled(mesh, channel, lifecycle, active, options.signal)) throw cancelledError();
     admission = createPending(
       mesh,
@@ -192,7 +192,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       participantId,
       channel,
       TRANSFER_TIMEOUTS.admission,
-      "Получатель не подтвердил готовность принять песню"
+      "room.receiverDidNotConfirmReadinessToReceiveTheSong"
     );
     channel.send(JSON.stringify(transferMetadata(transferId, blob, metadata)));
     if (isCancelled(mesh, channel, lifecycle, active, options.signal)) throw cancelledError();
@@ -222,7 +222,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
       participantId,
       channel,
       TRANSFER_TIMEOUTS.confirmation,
-      "Участник не подтвердил получение песни"
+      "room.theParticipantDidNotConfirmReceivingTheSong"
     );
     channel.send(JSON.stringify({ type: "file-end", transferId }));
     await confirmation;

@@ -167,9 +167,9 @@ function History() {
 
 export const formatBytes = (value) => {
   const bytes = Number(value) || 0;
-  if (!bytes) return tr("0 Б");
+  if (!bytes) return tr("settings.0B");
   const unit = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
-  const suffix = [tr("Б"), tr("КБ"), tr("МБ"), tr("ГБ")][unit];
+  const suffix = [tr("settings.b"), tr("settings.kb"), tr("settings.mb"), tr("settings.gb")][unit];
   return `${(bytes / 1024 ** unit).toFixed(1)} ${suffix}`;
 };
 
@@ -187,11 +187,11 @@ function Memory() {
     }
   };
   const actions = [
-    [tr("Очистить кэш"), api.clearCache],
-    [tr("Удалить временные файлы"), api.deleteTemp]
+    [tr("settings.clearCache"), api.clearCache],
+    [tr("settings.deleteTemporaryFiles"), api.deleteTemp]
   ];
   const options = [
-    { value: "", label: tr("Выберите песню") },
+    { value: "", label: tr("settings.selectASong") },
     ...songs
       .filter(({ status, optimized }) => status === "done" && !optimized)
       .map(({ id: value, title: label }) => ({ value, label }))
@@ -201,8 +201,8 @@ function Memory() {
       <ErrorText error={size.error} />
       <Metrics
         items={[
-          [tr("Всего занято"), size.data?.total_human],
-          [tr("Свободно на диске"), free?.free_human]
+          [tr("settings.memory.total"), size.data?.total_human],
+          [tr("settings.memory.free"), free?.free_human]
         ]}
       />
       <Metrics
@@ -218,7 +218,10 @@ function Memory() {
             variant="outlined"
             startIcon={<Trash2 />}
             onClick={() =>
-              run(request, (result) => `${tr("Освобождено")}: ${formatBytes(result?.freed_bytes)}`)
+              run(
+                request,
+                (result) => `${tr("settings.freed")}: ${formatBytes(result?.freed_bytes)}`
+              )
             }
           >
             {label}
@@ -226,18 +229,23 @@ function Memory() {
         ))}
       </Stack>
       <Grid columns={2} gap="var(--space-2)" align="end">
-        <Select label={tr("Песня")} value={song} options={options} onChange={setSong} />
+        <Select
+          label={tr("settings.history.song")}
+          value={song}
+          options={options}
+          onChange={setSong}
+        />
         <Button
           variant="contained"
           disabled={!song}
           onClick={() =>
             run(
               () => api.optimizeSong(song),
-              (result) => `${tr("Освобождено")}: ${result?.freed_human ?? "—"}`
+              (result) => `${tr("settings.freed")}: ${result?.freed_human ?? "—"}`
             )
           }
         >
-          {tr("Оптимизировать")}
+          {tr("settings.memory.optimize")}
         </Button>
       </Grid>
     </Stack>

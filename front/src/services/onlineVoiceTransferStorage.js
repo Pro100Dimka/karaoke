@@ -26,7 +26,7 @@ async function createDiskSink(participantId, metadata, getDirectory) {
   let state = "open";
   return {
     write(chunk) {
-      if (state !== "open") throw new Error(translate("Временный файл передачи уже закрыт"));
+      if (state !== "open") throw new Error(translate("room.temporaryTransferFileIsAlreadyClosed"));
       return writable.write(chunk);
     },
     async finish() {
@@ -61,7 +61,7 @@ export function createTransferSink(participantId, metadata) {
   if (typeof getDirectory === "function")
     return createDiskSink(participantId, metadata, getDirectory);
   if (metadata.size > MEMORY_LIMIT)
-    throw new Error(translate("Для большого файла требуется дисковое хранилище браузера"));
+    throw new Error(translate("room.largeFilesRequireBrowserDiskStorage"));
   const chunks = [];
   return {
     chunks,

@@ -30,7 +30,9 @@ export const getRecordingList = (recordings, recordingId) => {
 };
 export const formatRecordingDate = (value) => {
   const date = new Date(value);
-  return value && !Number.isNaN(date.getTime()) ? date.toLocaleString() : t("Запись исполнения");
+  return value && !Number.isNaN(date.getTime())
+    ? date.toLocaleString()
+    : t("karaoke.performanceRecording");
 };
 
 function Summary({ result }) {
@@ -38,27 +40,27 @@ function Summary({ result }) {
   const metrics = [
     [
       "pitch",
-      t("Попадание в ноты"),
+      t("karaoke.hittingTheNotes"),
       feedback.pitch_accuracy_percent,
-      t("Точные ноты в пределах половины полутона")
+      t("karaoke.accurateNotesWithinHalfASemitone")
     ],
     [
       "rhythm",
-      t("Ритм и вступления"),
+      t("karaoke.rhythmAndEntries"),
       feedback.rhythm_accuracy_percent,
-      t("Точность начала нот относительно минусовки")
+      t("karaoke.noteOnsetAccuracyRelativeToTheBackingTrack")
     ],
     [
       "hold",
-      t("Удержание нот"),
+      t("karaoke.noteSustain"),
       feedback.note_hold_percent,
-      t("Стабильная высота во время звучания ноты")
+      t("karaoke.stablePitchThroughoutEachNote")
     ],
     [
       "coverage",
-      t("Полнота исполнения"),
+      t("karaoke.performanceCompleteness"),
       feedback.note_coverage_percent,
-      t("Доля нот песни, в которых распознан голос")
+      t("karaoke.proportionOfSongNotesWithDetectedVoice")
     ]
   ];
   return (
@@ -88,19 +90,19 @@ function Summary({ result }) {
           <Typography data-role="analysis-score" variant="h3">
             {feedback.accuracy ?? "—"}%
           </Typography>
-          <Typography tone="muted">{t("Общая оценка исполнения")}</Typography>
+          <Typography tone="muted">{t("karaoke.overallPerformanceScore")}</Typography>
           <Typography variant="caption" tone="muted" textAlign="center">
-            {t("Итог: ноты 50% · ритм 25% · удержание 15% · полнота 10%")}
+            {t("karaoke.totalNotes50Rhythm25Sustain15Completeness10")}
           </Typography>
         </Stack>
         <Stack gap="var(--space-2)">
           <Typography>
-            <strong>{t("Рекомендация")}</strong>
+            <strong>{t("karaoke.recommendation")}</strong>
           </Typography>
           <Typography tone="muted">{feedback.advice}</Typography>
           {feedback.needsPractice && (
             <Typography variant="caption" tone="muted">
-              {t("Самый сложный фрагмент: {0}%", { 0: feedback.needsPractice.accuracy_percent })}
+              {t("karaoke.mostDifficultSection", { 0: feedback.needsPractice.accuracy_percent })}
             </Typography>
           )}
         </Stack>
@@ -142,7 +144,7 @@ export default function PerformanceAnalysisModal({
       .catch((reason) => {
         if (request.current.recordingId === recordingId)
           request.current = { recordingId: null, promise: null };
-        if (subscribed) setError(getErrorMessage(reason, t("Неизвестная ошибка анализа")));
+        if (subscribed) setError(getErrorMessage(reason, t("karaoke.unknownParsingError")));
       });
     return () => {
       subscribed = false;
@@ -150,15 +152,16 @@ export default function PerformanceAnalysisModal({
   }, [recordingId]);
   const remove = () =>
     run(async () => {
-      if (!(await confirm(t("Удалить это записанное исполнение?"))) || !mounted.current) return;
+      if (!(await confirm(t("karaoke.shouldIDeleteThisRecordedPerformance"))) || !mounted.current)
+        return;
       try {
         await api.deleteRecording(recordingId);
         if (mounted.current) onDeleted?.();
       } catch (reason) {
         if (mounted.current)
           setError(
-            t("Не удалось удалить запись: {0}", {
-              0: getErrorMessage(reason, t("неизвестная ошибка"))
+            t("karaoke.failedToDeleteEntry", {
+              0: getErrorMessage(reason, t("room.transfer.unknownError"))
             })
           );
       }
@@ -167,39 +170,37 @@ export default function PerformanceAnalysisModal({
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={t("Анализ выступления")}
+      ariaLabel={t("karaoke.analysisOfTheSpeech")}
       cardVariant="laser"
       portal
       titleProps={{
         icon: BarChart3,
-        eyebrow: t("РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"),
-        title: t("Анализ выступления"),
-        description: t("Точность нот, ритм и рекомендации по исполнению."),
+        eyebrow: t("karaoke.executionResult"),
+        title: t("karaoke.analysisOfTheSpeech"),
+        description: t("karaoke.accuracyOfNotesRhythmAndPerformanceRecommendations"),
         actions: (result || error) && (
           <Button variant="contained" onClick={result ? (onDone ?? onClose) : onClose}>
-            {result ? t("Готово") : t("Закрыть")}
+            {result ? t("status.done") : t("common.close")}
           </Button>
         )
       }}
     >
       <Stack gap="var(--space-4)" sx={{ padding: "var(--space-4)" }}>
         <ModalCarouselNavigation
-          ariaLabel={t("Записи исполнения")}
+          ariaLabel={t("karaoke.performanceRecordings")}
           index={index}
           count={list.length}
           title={formatRecordingDate(viewed.created_at)}
-          subtitle={`${t("Запись {0} из {1}", { 0: index + 1, 1: list.length })}${active ? ` · ${t("анализируется")}` : ""}`}
-          previousLabel={t("Предыдущая запись")}
-          nextLabel={t("Следующая запись")}
+          subtitle={`${t("karaoke.recordingOf", { 0: index + 1, 1: list.length })}${active ? ` · ${t("karaoke.beingAnalyzed")}` : ""}`}
+          previousLabel={t("karaoke.previousRecording")}
+          nextLabel={t("karaoke.nextRecording")}
           onPrevious={() => setViewedId(list[index - 1].id)}
           onNext={() => setViewedId(list[index + 1].id)}
         />
         {!active && (
           <>
             <Typography tone="muted">
-              {t(
-                "Вы просматриваете другую запись. Текущий анализ продолжает выполняться без переключения."
-              )}
+              {t("karaoke.youAreViewingAnotherRecordingTheCurrentAnalysisContinues")}
             </Typography>
             <AudioPlayer
               src={api.getPerformanceFileUrl(viewed.id)}
@@ -209,12 +210,12 @@ export default function PerformanceAnalysisModal({
         )}
         {active && !result && !error && (
           <Typography role="status" tone="muted">
-            {t("Анализируем ноты и ритм исполнения…")}
+            {t("karaoke.weAnalyzeTheNotesAndRhythmOfPerformance")}
           </Typography>
         )}
         {active && error && (
           <Typography role="alert" tone="danger">
-            {t("Не удалось выполнить анализ:")} {error}
+            {t("karaoke.analysisFailed")} {error}
           </Typography>
         )}
         {active && result && (
@@ -229,7 +230,7 @@ export default function PerformanceAnalysisModal({
                 icon={Trash2}
                 data-role="delete-recording"
                 tone="danger"
-                label={deleting ? t("Удаляем запись…") : t("Удалить запись")}
+                label={deleting ? t("karaoke.deletingRecording") : t("karaoke.deleteEntry")}
                 disabled={deleting}
                 onClick={remove}
               />

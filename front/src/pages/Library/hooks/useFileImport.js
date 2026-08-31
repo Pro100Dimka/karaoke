@@ -37,21 +37,16 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
             if (song && isAmbiguousTransportError(error)) {
               onStarted(song);
               await notify(
-                tr("Песня добавлена, но backend не подтвердил запуск обработки: {0}", {
+                tr("library.songAddedButBackendDidNotConfirmProcessingStarted", {
                   0: getErrorMessage(error)
                 })
               );
             } else {
               if (song) await api.deleteSong(song.id).catch(() => {});
               await notify(
-                tr(
-                  song
-                    ? "Не удалось запустить обработку песни: {0}"
-                    : "Не удалось добавить песню: {0}",
-                  {
-                    0: `${item.file.name}: ${getErrorMessage(error)}`
-                  }
-                )
+                tr(song ? "library.couldNotStartSongProcessing" : "library.couldNotAddSong", {
+                  0: `${item.file.name}: ${getErrorMessage(error)}`
+                })
               );
             }
           }

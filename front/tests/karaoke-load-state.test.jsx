@@ -1,10 +1,6 @@
 /* @vitest-environment jsdom */
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-vi.mock("../src/i18n/runtime", () => ({
-  translateSaved: (value, replacements = {}) =>
-    Object.entries(replacements).reduce((text, [key, replacement]) => text.replace(`{${key}}`, replacement), value)
-}));
 import KaraokeLoadState from "../src/pages/Karaoke/karaoke-load-state.jsx";
 const ready = {
   songs: [{ id: "song", title: "Song", status: "done" }],

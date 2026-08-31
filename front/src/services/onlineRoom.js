@@ -25,7 +25,7 @@ export function createRoomId(crypto = globalThis.crypto, random = Math.random) {
 export function createHostToken(crypto = globalThis.crypto) {
   if (crypto?.randomUUID) return `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
   if (crypto?.getRandomValues) return hex(crypto.getRandomValues(new Uint8Array(32)));
-  throw new Error(translate("Безопасный генератор случайных чисел недоступен"));
+  throw new Error(translate("room.secureRandomNumberGeneratorUnavailable"));
 }
 
 const GUEST_SESSION_STORAGE_KEY = "advoice-online-room-session-id";
@@ -69,7 +69,7 @@ function safeUrl(value) {
   if (url.protocol === "http:") url.protocol = "ws:";
   if (url.protocol === "https:") url.protocol = "wss:";
   if (!url.protocol.match(/^wss?:$/))
-    throw new TypeError(translate("Некорректный адрес сервера комнат"));
+    throw new TypeError(translate("room.invalidRoomServerAddress"));
   url.username = "";
   url.password = "";
   return url.toString().replace(/\/$/, "");
@@ -84,14 +84,14 @@ function participantName(value) {
       })
       .join("")
       .trim()
-      .slice(0, LIMITS.name) || translate("Гость")
+      .slice(0, LIMITS.name) || translate("room.guest")
   );
 }
 
 function closeDetail(event) {
   const reason = event?.reason?.trim();
   if (reason) return `: ${reason}`;
-  return event?.code && event.code !== 1006 ? translate("(код {0})", { 0: event.code }) : "";
+  return event?.code && event.code !== 1006 ? translate("room.code2", { 0: event.code }) : "";
 }
 
 export class OnlineRoomClient {
@@ -120,7 +120,7 @@ export class OnlineRoomClient {
 
   onMessage(listener) {
     if (typeof listener !== "function")
-      throw new TypeError(translate("Обработчик сообщений комнаты должен быть функцией"));
+      throw new TypeError(translate("room.theRoomMessageHandlerMustBeAFunction"));
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -189,7 +189,7 @@ export class OnlineRoomClient {
         settle({
           iceServers: fallback,
           expiresAt: Date.now() + 60_000,
-          warning: translate("Не получены настройки TURN. Пробуем прямое соединение.")
+          warning: translate("room.turnSettingsUnavailableTryingADirectConnection")
         }),
       6000
     );
@@ -222,9 +222,7 @@ export class OnlineRoomClient {
   connect({ id, name, host = false, hostToken = "" }, reconnect = false) {
     const roomId = normalizeRoomId(id);
     if (roomId.length < 4)
-      return Promise.reject(
-        new Error(translate("Код комнаты должен содержать минимум 4 символа."))
-      );
+      return Promise.reject(new Error(translate("room.theRoomCodeMustContainAtLeast4Characters")));
     if (!reconnect) {
       this.disconnect();
       this.connectionOptions = { id, name, host, hostToken };
@@ -235,7 +233,7 @@ export class OnlineRoomClient {
     }
     this.clockSamples = [];
     if (typeof globalThis.WebSocket !== "function")
-      return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
+      return Promise.reject(new Error(translate("room.websocketIsNotSupportedInThisEnvironment")));
     const query = new URLSearchParams({
       name: participantName(name),
       role: host ? "host" : "guest",
@@ -257,7 +255,7 @@ export class OnlineRoomClient {
       return Promise.reject(
         error instanceof Error
           ? error
-          : new Error(translate("Не удалось создать WebSocket-соединение."))
+          : new Error(translate("room.failedToCreateWebsocketConnection"))
       );
     }
     this.socket = socket;
@@ -276,7 +274,7 @@ export class OnlineRoomClient {
         if (socket.readyState < WebSocket.CLOSING) socket.close();
       };
       const timeout = setTimeout(
-        () => fail(translate("Сервер комнат не ответил.")),
+        () => fail(translate("room.theRoomServerDidNotRespond")),
         reconnect
           ? Math.min(LIMITS.connect, Math.max(1, this.reconnectDeadline - Date.now()))
           : LIMITS.connect
@@ -356,10 +354,9 @@ export class OnlineRoomClient {
         settle(
           reject,
           new Error(
-            translate(
-              "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
-              { 0: closeDetail(event) }
-            )
+            translate("room.failedToConnectToRoomServerCheckYourInternet", {
+              0: closeDetail(event)
+            })
           )
         );
         if (wasCurrent) {

@@ -30,7 +30,7 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     const status = directMonitor.data;
     if (status?.state !== "error" || reportedMonitorError.current === status.request_id) return;
     reportedMonitorError.current = status.request_id;
-    onError(translateSaved("Не удалось включить прослушивание: {0}", { 0: status.error }));
+    onError(translateSaved("karaoke.couldNotEnableMonitoring", { 0: status.error }));
   }, [directMonitor.data, onError]);
   const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
     () => getAudioPreferences().monitorInputDeviceId
@@ -89,8 +89,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         } catch (error) {
           if (mountedRef.current) {
             onError(
-              translateSaved("Не удалось сохранить настройки микрофона: {0}", {
-                0: getErrorMessage(error, translateSaved("неизвестная ошибка"))
+              translateSaved("karaoke.failedToSaveMicrophoneSettings", {
+                0: getErrorMessage(error, translateSaved("room.transfer.unknownError"))
               })
             );
           }

@@ -10,11 +10,11 @@ export const formatLibraryDate = (value, locale = "ru-RU") => {
 
 export const formatEta = (seconds) => {
   const rounded = Math.round(Number(seconds));
-  if (!Number.isFinite(rounded) || rounded <= 0) return tr("рассчитываем…");
+  if (!Number.isFinite(rounded) || rounded <= 0) return tr("library.counting");
   const minutes = Math.floor(rounded / 60);
   return minutes
-    ? tr("~{0} мин {1} сек", { 0: minutes, 1: rounded % 60 })
-    : tr("~{0} сек", { 0: rounded });
+    ? tr("library.minSec", { 0: minutes, 1: rounded % 60 })
+    : tr("library.sec", { 0: rounded });
 };
 
 export const getProcessingProgress = (status, song) =>
@@ -60,7 +60,9 @@ export const resolveVisibleSongs = ({ localSongs, room, roomSongs, roomSongsByPa
   };
   array(localSongs).forEach((song) => add(song, true));
   array(roomSongs).forEach((song) => add(song));
-  Object.values(roomSongsByParticipant || {}).flatMap(array).forEach((song) => add(song));
+  Object.values(roomSongsByParticipant || {})
+    .flatMap(array)
+    .forEach((song) => add(song));
   return [...merged.values()];
 };
 
@@ -129,5 +131,5 @@ export const formatSongKey = (value) => {
   const key = String(value || "").trim();
   return key
     ? key.replace(/\s+minor$/i, "m").replace(/\s+major$/i, "maj")
-    : tr("Тональность определяется");
+    : tr("library.theTonalityIsDetermined");
 };

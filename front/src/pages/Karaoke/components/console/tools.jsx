@@ -16,10 +16,15 @@ export default function ToolsPanel({
   onApplyEffectPreset
 }) {
   const tools = [
-    [AudioLines, t("Ноты"), showNotes, onToggleNotes],
-    [Type, t("Текст"), showLyrics, onToggleLyrics],
-    [MousePointer2, t("Автоскрытие"), autoHideEnabled, () => onAutoHideChange?.(!autoHideEnabled)],
-    [Cog, t("Настройки"), null, onOpenAppSettings]
+    [AudioLines, t("karaoke.sheetMusic"), showNotes, onToggleNotes],
+    [Type, t("karaoke.text"), showLyrics, onToggleLyrics],
+    [
+      MousePointer2,
+      t("karaoke.autohide"),
+      autoHideEnabled,
+      () => onAutoHideChange?.(!autoHideEnabled)
+    ],
+    [Cog, t("karaoke.settings"), null, onOpenAppSettings]
   ].filter(([, , , action]) => action);
   return (
     <Stack justify="space-between" gap="var(--space-2)">
@@ -42,7 +47,7 @@ export default function ToolsPanel({
           <Button
             key={id}
             variant={effectPreset === id ? "contained" : "outlined"}
-            title={t("{0}: эхо {1}%, реверб {2}%", {
+            title={t("karaoke.echoReverb", {
               0: label,
               1: Math.round(echo * 100),
               2: Math.round(reverb * 100)

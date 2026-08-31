@@ -44,7 +44,7 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
   }, [currentTimeRef, isPlaying, update]);
 
   if (!lines.length)
-    return <Typography tone="muted">{t("Синхронизированный текст недоступен")}</Typography>;
+    return <Typography tone="muted">{t("common.syncedTextNotAvailable")}</Typography>;
   return (
     <Stack
       data-role="lyrics"

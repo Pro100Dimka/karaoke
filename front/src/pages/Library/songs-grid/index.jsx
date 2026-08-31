@@ -63,8 +63,8 @@ export default function LibrarySongsGrid({ state: s, fileImport: f, processing, 
             {...(error ? { role: "alert", tone: "danger" } : { tone: "muted" })}
           >
             {error
-              ? `${tr("Не удалось загрузить список:")} ${error.message || error}`
-              : tr("Пока нет ни одной песни — добавьте первую")}
+              ? `${tr("library.failedToLoadList")} ${error.message || error}`
+              : tr("library.thereAreNoSongsYetAddTheFirstOne")}
           </Typography>
         </Card>
       </Stack>
@@ -72,7 +72,7 @@ export default function LibrarySongsGrid({ state: s, fileImport: f, processing, 
   return (
     <Box
       {...drop.getRootProps()}
-      aria-label={tr("Зона добавления песен")}
+      aria-label={tr("library.songDropZone")}
       data-drop-active={drop.isDragActive || undefined}
     >
       <Grid columns={3} gap="var(--space-6)" align="start">

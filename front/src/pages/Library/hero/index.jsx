@@ -5,17 +5,17 @@ import LibraryActions from "./actions";
 import StatCard from "./stat-card";
 
 const STAT_CARDS = [
-  [Music2, "songCount", () => tr("всего песен")],
-  [Mic2, "readyCount", () => tr("готово к караоке")]
+  [Music2, "songCount", () => tr("library.totalSongs")],
+  [Mic2, "readyCount", () => tr("library.readyForKaraoke")]
 ];
 
 export default function LibraryHero({ songCount, readyCount, ...actions }) {
   const stats = { songCount, readyCount };
   const columnSx = { width: "auto", flex: "1 1 40%", minInlineSize: "40%" };
   const HERO_TEXT = [
-    ["h5", "Ваша музыкальная коллекция"],
-    ["h1", "Библиотека песен"],
-    ["h5", "Добавляйте треки, управляйте обработкой и открывайте их в караоке."]
+    ["h5", "library.yourMusicCollection"],
+    ["h1", "library.songLibrary"],
+    ["h5", "library.addTracksControlProcessingAndOpenThemInKaraoke"]
   ];
   return (
     <Stack gap="var(--space-16)" py="var(--space-16)">

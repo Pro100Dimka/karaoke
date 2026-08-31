@@ -95,19 +95,19 @@ export default function OnlineRoomParticipant({
     ],
     [
       effectsLocked ? Lock : Unlock,
-      t(effectsLocked ? "Разрешить управление эффектами" : "Запретить управление эффектами"),
+      t(effectsLocked ? "room.effects.allow" : "room.effects.deny"),
       () => onSetEffectsLocked?.(!effectsLocked)
     ],
     [LogOut, t("room.leave"), onLeave]
   ];
 
   const effectFields = [
-    ["volume", t("Громкость"), 2, 1, "primary"],
-    ["reverb", t("Реверб"), 1, 0, "secondary"],
-    ["echo", t("Эхо"), 1, 0, "primary"],
-    ["delay", t("Дилей"), 1, 0, "secondary"],
-    ["noise_suppression", t("Шумоподавление"), 1, 0.35, "primary"],
-    ["octave", t("Октава голоса"), 1, 0, "secondary", -1, 0.1]
+    ["volume", t("settings.appearance.volume.label"), 2, 1, "primary"],
+    ["reverb", t("karaoke.reverb"), 1, 0, "secondary"],
+    ["echo", t("karaoke.echo"), 1, 0, "primary"],
+    ["delay", t("karaoke.delay"), 1, 0, "secondary"],
+    ["noise_suppression", t("room.effects.noise_suppression.label"), 1, 0.35, "primary"],
+    ["octave", t("karaoke.voiceOctave"), 1, 0, "secondary", -1, 0.1]
   ];
   const commitEffect = (name, value) => {
     const next = { ...effectDraft, [name]: value };
@@ -239,7 +239,7 @@ export default function OnlineRoomParticipant({
                 onClose={() => setEffectsOpen(false)}
                 onMouseEnter={openEffects}
                 onMouseLeave={closeEffectsSoon}
-                aria-label={t("Эффекты микрофона {0}", { 0: person.name })}
+                aria-label={t("room.effects.participant", { 0: person.name })}
                 style={{
                   width: "min(18rem, calc(100vw - 1rem))",
                   padding: "var(--space-4)",
@@ -247,10 +247,10 @@ export default function OnlineRoomParticipant({
                 }}
               >
                 <Stack gap="var(--space-3)">
-                  <Typography as="strong">{t("Эффекты микрофона")}</Typography>
+                  <Typography as="strong">{t("room.effects.title")}</Typography>
                   {effectsLocked && (
                     <Typography variant="caption" tone="muted">
-                      {t("Пользователь запретил изменять свои эффекты")}
+                      {t("room.effects.locked")}
                     </Typography>
                   )}
                   <Stack direction="row" justify="center" gap="var(--space-3)" wrap>

@@ -8,31 +8,32 @@ const STATES = [
     "danger",
     AlertCircle,
     (state) =>
-      `${t("Не удалось загрузить библиотеку:")} ${state.songsError?.message || t("ошибка соединения")}.`
+      `${t("karaoke.failedToLoadLibrary")} ${state.songsError?.message || t("karaoke.connectionError")}.`
   ],
-  [(state) => !state.songs, "muted", LoaderCircle, () => t("Загружаем песню…")],
+  [(state) => !state.songs, "muted", LoaderCircle, () => t("karaoke.loadingTheSong")],
   [
     (state) => !state.song,
     "muted",
     Music2,
     (state) =>
       state.songId
-        ? t("Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова.")
-        : t("Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке.")
+        ? t("karaoke.theSelectedSongWasNotFoundReturnToThe")
+        : t("karaoke.thereIsNoReadySongToPlayFirstProcess")
   ],
   [
     (state) => state.song?.status !== "done",
     "muted",
     Music2,
-    (state) => `«${state.song.title}» ${t("ещё не обработана — статус:")} ${state.song.status}.`
+    (state) =>
+      `«${state.song.title}» ${t("karaoke.hasNotBeenProcessedYetStatus")} ${state.song.status}.`
   ],
-  [(state) => state.resultLoading, "muted", LoaderCircle, () => t("Загружаем данные караоке…")],
+  [(state) => state.resultLoading, "muted", LoaderCircle, () => t("karaoke.loadingKaraokeData")],
   [
     (state) => state.resultError || !state.result,
     "danger",
     AlertCircle,
     (state) =>
-      `${t("Не удалось загрузить данные караоке:")} ${state.resultError?.message || t("результат обработки отсутствует")}.`
+      `${t("karaoke.failedToLoadKaraokeData")} ${state.resultError?.message || t("karaoke.noProcessingResult")}.`
   ]
 ];
 

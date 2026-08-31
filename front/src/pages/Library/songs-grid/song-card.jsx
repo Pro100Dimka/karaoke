@@ -18,13 +18,13 @@ import { getSongActions, SongCoverArt } from "../components";
 import { formatSongKey, getSongCardState } from "../utils";
 
 const statuses = {
-  done: ["success", "Готово"],
-  error: ["danger", "Ошибка"],
-  processing: ["primary", "Обрабатывается"],
-  queued: ["default", "В очереди"],
-  cancelling: ["default", "Отменяется"],
-  cancelled: ["default", "Отменено"],
-  pending: ["default", "Ожидает обработки"]
+  done: ["success", "status.done"],
+  error: ["danger", "status.error"],
+  processing: ["primary", "status.processing"],
+  queued: ["default", "status.queued"],
+  cancelling: ["default", "library.cancelling"],
+  cancelled: ["default", "status.cancelled"],
+  pending: ["default", "library.awaitingProcessing"]
 };
 
 export default memo(
@@ -63,7 +63,7 @@ export default memo(
         interactive={isReady}
         role={isReady ? "button" : undefined}
         tabIndex={isReady ? 0 : undefined}
-        aria-label={isReady ? tr("Открыть {0} в караоке", { 0: song.title }) : undefined}
+        aria-label={isReady ? tr("library.openInKaraoke", { 0: song.title }) : undefined}
         onClick={isReady ? activate : undefined}
         onKeyDown={
           isReady
@@ -98,10 +98,10 @@ export default memo(
               <Stack gap="var(--space-2)">
                 <Typography variant="h4">{song.title}</Typography>
                 <Typography variant="h5" tone="muted" sx={{ fontWeight: "normal" }}>
-                  {song.artist || tr("Исполнитель не указан")}
+                  {song.artist || tr("library.artistNotSpecified")}
                 </Typography>
               </Stack>
-              <Chip tone={tone}>{tr(text)}</Chip>
+              <Chip tone={tone}>{statuses[status] ? tr(text) : status}</Chip>
             </Stack>
             <Stack direction="row" align="center" justify="space-between" wrap gap="var(--space-3)">
               {isWorking || transfer ? (
@@ -117,7 +117,7 @@ export default memo(
                 >
                   {retry ? (
                     <Typography variant="body2" tone="danger">
-                      {tr("Передача прервана — нажмите, чтобы повторить")}
+                      {tr("library.transferInterruptedClickToRetry")}
                     </Typography>
                   ) : (
                     <Stack gap="var(--space-1)" sx={{ width: "100%" }}>
@@ -125,8 +125,8 @@ export default memo(
                         <Typography variant="body2" tone="muted">
                           {tr(
                             song.__roomLocal
-                              ? "Ожидаем, пока другие участники получат песню"
-                              : "Песня скачивается…"
+                              ? "library.waitingForOtherParticipantsToReceiveTheSong"
+                              : "library.downloadingSong"
                           )}
                         </Typography>
                       )}
@@ -159,7 +159,7 @@ export default memo(
                       ref={anchor}
                       icon={Ellipsis}
                       variant="contained"
-                      label={tr("Другие действия")}
+                      label={tr("library.moreActions")}
                       aria-haspopup="menu"
                       aria-expanded={open}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -174,7 +174,7 @@ export default memo(
                       placement="bottom-end"
                       role="menu"
                       onClose={() => setOpen(false)}
-                      aria-label={tr("Другие действия с песней {0}", { 0: song.title })}
+                      aria-label={tr("library.moreActionsForSong", { 0: song.title })}
                       style={{ minWidth: "auto" }}
                     >
                       <Stack align="center" gap="var(--space-1)">

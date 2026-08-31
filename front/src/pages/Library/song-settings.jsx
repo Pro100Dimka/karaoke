@@ -16,11 +16,11 @@ export const HALF = 6;
 export const THIRD = 4;
 export const FULL = 12;
 export const DIFFICULTY_OPTIONS = [
-  tr("Авто (по AI)"),
-  tr("Лёгкий"),
-  tr("Средний"),
-  tr("Сложный"),
-  tr("Эксперт")
+  tr("library.autoByAi"),
+  tr("library.easy"),
+  tr("library.average"),
+  tr("library.difficult"),
+  tr("library.expert")
 ].map((label, index) => ({ value: index ? label : "", label }));
 const nullableNumber = (value) => (value === "" || value == null ? null : Number(value));
 const field = (name, type, label, span = HALF, extra = {}) => ({
@@ -34,22 +34,27 @@ const field = (name, type, label, span = HALF, extra = {}) => ({
 });
 
 export const SONG_FIELDS = [
-  field("artist", "text", tr("Исполнитель"), HALF, { placeholder: "Muse" }),
-  field("title", "text", tr("Название песни"), HALF, {
-    placeholder: tr("Название песни"),
+  field("artist", "text", tr("library.sort.artist"), HALF, { placeholder: "Muse" }),
+  field("title", "text", tr("library.songTitle"), HALF, {
+    placeholder: tr("library.songTitle"),
     required: true
   }),
-  field("tempo_override", "number", tr("Темп"), THIRD, { min: 1, parse: "nullable-number" }),
-  field("key_override", "text", tr("Тональность"), THIRD, { placeholder: tr("напр. C#m") }),
-  field("genre", "select", tr("Жанр"), THIRD, { options: genreOptions() }),
-  field("difficulty_override", "select", tr("Сложность"), HALF, { options: DIFFICULTY_OPTIONS }),
+  field("tempo_override", "number", tr("karaoke.pace"), THIRD, {
+    min: 1,
+    parse: "nullable-number"
+  }),
+  field("key_override", "text", tr("karaoke.key"), THIRD, { placeholder: tr("library.egCM") }),
+  field("genre", "select", tr("library.genre"), THIRD, { options: genreOptions() }),
+  field("difficulty_override", "select", tr("library.complexity"), HALF, {
+    options: DIFFICULTY_OPTIONS
+  }),
   {
     name: "note_range",
     type: "custom",
-    label: tr("Диапазон нот"),
+    label: tr("library.noteRange"),
     span: HALF,
     render: ({ context }) => (
-      <Field label={tr("Диапазон нот")}>
+      <Field label={tr("library.noteRange")}>
         {({ id }) => (
           <Stack direction="row" gap={1} sx={{ width: "100%" }}>
             {["min", "max"].map((edge) => {
@@ -61,8 +66,8 @@ export const SONG_FIELDS = [
                   min={0}
                   max={127}
                   value={context.form?.[name] ?? ""}
-                  placeholder={tr(edge === "min" ? "От" : "До")}
-                  aria-label={tr(edge === "min" ? "Нижняя нота" : "Верхняя нота")}
+                  placeholder={tr(edge === "min" ? "library.from" : "library.to")}
+                  aria-label={tr(edge === "min" ? "library.bottomNote" : "library.topNote")}
                   onChange={(value) => context.onChange(name, nullableNumber(value))}
                 />
               );
@@ -72,11 +77,9 @@ export const SONG_FIELDS = [
       </Field>
     )
   },
-  field("video_url", "text", tr("Ссылка на клип"), FULL, {
+  field("video_url", "text", tr("library.linkToClip"), FULL, {
     placeholder: "https://example.com/video.mp4",
-    tooltip: tr(
-      "Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней."
-    )
+    tooltip: tr("library.youtubeLinksAndDirectLinksToMp4WebmAre")
   })
 ];
 
@@ -94,11 +97,11 @@ const midi = (value) => {
   return number == null ? null : Math.max(0, Math.min(127, Math.round(number)));
 };
 export const validateSongSettings = (form) => {
-  if (!normalizeText(form?.title)) return tr("Укажите название песни.");
+  if (!normalizeText(form?.title)) return tr("library.enterTheTitleOfTheSong");
   const tempo = normalizeNumber(form.tempo_override);
-  if (tempo != null && tempo <= 0) return tr("Темп должен быть больше 0 BPM.");
+  if (tempo != null && tempo <= 0) return tr("library.theTempoMustBeGreaterThan0Bpm");
   const [min, max] = [midi(form.note_range_min), midi(form.note_range_max)];
-  return max != null && min > max ? tr("Нижняя нота диапазона не может быть выше верхней.") : null;
+  return max != null && min > max ? tr("library.theBottomNoteOfTheRangeCannotBeHigher") : null;
 };
 export const createSongPayload = (form, song) => ({
   title: normalizeText(form.title) ?? song.title,
@@ -132,26 +135,26 @@ export default function SongSettings({ songId, onClose }) {
           setForm((current) => ({ ...current, ...updated }));
         await query.refresh?.();
       } catch (error) {
-        await alert(tr("Не удалось сохранить: {0}", { 0: getErrorMessage(error) }));
+        await alert(tr("library.failedToSave", { 0: getErrorMessage(error) }));
       }
     });
   const content = query.error ? (
     <Stack gap={0.75}>
       <Typography role="alert" tone="danger">
-        {tr("Не удалось загрузить песню:")} {getErrorMessage(query.error)}
+        {tr("library.failedToLoadSong")} {getErrorMessage(query.error)}
       </Typography>
       <Button variant="outlined" onClick={query.refresh}>
-        {tr("Повторить")}
+        {tr("backend.retry")}
       </Button>
     </Stack>
   ) : !query.data ? (
-    <Typography tone="muted">{tr("Загружаем настройки песни…")}</Typography>
+    <Typography tone="muted">{tr("library.loadingSongSettings")}</Typography>
   ) : !song ? (
     <Typography role="alert" tone="danger">
-      {tr("Песня не найдена. Возможно, она была удалена.")}
+      {tr("library.songNotFoundItMayHaveBeenDeleted")}
     </Typography>
   ) : !form ? (
-    <Typography tone="muted">{tr("Подготавливаем настройки…")}</Typography>
+    <Typography tone="muted">{tr("library.preparingTheSettings")}</Typography>
   ) : (
     <Stack gap={1}>
       <ConfigForm
@@ -178,15 +181,15 @@ export default function SongSettings({ songId, onClose }) {
       isOpen
       portal
       onClose={onClose}
-      ariaLabel={tr("Настройки песни {0}", { 0: song?.title || "" }).trim()}
+      ariaLabel={tr("library.songSettings2", { 0: song?.title || "" }).trim()}
       titleProps={{
         icon: Music2,
-        eyebrow: tr("КАРАОКЕ · РЕДАКТОР"),
-        title: tr("Настройки песни"),
-        description: song?.title || tr("Загружаем данные песни…"),
+        eyebrow: tr("library.karaokeEditor"),
+        title: tr("library.songSettings"),
+        description: song?.title || tr("library.loadingSongData"),
         actions: song && form && (
           <Button variant="contained" startIcon={<Save />} disabled={pending} onClick={save}>
-            {tr(pending ? "Сохранение…" : "Сохранить")}
+            {tr(pending ? "library.saving" : "library.save")}
           </Button>
         )
       }}
@@ -198,12 +201,12 @@ export default function SongSettings({ songId, onClose }) {
 
 const CardEditor = ({ onClick }) => (
   <Stack gap={0.5}>
-    <Typography sx={{ fontWeight: 800 }}>{tr("Мелодия и текст")}</Typography>
+    <Typography sx={{ fontWeight: 800 }}>{tr("library.melodyAndLyrics")}</Typography>
     <Typography variant="body2" tone="muted">
-      {tr("Откройте piano-roll редактор, чтобы исправить ноты, длительность и привязку текста.")}
+      {tr("library.openThePianoRollEditorToAdjustNotesDurations")}
     </Typography>
     <Button variant="outlined" startIcon={<Piano />} onClick={onClick}>
-      {tr("Открыть редактор")}
+      {tr("library.openEditor")}
     </Button>
   </Stack>
 );

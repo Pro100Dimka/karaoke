@@ -62,7 +62,7 @@ export default function useLibrarySongActions({
         } catch (error) {
           await notify(
             isAmbiguousTransportError(error)
-              ? tr("Backend не подтвердил результат операции: {0}", { 0: getErrorMessage(error) })
+              ? tr("library.backendDidNotConfirmTheOperationResult", { 0: getErrorMessage(error) })
               : `${message}: ${getErrorMessage(error)}`
           );
           if (!isAmbiguousTransportError(error)) return;
@@ -72,7 +72,7 @@ export default function useLibrarySongActions({
           await onChanged?.();
         } catch (error) {
           await notify(
-            tr("Операция выполнена, но список не обновился: {0}", {
+            tr("library.operationCompletedButTheListDidNotRefresh", {
               0: getErrorMessage(error)
             })
           );
@@ -85,7 +85,7 @@ export default function useLibrarySongActions({
   );
 
   const confirmReprocess = useCallback(
-    (text) => confirmDialog(text, tr("Обработать песню заново?")),
+    (text) => confirmDialog(text, tr("library.reworkTheSong")),
     [confirmDialog]
   );
 
@@ -95,14 +95,11 @@ export default function useLibrarySongActions({
       if (
         song?.status !== "pending" &&
         !(await confirmReprocess(
-          tr(
-            "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
-            { 0: song?.title || tr("Без названия") }
-          )
+          tr("library.areYouSureYouWantToReArrangeThe", { 0: song?.title || tr("api.untitled") })
         ))
       )
         return;
-      await process(song, api.processSong, tr("Не удалось запустить обработку"));
+      await process(song, api.processSong, tr("library.failedToStartProcessing"));
     },
     [confirmReprocess, process]
   );
@@ -112,14 +109,11 @@ export default function useLibrarySongActions({
       if (!song?.id) return;
       if (
         !(await confirmReprocess(
-          tr(
-            "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
-            { 0: song?.title || tr("Без названия") }
-          )
+          tr("library.areYouSureYouWantToReArrangeThe2", { 0: song?.title || tr("api.untitled") })
         ))
       )
         return;
-      await process(song, api.reprocessMelody, tr("Не удалось переобработать мелодию"));
+      await process(song, api.reprocessMelody, tr("library.failedToReprocessTheMelody"));
     },
     [confirmReprocess, process]
   );
@@ -132,11 +126,11 @@ export default function useLibrarySongActions({
         let confirmed;
         try {
           confirmed = await confirmDialog(
-            tr("Удалить «{0}»? Это удалит все файлы песни.", { 0: song.title }),
-            tr("Удалить песню?")
+            tr("library.deleteThisWillDeleteAllSongFiles", { 0: song.title }),
+            tr("library.deleteASong")
           );
         } catch (error) {
-          await notify(tr("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) }));
+          await notify(tr("library.failedToConfirmDeletion", { 0: getErrorMessage(error) }));
           return;
         }
         if (!confirmed) return;
@@ -149,11 +143,11 @@ export default function useLibrarySongActions({
         } catch (error) {
           if (!isAmbiguousTransportError(error)) {
             removeFromSet(setHiddenSongIds, song.id);
-            await notify(tr("Не удалось удалить: {0}", { 0: getErrorMessage(error) }));
+            await notify(tr("library.failedToDelete", { 0: getErrorMessage(error) }));
             return;
           }
           await notify(
-            tr("Backend не подтвердил удаление; проверяем состояние: {0}", {
+            tr("library.backendDidNotConfirmDeletionCheckingStatus", {
               0: getErrorMessage(error)
             })
           );
@@ -169,7 +163,7 @@ export default function useLibrarySongActions({
           await onChanged?.();
         } catch (error) {
           await notify(
-            tr("Песня удалена, но список не обновился: {0}", {
+            tr("library.songDeletedButTheListDidNotRefresh", {
               0: getErrorMessage(error)
             })
           );
@@ -195,14 +189,14 @@ export default function useLibrarySongActions({
       try {
         const result = await platform.openSongFolder(song);
         if (!result.supported) {
-          await notify(tr("Открытие папки доступно только в установленном приложении."));
+          await notify(tr("library.openingAFolderIsOnlyAvailableInTheInstalled"));
           return;
         }
-        if (result.error) await notify(result.error, tr("Не удалось открыть папку"));
+        if (result.error) await notify(result.error, tr("library.failedToOpenFolder"));
       } catch (error) {
         await notify(
-          tr("Не удалось открыть папку: {0}", { 0: getErrorMessage(error) }),
-          tr("Не удалось открыть папку")
+          tr("library.failedToOpenFolder2", { 0: getErrorMessage(error) }),
+          tr("library.failedToOpenFolder")
         );
       }
     },

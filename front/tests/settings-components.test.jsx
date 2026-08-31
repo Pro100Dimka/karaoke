@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ data: { ready: true }, settings: null }));
@@ -8,7 +8,12 @@ vi.mock("../src/i18n", () => ({ useI18n: () => ({ t: (key) => key }) }));
 vi.mock("../src/pages/Settings/use-settings", () => ({ default: () => mocks.settings }));
 vi.mock("../src/theme/ui", async (importOriginal) => ({
   ...(await importOriginal()),
-  Modal: ({ children }) => <main>{children}</main>
+  Modal: ({ children, titleProps }) => (
+    <main>
+      {titleProps?.actions}
+      {children}
+    </main>
+  )
 }));
 
 import ModelStatus from "../src/pages/Settings/ModelStatus.jsx";
@@ -39,5 +44,18 @@ describe("new settings components", () => {
     render(<Settings />);
     expect(screen.getAllByRole("tab")).toHaveLength(4);
     expect(screen.getByText("settings.loading")).not.toBeNull();
+  });
+
+  test("advanced services open and back returns to their cards", () => {
+    mocks.settings = { app: { form: null }, audio: {}, radio: {} };
+    render(<Settings initialTab="advanced" />);
+    expect(screen.getByRole("button", { name: /settings.service.about.title/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /settings.service.about.title/ }));
+    expect(screen.getByText("A&D Voice")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "settings.back" }));
+    expect(screen.getByRole("button", { name: /settings.service.about.title/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "settings.tab.audio" }));
+    expect(screen.queryByRole("button", { name: "settings.back" })).toBeNull();
+    expect(screen.getByText("settings.loading")).toBeTruthy();
   });
 });

@@ -167,9 +167,9 @@ export default function KaraokePerformanceStage({
             {songId && <SongCoverArt song={{ id: songId }} sx={{ flex: 1 }} />}
             <Stack align="center" justify="space-between" py="var(--space-8)" sx={{ flex: 4 }}>
               <Typography variant="h6" tone="muted">
-                {t("Сейчас прозвучит")}
+                {t("karaoke.nowItWillSound")}
               </Typography>
-              <Typography variant="h2">{sceneIntro?.title || t("Караоке")}</Typography>
+              <Typography variant="h2">{sceneIntro?.title || t("karaoke.karaoke")}</Typography>
               {sceneIntro?.artist && (
                 <Typography variant="h5" tone="muted">
                   {sceneIntro.artist}

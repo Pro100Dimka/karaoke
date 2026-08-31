@@ -228,7 +228,7 @@ export function createOnlineRoomMessageHandler(options) {
         participantId: message.fromId,
         songId: command.songId,
         stage: "error",
-        error: command.error || translateSaved("Ведущий не смог передать песню"),
+        error: command.error || translateSaved("room.theHostCouldNotSendTheSong"),
         percent: 0
       });
       return true;
@@ -252,7 +252,7 @@ export function createOnlineRoomMessageHandler(options) {
         // it directly and immediately so the caller isn't left stranded.
         previous.reject?.(
           new Error(
-            translateSaved("Запрос синхронизации песни отменён: ведущий запустил другую песню")
+            translateSaved("room.songSynchronizationRequestCancelledHostStartedAnotherSong")
           )
         );
       }
@@ -326,7 +326,7 @@ export function createOnlineRoomMessageHandler(options) {
           __eventId: createEventId("snapshot")
         }));
       if (message.hostReconnectDeadline)
-        setVoiceError(translateSaved("Ведущий переподключается. Комната сохранена на 45 секунд."));
+        setVoiceError(translateSaved("room.hostIsReconnectingRoomIsReservedFor45Seconds"));
       // Guests can operate playback while the host reconnects. A returning
       // host must follow the latest command too, not overwrite it with a heartbeat.
       if (message.playbackState && (self?.role !== "host" || message.resumed))
@@ -411,12 +411,12 @@ export function createOnlineRoomMessageHandler(options) {
       }));
     },
     error: (message) =>
-      setVoiceError(message.message || translateSaved("Сервер комнаты отклонил действие.")),
+      setVoiceError(message.message || translateSaved("room.roomServerRejectedTheAction")),
     "effect-control-denied": () =>
-      setVoiceError(translateSaved("Участник запретил изменение своих эффектов.")),
+      setVoiceError(translateSaved("room.participantDoesNotAllowChangesToTheirEffects")),
     "connection-reconnecting": () => {
       setVoiceError(
-        translateSaved("Связь с сервером потеряна. Переподключаемся, не выключая голос.")
+        translateSaved("room.serverConnectionLostReconnectingWithoutInterruptingVoice")
       );
     },
     "connection-restored": () => {
@@ -437,7 +437,7 @@ export function createOnlineRoomMessageHandler(options) {
           item.id === message.participantId ? { ...item, reconnecting: true } : item
         )
       );
-      setVoiceError(translateSaved("Ведущий переподключается. Комната сохранена на 45 секунд."));
+      setVoiceError(translateSaved("room.hostIsReconnectingRoomIsReservedFor45Seconds"));
     },
     "host-reconnected": (message) => {
       setParticipants((items) =>
@@ -464,7 +464,7 @@ export function createOnlineRoomMessageHandler(options) {
       cleanupConnection();
       setRoom(null);
       setParticipants([]);
-      setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+      setVoiceError(translateSaved("room.theConnectionToTheRoomIsLost"));
     },
     "room-closed": (message) => {
       if (disconnectIntentRef.current) return;
@@ -475,10 +475,10 @@ export function createOnlineRoomMessageHandler(options) {
       // would otherwise report.
       const reason =
         message.reason === "host-left"
-          ? translateSaved("Хост покинул комнату. Комната закрыта.")
+          ? translateSaved("room.hostLeftTheRoomRoomClosed")
           : message.reason === "host-timeout"
-            ? translateSaved("Ведущий не восстановил связь за 45 секунд. Комната закрыта.")
-            : translateSaved("Комната закрыта.");
+            ? translateSaved("room.hostDidNotReconnectWithin45SecondsRoomClosed")
+            : translateSaved("room.roomClosed2");
       if (onConnectionClosed) return onConnectionClosed(reason);
       cleanupConnection();
       setRoom(null);

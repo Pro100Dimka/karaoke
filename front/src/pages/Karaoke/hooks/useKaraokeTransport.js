@@ -7,8 +7,8 @@ import { readJsonStorage, writeJsonStorage } from "../../../utils/storage";
 import { playbackGain } from "../utils/data";
 import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transport";
 
-const UNKNOWN_ERROR = "неизвестная ошибка";
-const MISSING_RECORDING_ID = "Backend не вернул идентификатор записи";
+const UNKNOWN_ERROR = "room.transfer.unknownError";
+const MISSING_RECORDING_ID = "karaoke.backendDidNotReturnPostId";
 const PENDING_RECORDING_KEY = "karaoke-pending-recording-session";
 const ROOM_PLAY_LEAD_MS = 450;
 const MASTER_PLAY_TIMEOUT_MS = 4_000;
@@ -336,7 +336,7 @@ export default function useKaraokeTransport({
         if (!finalizeError) clearSession(id);
       }
       setRecordingError(
-        formatError("Запись недоступна, караоке продолжит работу без неё: {0}", error)
+        formatError("karaoke.recordingIsNotAvailableKaraokeWillContinueToWork", error)
       );
       return null;
     }
@@ -408,7 +408,7 @@ export default function useKaraokeTransport({
         if (!recordingId || operation !== operationRef.current) return;
         Promise.resolve(api.syncRecording(recordingId, instrumental.currentTime)).catch((error) => {
           if (operation === operationRef.current) {
-            setRecordingError(formatError("Не удалось точно синхронизировать запись: {0}", error));
+            setRecordingError(formatError("karaoke.couldNotPreciselySynchronizeRecording", error));
           }
         });
       });
@@ -421,7 +421,7 @@ export default function useKaraokeTransport({
       const activeSession = sessionRef.current;
       if (activeSession) await discardSession(activeSession);
       lifecycle.fail();
-      setRecordingError(translateSaved("Не удалось запустить воспроизведение"));
+      setRecordingError(translateSaved("karaoke.failedToStartPlayback"));
       if (scheduledAt != null) broadcast("pause", instrumental.currentTime);
       return false;
     }
@@ -456,7 +456,7 @@ export default function useKaraokeTransport({
     if (id) {
       const { recording, error } = await finalizeRecording(id);
       if (error) {
-        setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
+        setRecordingError(formatError("karaoke.failedToSaveEntry", error));
         clearSession(id, false);
       } else {
         if (recording?.id) {
@@ -474,10 +474,7 @@ export default function useKaraokeTransport({
               );
             } catch (error) {
               setRecordingError(
-                formatError(
-                  "Запись сохранена, но голос второго участника добавить не удалось: {0}",
-                  error
-                )
+                formatError("karaoke.recordingSavedButTheOtherParticipantSVoiceCould", error)
               );
             }
           }
@@ -492,7 +489,7 @@ export default function useKaraokeTransport({
       // keep its Hands-Free microphone profile and play normal media at once.
       await Promise.resolve(releaseMonitoring?.());
     } catch (error) {
-      setRecordingError(formatError("Не удалось отключить прослушивание микрофона: {0}", error));
+      setRecordingError(formatError("karaoke.couldNotDisableMicrophoneMonitoring", error));
     }
     return true;
   };
@@ -516,7 +513,7 @@ export default function useKaraokeTransport({
       try {
         await stop({ broadcast: false });
       } catch (error) {
-        setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
+        setRecordingError(formatError("karaoke.failedToSaveEntry", error));
       }
     }
     if (onlineRoom?.room) {
@@ -584,7 +581,7 @@ export default function useKaraokeTransport({
     const action = Object.hasOwn(actions, roomCommand.action) && actions[roomCommand.action];
     const runAction = () =>
       Promise.resolve(action && action()).catch((error) =>
-        setRecordingError(formatError("Не удалось выполнить команду комнаты: {0}", error))
+        setRecordingError(formatError("karaoke.failedToExecuteRoomCommand", error))
       );
     const delay =
       roomCommand.action === "play" && Number.isFinite(executeAt) && Number.isFinite(serverNow)

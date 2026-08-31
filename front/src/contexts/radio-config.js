@@ -17,132 +17,187 @@ const station = (id, name, group, description) => ({
 // the same redundant ice5/ice2 transport preserves the existing failover.
 /* Stryker disable all */
 export const RADIO_STATIONS = [
-  station("poptron", "PopTron", "Поп и инди", "Электропоп и танцевальный инди-рок"),
-  station("indiepop", "Indie Pop Rocks", "Поп и инди", "Новый и классический инди-поп"),
-  station("lush", "Lush", "Поп и инди", "Мягкий женский вокал и электроника"),
-  station("covers", "Covers", "Поп и инди", "Знакомые песни в необычных кавер-версиях"),
-  station("insound", "The In-Sound", "Поп и инди", "Европейский поп шестидесятых и семидесятых"),
+  station("poptron", "PopTron", "radio.popAndIndie", "radio.electropopAndDanceableIndieRock"),
+  station("indiepop", "Indie Pop Rocks", "radio.popAndIndie", "radio.newAndClassicIndiePop"),
+  station("lush", "Lush", "radio.popAndIndie", "radio.softFemaleVocalsAndElectronica"),
+  station("covers", "Covers", "radio.popAndIndie", "radio.familiarSongsInUnusualCoverVersions"),
+  station(
+    "insound",
+    "The In-Sound",
+    "radio.popAndIndie",
+    "radio.europeanPopOfTheSixtiesAndSeventies"
+  ),
 
-  station("seventies", "Left Coast 70s", "Рок и альтернатива", "Мягкий альбомный рок семидесятых"),
-  station("metal", "Metal Detector", "Рок и альтернатива", "Метал от прога и трэша до пост-метала"),
-  station("digitalis", "Digitalis", "Рок и альтернатива", "Экспериментальный электронный рок"),
-  station("folkfwd", "Folk Forward", "Рок и альтернатива", "Инди-фолк и современная акустика"),
+  station(
+    "seventies",
+    "Left Coast 70s",
+    "radio.rockAndAlternative",
+    "radio.softAlbumRockOfTheSeventies"
+  ),
+  station(
+    "metal",
+    "Metal Detector",
+    "radio.rockAndAlternative",
+    "radio.metalFromProgAndThrashToPostMetal"
+  ),
+  station("digitalis", "Digitalis", "radio.rockAndAlternative", "radio.experimentalElectronicRock"),
+  station(
+    "folkfwd",
+    "Folk Forward",
+    "radio.rockAndAlternative",
+    "radio.indieFolkAndContemporaryAcousticMusic"
+  ),
   station(
     "n5md",
     "n5MD Radio",
-    "Рок и альтернатива",
-    "Пост-рок и эмоциональная экспериментальная музыка"
+    "radio.rockAndAlternative",
+    "radio.postRockAndEmotionalExperimentalMusic"
   ),
 
   station(
     "beatblender",
     "Beat Blender",
-    "Электроника и танцы",
-    "Дип-хаус и спокойный электронный бит"
+    "radio.electronicAndDance",
+    "radio.deepHouseAndMellowElectronicBeats"
   ),
-  station("thetrip", "The Trip", "Электроника и танцы", "Прогрессив-хаус и транс"),
-  station("dubstep", "Dub Step Beyond", "Электроника и танцы", "Дабстеп, даб и глубокий бас"),
-  station("cliqhop", "cliqhop idm", "Электроника и танцы", "IDM, ритмы и цифровые эксперименты"),
-  station("vaporwaves", "Vaporwaves", "Электроника и танцы", "Круглосуточный vaporwave"),
+  station("thetrip", "The Trip", "radio.electronicAndDance", "radio.progressiveHouseAndTrance"),
+  station("dubstep", "Dub Step Beyond", "radio.electronicAndDance", "radio.dubstepDubAndDeepBass"),
+  station(
+    "cliqhop",
+    "cliqhop idm",
+    "radio.electronicAndDance",
+    "radio.idmRhythmsAndDigitalExperiments"
+  ),
+  station("vaporwaves", "Vaporwaves", "radio.electronicAndDance", "radio.vaporwaveAroundTheClock"),
 
-  station("groovesalad", "Groove Salad", "Эмбиент и чилл", "Эмбиент, даунтемпо и мягкий грув"),
-  station("groovesalad2", "Groove Salad 2", "Эмбиент и чилл", "Альтернативный микс чилл-эмбиента"),
+  station(
+    "groovesalad",
+    "Groove Salad",
+    "radio.ambientAndChill",
+    "radio.ambientDowntempoAndMellowGrooves"
+  ),
+  station(
+    "groovesalad2",
+    "Groove Salad 2",
+    "radio.ambientAndChill",
+    "radio.alternativeChillAmbientMix"
+  ),
   station(
     "gsclassic",
     "Groove Salad Classic",
-    "Эмбиент и чилл",
-    "Классический Groove Salad начала 2000-х"
+    "radio.ambientAndChill",
+    "radio.classicGrooveSaladFromTheEarly2000s"
   ),
-  station("dronezone", "Drone Zone", "Эмбиент и чилл", "Атмосферные текстуры с минимумом ритма"),
-  station("dz2", "Drone Zone 2", "Эмбиент и чилл", "Более эклектичный атмосферный эмбиент"),
+  station(
+    "dronezone",
+    "Drone Zone",
+    "radio.ambientAndChill",
+    "radio.atmosphericTexturesWithMinimalRhythm"
+  ),
+  station("dz2", "Drone Zone 2", "radio.ambientAndChill", "radio.moreEclecticAtmosphericAmbient"),
 
-  station("deepspaceone", "Deep Space One", "Космос и эксперимент", "Глубокий космический эмбиент"),
+  station("deepspaceone", "Deep Space One", "radio.spaceAndExperimental", "radio.deepSpaceAmbient"),
   station(
     "spacestation",
     "Space Station Soma",
-    "Космос и эксперимент",
-    "Космическая электроника среднего темпа"
+    "radio.spaceAndExperimental",
+    "radio.midTempoSpaceElectronica"
   ),
   station(
     "synphaera",
     "Synphaera Radio",
-    "Космос и эксперимент",
-    "Современный электронный эмбиент"
+    "radio.spaceAndExperimental",
+    "radio.contemporaryElectronicAmbient"
   ),
   station(
     "missioncontrol",
     "Mission Control",
-    "Космос и эксперимент",
-    "Музыка и архивные голоса космических миссий"
+    "radio.spaceAndExperimental",
+    "radio.musicAndArchiveVoicesFromSpaceMissions"
   ),
-  station("darkzone", "The Dark Zone", "Космос и эксперимент", "Тёмная сторона глубокого эмбиента"),
+  station(
+    "darkzone",
+    "The Dark Zone",
+    "radio.spaceAndExperimental",
+    "radio.theDarkSideOfDeepAmbient"
+  ),
 
   station(
     "sonicuniverse",
     "Sonic Universe",
-    "Джаз, соул и лаунж",
-    "Современный и авангардный джаз"
+    "radio.jazzSoulAndLounge",
+    "radio.contemporaryAndAvantGardeJazz"
   ),
   station(
     "7soul",
     "Seven Inch Soul",
-    "Джаз, соул и лаунж",
-    "Винтажный соул с оригинальных пластинок"
+    "radio.jazzSoulAndLounge",
+    "radio.vintageSoulFromOriginalRecords"
   ),
   station(
     "secretagent",
     "Secret Agent",
-    "Джаз, соул и лаунж",
-    "Стильный саундтрек для шпионского кино"
+    "radio.jazzSoulAndLounge",
+    "radio.stylishSpyMovieSoundtrack"
   ),
   station(
     "illstreet",
     "Illinois Street Lounge",
-    "Джаз, соул и лаунж",
-    "Классический лаунж и экзотика"
+    "radio.jazzSoulAndLounge",
+    "radio.classicLoungeAndExotica"
   ),
-  station("bossa", "Bossa Beyond", "Джаз, соул и лаунж", "Босса-нова, самба и бразильские ритмы"),
+  station(
+    "bossa",
+    "Bossa Beyond",
+    "radio.jazzSoulAndLounge",
+    "radio.bossaNovaSambaAndBrazilianRhythms"
+  ),
 
   station(
     "suburbsofgoa",
     "Suburbs of Goa",
-    "Мировая музыка и корни",
-    "Азиатские и индийские world-биты"
+    "radio.worldMusicAndRoots",
+    "radio.asianAndIndianWorldBeats"
   ),
   station(
     "thistle",
     "ThistleRadio",
-    "Мировая музыка и корни",
-    "Кельтская музыка от корней до современности"
+    "radio.worldMusicAndRoots",
+    "radio.celticMusicFromRootsToToday"
   ),
-  station("reggae", "Heavyweight Reggae", "Мировая музыка и корни", "Регги, ска и рокстеди"),
+  station(
+    "reggae",
+    "Heavyweight Reggae",
+    "radio.worldMusicAndRoots",
+    "radio.reggaeSkaAndRocksteady"
+  ),
   station(
     "bootliquor",
     "Boot Liquor",
-    "Мировая музыка и корни",
-    "Американа и музыка кантри-корней"
+    "radio.worldMusicAndRoots",
+    "radio.americanaAndCountryRootsMusic"
   ),
-  station("tikitime", "Tiki Time", "Мировая музыка и корни", "Винтажные островные и тики-ритмы"),
+  station("tikitime", "Tiki Time", "radio.worldMusicAndRoots", "radio.vintageIslandAndTikiRhythms"),
 
   station(
     "brfm",
     "Black Rock FM",
-    "Эклектика и специальные",
-    "Эклектичная музыка пустыни Black Rock"
+    "radio.eclecticAndSpecial",
+    "radio.eclecticMusicFromTheBlackRockDesert"
   ),
-  station("defcon", "DEF CON Radio", "Эклектика и специальные", "Музыка для хакерской культуры"),
-  station("fluid", "Fluid", "Эклектика и специальные", "Инструментальный хип-хоп и future soul"),
+  station("defcon", "DEF CON Radio", "radio.eclecticAndSpecial", "radio.musicForHackerCulture"),
+  station("fluid", "Fluid", "radio.eclecticAndSpecial", "radio.instrumentalHipHopAndFutureSoul"),
   station(
     "chillits",
     "Chillits Radio",
-    "Эклектика и специальные",
-    "Живые чилл-сеты и фестивальная атмосфера"
+    "radio.eclecticAndSpecial",
+    "radio.liveChillSetsAndFestivalAtmosphere"
   ),
   station(
     "specials",
     "Specials",
-    "Эклектика и специальные",
-    "Сезонные программы и специальные эфиры"
+    "radio.eclecticAndSpecial",
+    "radio.seasonalProgramsAndSpecialBroadcasts"
   )
 ];
 /* Stryker restore all */

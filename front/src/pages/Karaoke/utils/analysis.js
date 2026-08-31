@@ -4,45 +4,35 @@ import { translateSaved } from "../../../i18n/runtime";
 const EMPTY_SECTIONS = Object.freeze(Array()); // eslint-disable-line no-array-constructor
 
 const ANALYSIS_GRADES = [
-  [85, () => translateSaved("Отличное исполнение")],
-  [70, () => translateSaved("Хороший результат")],
-  [50, () => translateSaved("Есть потенциал")],
-  [-Infinity, () => translateSaved("Нужно потренироваться")]
+  [85, () => translateSaved("karaoke.excellentPerformance")],
+  [70, () => translateSaved("karaoke.goodResult")],
+  [50, () => translateSaved("karaoke.thereIsPotential")],
+  [-Infinity, () => translateSaved("karaoke.needToPractice")]
 ];
 
 function getAnalysisGrade(accuracy) {
-  if (accuracy == null) return translateSaved("Нет данных");
+  if (accuracy == null) return translateSaved("common.noData");
   const [, getLabel] = ANALYSIS_GRADES.find(([minimum]) => accuracy >= minimum);
   return getLabel();
 }
 
 function getAnalysisAdvice(accuracy, meanDeviation, practiceMetric) {
   if (accuracy == null) {
-    return translateSaved(
-      "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
-    );
+    return translateSaved("karaoke.couldnTDetermineEnoughNotesSungTrySingingCloser");
   }
   if (meanDeviation > 1) {
-    return translateSaved("Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты.");
+    return translateSaved("karaoke.focusOnStartingEachPhraseAccuratelyAndMaintainingThe");
   }
   const advice = {
-    pitch: () =>
-      translateSaved("Потренируйте точное попадание в высоту нот, начиная с медленного темпа."),
-    rhythm: () =>
-      translateSaved(
-        "Потренируйте моменты вступления: слушайте сильную долю и начинайте фразу вместе с минусовкой."
-      ),
-    hold: () =>
-      translateSaved(
-        "Удерживайте ноту ровнее до её окончания и распределяйте дыхание на всю фразу."
-      ),
-    coverage: () =>
-      translateSaved("Пойте все отмеченные фразы ближе к микрофону, не пропуская окончания слов.")
+    pitch: () => translateSaved("karaoke.practiceMatchingNotePitchesStartingAtASlowTempo"),
+    rhythm: () => translateSaved("karaoke.practiceYourEntriesListenForTheDownbeatAndStart"),
+    hold: () => translateSaved("karaoke.sustainEachNoteSteadilyToItsEndAndPace"),
+    coverage: () => translateSaved("karaoke.singEveryMarkedPhraseCloserToTheMicrophoneWithout")
   };
   if (practiceMetric?.key && advice[practiceMetric.key]) return advice[practiceMetric.key]();
   return accuracy >= 70
-    ? translateSaved("Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию.")
-    : translateSaved("Повторите сложные фразы медленнее, ориентируясь на ноты на экране.");
+    ? translateSaved("karaoke.goodAccuracyTryToMakeThePhrasesMoreEven")
+    : translateSaved("karaoke.repeatDifficultPhrasesMoreSlowlyFocusingOnTheNotes");
 }
 
 function finiteOrNull(value) {

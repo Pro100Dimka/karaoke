@@ -233,7 +233,7 @@ export function OnlineRoomProvider({ children }) {
     async () => {
       const voice = voiceRef.current;
       if (!voice) {
-        setVoiceError(translateSaved("Сначала подключитесь к комнате."));
+        setVoiceError(translateSaved("room.firstConnectToTheRoom"));
         return false;
       }
       setVoiceError("");
@@ -252,12 +252,11 @@ export function OnlineRoomProvider({ children }) {
         return true;
       } catch (error) {
         if (voiceRef.current !== voice) return false;
-        const message = getErrorMessage(error, translateSaved("нет доступа к микрофону"));
+        const message = getErrorMessage(error, translateSaved("room.noAccessToMicrophone"));
         setVoiceError(
-          translateSaved(
-            "Не удалось получить доступ к микрофону: {0}. Проверьте разрешение Windows и повторите попытку.",
-            { 0: message }
-          )
+          translateSaved("room.failedToAccessMicrophoneCheckYourWindowsResolutionAnd", {
+            0: message
+          })
         );
         return false;
       }
@@ -305,7 +304,10 @@ export function OnlineRoomProvider({ children }) {
         pending.reject = (error) => finish(false, error);
         librarySyncRef.current = pending;
         pending.timer = globalThis.setTimeout(
-          () => pending.reject(new Error(translateSaved("Участник не ответил на запрос песни"))),
+          () =>
+            pending.reject(
+              new Error(translateSaved("room.participantDidNotRespondToTheSongRequest"))
+            ),
           SONG_SYNC_REQUEST_TIMEOUT_MS
         );
         setTransferStatus({
@@ -376,7 +378,7 @@ export function OnlineRoomProvider({ children }) {
       hostSongCommandRef.current = null;
       songExportsRef.current.clear();
       roomTransferBroadcastRef.current = null;
-      librarySyncRef.current?.reject?.(new Error(translateSaved("Комната закрыта")));
+      librarySyncRef.current?.reject?.(new Error(translateSaved("room.roomClosed")));
       librarySyncRef.current = null;
       setTransferStatus(null);
       setVoiceError("");
@@ -419,9 +421,7 @@ export function OnlineRoomProvider({ children }) {
         }
         attachRemoteStream(participantId, stream, () => {
           if (!isCurrentConnection()) return;
-          setVoiceError(
-            translateSaved("Нажмите в любом месте приложения, чтобы разрешить звук комнаты.")
-          );
+          setVoiceError(translateSaved("room.tapAnywhereInTheAppToEnableRoomAudio"));
         });
       };
       voice.onPeerClosed = (participantId) => {
@@ -518,7 +518,7 @@ export function OnlineRoomProvider({ children }) {
       const handleLibrarySongFile = async (participantId, blob, metadata, signal) => {
         const pending = librarySyncRef.current;
         if (!canAcceptLibrarySongPackage(participantId, metadata))
-          throw new Error(translateSaved("Получение песни больше не разрешено"));
+          throw new Error(translateSaved("room.receivingThisSongIsNoLongerAllowed"));
         try {
           setTransferStatus({
             participantId,
@@ -545,9 +545,7 @@ export function OnlineRoomProvider({ children }) {
           if (signal?.aborted) return false;
           if (isCurrentConnection() && librarySyncRef.current === pending) {
             pending.reject?.(
-              new Error(
-                translateSaved("Не удалось получить песню: {0}", { 0: getErrorMessage(error) })
-              )
+              new Error(translateSaved("room.couldNotReceiveSong", { 0: getErrorMessage(error) }))
             );
           }
           throw error;
@@ -557,7 +555,7 @@ export function OnlineRoomProvider({ children }) {
       const handleKaraokeSongFile = async (participantId, blob, metadata, signal) => {
         const pendingCommand = pendingSongCommandRef.current;
         if (!canAcceptSongPackage(participantId, metadata))
-          throw new Error(translateSaved("Получение пакета песни больше не разрешено"));
+          throw new Error(translateSaved("room.receivingThisSongPackageIsNoLongerAllowed"));
         try {
           setTransferStatus({
             participantId,
@@ -572,9 +570,7 @@ export function OnlineRoomProvider({ children }) {
           });
           const imported = await api.getSongRevision(metadata.songId);
           if (imported?.revision !== metadata.revision)
-            throw new Error(
-              translateSaved("Импортированная версия песни не совпадает с версией комнаты")
-            );
+            throw new Error(translateSaved("room.importedSongVersionDoesNotMatchTheRoomVersion"));
           if (
             !isCurrentConnection() ||
             pendingSongCommandRef.current?.commandId !== metadata.commandId
@@ -610,7 +606,7 @@ export function OnlineRoomProvider({ children }) {
               songId: metadata.songId,
               commandId: metadata.commandId,
               stage: "error",
-              error: translateSaved("Не удалось импортировать песню: {0}", {
+              error: translateSaved("room.failedToImportSong", {
                 0: getErrorMessage(error)
               }),
               percent: 0
@@ -635,7 +631,7 @@ export function OnlineRoomProvider({ children }) {
           const revisionPayload = await api.getSongRevision(message.songId);
           const revision = revisionPayload?.revision;
           if (typeof revision !== "string" || !revision.startsWith("sha256:"))
-            throw new Error(translateSaved("Песня недоступна для передачи"));
+            throw new Error(translateSaved("room.songIsUnavailableForTransfer"));
           if (!isCurrentConnection()) return;
           blob = await api.exportSongPackage(message.songId, revision);
           if (!isCurrentConnection()) return;
@@ -661,7 +657,7 @@ export function OnlineRoomProvider({ children }) {
         )
           return;
         pending.reject?.(
-          new Error(message.error || translateSaved("Участник не смог отправить песню"))
+          new Error(message.error || translateSaved("room.participantCouldNotSendTheSong"))
         );
       };
       unsubscribeRef.current = client.onMessage(
@@ -704,13 +700,13 @@ export function OnlineRoomProvider({ children }) {
               .catch((error) => {
                 if (isCurrentConnection())
                   setVoiceError(
-                    translateSaved("Не удалось применить настройки эффектов: {0}", {
+                    translateSaved("room.couldNotApplyEffectSettings", {
                       0: getErrorMessage(error)
                     })
                   );
               });
           },
-          onConnectionClosed: (message = translateSaved("Соединение с комнатой потеряно.")) => {
+          onConnectionClosed: (message = translateSaved("room.theConnectionToTheRoomIsLost")) => {
             if (roomRef.current && !roomSoundMutedRef.current) playParticipantLeftSound();
             connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
@@ -724,7 +720,7 @@ export function OnlineRoomProvider({ children }) {
       try {
         const normalizedId = await client.connect({ id, name, host, hostToken });
         if (!isCurrentConnection())
-          throw new Error(translateSaved("Подключение отменено новым запросом"));
+          throw new Error(translateSaved("room.connectionCanceledByNewRequest"));
         if (!roomSoundMutedRef.current) playParticipantJoinedSound();
 
         // Show the room UI as soon as the WebSocket is connected. The server
@@ -740,7 +736,7 @@ export function OnlineRoomProvider({ children }) {
           setParticipants([
             {
               id: pendingSelfId,
-              name: name?.trim() || translateSaved("Гость"),
+              name: name?.trim() || translateSaved("room.guest"),
               role: host ? "host" : "guest",
               pending: true
             }
@@ -763,8 +759,8 @@ export function OnlineRoomProvider({ children }) {
           .catch((error) => {
             if (!isCurrentConnection()) return;
             setVoiceError(
-              translateSaved("Комната подключена без голоса: {0}", {
-                0: getErrorMessage(error, translateSaved("нет доступа к микрофону"))
+              translateSaved("room.roomConnectedWithoutVoice", {
+                0: getErrorMessage(error, translateSaved("room.noAccessToMicrophone"))
               })
             );
           });

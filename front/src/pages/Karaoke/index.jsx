@@ -401,7 +401,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
     } catch (error) {
       setRecordingError(
-        translateSaved("Не удалось изменить прослушивание микрофона: {0}", {
+        translateSaved("karaoke.failedToChangeMicrophoneListening", {
           0: getErrorMessage(error)
         })
       );

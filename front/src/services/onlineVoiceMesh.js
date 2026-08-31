@@ -98,7 +98,7 @@ export default class OnlineVoiceMesh {
 
   async start() {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error(translateSaved("Захват микрофона не поддерживается в этом окружении"));
+      throw new Error(translateSaved("room.microphoneCaptureIsNotSupportedInThisEnvironment"));
     }
     // Checked before any await below: two calls to start() landing in the
     // same tick (e.g. two components each mounting and calling voice.start()
@@ -134,7 +134,7 @@ export default class OnlineVoiceMesh {
         capturedStream = stream;
         if (lifecycleVersion !== this.lifecycleVersion) {
           stream.getTracks().forEach((track) => track.stop());
-          throw new Error(translateSaved("Запуск микрофона отменён"));
+          throw new Error(translateSaved("room.microphoneLaunchCanceled"));
         }
         // The graph otherwise defaults to a stale/hardcoded noise-suppression
         // level until some settings save happens to dispatch
@@ -230,10 +230,10 @@ export default class OnlineVoiceMesh {
 
   createPeer(participantId) {
     if (typeof participantId !== "string" || !participantId || participantId.length > 128) {
-      throw new TypeError(translateSaved("Некорректный идентификатор участника"));
+      throw new TypeError(translateSaved("room.invalidMemberId"));
     }
     if (typeof globalThis.RTCPeerConnection !== "function") {
-      throw new Error(translateSaved("WebRTC не поддерживается в этом окружении"));
+      throw new Error(translateSaved("room.webrtcIsNotSupportedInThisEnvironment"));
     }
     const current = this.peers.get(participantId);
     if (current) return current;
@@ -345,12 +345,8 @@ export default class OnlineVoiceMesh {
       (Array.isArray(urls) ? urls : [urls]).some((url) => /^turns?:/.test(url))
     );
     const message = relay
-      ? translateSaved(
-          "Не удалось соединиться с участником: голос и передача песни недоступны. Проверьте сеть и подключитесь к комнате повторно."
-        )
-      : translateSaved(
-          "Прямое соединение с участником не установлено, TURN не настроен или недоступен. Голос и передача песни недоступны."
-        );
+      ? translateSaved("room.couldNotConnectToParticipantVoiceAndSongTransfer")
+      : translateSaved("room.directParticipantConnectionFailedAndTurnIsUnconfiguredOr");
     console.error("Room peer connection failed", { participantId, relayAvailable: relay });
     this.onPeerError?.(participantId, message);
   }
@@ -523,7 +519,7 @@ export default class OnlineVoiceMesh {
           const queue = this.pendingCandidates.get(fromId) || [];
           if (queue.length >= MAX_PENDING_ICE_CANDIDATES) {
             this.removePeer(fromId);
-            throw new Error(translateSaved("Получено слишком много ICE-кандидатов"));
+            throw new Error(translateSaved("room.tooManyIceCandidatesReceived"));
           }
           queue.push(signal.candidate);
           this.pendingCandidates.set(fromId, queue);
@@ -628,9 +624,7 @@ export default class OnlineVoiceMesh {
       participantId,
       null,
       new Error(
-        translateSaved(
-          "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя."
-        )
+        translateSaved("room.participantDisconnectedDuringTransferSendTheFileAgainInterrupted")
       )
     );
     const admission = this.incomingFileAdmissions.get(participantId);
@@ -683,7 +677,12 @@ export default class OnlineVoiceMesh {
     this.incomingFiles.clear();
     for (const admission of this.incomingFileAdmissions.values()) admission.cancelled = true;
     this.incomingFileAdmissions.clear();
-    cancelOutboundTransfers(this, null, null, new Error(translateSaved("Передача файла отменена")));
+    cancelOutboundTransfers(
+      this,
+      null,
+      null,
+      new Error(translateSaved("room.fileTransferCanceled"))
+    );
     this.outboundTransfers.clear();
     this.channels.clear();
   }

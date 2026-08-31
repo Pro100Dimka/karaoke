@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import SettingsForm from "../src/pages/Settings/SettingsForm.jsx";
+import SettingsPage from "./helpers/settings-page";
 
 afterEach(() => {
   cleanup();
@@ -14,7 +14,7 @@ test("processing folder buttons select and persist every directory", async () =>
   const save = vi.fn();
   vi.stubGlobal("electronAPI", { selectFolder });
   render(
-    <SettingsForm
+    <SettingsPage
       tab="ai"
       settings={{
         app: {
@@ -42,11 +42,11 @@ test("processing folder buttons select and persist every directory", async () =>
   expect(folderButtons).toHaveLength(3);
 });
 
-test("browser mode replaces unavailable directory dialogs with editable paths", () => {
+test("browser mode replaces unavailable directory dialogs with editable paths", async () => {
   const change = vi.fn();
   const save = vi.fn();
   render(
-    <SettingsForm
+    <SettingsPage
       tab="ai"
       settings={{
         app: {
@@ -65,6 +65,6 @@ test("browser mode replaces unavailable directory dialogs with editable paths", 
   expect(songs.readOnly).toBe(false);
   fireEvent.change(songs, { target: { value: "E:/Karaoke" } });
   fireEvent.blur(songs, { target: { value: "E:/Karaoke" } });
-  expect(change).toHaveBeenCalledWith("songs_folder", "E:/Karaoke");
+  await waitFor(() => expect(change).toHaveBeenCalledWith("songs_folder", "E:/Karaoke"));
   expect(save).toHaveBeenCalledWith("songs_folder", "E:/Karaoke");
 });
