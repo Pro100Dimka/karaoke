@@ -1,18 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { Miniflare } from "miniflare";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 test("real Workers WebSockets: guest controls, host grace, resume and explicit exit", { timeout: 20000 }, async () => {
-  const mf = new Miniflare({
+  const mf = new Miniflare(convertV4MiniflareOptions({
     workers: [{
-    modules: true,
-    scriptPath: fileURLToPath(new URL("../src/worker.js", import.meta.url)),
-    modulesRules: [{ type: "ESModule", include: ["**/*.js"] }],
+    modules: ["index.js", "worker.js", "roomIce.js"].map((name) => ({ type: "ESModule", path: fileURLToPath(new URL(`../src/${name}`, import.meta.url)) })),
     compatibilityDate: "2026-08-03",
     durableObjects: { ROOMS: { className: "KaraokeRoom", useSQLite: true } },
     }],
-  });
+  }));
   const token = "a".repeat(64);
   const connections = [];
   async function join(params) {

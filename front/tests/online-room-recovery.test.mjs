@@ -124,13 +124,14 @@ test("guest UI changes are accepted, errors visible, reconnect leaves media alon
   const voice = { peers: new Map([["guest", {}]]), invite: vi.fn().mockResolvedValue(true), removePeer: vi.fn(), stop: vi.fn() };
   const cleanup = vi.fn();
   const setVoiceError = vi.fn();
+  const setRoomCommand = vi.fn();
   const handler = createOnlineRoomMessageHandler({
     id: "ROOM", client: {}, voice,
     roomRef: { current: { selfId: "host", host: true } },
     participantsRef: { current: [{ id: "host", role: "host" }, { id: "guest", role: "guest" }] },
     intentionalDisconnectRef: { current: false },
     cleanupConnection: cleanup, setRoom: vi.fn(), setParticipants: vi.fn(),
-    setRoomUi: (change) => { ui = change(ui); }, setRoomCommand: vi.fn(), setVoiceError,
+    setRoomUi: (change) => { ui = change(ui); }, setRoomCommand, setVoiceError,
   });
   handler({ type: "ui", fromId: "guest", state: { query: "Ария", radio: { isPlaying: false }, karaoke: { keyShift: 2 }, host: false } });
   expect(ui).toMatchObject({ query: "Ария", radio: { isPlaying: false }, karaoke: { keyShift: 2 } });
@@ -144,6 +145,8 @@ test("guest UI changes are accepted, errors visible, reconnect leaves media alon
   expect(voice.stop).not.toHaveBeenCalled();
   expect(voice.removePeer).not.toHaveBeenCalled();
   expect(voice.invite).not.toHaveBeenCalled();
+  handler({ type: "room-state", self: { id: "host", role: "host" }, resumed: true, participants: [{ id: "guest" }], playbackState: { type: "karaoke-player", action: "pause", commandId: "guest-pause" } });
+  expect(setRoomCommand).toHaveBeenCalledWith(expect.objectContaining({ commandId: "guest-pause" }));
 });
 
 test("mesh actually uses the received TURN settings and reports an initial connection timeout", async () => {

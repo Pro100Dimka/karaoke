@@ -244,6 +244,7 @@ export class KaraokeRoom {
     await this.ctx.storage.put("recentGuests", [...this.recentGuests]);
     this.send(server, "room-state", {
       self: publicParticipant,
+      resumed: Boolean(resumingHost || reclaimedId),
       participants: this.participants(),
       sharedUi: this.sharedUi,
       hostReconnectDeadline: this.hostDeadline,

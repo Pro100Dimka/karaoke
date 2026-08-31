@@ -14,12 +14,7 @@ const valuesOf = (preferences) =>
     effectPreset: preferences.effectPreset
   });
 
-export default function useKaraokeRoomPreferences({
-  preferences,
-  room,
-  roomUi,
-  syncUi
-}) {
+export default function useKaraokeRoomPreferences({ preferences, room, roomUi, syncUi }) {
   const remoteTarget = useRef(null);
   const sent = useRef("");
   const local = useMemo(() => valuesOf(preferences), [preferences]);
@@ -65,5 +60,4 @@ export default function useKaraokeRoomPreferences({
     sent.current = localSignature;
     syncUi({ karaoke: local });
   }, [local, localSignature, room, syncUi]);
-
 }

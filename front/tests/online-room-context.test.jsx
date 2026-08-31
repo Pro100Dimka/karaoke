@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   importSongPackage: vi.fn(),
   getSongRevision: vi.fn(),
+  updateAudioSettings: vi.fn(),
   exportSongPackage: vi.fn(),
   openKaraokeInRoom: vi.fn(),
   messageHandler: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("../src/api/client", () => ({
   api: {
     importSongPackage: mocks.importSongPackage,
     getSongRevision: mocks.getSongRevision,
+    updateAudioSettings: mocks.updateAudioSettings,
     exportSongPackage: mocks.exportSongPackage
   }
 }));
@@ -121,6 +123,18 @@ afterEach(() => {
 });
 
 describe("online room provider", () => {
+  test("guest shared controls are sent and an effect patch never resets unrelated effects", async () => {
+    const hook = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => hook.result.current.joinRoom("room", "Guest"));
+    act(() => hook.result.current.syncUi({ query: "Ария", karaoke: { keyShift: 2 } }));
+    expect(mocks.clients[0].send).toHaveBeenCalledWith("ui", { state: { query: "Ария", karaoke: { keyShift: 2 } } });
+    act(() => hook.result.current.requestParticipantEffects("host", { octave: -0.5 }));
+    expect(mocks.clients[0].send).toHaveBeenCalledWith("effect-control", { targetId: "host", effects: { octave: -0.5 } });
+    mocks.updateAudioSettings.mockResolvedValue({ volume: 0.9, reverb: 0.3, echo: 0.2, octave: -0.5 });
+    const options = mocks.createOnlineRoomMessageHandler.mock.calls[0][0];
+    await act(async () => options.onEffectControl({ echo: 0.2 }));
+    expect(mocks.updateAudioSettings).toHaveBeenCalledWith({ echo: 0.2 });
+  });
   test("bounds room-wide transfer progress without dropping terminal updates", () => {
     const previous = { commandId: "command", stage: "sending", percent: 10, at: 1_000 };
 

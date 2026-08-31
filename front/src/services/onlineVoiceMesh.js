@@ -327,22 +327,31 @@ export default class OnlineVoiceMesh {
       }
     };
     this.peers.set(participantId, peer);
-    this.connectTimers.set(participantId, globalThis.setTimeout(() => {
-      this.connectTimers.delete(participantId);
-      if (isCurrentPeer() && peer.connectionState !== "connected") {
-        this.reportPeerFailure(participantId);
-        this.removePeer(participantId);
-      }
-    }, 30_000));
+    this.connectTimers.set(
+      participantId,
+      globalThis.setTimeout(() => {
+        this.connectTimers.delete(participantId);
+        if (isCurrentPeer() && peer.connectionState !== "connected") {
+          this.reportPeerFailure(participantId);
+          this.removePeer(participantId);
+        }
+      }, 30_000)
+    );
     return peer;
   }
 
   reportPeerFailure(participantId) {
-    const relay = this.iceServers.some(({ urls }) => (Array.isArray(urls) ? urls : [urls]).some((url) => /^turns?:/.test(url)));
+    const relay = this.iceServers.some(({ urls }) =>
+      (Array.isArray(urls) ? urls : [urls]).some((url) => /^turns?:/.test(url))
+    );
     const message = relay
-      ? translateSaved("Не удалось соединиться с участником: голос и передача песни недоступны. Проверьте сеть и подключитесь к комнате повторно.")
-      : translateSaved("Прямое соединение с участником не установлено, TURN не настроен или недоступен. Голос и передача песни недоступны.");
-    console.warn("Room peer connection failed", { participantId, relayAvailable: relay });
+      ? translateSaved(
+          "Не удалось соединиться с участником: голос и передача песни недоступны. Проверьте сеть и подключитесь к комнате повторно."
+        )
+      : translateSaved(
+          "Прямое соединение с участником не установлено, TURN не настроен или недоступен. Голос и передача песни недоступны."
+        );
+    console.error("Room peer connection failed", { participantId, relayAvailable: relay });
     this.onPeerError?.(participantId, message);
   }
 
@@ -494,7 +503,11 @@ export default class OnlineVoiceMesh {
         if ((this.peerVersions.get(fromId) || 0) !== peerVersion) return false;
         const { lifecycleVersion } = this;
         if (this.roomClient.getIceServers) this.iceServers = await this.roomClient.getIceServers();
-        if (lifecycleVersion !== this.lifecycleVersion || (this.peerVersions.get(fromId) || 0) !== peerVersion) return false;
+        if (
+          lifecycleVersion !== this.lifecycleVersion ||
+          (this.peerVersions.get(fromId) || 0) !== peerVersion
+        )
+          return false;
         const peer = this.createPeer(fromId);
         const isCurrentPeer = () =>
           lifecycleVersion === this.lifecycleVersion &&

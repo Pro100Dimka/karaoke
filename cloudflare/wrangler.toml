@@ -1,5 +1,5 @@
 name = "karaoke-studio-online"
-main = "src/worker.js"
+main = "src/index.js"
 compatibility_date = "2026-08-03"
 workers_dev = true
 

@@ -319,22 +319,32 @@ export function createOnlineRoomMessageHandler(options) {
           role: self.role
         });
       setParticipants(message.participants || []);
-      if (message.sharedUi) setRoomUi((current) => ({ ...current, ...message.sharedUi, __eventId: createEventId("snapshot") }));
+      if (message.sharedUi)
+        setRoomUi((current) => ({
+          ...current,
+          ...message.sharedUi,
+          __eventId: createEventId("snapshot")
+        }));
       if (message.hostReconnectDeadline)
         setVoiceError(translateSaved("Ведущий переподключается. Комната сохранена на 45 секунд."));
-      // Catches a guest up on the host's last known playback state -- e.g.
-      // after a brief network drop -- instead of leaving it stale until the
-      // host's next explicit command. The host is its own authority and
-      // never follows this.
-      if (message.playbackState && self?.role !== "host")
+      // Guests can operate playback while the host reconnects. A returning
+      // host must follow the latest command too, not overwrite it with a heartbeat.
+      if (message.playbackState && (self?.role !== "host" || message.resumed))
         publishRoomCommand(message.playbackState, "room-state", message.playbackSentAt);
+      if (message.resumed && voice.peers) {
+        const present = new Set(
+          (message.participants || []).map(({ id: participantId }) => participantId)
+        );
+        for (const participantId of voice.peers.keys())
+          if (!present.has(participantId)) voice.removePeer(participantId);
+      }
     },
     "participant-joined": (message) => {
       const { participant } = message;
       setParticipants((items) => upsertParticipant(items, participant));
       if (!message.resumed && participant?.id && participant.id !== activeRoomRef.current?.selfId)
         onParticipantJoined(participant);
-      if (participant?.id && (!message.resumed || !voice.peers?.has(participant.id)))
+      if (participant?.id && !message.resumed)
         voice.invite(participant.id).catch((error) => setVoiceError(getErrorMessage(error)));
     },
     "participant-updated": (message) =>
@@ -360,12 +370,22 @@ export function createOnlineRoomMessageHandler(options) {
       }
       voice.removePeer(message.participantId);
     },
-    signal: (message) => voice.accept(message.fromId, message.signal).catch((error) => setVoiceError(getErrorMessage(error))),
+    signal: (message) =>
+      voice
+        .accept(message.fromId, message.signal)
+        .catch((error) => setVoiceError(getErrorMessage(error))),
     ui: (message) => {
       const state = message.state || {};
       const { participantEffects, songs } = state;
-      if (!participantsRef.current?.some(({ id: participantId }) => participantId === message.fromId)) return;
-      const shared = Object.fromEntries(["query", "filters", "radio", "karaoke"].filter((key) => Object.hasOwn(state, key)).map((key) => [key, state[key]]));
+      if (
+        !participantsRef.current?.some(({ id: participantId }) => participantId === message.fromId)
+      )
+        return;
+      const shared = Object.fromEntries(
+        ["query", "filters", "radio", "karaoke"]
+          .filter((key) => Object.hasOwn(state, key))
+          .map((key) => [key, state[key]])
+      );
       setRoomUi((current) => ({
         ...current,
         ...shared,
@@ -390,26 +410,39 @@ export function createOnlineRoomMessageHandler(options) {
         __eventId: createEventId("ui")
       }));
     },
-    error: (message) => setVoiceError(message.message || translateSaved("Сервер комнаты отклонил действие.")),
-    "effect-control-denied": () => setVoiceError(translateSaved("Участник запретил изменение своих эффектов.")),
+    error: (message) =>
+      setVoiceError(message.message || translateSaved("Сервер комнаты отклонил действие.")),
+    "effect-control-denied": () =>
+      setVoiceError(translateSaved("Участник запретил изменение своих эффектов.")),
     "connection-reconnecting": () => {
-      setVoiceError(translateSaved("Связь с сервером потеряна. Переподключаемся, не выключая голос."));
+      setVoiceError(
+        translateSaved("Связь с сервером потеряна. Переподключаемся, не выключая голос.")
+      );
     },
     "connection-restored": () => {
       setVoiceError("");
       // Only the reconnecting client initiates recovery. Healthy P2P paths
       // keep running; failed/missing ones are negotiated again.
       for (const participant of participantsRef.current || []) {
-        if (participant.id === activeRoomRef.current?.selfId || voice.peers?.has(participant.id)) continue;
+        if (participant.id === activeRoomRef.current?.selfId || participant.reconnecting) continue;
+        const peer = voice.peers?.get(participant.id);
+        if (peer && (!peer.connectionState || peer.connectionState === "connected")) continue;
+        if (peer) voice.removePeer(participant.id);
         voice.invite(participant.id).catch((error) => setVoiceError(getErrorMessage(error)));
       }
     },
     "host-reconnecting": (message) => {
-      setParticipants((items) => items.map((item) => item.id === message.participantId ? { ...item, reconnecting: true } : item));
+      setParticipants((items) =>
+        items.map((item) =>
+          item.id === message.participantId ? { ...item, reconnecting: true } : item
+        )
+      );
       setVoiceError(translateSaved("Ведущий переподключается. Комната сохранена на 45 секунд."));
     },
     "host-reconnected": (message) => {
-      setParticipants((items) => upsertParticipant(items, { ...message.participant, reconnecting: false }));
+      setParticipants((items) =>
+        upsertParticipant(items, { ...message.participant, reconnecting: false })
+      );
       setVoiceError("");
     },
     sync: (message) => {
@@ -445,7 +478,7 @@ export function createOnlineRoomMessageHandler(options) {
           ? translateSaved("Хост покинул комнату. Комната закрыта.")
           : message.reason === "host-timeout"
             ? translateSaved("Ведущий не восстановил связь за 45 секунд. Комната закрыта.")
-          : translateSaved("Комната закрыта.");
+            : translateSaved("Комната закрыта.");
       if (onConnectionClosed) return onConnectionClosed(reason);
       cleanupConnection();
       setRoom(null);

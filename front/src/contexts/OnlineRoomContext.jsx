@@ -70,9 +70,11 @@ export const normalizeParticipantEffects = (settings = {}) =>
     })
   );
 const normalizeParticipantEffectPatch = (settings = {}) =>
-  Object.fromEntries(Object.entries(normalizeParticipantEffects(settings)).filter(
-    ([key]) => Object.hasOwn(settings, key) && Number.isFinite(Number(settings[key]))
-  ));
+  Object.fromEntries(
+    Object.entries(normalizeParticipantEffects(settings)).filter(
+      ([key]) => Object.hasOwn(settings, key) && Number.isFinite(Number(settings[key]))
+    )
+  );
 export const shouldBroadcastRoomTransferProgress = (
   previous,
   { commandId, stage, percent },
@@ -427,7 +429,9 @@ export function OnlineRoomProvider({ children }) {
       };
       voice.onPeerError = (participantId, message) => {
         if (!isCurrentConnection()) return;
-        const participant = participantsRef.current.find(({ id: participantKey }) => participantKey === participantId);
+        const participant = participantsRef.current.find(
+          ({ id: participantKey }) => participantKey === participantId
+        );
         setVoiceError(`${participant?.name || participantId}: ${message}`);
       };
       voice.onTransferProgress = ({ participantId, stage, percent, metadata }) => {
@@ -728,18 +732,18 @@ export function OnlineRoomProvider({ children }) {
         const pendingSelfId = `pending-${normalizedId}`;
         if (!roomRef.current?.selfId || roomRef.current.selfId.startsWith("pending-")) {
           setRoom({
-          id: normalizedId,
-          selfId: pendingSelfId,
-          host: Boolean(host),
-          role: host ? "host" : "guest"
-        });
+            id: normalizedId,
+            selfId: pendingSelfId,
+            host: Boolean(host),
+            role: host ? "host" : "guest"
+          });
           setParticipants([
-          {
-            id: pendingSelfId,
-            name: name?.trim() || translateSaved("Гость"),
-            role: host ? "host" : "guest",
-            pending: true
-          }
+            {
+              id: pendingSelfId,
+              name: name?.trim() || translateSaved("Гость"),
+              role: host ? "host" : "guest",
+              pending: true
+            }
           ]);
         }
         Promise.resolve(api.getAudioSettings?.())

@@ -158,11 +158,14 @@ export class OnlineRoomClient {
   }
 
   getIceServers() {
-    if (this.iceConfig?.expiresAt > Date.now() + 60_000) return Promise.resolve(this.iceConfig.iceServers);
+    if (this.iceConfig?.expiresAt > Date.now() + 30_000)
+      return Promise.resolve(this.iceConfig.iceServers);
     if (this.iceRequest) return this.iceRequest.promise;
     const requestId = globalThis.crypto?.randomUUID?.() || `ice-${Date.now()}`;
     let finish;
-    const promise = new Promise((resolve) => { finish = resolve; });
+    const promise = new Promise((resolve) => {
+      finish = resolve;
+    });
     const fallback = [{ urls: "stun:stun.cloudflare.com:3478" }];
     const settle = (config) => {
       clearTimeout(timer);
@@ -173,17 +176,25 @@ export class OnlineRoomClient {
       finish(config.iceServers);
     };
     const unsubscribe = this.onMessage((message) => {
-      if (message.type !== "ice-config" || message.requestId !== requestId || !Array.isArray(message.iceServers)) return;
+      if (
+        message.type !== "ice-config" ||
+        message.requestId !== requestId ||
+        !Array.isArray(message.iceServers)
+      )
+        return;
       settle(message);
     });
-    const timer = setTimeout(() => settle({
-      iceServers: fallback,
-      expiresAt: Date.now() + 60_000,
-      warning: translate("Не получены настройки TURN. Пробуем прямое соединение.")
-    }), 6000);
+    const timer = setTimeout(
+      () =>
+        settle({
+          iceServers: fallback,
+          expiresAt: Date.now() + 60_000,
+          warning: translate("Не получены настройки TURN. Пробуем прямое соединение.")
+        }),
+      6000
+    );
     this.iceRequest = { promise, cancel: () => settle({ iceServers: fallback, expiresAt: 0 }) };
-    if (!this.send("ice-config-request", { requestId }))
-      this.iceRequest.cancel();
+    if (!this.send("ice-config-request", { requestId })) this.iceRequest.cancel();
     return promise;
   }
 
@@ -218,8 +229,10 @@ export class OnlineRoomClient {
       this.disconnect();
       this.connectionOptions = { id, name, host, hostToken };
     }
-    this.clockOffsetMs = 0;
-    this.clockSynchronized = false;
+    if (!reconnect) {
+      this.clockOffsetMs = 0;
+      this.clockSynchronized = false;
+    }
     this.clockSamples = [];
     if (typeof globalThis.WebSocket !== "function")
       return Promise.reject(new Error(translate("WebSocket не поддерживается в этом окружении.")));
@@ -264,7 +277,9 @@ export class OnlineRoomClient {
       };
       const timeout = setTimeout(
         () => fail(translate("Сервер комнат не ответил.")),
-        reconnect ? Math.min(LIMITS.connect, Math.max(1, this.reconnectDeadline - Date.now())) : LIMITS.connect
+        reconnect
+          ? Math.min(LIMITS.connect, Math.max(1, this.reconnectDeadline - Date.now()))
+          : LIMITS.connect
       );
       socket.onopen = () => {
         if (!current()) return socket.close(1000, "Stale connection");
@@ -348,7 +363,7 @@ export class OnlineRoomClient {
           )
         );
         if (wasCurrent) {
-          const terminal = [1000, 1008, 1009, 4000].includes(event?.code);
+          const terminal = [1008, 1009, 4000].includes(event?.code);
           if (!terminal && this.joined && this.connectionOptions) this.scheduleReconnect();
           else if (!reconnect || terminal) {
             this.connectionOptions = null;
@@ -367,7 +382,11 @@ export class OnlineRoomClient {
     }
     if (type === "presence") this.presence = payload;
     if (type === "effect-permission") this.effectPermission = payload;
-    if (this.reconnectDeadline && type === "sync" && ["song-ready", "song-request"].includes(payload?.state?.type)) {
+    if (
+      this.reconnectDeadline &&
+      type === "sync" &&
+      ["song-ready", "song-request"].includes(payload?.state?.type)
+    ) {
       this.pendingControl.set(payload.state.type, payload);
     }
     if (
