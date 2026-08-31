@@ -69,6 +69,10 @@ export const normalizeParticipantEffects = (settings = {}) =>
       ];
     })
   );
+const normalizeParticipantEffectPatch = (settings = {}) =>
+  Object.fromEntries(Object.entries(normalizeParticipantEffects(settings)).filter(
+    ([key]) => Object.hasOwn(settings, key) && Number.isFinite(Number(settings[key]))
+  ));
 export const shouldBroadcastRoomTransferProgress = (
   previous,
   { commandId, stage, percent },
@@ -421,6 +425,11 @@ export function OnlineRoomProvider({ children }) {
       voice.onPeerClosed = (participantId) => {
         if (isCurrentConnection()) removeRemoteAudio(participantId);
       };
+      voice.onPeerError = (participantId, message) => {
+        if (!isCurrentConnection()) return;
+        const participant = participantsRef.current.find(({ id: participantKey }) => participantKey === participantId);
+        setVoiceError(`${participant?.name || participantId}: ${message}`);
+      };
       voice.onTransferProgress = ({ participantId, stage, percent, metadata }) => {
         if (!isCurrentConnection()) return;
         const commandId = metadata?.commandId;
@@ -682,7 +691,7 @@ export function OnlineRoomProvider({ children }) {
           },
           onEffectControl: (effects) => {
             api
-              .updateAudioSettings(normalizeParticipantEffects(effects))
+              .updateAudioSettings(normalizeParticipantEffectPatch(effects))
               .then((updated) => {
                 globalThis.dispatchEvent?.(
                   new CustomEvent("audio-settings-changed", { detail: updated })
@@ -717,20 +726,22 @@ export function OnlineRoomProvider({ children }) {
         // Show the room UI as soon as the WebSocket is connected. The server
         // room-state packet will replace the temporary self id a moment later.
         const pendingSelfId = `pending-${normalizedId}`;
-        setRoom({
+        if (!roomRef.current?.selfId || roomRef.current.selfId.startsWith("pending-")) {
+          setRoom({
           id: normalizedId,
           selfId: pendingSelfId,
           host: Boolean(host),
           role: host ? "host" : "guest"
         });
-        setParticipants([
+          setParticipants([
           {
             id: pendingSelfId,
             name: name?.trim() || translateSaved("Гость"),
             role: host ? "host" : "guest",
             pending: true
           }
-        ]);
+          ]);
+        }
         Promise.resolve(api.getAudioSettings?.())
           .then((settings) => settings && publishParticipantEffects(settings))
           .catch(() => {});
@@ -828,7 +839,7 @@ export function OnlineRoomProvider({ children }) {
     if (!participantId || participantId === roomRef.current?.selfId) return false;
     return clientRef.current?.send("effect-control", {
       targetId: participantId,
-      effects: normalizeParticipantEffects(patch)
+      effects: normalizeParticipantEffectPatch(patch)
     });
   }, []);
 

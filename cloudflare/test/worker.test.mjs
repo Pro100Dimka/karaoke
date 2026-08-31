@@ -290,14 +290,15 @@ test("closes the room and disconnects every remaining guest when the host leaves
   const deletedKeys = [];
   const room = new KaraokeRoom({
     getWebSockets: () => [guest],
-    storage: { delete: async (key) => deletedKeys.push(key) },
+    storage: { delete: async (keys) => deletedKeys.push(...keys), deleteAlarm: async () => {} },
   });
 
-  await room.webSocketClose(host, 1000, "gone");
+  await room.webSocketClose(host, 1000, "Client left room");
 
   assert.deepEqual(guest.messages.at(-1), { type: "room-closed", reason: "host-left" });
   assert.deepEqual(guest.closed, { code: 4000, reason: "Host left the room" });
-  assert.deepEqual(deletedKeys, ["hostToken"]);
+  assert.ok(deletedKeys.includes("hostToken"));
+  assert.ok(deletedKeys.includes("sharedUi"));
 });
 
 test("a guest leaving only removes them from the participant list, without closing the room", async () => {
@@ -334,8 +335,8 @@ test("a departing guest's session token is remembered for a later reconnect, unl
     micMuted: false,
     sessionToken: "should-be-ignored",
   });
-  const hostRoom = new KaraokeRoom({ getWebSockets: () => [], storage: { delete: async () => {} } });
-  await hostRoom.webSocketClose(host, 1000, "gone");
+  const hostRoom = new KaraokeRoom({ getWebSockets: () => [], storage: { delete: async () => {}, deleteAlarm: async () => {} } });
+  await hostRoom.webSocketClose(host, 1000, "Client left room");
   assert.equal(hostRoom.recentGuests.size, 0);
 });
 
@@ -406,7 +407,7 @@ test("host can broadcast all shared karaoke preferences", async () => {
   });
 });
 
-test("a guest cannot broadcast host-only state like library filters or karaoke preferences", async () => {
+test("a guest broadcasts shared filters to everyone including itself", async () => {
   const sender = new FakeSocket({ id: "sender", role: "guest" });
   const target = new FakeSocket({ id: "target", role: "guest" });
   const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
@@ -418,10 +419,9 @@ test("a guest cannot broadcast host-only state like library filters or karaoke p
 
   assert.equal(sender.closed, null);
   assert.deepEqual(sender.messages.at(-1), {
-    type: "error",
-    message: "Некорректное сообщение комнаты.",
+    type: "ui", fromId: "sender", state: { filters: { genre: "Rock" } },
   });
-  assert.equal(target.messages.length, 0);
+  assert.deepEqual(target.messages.at(-1), sender.messages.at(-1));
 });
 
 test("a guest can operate the validated shared karaoke transport", async () => {
@@ -451,7 +451,7 @@ test("remembers the host's last karaoke-player state and hands it to the next jo
   const host = new FakeSocket({ id: "host", role: "host" });
   const room = new KaraokeRoom({
     getWebSockets: () => [host],
-    storage: { get: async () => undefined, put: async () => {} },
+    storage: { get: async (key) => key === "hostToken" ? "owner-token" : undefined, put: async () => {} },
     acceptWebSocket: () => {},
   });
   const playbackState = { type: "karaoke-player", action: "seek", songId: "song", position: 42, commandId: "cmd-1" };
@@ -494,7 +494,7 @@ test("a room with no playback yet omits playbackState from room-state", async ()
   try {
     const room = new KaraokeRoom({
       getWebSockets: () => [],
-      storage: { get: async () => undefined, put: async () => {} },
+      storage: { get: async (key) => key === "hostToken" ? "owner-token" : undefined, put: async () => {} },
       acceptWebSocket: () => {},
     });
     await room.fetch(joinRequest({ role: "guest" })).catch(() => {});
@@ -508,7 +508,7 @@ test("any participant can broadcast their own effects and shared library songs",
   const sender = new FakeSocket({ id: "sender", role: "guest" });
   const target = new FakeSocket({ id: "target", role: "guest" });
   const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
-  const participantEffects = { dry: 0.5, wet: 0.5 };
+  const participantEffects = { volume: 0.5, reverb: 0.5, octave: -0.5 };
   const songs = [{ id: "song-1", title: "Song" }];
 
   await room.webSocketMessage(

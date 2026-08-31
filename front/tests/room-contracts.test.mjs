@@ -300,6 +300,7 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.equal(ui.radio, true);
   assert.ok(ui.__eventId);
   ui = {};
+  participantsRef.current.push({ id: "first-effects", role: "guest" });
   handler({ type: "ui", fromId: "first-effects", state: { participantEffects: { dry: 0.5 } } });
   assert.deepEqual(ui.effectsByParticipant, { "first-effects": { dry: 0.5 } });
 

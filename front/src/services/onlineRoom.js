@@ -6,6 +6,7 @@ export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-an
 export const ROOM_PROTOCOL_VERSION = 1;
 const LIMITS = { connect: 10_000, message: 256 * 1024, name: 40, ping: 3_000, signal: 64 * 1024 };
 const CLOCK_SAMPLE_LIMIT = 8;
+const RECONNECT_WINDOW_MS = 45_000;
 const bytes = (value) => new TextEncoder().encode(value).byteLength;
 const hex = (values) => [...values].map((value) => value.toString(16).padStart(2, "0")).join("");
 
@@ -102,6 +103,19 @@ export class OnlineRoomClient {
     this.clockOffsetMs = 0;
     this.clockSynchronized = false;
     this.clockSamples = [];
+    this.connectionOptions = null;
+    this.reconnectTimer = null;
+    this.reconnectDeadline = 0;
+    this.reconnectAttempt = 0;
+    this.joined = false;
+    this.privateUi = {};
+    this.presence = null;
+    this.effectPermission = null;
+    this.pendingControl = new Map();
+    this.lastMessageAt = 0;
+    this.iceConfig = null;
+    this.iceRequest = null;
+    this.guestSessionId = null;
   }
 
   onMessage(listener) {
@@ -132,16 +146,78 @@ export class OnlineRoomClient {
   }
 
   sendClockProbe() {
+    if (this.joined && this.lastMessageAt && Date.now() - this.lastMessageAt > 12_000) {
+      const stale = this.socket;
+      this.socket = null;
+      this.stopPing();
+      stale?.close(4001, "Heartbeat timeout");
+      this.scheduleReconnect();
+      return;
+    }
     this.send("ping", { clientTime: Date.now() });
   }
 
-  connect({ id, name, host = false, hostToken = "" }) {
+  getIceServers() {
+    if (this.iceConfig?.expiresAt > Date.now() + 60_000) return Promise.resolve(this.iceConfig.iceServers);
+    if (this.iceRequest) return this.iceRequest.promise;
+    const requestId = globalThis.crypto?.randomUUID?.() || `ice-${Date.now()}`;
+    let finish;
+    const promise = new Promise((resolve) => { finish = resolve; });
+    const fallback = [{ urls: "stun:stun.cloudflare.com:3478" }];
+    const settle = (config) => {
+      clearTimeout(timer);
+      unsubscribe();
+      this.iceRequest = null;
+      this.iceConfig = config;
+      if (config.warning) this.emit({ type: "error", message: config.warning });
+      finish(config.iceServers);
+    };
+    const unsubscribe = this.onMessage((message) => {
+      if (message.type !== "ice-config" || message.requestId !== requestId || !Array.isArray(message.iceServers)) return;
+      settle(message);
+    });
+    const timer = setTimeout(() => settle({
+      iceServers: fallback,
+      expiresAt: Date.now() + 60_000,
+      warning: translate("Не получены настройки TURN. Пробуем прямое соединение.")
+    }), 6000);
+    this.iceRequest = { promise, cancel: () => settle({ iceServers: fallback, expiresAt: 0 }) };
+    if (!this.send("ice-config-request", { requestId }))
+      this.iceRequest.cancel();
+    return promise;
+  }
+
+  scheduleReconnect() {
+    if (!this.connectionOptions || this.reconnectTimer !== null) return;
+    if (!this.reconnectDeadline) {
+      this.reconnectDeadline = Date.now() + RECONNECT_WINDOW_MS;
+      this.emit({ type: "connection-reconnecting" });
+    }
+    const remaining = this.reconnectDeadline - Date.now();
+    if (remaining <= 0) {
+      this.connectionOptions = null;
+      this.emit({ type: "connection-closed" });
+      return;
+    }
+    const delay = Math.min(500 * 2 ** Math.min(this.reconnectAttempt++, 3), remaining);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.connectionOptions) return;
+      if (Date.now() >= this.reconnectDeadline) return this.scheduleReconnect();
+      this.connect(this.connectionOptions, true).catch(() => this.scheduleReconnect());
+    }, delay);
+  }
+
+  connect({ id, name, host = false, hostToken = "" }, reconnect = false) {
     const roomId = normalizeRoomId(id);
     if (roomId.length < 4)
       return Promise.reject(
         new Error(translate("Код комнаты должен содержать минимум 4 символа."))
       );
-    this.disconnect();
+    if (!reconnect) {
+      this.disconnect();
+      this.connectionOptions = { id, name, host, hostToken };
+    }
     this.clockOffsetMs = 0;
     this.clockSynchronized = false;
     this.clockSamples = [];
@@ -153,10 +229,12 @@ export class OnlineRoomClient {
       v: String(ROOM_PROTOCOL_VERSION)
     });
     if (host) {
-      query.set("create", "1");
+      // A reconnect may resume an existing room, never resurrect an expired one.
+      if (!reconnect) query.set("create", "1");
       query.set("hostToken", String(hostToken));
     } else {
-      const sessionId = getOrCreateGuestSessionId();
+      const sessionId = this.guestSessionId || getOrCreateGuestSessionId();
+      this.guestSessionId = sessionId;
       if (sessionId) query.set("sessionId", sessionId);
     }
     let socket;
@@ -170,6 +248,7 @@ export class OnlineRoomClient {
       );
     }
     this.socket = socket;
+    this.lastMessageAt = Date.now();
     return new Promise((resolve, reject) => {
       const current = () => this.socket === socket;
       const settle = (callback, value) => {
@@ -179,19 +258,20 @@ export class OnlineRoomClient {
       const fail = (message) => {
         if (!current()) return;
         this.socket = null;
+        this.stopPing();
         settle(reject, new Error(message));
         if (socket.readyState < WebSocket.CLOSING) socket.close();
       };
       const timeout = setTimeout(
         () => fail(translate("Сервер комнат не ответил.")),
-        LIMITS.connect
+        reconnect ? Math.min(LIMITS.connect, Math.max(1, this.reconnectDeadline - Date.now())) : LIMITS.connect
       );
       socket.onopen = () => {
         if (!current()) return socket.close(1000, "Stale connection");
         this.stopPing();
         this.sendClockProbe();
         this.pingTimer = setInterval(() => this.sendClockProbe(), LIMITS.ping);
-        settle(resolve, roomId);
+        if (!reconnect) settle(resolve, roomId);
       };
       socket.onmessage = ({ data }) => {
         if (!current() || typeof data !== "string") return;
@@ -199,6 +279,12 @@ export class OnlineRoomClient {
         try {
           const message = JSON.parse(data);
           if (!message || typeof message !== "object" || Array.isArray(message)) return;
+          this.lastMessageAt = Date.now();
+          if (message.type === "room-closed") {
+            this.connectionOptions = null;
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+          }
           if (
             message.type === "pong" &&
             Number.isFinite(message.serverTime) &&
@@ -222,6 +308,20 @@ export class OnlineRoomClient {
             }
           }
           this.emit(message);
+          if (message.type === "room-state") {
+            this.joined = true;
+            if (reconnect) {
+              this.reconnectDeadline = 0;
+              this.reconnectAttempt = 0;
+              if (Object.keys(this.privateUi).length) this.send("ui", { state: this.privateUi });
+              if (this.presence) this.send("presence", this.presence);
+              if (this.effectPermission) this.send("effect-permission", this.effectPermission);
+              for (const payload of this.pendingControl.values()) this.send("sync", payload);
+              this.pendingControl.clear();
+              this.emit({ type: "connection-restored" });
+              settle(resolve, roomId);
+            }
+          }
         } catch {
           // Malformed packets do not own the room connection.
         }
@@ -247,12 +347,29 @@ export class OnlineRoomClient {
             )
           )
         );
-        if (wasCurrent) this.emit({ type: "connection-closed" });
+        if (wasCurrent) {
+          const terminal = [1000, 1008, 1009, 4000].includes(event?.code);
+          if (!terminal && this.joined && this.connectionOptions) this.scheduleReconnect();
+          else if (!reconnect || terminal) {
+            this.connectionOptions = null;
+            this.emit({ type: "connection-closed" });
+          }
+        }
       };
     });
   }
 
   send(type, payload = {}) {
+    if (type === "ui" && payload?.state) {
+      for (const key of ["songs", "participantEffects"]) {
+        if (Object.hasOwn(payload.state, key)) this.privateUi[key] = payload.state[key];
+      }
+    }
+    if (type === "presence") this.presence = payload;
+    if (type === "effect-permission") this.effectPermission = payload;
+    if (this.reconnectDeadline && type === "sync" && ["song-ready", "song-request"].includes(payload?.state?.type)) {
+      this.pendingControl.set(payload.state.type, payload);
+    }
     if (
       this.socket?.readyState !== 1 ||
       typeof type !== "string" ||
@@ -276,6 +393,16 @@ export class OnlineRoomClient {
   }
 
   disconnect() {
+    this.connectionOptions = null;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.reconnectDeadline = 0;
+    this.reconnectAttempt = 0;
+    this.joined = false;
+    this.privateUi = {};
+    this.pendingControl.clear();
+    this.iceRequest?.cancel();
+    this.iceConfig = null;
     const { socket } = this;
     this.socket = null;
     this.stopPing();

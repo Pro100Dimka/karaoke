@@ -15,7 +15,6 @@ const valuesOf = (preferences) =>
   });
 
 export default function useKaraokeRoomPreferences({
-  participantCount,
   preferences,
   room,
   roomUi,
@@ -67,7 +66,4 @@ export default function useKaraokeRoomPreferences({
     syncUi({ karaoke: local });
   }, [local, localSignature, room, syncUi]);
 
-  useEffect(() => {
-    if (room?.host && participantCount) syncUi({ karaoke: currentLocal.current });
-  }, [participantCount, room?.host, syncUi]);
 }

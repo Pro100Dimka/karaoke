@@ -7,7 +7,7 @@ const signature = ({ stationId, isPlaying, volume }) =>
   `${stationId}:${Boolean(isPlaying)}:${Number(volume).toFixed(3)}`;
 
 export default function RoomRadioSync() {
-  const { participants, room, roomUi, syncUi } = useOnlineRoom();
+  const { room, roomUi, syncUi } = useOnlineRoom();
   const radio = useRadio();
   const current = useRef(radio);
   const target = useRef(null);
@@ -71,13 +71,6 @@ export default function RoomRadioSync() {
       radio: { isPlaying: radio.isPlaying, stationId: radio.stationId, volume: radio.volume }
     });
   }, [radio.isPlaying, radio.stationId, radio.volume, room, syncUi]);
-  useEffect(() => {
-    if (!room?.host || !participants.length || target.current) return;
-    const value = current.current;
-    syncUi({
-      radio: { isPlaying: value.isPlaying, stationId: value.stationId, volume: value.volume }
-    });
-  }, [participants.length, room?.host, syncUi]);
 
   return null;
 }

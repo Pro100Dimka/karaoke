@@ -104,10 +104,6 @@ export default function useLibraryRoomSync({
   }, [filters, room, syncUi]);
 
   useEffect(() => {
-    if (room?.host && participantCount)
-      syncUi({ query: currentQuery.current, filters: currentFilters.current });
-  }, [participantCount, room?.host, syncUi]);
-  useEffect(() => {
     if (!room?.selfId) return undefined;
     let active = true;
     const doneIds = localSongs.filter((song) => song?.status === "done").map((song) => song.id);

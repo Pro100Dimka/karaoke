@@ -91,6 +91,9 @@ export default class OnlineVoiceMesh {
     this.onSongPullError = null;
     this.onTransferProgress = null;
     this.disconnectTimers = new Map();
+    this.connectTimers = new Map();
+    this.onPeerError = null;
+    this.iceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
   }
 
   async start() {
@@ -235,7 +238,7 @@ export default class OnlineVoiceMesh {
     const current = this.peers.get(participantId);
     if (current) return current;
     const peer = new globalThis.RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+      iceServers: this.iceServers,
       bundlePolicy: "max-bundle",
       rtcpMuxPolicy: "require",
       iceCandidatePoolSize: 4
@@ -303,20 +306,44 @@ export default class OnlineVoiceMesh {
         this.disconnectTimers.delete(participantId);
       }
       if (["failed", "closed"].includes(peer.connectionState)) {
+        if (peer.connectionState === "failed") this.reportPeerFailure(participantId);
         this.removePeer(participantId);
         return;
       }
       if (peer.connectionState === "disconnected") {
         const timer = globalThis.setTimeout(() => {
           this.disconnectTimers.delete(participantId);
-          if (isCurrentPeer() && peer.connectionState === "disconnected")
+          if (isCurrentPeer() && peer.connectionState === "disconnected") {
+            this.reportPeerFailure(participantId);
             this.removePeer(participantId);
+          }
         }, 10_000);
         this.disconnectTimers.set(participantId, timer);
       }
+      if (peer.connectionState === "connected") {
+        const connectTimer = this.connectTimers.get(participantId);
+        if (connectTimer) globalThis.clearTimeout(connectTimer);
+        this.connectTimers.delete(participantId);
+      }
     };
     this.peers.set(participantId, peer);
+    this.connectTimers.set(participantId, globalThis.setTimeout(() => {
+      this.connectTimers.delete(participantId);
+      if (isCurrentPeer() && peer.connectionState !== "connected") {
+        this.reportPeerFailure(participantId);
+        this.removePeer(participantId);
+      }
+    }, 30_000));
     return peer;
+  }
+
+  reportPeerFailure(participantId) {
+    const relay = this.iceServers.some(({ urls }) => (Array.isArray(urls) ? urls : [urls]).some((url) => /^turns?:/.test(url)));
+    const message = relay
+      ? translateSaved("Не удалось соединиться с участником: голос и передача песни недоступны. Проверьте сеть и подключитесь к комнате повторно.")
+      : translateSaved("Прямое соединение с участником не установлено, TURN не настроен или недоступен. Голос и передача песни недоступны.");
+    console.warn("Room peer connection failed", { participantId, relayAvailable: relay });
+    this.onPeerError?.(participantId, message);
   }
 
   async optimizeAudioSenders(peer) {
@@ -405,6 +432,9 @@ export default class OnlineVoiceMesh {
 
   async invite(participantId) {
     if (!participantId) return false;
+    const version = this.lifecycleVersion;
+    if (this.roomClient.getIceServers) this.iceServers = await this.roomClient.getIceServers();
+    if (version !== this.lifecycleVersion) return false;
     const pendingInvite = this.invitePromises.get(participantId);
     if (pendingInvite) return pendingInvite;
     const { lifecycleVersion } = this;
@@ -463,6 +493,8 @@ export default class OnlineVoiceMesh {
       .then(async () => {
         if ((this.peerVersions.get(fromId) || 0) !== peerVersion) return false;
         const { lifecycleVersion } = this;
+        if (this.roomClient.getIceServers) this.iceServers = await this.roomClient.getIceServers();
+        if (lifecycleVersion !== this.lifecycleVersion || (this.peerVersions.get(fromId) || 0) !== peerVersion) return false;
         const peer = this.createPeer(fromId);
         const isCurrentPeer = () =>
           lifecycleVersion === this.lifecycleVersion &&
@@ -558,13 +590,17 @@ export default class OnlineVoiceMesh {
   }
 
   removePeer(participantId) {
+    const connectTimer = this.connectTimers.get(participantId);
+    if (connectTimer) globalThis.clearTimeout(connectTimer);
+    this.connectTimers.delete(participantId);
     const disconnectTimer = this.disconnectTimers.get(participantId);
     if (disconnectTimer) globalThis.clearTimeout(disconnectTimer);
     this.disconnectTimers.delete(participantId);
     const existed = this.peers.has(participantId) || this.channels.has(participantId);
     this.peerVersions.set(participantId, (this.peerVersions.get(participantId) || 0) + 1);
-    this.peers.get(participantId)?.close();
+    const peer = this.peers.get(participantId);
     this.peers.delete(participantId);
+    peer?.close();
     this.pendingCandidates.delete(participantId);
     this.pendingInvites.delete(participantId);
     this.invitePromises.delete(participantId);

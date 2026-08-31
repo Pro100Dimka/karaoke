@@ -1,9 +1,13 @@
+import { generateRoomIce } from "./roomIce.js";
+
 const MAX_ROOM_ID_LENGTH = 32;
 const MAX_NAME_LENGTH = 40;
 const MAX_MESSAGE_BYTES = 256 * 1024;
 const MAX_PARTICIPANTS = 12;
 const RATE_WINDOW_MS = 10_000;
-const RATE_LIMIT = 80;
+const RATE_LIMIT = 160;
+const HOST_RATE_LIMIT = 480;
+const SIGNAL_RATE_LIMIT = 400;
 const MAX_SIGNAL_BYTES = 64 * 1024;
 const MAX_STATE_BYTES = 128 * 1024;
 const MAX_LOG_BYTES = 32 * 1024;
@@ -11,14 +15,9 @@ const MAX_DEVICE_LOG_EVENTS = 10_000;
 const LOG_RATE_WINDOW_MS = 60_000;
 const LOG_RATE_LIMIT = 30;
 const MAX_ROOM_SONGS = 500;
-// How long a guest's participant id (and therefore their volume/mute/effect
-// settings in every other client's UI, which are keyed by that id) is held
-// for them to reclaim on a reconnect -- a brief network drop shouldn't make
-// them look like a brand new person to everyone else. The host has no such
-// grace period: per the chosen host-lifecycle contract, the room closes the
-// moment the host disconnects (see webSocketClose), so there is nothing to
-// reclaim.
+// A transport failure is not an explicit decision to leave the room.
 const GUEST_RECONNECT_GRACE_MS = 45_000;
+const HOST_RECONNECT_GRACE_MS = 45_000;
 // Bumped only when the message schema itself changes incompatibly (a field
 // renamed/removed/retyped in a message the other side must understand) --
 // not on every worker/frontend release. Without this, an old frontend build
@@ -32,6 +31,7 @@ const EFFECT_LIMITS = Object.freeze({
   echo: 1,
   delay: 1,
   noise_suppression: 1,
+  octave: 1,
 });
 
 export function normalizeParticipantEffects(value) {
@@ -40,9 +40,27 @@ export function normalizeParticipantEffects(value) {
   for (const [name, maximum] of Object.entries(EFFECT_LIMITS)) {
     if (!Object.hasOwn(value, name)) continue;
     const number = Number(value[name]);
-    if (Number.isFinite(number)) effects[name] = Math.max(0, Math.min(maximum, number));
+    if (Number.isFinite(number)) effects[name] = Math.max(name === "octave" ? -1 : 0, Math.min(maximum, number));
   }
   return Object.keys(effects).length ? effects : null;
+}
+
+const isRecord = (value) => value && typeof value === "object" && !Array.isArray(value);
+const SHARED_UI_KEYS = ["query", "filters", "radio", "karaoke"];
+export function normalizeRoomUi(value) {
+  if (!isRecord(value)) return null;
+  const state = {};
+  if (typeof value.query === "string" && value.query.length <= 500) state.query = value.query;
+  // Only these namespaces are shared. Identity, roles and per-person maps
+  // are always assigned by the server, never accepted from a client.
+  for (const key of ["filters", "radio", "karaoke"]) {
+    if (isRecord(value[key]) && JSON.stringify(value[key]).length <= 8192) state[key] = value[key];
+  }
+  const effects = normalizeParticipantEffects(value.participantEffects);
+  if (effects) state.participantEffects = effects;
+  if (Array.isArray(value.songs) && value.songs.length <= MAX_ROOM_SONGS && value.songs.every(isRecord))
+    state.songs = value.songs;
+  return Object.keys(state).length ? state : null;
 }
 
 function json(data, status = 200) {
@@ -90,11 +108,25 @@ export function reclaimGuestId(recentGuests, sessionToken, now = Date.now()) {
 }
 
 export class KaraokeRoom {
-  constructor(ctx) {
+  constructor(ctx, env = {}) {
     this.ctx = ctx;
+    this.env = env;
     this.rate = new Map();
     this.recentGuests = new Map();
     this.playbackState = null;
+    this.sharedUi = {};
+    this.hostParticipant = null;
+    this.hostDeadline = null;
+    this.iceCredentials = new Map();
+    const restore = async () => {
+      if (!ctx.storage?.get) return;
+      this.sharedUi = (await ctx.storage.get("sharedUi")) || {};
+      this.playbackState = (await ctx.storage.get("playbackState")) || null;
+      this.hostParticipant = (await ctx.storage.get("hostParticipant")) || null;
+      this.hostDeadline = (await ctx.storage.get("hostDeadline")) || null;
+      this.recentGuests = new Map((await ctx.storage.get("recentGuests")) || []);
+    };
+    this.ready = ctx.blockConcurrencyWhile ? ctx.blockConcurrencyWhile(restore) : restore();
   }
 
   reject(socket, message = "Некорректное сообщение комнаты.") {
@@ -110,16 +142,19 @@ export class KaraokeRoom {
     this.send(socket, "error", { message });
   }
 
-  withinRate(id) {
+  withinRate(id, role, type) {
     const now = Date.now();
-    const entry = this.rate.get(id) || { startedAt: now, count: 0 };
+    const channel = type === "signal" ? "signal" : type === "ping" ? "ping" : "control";
+    const key = `${id}:${channel}`;
+    const limit = channel === "signal" ? SIGNAL_RATE_LIMIT : channel === "ping" ? 20 : role === "host" ? HOST_RATE_LIMIT : RATE_LIMIT;
+    const entry = this.rate.get(key) || { startedAt: now, count: 0 };
     if (now - entry.startedAt >= RATE_WINDOW_MS) { entry.startedAt = now; entry.count = 0; }
-    entry.count += 1; this.rate.set(id, entry);
-    return entry.count <= RATE_LIMIT;
+    entry.count += 1; this.rate.set(key, entry);
+    return entry.count <= limit;
   }
 
   participants() {
-    return this.ctx
+    const connected = this.ctx
       .getWebSockets()
       .map(participantFromSocket)
       .filter(Boolean)
@@ -130,10 +165,14 @@ export class KaraokeRoom {
         micMuted,
         effectsLocked,
       }));
+    if (this.hostDeadline && this.hostParticipant && !connected.some(({ role }) => role === "host"))
+      connected.push({ ...this.hostParticipant, reconnecting: true });
+    return connected;
   }
 
   send(socket, type, payload) {
-    socket.send(JSON.stringify({ type, ...payload }));
+    try { socket.send(JSON.stringify({ type, ...payload })); }
+    catch { /* A closing socket must not interrupt broadcasts to healthy peers. */ }
   }
 
   broadcast(type, payload, exceptId = null) {
@@ -145,6 +184,8 @@ export class KaraokeRoom {
   }
 
   async fetch(request) {
+    await this.ready;
+    if (this.hostDeadline && this.hostDeadline <= Date.now()) await this.alarm();
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return json({ error: "WebSocket upgrade required" }, 426);
     }
@@ -155,7 +196,8 @@ export class KaraokeRoom {
     }
     const requestedRole = url.searchParams.get("role") === "host" ? "host" : "guest";
     const currentParticipants = this.participants();
-    if (currentParticipants.length >= MAX_PARTICIPANTS) return json({ error: "Room is full" }, 429);
+    const resumingHost = requestedRole === "host" && this.hostDeadline;
+    if (currentParticipants.length >= MAX_PARTICIPANTS && !resumingHost) return json({ error: "Room is full" }, 429);
     let role = "guest";
     if (requestedRole === "host") {
       const suppliedToken = url.searchParams.get("hostToken") || "";
@@ -165,8 +207,10 @@ export class KaraokeRoom {
         await this.ctx.storage.put("hostToken", ownerToken);
       }
       if (!ownerToken || suppliedToken !== ownerToken) return json({ error: "Invalid room host capability" }, 403);
-      if (currentParticipants.some((participant) => participant.role === "host")) return json({ error: "Host is already connected" }, 409);
+      if (currentParticipants.some((participant) => participant.role === "host" && !participant.reconnecting)) return json({ error: "Host is already connected" }, 409);
       role = "host";
+    } else if (!(await this.ctx.storage.get("hostToken"))) {
+      return json({ error: "Room is closed" }, 404);
     }
     // A guest that reconnects within the grace window (see
     // GUEST_RECONNECT_GRACE_MS) reclaims their previous id instead of
@@ -176,11 +220,11 @@ export class KaraokeRoom {
     const sessionToken = String(url.searchParams.get("sessionId") || "").slice(0, 128);
     const reclaimedId = role === "guest" ? reclaimGuestId(this.recentGuests, sessionToken) : null;
     const publicParticipant = {
-      id: reclaimedId || crypto.randomUUID(),
+      id: (role === "host" && this.hostParticipant?.id) || reclaimedId || crypto.randomUUID(),
       name: normalizeName(url.searchParams.get("name")),
       role,
-      micMuted: false,
-      effectsLocked: false,
+      micMuted: role === "host" ? Boolean(this.hostParticipant?.micMuted) : false,
+      effectsLocked: role === "host" ? Boolean(this.hostParticipant?.effectsLocked) : false,
     };
     // sessionToken is kept in the socket's own attachment for this server to
     // recognize a future reconnect -- it must never be broadcast to other
@@ -190,14 +234,25 @@ export class KaraokeRoom {
     const [client, server] = Object.values(pair);
     server.serializeAttachment(participant);
     this.ctx.acceptWebSocket(server);
+    if (role === "host") {
+      this.hostParticipant = publicParticipant;
+      this.hostDeadline = null;
+      await this.ctx.storage.put("hostParticipant", publicParticipant);
+      await this.ctx.storage.delete("hostDeadline");
+      await this.ctx.storage.deleteAlarm();
+    }
+    await this.ctx.storage.put("recentGuests", [...this.recentGuests]);
     this.send(server, "room-state", {
       self: publicParticipant,
       participants: this.participants(),
+      sharedUi: this.sharedUi,
+      hostReconnectDeadline: this.hostDeadline,
       ...(this.playbackState
         ? { playbackState: this.playbackState.state, playbackSentAt: this.playbackState.sentAt }
         : {}),
     });
-    this.broadcast("participant-joined", { participant: publicParticipant }, publicParticipant.id);
+    this.broadcast("participant-joined", { participant: publicParticipant, resumed: Boolean(resumingHost) }, publicParticipant.id);
+    if (resumingHost) this.broadcast("host-reconnected", { participant: publicParticipant });
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -206,8 +261,8 @@ export class KaraokeRoom {
   //
   // | Action                                    | Host | Guest         |
   // |-------------------------------------------|------|---------------|
-  // | select song / play / pause / seek         | yes  | no (rejected) |
-  // | tempo/key/radio/search filters (ui state) | yes  | no (rejected) |
+  // | play / pause / seek / stop               | yes  | yes           |
+  // | tempo/key/radio/search filters (ui state) | yes  | yes           |
   // | own participant audio effects             | yes  | yes           |
   // | own shared library (songs)                | yes  | yes           |
   // | song request/ready and karaoke request    | n/a  | yes           |
@@ -220,6 +275,7 @@ export class KaraokeRoom {
   // with no room-wide meaning. Kicking a participant is not a feature this
   // product has; there is nothing to authorize.
   async webSocketMessage(socket, rawMessage) {
+    await this.ready;
     const text = typeof rawMessage === "string" ? rawMessage : new TextDecoder().decode(rawMessage);
     if (new TextEncoder().encode(text).byteLength > MAX_MESSAGE_BYTES) { this.reject(socket, "Message too large"); return; }
     let message;
@@ -227,10 +283,36 @@ export class KaraokeRoom {
     catch { this.reject(socket); return; }
     const sender = participantFromSocket(socket);
     if (!sender || typeof message?.type !== "string") return;
-    if (!this.withinRate(sender.id)) { this.reject(socket, "Rate limit exceeded"); return; }
+    if (!this.withinRate(sender.id, sender.role, message.type)) {
+      this.send(socket, "error", { code: "rate-limit", message: "Слишком много команд. Повторите действие через несколько секунд." });
+      return;
+    }
 
     if (message.type === "ping" && Number.isFinite(message.clientTime)) {
       this.send(socket, "pong", { clientTime: message.clientTime, serverTime: Date.now() });
+      return;
+    }
+
+    if (message.type === "ice-config-request" && typeof message.requestId === "string" && message.requestId.length <= 128) {
+      // This endpoint is reachable only through an admitted room socket. Cache
+      // per participant and deduplicate concurrent requests, never broadcast keys.
+      const cached = this.iceCredentials.get(sender.id);
+      if (cached?.expiresAt > Date.now() + 30_000) {
+        const result = await cached.promise;
+        this.send(socket, "ice-config", { requestId: message.requestId, ...result });
+        return;
+      }
+      const entry = { expiresAt: Date.now() + 60_000 };
+      entry.promise = generateRoomIce(this.env).catch(() => ({
+        iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+        relayAvailable: false,
+        warning: "Резервный TURN-сервер недоступен. Пробуем прямое соединение.",
+        expiresAt: Date.now() + 60_000,
+      }));
+      this.iceCredentials.set(sender.id, entry);
+      const result = await entry.promise;
+      entry.expiresAt = result.expiresAt;
+      this.send(socket, "ice-config", { requestId: message.requestId, ...result });
       return;
     }
 
@@ -245,7 +327,8 @@ export class KaraokeRoom {
 
     if (message.type === "chat" && typeof message.text === "string") {
       const text = message.text.trim().slice(0, 500);
-      if (text) this.broadcast("chat", { from: sender, text });
+      const { sessionToken: _privateToken, ...publicSender } = sender;
+      if (text) this.broadcast("chat", { from: publicSender, text });
       return;
     }
 
@@ -281,28 +364,16 @@ export class KaraokeRoom {
 
     if (message.type === "ui" && message.state && typeof message.state === "object") {
       if (new TextEncoder().encode(JSON.stringify(message.state)).byteLength > MAX_STATE_BYTES) { this.reportInvalid(socket, "Room UI state is too large"); return; }
-      if (sender.role === "host") {
-        this.broadcast("ui", { fromId: sender.id, state: message.state }, sender.id);
-        return;
+      const state = normalizeRoomUi(message.state);
+      if (!state) { this.reportInvalid(socket); return; }
+      const shared = Object.fromEntries(SHARED_UI_KEYS.filter((key) => Object.hasOwn(state, key)).map((key) => [key, state[key]]));
+      if (Object.keys(shared).length) {
+        this.sharedUi = { ...this.sharedUi, ...shared };
+        await this.ctx.storage?.put?.("sharedUi", this.sharedUi);
       }
-      // Guests may not broadcast arbitrary state (that stays host-only, e.g. the
-      // shared search query), but every participant -- host or guest -- owns a
-      // library, so both participantEffects and songs are allowed through here.
-      const { participantEffects, songs } = message.state;
-      const hasEffects = Boolean(
-        participantEffects && typeof participantEffects === "object" && !Array.isArray(participantEffects)
-      );
-      const hasSongs = Boolean(
-        Array.isArray(songs) &&
-        songs.length <= MAX_ROOM_SONGS &&
-        songs.every((song) => song && typeof song === "object" && !Array.isArray(song))
-      );
-      if (!hasEffects && !hasSongs) { this.reportInvalid(socket); return; }
-      const state = {
-        ...(hasEffects ? { participantEffects } : {}),
-        ...(hasSongs ? { songs } : {})
-      };
-      this.broadcast("ui", { fromId: sender.id, state }, sender.id);
+      // Echo shared changes too: concurrent edits converge in server order,
+      // rather than each sender ignoring the authoritative last update.
+      this.broadcast("ui", { fromId: sender.id, state }, Object.keys(shared).length ? null : sender.id);
       return;
     }
 
@@ -315,7 +386,10 @@ export class KaraokeRoom {
         // room-state instead of staying on stale playback until the host's
         // next command.
         const sentAt = Date.now();
-        if (state.type === "karaoke-player") this.playbackState = { state, sentAt };
+        if (state.type === "karaoke-player") {
+          this.playbackState = { state, sentAt };
+          await this.ctx.storage?.put?.("playbackState", this.playbackState);
+        }
         this.broadcast("sync", { state, sentAt, fromId: sender.id }, sender.id);
         return;
       }
@@ -333,6 +407,7 @@ export class KaraokeRoom {
         // host command. Other sync message types remain host-only below.
         const sentAt = Date.now();
         this.playbackState = { state, sentAt };
+        await this.ctx.storage?.put?.("playbackState", this.playbackState);
         this.broadcast("sync", { state, sentAt, fromId: sender.id }, sender.id);
         return;
       }
@@ -398,32 +473,33 @@ export class KaraokeRoom {
   }
 
   async webSocketClose(socket, code, reason) {
+    await this.ready;
     const participant = participantFromSocket(socket);
     if (participant) {
-      this.rate.delete(participant.id);
+      for (const key of this.rate.keys()) if (key.startsWith(`${participant.id}:`)) this.rate.delete(key);
+      this.iceCredentials.delete(participant.id);
       if (participant.role === "host") {
-        // The room closes the moment its host leaves rather than persisting
-        // in an undefined "headless" state (no re-election, no host-only
-        // sync) until/unless the same host token reconnects. Every
-        // remaining guest gets an explicit reason as a message first (so it
-        // arrives ahead of the close frame on the same socket), then their
-        // connection is closed server-side so their own disconnect/cleanup
-        // path runs immediately instead of sitting in a hostless room.
-        this.broadcast("room-closed", { reason: "host-left" });
-        for (const remaining of this.ctx.getWebSockets()) {
-          try {
-            remaining.close(4000, "Host left the room");
-          } catch {
-            // Already closing/closed.
-          }
+        // A late close from the old socket must not evict a reconnected host.
+        if (this.ctx.getWebSockets().some((other) => other !== socket && participantFromSocket(other)?.role === "host")) return;
+        if (code === 1000 && reason === "Client left room") {
+          await this.closeRoom("host-left");
+          return;
         }
-        await this.ctx.storage.delete("hostToken");
+        const { sessionToken: _token, ...publicHost } = participant;
+        this.hostParticipant = publicHost;
+        this.hostDeadline = Date.now() + HOST_RECONNECT_GRACE_MS;
+        await this.ctx.storage.put("hostParticipant", publicHost);
+        await this.ctx.storage.put("hostDeadline", this.hostDeadline);
+        await this.ctx.storage.setAlarm(this.hostDeadline);
+        this.broadcast("host-reconnecting", { participantId: participant.id, deadline: this.hostDeadline });
       } else {
         if (participant.sessionToken) {
           this.recentGuests.set(participant.sessionToken, {
             id: participant.id,
             disconnectedAt: Date.now(),
           });
+          pruneRecentGuests(this.recentGuests);
+          await this.ctx.storage?.put?.("recentGuests", [...this.recentGuests]);
         }
         this.broadcast("participant-left", { participantId: participant.id });
       }
@@ -431,6 +507,31 @@ export class KaraokeRoom {
     // The edge already closes this endpoint before invoking the callback.
     // Calling close() again on THIS socket can prevent the remaining
     // sockets from receiving the broadcasts above.
+  }
+
+  async closeRoom(reason) {
+    this.broadcast("room-closed", { reason });
+    for (const socket of this.ctx.getWebSockets()) {
+      try { socket.close(4000, "Host left the room"); } catch { /* Already closed. */ }
+    }
+    this.hostDeadline = null;
+    this.hostParticipant = null;
+    this.sharedUi = {};
+    this.playbackState = null;
+    this.recentGuests.clear();
+    this.iceCredentials.clear();
+    await this.ctx.storage.delete(["hostToken", "hostParticipant", "hostDeadline", "sharedUi", "playbackState", "recentGuests"]);
+    await this.ctx.storage.deleteAlarm();
+  }
+
+  async alarm() {
+    await this.ready;
+    if (!this.hostDeadline) return;
+    if (Date.now() < this.hostDeadline) {
+      await this.ctx.storage.setAlarm(this.hostDeadline);
+      return;
+    }
+    await this.closeRoom("host-timeout");
   }
 }
 

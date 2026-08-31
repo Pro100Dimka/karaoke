@@ -1097,9 +1097,11 @@ describe("online voice mesh", () => {
     peer.onconnectionstatechange();
     expect(mesh.peerVersions.get("stale")).toBe(version);
     const current = mesh.createPeer("current");
+    const connectTimer = mesh.connectTimers.get("current");
     current.connectionState = "connected";
     current.onconnectionstatechange();
-    expect(clear).not.toHaveBeenCalled();
+    expect(clear).toHaveBeenCalledWith(connectTimer);
+    expect(mesh.connectTimers.has("current")).toBe(false);
     let release;
     mesh.signalPromises.set(
       "queued",
