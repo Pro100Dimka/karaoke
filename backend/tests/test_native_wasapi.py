@@ -85,6 +85,45 @@ def test_native_clock_and_bounded_queue_statistics_are_propagated(dll):
         stream.close()
 
 
+def test_program_timings_do_not_require_driver_clock_estimate(dll):
+    stats = {}
+    stream = native_wasapi.NativeWasapiStream(options(), stats)
+    try:
+        stream.stats.stream_latency_ms = -1
+        stream.stats.program_residence_ms = .4567
+        stream.stats.queue_residence_ms = .1004
+        stream.stats.output_clock_lead_ms = -1
+        stream.pump()
+        assert stats["stream_latency_ms"] is None
+        assert stats["program_residence_ms"] == .457
+        assert stats["queue_residence_ms"] == .1
+        assert stats["output_clock_lead_ms"] is None
+    finally:
+        stream.close()
+
+
+@pytest.mark.parametrize("value", [-1, float("nan"), float("inf")])
+def test_invalid_stage_timings_are_unavailable(dll, value):
+    stats = {}
+    stream = native_wasapi.NativeWasapiStream(options(), stats)
+    try:
+        for name in native_wasapi.TIMING_FIELDS:
+            setattr(stream.stats, name, value)
+        stream.pump()
+        assert all(stats[name] is None for name in native_wasapi.TIMING_FIELDS)
+    finally:
+        stream.close()
+
+
+@pytest.mark.parametrize("version", [None, 1, 3])
+def test_mismatched_native_binary_rejected_before_writing_statistics(monkeypatch, version):
+    library = SimpleNamespace() if version is None else SimpleNamespace(wm_abi_version=Mock(return_value=version))
+    monkeypatch.setattr(native_wasapi, "library_path", lambda: SimpleNamespace(is_file=lambda: True))
+    monkeypatch.setattr(native_wasapi.ct, "CDLL", lambda _path: library)
+    with pytest.raises(RuntimeError, match="rebuild"):
+        native_wasapi.load_library()
+
+
 def test_callback_failure_stops_native_output_instead_of_replaying_old_block(dll):
     stats = {}
     stream = native_wasapi.NativeWasapiStream(options(), stats)

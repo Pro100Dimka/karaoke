@@ -25,6 +25,23 @@ int main() {
     float result = 0;
     for (float expected : {3, 4, 5, 6}) { verify(direct.pop(result)); verify(result == expected); }
     verify(!direct.pop(result) && result == 0);
+    // Arrival/processing clocks must follow the exact sample through overwrite
+    // and resampling, independently of missing device capture timestamps.
+    MonitorBuffer timing(4, 1);
+    timing.push(source, 2, 0, 0, 12, 12.001);
+    timing.push(source, 4, 0, 0, 13, 13.002);
+    double captured = -1, received = -1, processed = -1;
+    verify(timing.pop(result, &captured, &received, &processed));
+    verify(captured == 0 && received == 13 && processed == 13.002);
+    MonitorBuffer interpolatedTiming(8, .5);
+    interpolatedTiming.push(source, 1, 10, 0, 12, 12.001);
+    interpolatedTiming.push(source + 1, 1, 11, 0, 13, 13.001);
+    verify(interpolatedTiming.pop(result, &captured, &received, &processed));
+    verify(captured == 10 && received == 12);
+    verify(interpolatedTiming.pop(result, &captured, &received, &processed));
+    verify(captured == 10.5 && received == 12.5 && std::abs(processed - 12.501) < 1e-9);
+    verify(!interpolatedTiming.pop(result, &captured, &received, &processed));
+    verify(captured == 0 && received == 0 && processed == 0);
     MonitorBuffer upsample(16, .5);
     upsample.push(source, 6);
     for (float expected : {1.0F, 1.5F, 2.0F, 2.5F}) { verify(upsample.pop(result)); verify(result == expected); }

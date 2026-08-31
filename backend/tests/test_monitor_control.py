@@ -332,3 +332,14 @@ def test_split_queue_statistics_are_separate_and_reset_after_fallback(control):
     control.event(control.token, {"event": "started", "engine": "duplex"})
     assert "queue_ms" not in control.snapshot()
     assert "queue_underruns" not in control.snapshot()
+
+
+def test_native_stage_timings_are_exposed_and_cleared_on_restart(control):
+    from app.services.native_wasapi import TIMING_FIELDS
+    values = {name: index / 10 for index, name in enumerate(TIMING_FIELDS)}
+    control.event(control.token, {"event": "started", "engine": "wasapi-native-shared"})
+    control.event(control.token, {"event": "level", **values})
+    status = control.snapshot()
+    assert all(status[name] == value for name, value in values.items())
+    control.event(control.token, {"event": "started", "engine": "wasapi-native-shared"})
+    assert not any(name in control.snapshot() for name in values)
