@@ -232,17 +232,17 @@ def test_cancelled_launch_does_not_spawn_a_process(control, monkeypatch, tmp_pat
     launch.assert_not_called()
 
 
-def test_exclusive_is_opt_in_without_fallback_and_with_correct_labels(monkeypatch):
+def test_wasapi_shared_without_exclusive_and_with_correct_labels(monkeypatch):
     monkeypatch.setattr(monitor_worker.sd, "WasapiSettings", lambda **kwargs: kwargs)
     base = {"sample_rate": 48000, "output_channels": 2, "input_device_id": 0,
-            "output_device_id": 1, "blocksize": 128, "wasapi_mode": "exclusive"}
+            "output_device_id": 1, "blocksize": 128, "wasapi_mode": "shared"}
     candidates = monitor_worker._stream_candidates(base)
     assert len(candidates) == 1
-    assert candidates[0]["extra_settings"] == ({"exclusive": True, "auto_convert": False}, {"exclusive": True, "auto_convert": False})
     shared = monitor_worker._stream_candidates({**base, "wasapi_mode": "shared"})[0]
     assert shared["extra_settings"] == ({"exclusive": False, "auto_convert": True}, {"exclusive": False, "auto_convert": True})
-    partial = monitor_worker._stream_candidates({**base, "wasapi_mode": "input-exclusive"})[0]
-    assert partial["extra_settings"] == ({"exclusive": True, "auto_convert": False}, {"exclusive": False, "auto_convert": True})
+    for mode in ("exclusive", "input-exclusive"):
+        with pytest.raises(ValueError, match="Unsupported WASAPI mode"):
+            monitor_worker._stream_candidates({**base, "wasapi_mode": mode})
     details = monitor_worker._stream_diagnostics(SimpleNamespace(latency=(.004, .006)), shared, base, "shared")
     assert details["exclusive"] is False
     assert details["input_latency_ms"] == 4 and details["output_latency_ms"] == 6

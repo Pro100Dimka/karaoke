@@ -65,7 +65,7 @@ def test_wasapi_has_no_host_neutral_fallback():
             "input_device_id": 1,
             "output_device_id": 2,
             "blocksize": 64,
-            "wasapi_exclusive": True,
+            "wasapi_mode": "shared",
         }
     )
 

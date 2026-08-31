@@ -1,5 +1,6 @@
 /* Stryker disable all */
 export const ukMessages = {
+  "room.audio.selectedInputUnavailable": "Вибраний мікрофон недоступний у кімнаті. Перевірте вибір пристрою в налаштуваннях звуку.",
   "audio.mute": "Вимкнути звук",
   "audio.pause": "Пауза",
   "audio.playRecording": "Відтворити запис",
@@ -637,6 +638,12 @@ export const ukMessages = {
   "settings.audio.monitor.status.unavailable": "Не вдалося отримати стан мікрофона",
   "settings.audio.monitor.status.checking": "Перевіряємо стан…",
   "settings.audio.monitor.buffer.label": "Буфер",
+  "settings.audio.monitor.compact.driverName": "Драйвер: {0}",
+  "settings.audio.monitor.compact.driver": "Затримка драйвера: {0} мс · вхід {1} · вихід {2}",
+  "settings.audio.monitor.compact.estimate": "Затримка (оцінка): {0} мс · вхід {1} · вихід {2}",
+  "settings.audio.monitor.compact.unavailable": "Затримка: немає даних",
+  "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: відліки драйвера × 1000 / частота. Вхід і вихід включають затримки, повідомлені драйвером, але це не фізичний вимір мікрофон → навушники.",
+  "settings.audio.monitor.compact.estimateTooltip": "Оцінка PortAudio для активного потоку, не фізичний вимір. Точну повну затримку можна виміряти тестовим сигналом із поверненням виходу на вхід.",
   "settings.audio.monitor.buffer.auto": "авто",
   "settings.audio.monitor.inputLatency.label": "Оцінка входу аудіобекендом (не вимірювання)",
   "settings.audio.monitor.outputLatency.label": "Оцінка виходу аудіобекендом (не вимірювання)",

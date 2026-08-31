@@ -182,14 +182,16 @@ describe("karaoke transport", () => {
   });
   test("broadcasts guest pause before a slow recording backend replies", async () => {
     let finishPause;
-    api.pauseRecording.mockReturnValue(new Promise((resolve) => { finishPause = resolve; }));
+    api.pauseRecording.mockReturnValue(
+      new Promise((resolve) => {
+        finishPause = resolve;
+      })
+    );
     const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
     const hook = renderHook(() => useKaraokeTransport(props));
     const pausing = hook.result.current.togglePlay();
     try {
-      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "pause", position: 4 })
-      );
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(expect.objectContaining({ action: "pause", position: 4 }));
       expect(props.navigate).not.toHaveBeenCalled();
       expect(api.stopRecording).not.toHaveBeenCalled();
     } finally {
@@ -368,7 +370,11 @@ describe("karaoke transport", () => {
   });
   test("back broadcasts library navigation before recording finalization completes", async () => {
     let finishStop;
-    api.stopRecording.mockReturnValue(new Promise((resolve) => { finishStop = resolve; }));
+    api.stopRecording.mockReturnValue(
+      new Promise((resolve) => {
+        finishStop = resolve;
+      })
+    );
     const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
     const hook = renderHook(() => useKaraokeTransport(props));
     const leaving = hook.result.current.returnToLibrary();
@@ -465,7 +471,7 @@ describe("karaoke transport", () => {
     });
     expect(props.setCurrentTime).toHaveBeenCalledWith(30);
   });
-  test("corrects a synced position for measured delivery latency", async () => {
+  test.each([undefined, 3000])("corrects synced position including sender transit (%s)", async (senderAge) => {
     const props = createProps();
     const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
     const now = Date.now();
@@ -480,12 +486,13 @@ describe("karaoke transport", () => {
           position: 10,
           commandId: "cmd-sync",
           __serverSentAt: now - 2000,
+          positionAt: senderAge === undefined ? undefined : now - senderAge,
           __receivedServerAt: now
         }
       }
     });
     // 10s position + ~2s measured delivery delay = seek to ~12s, not the raw 10s.
-    expect(props.instrumentalRef.current.currentTime).toBeCloseTo(12, 0);
+    expect(props.instrumentalRef.current.currentTime).toBeCloseTo(senderAge === undefined ? 12 : 13, 0);
   });
   test("finishes an active session when the song changes or unmounts", async () => {
     const props = createProps({ recordingSessionId: "existing" });

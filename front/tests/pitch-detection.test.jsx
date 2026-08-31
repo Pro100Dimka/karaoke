@@ -96,6 +96,19 @@ const setupAudio = ({ audio = createAudio(), getUserMedia = vi.fn().mockResolved
 };
 const runFrame = (timestamp) => act(() => frames.shift()(timestamp));
 describe("pitch detection", () => {
+  test("borrows the room microphone without recapturing or stopping it", async () => {
+    const { audio, getUserMedia } = setupAudio();
+    const getLocalVoiceStream = vi.fn().mockResolvedValue(audio.stream);
+    const input = props({ getLocalVoiceStream });
+    const hook = renderHook((value) => usePitchDetection(value), { initialProps: input });
+    await waitFor(() => expect(audio.source.connect).toHaveBeenCalled());
+    expect(getUserMedia).not.toHaveBeenCalled();
+    hook.rerender({ ...input, monitoringEnabled: false });
+    expect(getLocalVoiceStream).toHaveBeenCalledTimes(1);
+    hook.unmount();
+    expect(audio.track.stop).not.toHaveBeenCalled();
+    expect(audio.context.close).toHaveBeenCalledTimes(1);
+  });
   test("stays reset while playback or media capture is unavailable", () => {
     const hook = renderHook((value) => usePitchDetection(value), {
       initialProps: props({ isPlaying: false })

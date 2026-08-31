@@ -1,5 +1,6 @@
 /* Stryker disable all */
 export const enMessages = {
+  "room.audio.selectedInputUnavailable": "The selected microphone is unavailable in the room. Check the input device in audio settings.",
   "audio.mute": "Mute",
   "audio.pause": "Pause",
   "audio.playRecording": "Play recording",
@@ -636,6 +637,12 @@ export const enMessages = {
   "settings.audio.monitor.status.unavailable": "Could not get microphone status",
   "settings.audio.monitor.status.checking": "Checking status…",
   "settings.audio.monitor.buffer.label": "Buffer",
+  "settings.audio.monitor.compact.driverName": "Driver: {0}",
+  "settings.audio.monitor.compact.driver": "Driver latency: {0} ms · input {1} · output {2}",
+  "settings.audio.monitor.compact.estimate": "Latency (estimate): {0} ms · input {1} · output {2}",
+  "settings.audio.monitor.compact.unavailable": "Latency: unavailable",
+  "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: driver samples × 1000 / sample rate. Input and output include driver-reported delays, not a physical microphone-to-headphones measurement.",
+  "settings.audio.monitor.compact.estimateTooltip": "PortAudio estimate for the active stream, not a physical measurement. Actual round-trip latency requires a test signal returned from output to input.",
   "settings.audio.monitor.buffer.auto": "auto",
   "settings.audio.monitor.inputLatency.label": "Audio backend input estimate (not measured)",
   "settings.audio.monitor.outputLatency.label": "Audio backend output estimate (not measured)",

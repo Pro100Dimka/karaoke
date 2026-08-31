@@ -1,5 +1,6 @@
 /* Stryker disable all */
 export const ruMessages = {
+  "room.audio.selectedInputUnavailable": "Выбранный микрофон недоступен в комнате. Проверьте выбор устройства в настройках звука.",
   "audio.mute": "Выключить звук",
   "audio.pause": "Пауза",
   "audio.playRecording": "Воспроизвести запись",
@@ -639,6 +640,12 @@ export const ruMessages = {
   "settings.audio.monitor.status.unavailable": "Не удалось получить состояние микрофона",
   "settings.audio.monitor.status.checking": "Проверяем состояние…",
   "settings.audio.monitor.buffer.label": "Буфер",
+  "settings.audio.monitor.compact.driverName": "Драйвер: {0}",
+  "settings.audio.monitor.compact.driver": "Задержка драйвера: {0} мс · вход {1} · выход {2}",
+  "settings.audio.monitor.compact.estimate": "Задержка (оценка): {0} мс · вход {1} · выход {2}",
+  "settings.audio.monitor.compact.unavailable": "Задержка: нет данных",
+  "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: отсчёты драйвера × 1000 / частота. Вход и выход включают задержки, сообщённые драйвером, но не являются физическим замером микрофон → наушники.",
+  "settings.audio.monitor.compact.estimateTooltip": "Оценка PortAudio для активного потока, не физический замер. Точную полную задержку можно измерить тестовым сигналом с возвратом выхода на вход.",
   "settings.audio.monitor.buffer.auto": "авто",
   "settings.audio.monitor.inputLatency.label": "Оценка входа аудиобэкендом (не замер)",
   "settings.audio.monitor.outputLatency.label": "Оценка выхода аудиобэкендом (не замер)",

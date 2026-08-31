@@ -5,7 +5,16 @@ import { Stack, Switch } from "../../../theme/ui";
 
 export default function rows({ settings: { audio }, run, tr = translateSaved }) {
   const status = audio.monitorStatus;
-  const wasapi = audio.values?.audio_driver !== "asio";
+  const running = status?.state === "running";
+  const input = status?.input_latency_ms;
+  const output = status?.output_latency_ms;
+  const known = [input, output].every((value) => Number.isFinite(value) && value >= 0);
+  const source = status?.latency_source === "asio-driver-report" ? "driver" : "estimate";
+  const latency = known
+    ? tr(`settings.audio.monitor.compact.${source}`, {
+        0: (input + output).toFixed(3), 1: input.toFixed(3), 2: output.toFixed(3)
+      })
+    : tr("settings.audio.monitor.compact.unavailable");
   return [
     ...[
       ["output_device_id", "settings.audio.output_device_id.label", "outputs"],
@@ -70,99 +79,56 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       type: "Label",
       role: "alert",
       variant: "caption",
-      showFor: Number(status?.fallback_count) > 0,
-      text: `${tr("settings.audio.monitor.fallback")} ${status?.fallback_reason ?? ""}`
+      showFor: !!audio.monitorStatusError,
+      text: tr("settings.audio.monitor.status.unavailable")
+    },
+    {
+      type: "Label",
+      role: "status",
+      variant: "caption",
+      showFor: ["starting", "stopping"].includes(status?.state),
+      text: tr(`settings.audio.monitor.status.${status?.state ?? "checking"}`)
     },
     {
       md: 6,
       type: "SelectField",
-      tag: "monitor.wasapiMode",
-      ...(wasapi &&
-        audio.wasapiMode !== "shared" && {
-          tooltip: tr("settings.audio.wasapiMode.warning")
-        }),
-      showFor: wasapi,
-      label: tr("settings.audio.wasapiMode.label"),
-      onSave: audio.setWasapiMode,
-      options: [
-        { value: "shared", label: tr("settings.audio.wasapiMode.options.shared") },
-        { value: "input-exclusive", label: tr("settings.audio.wasapiMode.options.inputExclusive") },
-        { value: "exclusive", label: tr("settings.audio.wasapiMode.options.exclusive") }
-      ]
+      tag: "audio.asio_driver_name",
+      label: tr("settings.audio.audio_driver.label"),
+      onSave: audio.selectDriver,
+      options: audio.options?.drivers ?? []
     },
     {
       md: 6,
       type: "SelectField",
       tag: "audio.buffer_size",
       tooltip: tr("settings.audio.buffer_size.description"),
-      showFor: wasapi,
       valueType: "number",
       label: tr("settings.audio.buffer_size.label"),
-      options: [128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
+      options: [64, 128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
     },
     {
+      md: 12,
       type: "Label",
       variant: "caption",
-      showFor: status?.state === "running",
-      text: `${status?.host_api || status?.driver} · ${status?.mode || "ASIO"} · ${tr("settings.audio.monitor.buffer.label")}: ${status?.blocksize === 0 ? tr("settings.audio.monitor.buffer.auto") : (status?.blocksize ?? "—")} · ${status?.sample_rate ?? "—"} Hz`
+      showFor: running,
+      text: tr("settings.audio.monitor.compact.driverName", {
+        0: status?.mode === "ASIO" ? (status?.driver || "ASIO") : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
+      })
     },
     {
+      md: 12,
       type: "Label",
       variant: "caption",
-      showFor: status?.state === "running",
-      text: tr("settings.audio.monitor.endToEnd.unmeasured")
+      showFor: running,
+      title: tr(`settings.audio.monitor.compact.${source}Tooltip`),
+      text: latency
     },
-    {
-      type: "Label",
-      variant: "caption",
-      showFor: !!status?.input_device,
-      text: `${status?.input_device} → ${status?.output_device}`
-    },
-    {
-      type: "Label",
-      variant: "caption",
-      showFor: status?.state === "running" && status?.engine === "wasapi-split",
-      text: tr("settings.audio.monitor.splitEngine.label")
-    },
-    ...[
-      ["input_latency_ms", "settings.audio.monitor.inputLatency.label", "ms"],
-      ["output_latency_ms", "settings.audio.monitor.outputLatency.label", "ms"],
-      ["callback_frames", "settings.audio.monitor.callbackFrames.label", ""],
-      ["glitch_count", "settings.audio.monitor.glitchCount.label", ""],
-      ["dsp_compute_ms", "settings.audio.monitor.dspCompute.label", "ms"],
-      ["queue_wait_ms", "settings.audio.monitor.queueWait.label", "ms"],
-      ["queue_ms", "settings.audio.monitor.queueLatency.label", "ms"],
-      ["queue_capacity_ms", "settings.audio.monitor.queueLimit.label", "ms"],
-      ["queue_underruns", "settings.audio.monitor.queueUnderruns.label", ""]
-    ].map(([key, label, unit]) => ({
-      type: "Label",
-      variant: "caption",
-      showFor: status?.state === "running" && Number.isFinite(status?.[key]),
-      text: `${tr(label)}: ${status?.[key]} ${unit}`.trim()
-    })),
     {
       type: "ButtonField",
       label: tr("settings.audio.monitor.retry.label"),
       showFor: !!audio.values?.monitoring_enabled,
       disabled: audio.busy || ["starting", "stopping"].includes(status?.state),
       onClick: () => run(() => audio.monitor(true))
-    },
-    {
-      type: "Label",
-      variant: "caption",
-      showFor: audio.suggestAsio === true,
-      text: tr("settings.audio.asioHelp.description")
-    },
-    {
-      type: "ButtonField",
-      showFor: audio.suggestAsio === true,
-      label: tr("settings.audio.asioHelp.label"),
-      onClick: () =>
-        globalThis.open(
-          "https://asio4all.org/about/download-asio4all/",
-          "_blank",
-          "noopener,noreferrer"
-        )
     }
   ];
 }

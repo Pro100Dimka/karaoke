@@ -71,6 +71,7 @@ def test_start_recording_builds_device_specific_session(monkeypatch):
     patch_many(monkeypatch, (recording.repositories, "get_song", Mock(return_value=song)), (recording.audio_service, "get_settings", Mock(return_value=settings)), (recording, "_configure_recording_monitor", Mock(return_value=False)))
     patch_attrs(monkeypatch, recording.audio_service, preferred_input_device=Mock(return_value=3), preferred_output_device=Mock(return_value=4), preferred_sample_rate=Mock(return_value=48000))
     start = Mock(return_value="session")
+    monkeypatch.setattr(recording.audio_service, "recording_monitor_mode", Mock(return_value="shared"))
     monkeypatch.setattr(recording.recording_service, "start_recording", start)
 
     result = recording.start_recording(body, database)
@@ -89,6 +90,8 @@ def test_start_recording_builds_device_specific_session(monkeypatch):
         music_gain=0.8,
             effects={"reverb": 0.4, "echo": 0.5, "delay": 0.6, "octave": 0},
             noise_suppression=0.35,
+            monitor_owner="recording",
+            monitor_mode="shared",
         )
 
 

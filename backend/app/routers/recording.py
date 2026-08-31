@@ -71,6 +71,8 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
     song = repositories.get_song(db, body.song_id)
     if song is None: raise HTTPException(status_code=404, detail="Песня не найдена")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Нельзя начать запись во время обработки песни")
+    if recording_service.has_live_capture():
+        raise HTTPException(status_code=409, detail="A microphone recording is already active")
     settings = audio_service.get_settings(db)
     try:
         if body.room_mode:

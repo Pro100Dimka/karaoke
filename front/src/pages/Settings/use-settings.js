@@ -79,11 +79,9 @@ function useAudio(open) {
   const signal = useOpenPoll(open, api.getSignalQuality, POLL.realtimeSignal, null);
   const monitorStatus = useOpenPoll(open, api.getDirectMonitorStatus, 750, null);
   const [local, setLocal] = useState({});
-  const [wasapiMode, setWasapiMode] = useState("shared");
   const [busy, setBusy] = useState(false);
   const values = { ...settings.data, ...local };
-  const needsAsio = open && Number(monitorStatus.data?.glitch_fallback_count) >= 2;
-  const asio = useOpenPoll(needsAsio, api.listAsioDrivers, 0, null);
+  const asio = useOpenPoll(open, api.listAsioDrivers, POLL.devices, []);
   const fail = (key, error) => alert(tr(key, { 0: getErrorMessage(error) }));
   const merge = (patch) => setLocal((state) => ({ ...state, ...patch }));
   const update = (name, value) => {
@@ -106,7 +104,7 @@ function useAudio(open) {
       const enabled = !!values.monitoring_enabled && !retry;
       const saved = await (enabled
         ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode }));
+        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode: "shared" }));
 
       merge({ monitoring_enabled: !enabled });
       emit(saved);
@@ -117,6 +115,20 @@ function useAudio(open) {
       setBusy(false);
     }
   };
+  const selectDriver = (name) =>
+    queue("driver", async () => {
+      try {
+        const saved = await api.updateAudioSettings({
+          audio_driver: name ? "asio" : "auto",
+          asio_driver_name: name || ""
+        });
+        merge(saved);
+        emit(saved);
+        await settings.refresh();
+      } catch (error) {
+        await fail("settings.couldNotSaveAudioSettings", error);
+      }
+    });
   const speaker = async () => {
     if (busy) return;
     setBusy(true);
@@ -134,13 +146,16 @@ function useAudio(open) {
     update,
     monitor,
     speaker,
-    wasapiMode,
-    setWasapiMode,
+    selectDriver,
     monitorStatus: monitorStatus.data,
     monitorStatusError: monitorStatus.error,
-    suggestAsio: needsAsio && Array.isArray(asio.data) && !asio.data.length,
+    suggestAsio: false,
     level: values.monitoring_enabled ? signalLevel(signal.data) : 0,
     options: {
+      drivers: [
+        { value: "", label: tr("settings.audio.wasapiMode.options.shared") },
+        ...(asio.data ?? []).map(({ name }) => ({ value: name, label: `ASIO · ${name}` }))
+      ],
       inputs: createInputDeviceOptions(inputs.data, values.input_device_id),
       outputs: createOutputDeviceOptions(
         outputs.data,

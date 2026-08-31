@@ -50,13 +50,15 @@ def test_backend_status_and_session_controls(monkeypatch):
 
 
 def test_close_sessions_for_song_keeps_unrelated_recordings(monkeypatch):
-    selected = SimpleNamespace(song_id="song", close=Mock())
-    other = SimpleNamespace(song_id="other", close=Mock())
+    selected = SimpleNamespace(song_id="song", close=Mock(), stop_capture=Mock())
+    other = SimpleNamespace(song_id="other", close=Mock(), stop_capture=Mock())
     monkeypatch.setattr(recording_service, "_sessions", {"selected": selected, "other": other})
 
     recording_service.close_sessions_for_song("song")
 
     selected.close.assert_called_once_with()
+    selected.stop_capture.assert_called_once_with()
+    other.stop_capture.assert_not_called()
     other.close.assert_not_called()
     assert recording_service._sessions == {"other": other}
 

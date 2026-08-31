@@ -461,6 +461,7 @@ def update_settings(db: Session, patch: dict, *, background: bool = False) -> mo
         # Hardware failures are reported by /direct-monitor/status, not as a false
         # promise that an accepted settings write has already opened the device.
         commit_refresh(db, settings)
+        recording_service.update_capture_controls(updates)
         if reconfigure_monitoring:
             request_monitoring(settings)
         elif live_update_fields and settings.monitoring_enabled:
@@ -475,6 +476,7 @@ def update_settings(db: Session, patch: dict, *, background: bool = False) -> mo
             _send_live_update({field: getattr(settings, field) for field in live_update_fields})
         db.commit()
         db.refresh(settings)
+        recording_service.update_capture_controls(updates)
         return settings
     except Exception:
         db.rollback()
@@ -576,8 +578,9 @@ def stop_monitoring() -> None:
     # devices, so it cannot resurrect the monitor after recording takes ownership.
     _monitor_control.cancel()
     from app.services import recording_service
-    recording_service.update_capture_controls({"monitoring_enabled": False})
-    _stop_monitoring_process()
+    with hardware_lock:
+        recording_service.update_capture_controls({"monitoring_enabled": False})
+        _stop_monitoring_process()
 
 
 def _stop_monitoring_process(expected_process=None) -> None:
@@ -640,10 +643,10 @@ def _configure_monitoring(settings) -> None:
     _monitor_control.check()
     from app.services import recording_service
     if recording_service.apply_monitor_settings(
-        settings, getattr(settings, "wasapi_mode", _monitor_wasapi_mode), _monitor_effects_disabled
+        settings, "shared", _monitor_effects_disabled
     ):
         _monitor_control.publish(state="running" if settings.monitoring_enabled else "idle",
-                                 engine="recording", mode=_monitor_wasapi_mode)
+                                 engine="recording", mode="shared")
         return
     if not settings.monitoring_enabled:
         _monitor_control.publish(state="idle")

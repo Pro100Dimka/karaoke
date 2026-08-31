@@ -102,7 +102,6 @@ class RecordingSession:
         self._capture_stopped = False
         self._capture_error = None
         self._signal = {"rms_db": -120.0, "clipping": False, "silent": True}
-        self._audio_config = (device_id, output_device_id, blocksize)
         self.noise_suppression = clamp01(noise_suppression)
         self._quality = StudioMicrophoneProcessor(sample_rate, channels)
         self._pitch = RealtimePitchShifter(sample_rate)
@@ -386,7 +385,7 @@ def update_capture_controls(patch):
                 continue
             if "monitoring_enabled" in patch:
                 session._monitoring_enabled = bool(patch["monitoring_enabled"]) and session._monitor_owner == "recording"
-            if "volume" in patch:
+            if patch.get("volume") is not None:
                 session.gain = max(0, min(4, float(patch["volume"])))
             if patch.get("noise_suppression") is not None:
                 session.noise_suppression = clamp01(patch["noise_suppression"])
@@ -402,7 +401,7 @@ def apply_monitor_settings(settings, mode, disabled_effects):
             return True  # Browser room owns monitoring; never open a competing output.
         owned = [session for session in sessions if session._monitor_owner == "recording"]
         for session in owned:
-            if settings.monitoring_enabled and session._monitor_mode and mode != session._monitor_mode:
+            if settings.monitoring_enabled and session._monitor_mode == "shared" and mode != "shared":
                 raise RuntimeError("Stop recording before changing the WASAPI monitoring mode")
             session._monitor_effects_disabled = disabled_effects
         patch = {key: getattr(settings, key, None) for key in ("volume", "noise_suppression", "reverb", "echo", "delay", "octave")}
@@ -539,20 +538,24 @@ def has_active_recording(song_id: object) -> bool:
 
 def close_sessions_for_song(song_id: object) -> None:
     key = str(song_id)
-    with _sessions_lock:
+    with hardware_lock, _sessions_lock:
         sessions = [
             _sessions.pop(session_id)
             for session_id, session in tuple(_sessions.items())
             if str(session.song_id) == key
         ]
+        for session in sessions:
+            session.stop_capture()
     for session in sessions:
         with contextlib.suppress(Exception): session.close()
 
 
 def close_all_sessions() -> None:
-    with _sessions_lock:
+    with hardware_lock, _sessions_lock:
         sessions = tuple(_sessions.values())
         _sessions.clear()
+        for session in sessions:
+            session.stop_capture()
     for session in sessions:
         with contextlib.suppress(Exception): session.close()
 

@@ -1,6 +1,7 @@
 """One coalescing hardware-command lane; no DB sessions cross thread boundaries."""
 
 import logging
+import math
 import threading
 import time
 
@@ -95,10 +96,11 @@ class MonitorControl:
                 message = {**message, "blocksize": message["buffer_size"], "mode": "ASIO",
                            "latency_source": "asio-driver-report"}
                 rate = float(message.get("sample_rate") or 0)
-                if rate > 0:
+                if math.isfinite(rate) and rate > 0:
                     for kind in ("input", "output"):
-                        if f"{kind}_latency" in message:
-                            message[f"{kind}_latency_ms"] = round(float(message[f"{kind}_latency"]) * 1000 / rate, 2)
+                        samples = message.get(f"{kind}_latency")
+                        if isinstance(samples, (int, float)) and math.isfinite(samples) and samples >= 0:
+                            message[f"{kind}_latency_ms"] = samples * 1000 / rate
             if event in {"started", "fallback"}:
                 for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms"):
                     if key in message:

@@ -31,7 +31,7 @@ def test_selected_buffer_is_not_raised_or_replaced():
     assert len(candidates) == 1
     assert candidates[0]["blocksize"] == 64
     assert candidates[0]["latency"] == 64 / 48000
-    assert "extra_settings" not in candidates[0]
+    assert "extra_settings" in candidates[0]
 
 
 def test_low_rate_keeps_selected_buffer():
@@ -62,28 +62,28 @@ def test_variable_callback_frames_and_glitches_are_reported(monkeypatch):
 
 
 def test_each_mode_uses_only_its_selected_configuration():
-    for mode in ("plain", "shared", "input-exclusive", "exclusive"):
+    for mode in ("plain", "shared"):
         for block in (64, 128, 256, 512):
             candidates = monitor_worker._stream_candidates({**options(), "wasapi_mode": mode, "blocksize": block})
             assert len(candidates) == 1
             assert candidates[0]["blocksize"] == block
             assert candidates[0]["_mode"] == mode
-            assert (candidates[0].get("_engine") == "wasapi-split") == (mode == "exclusive")
+            assert candidates[0].get("_engine") != "wasapi-split"
 
 
-def test_failed_split_open_reports_error_without_duplex_fallback(monkeypatch, capsys):
+def test_exclusive_request_rejected_without_opening_hardware(monkeypatch, capsys):
     configure_argv(monkeypatch, {**options(), "wasapi_mode": "exclusive"})
     monkeypatch.setattr(monitor_worker, "_running", False)
     monkeypatch.setattr(monitor_worker.sd, "InputStream", Mock(side_effect=RuntimeError("separate endpoints rejected")), raising=False)
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock())
     assert monitor_worker.main() == 1
-    monitor_worker.sd.InputStream.assert_called_once()
+    monitor_worker.sd.InputStream.assert_not_called()
     monitor_worker.sd.Stream.assert_not_called()
-    assert json.loads(capsys.readouterr().out) == {"event": "error", "message": "separate endpoints rejected"}
+    assert json.loads(capsys.readouterr().out) == {"event": "error", "message": "Unsupported WASAPI mode"}
 
 
-def test_fatal_callback_shape_error_stops_without_switching_engine(monkeypatch, capsys):
-    configure_argv(monkeypatch, {**options(), "wasapi_mode": "exclusive", "blocksize": 128})
+def test_input_exclusive_request_rejected_without_switching_engine(monkeypatch, capsys):
+    configure_argv(monkeypatch, {**options(), "wasapi_mode": "input-exclusive", "blocksize": 128})
     monkeypatch.setattr(monitor_worker, "_running", True)
     input_endpoint = Mock(latency=.006)
     def start_input():
@@ -95,8 +95,9 @@ def test_fatal_callback_shape_error_stops_without_switching_engine(monkeypatch, 
     assert monitor_worker.main() == 1
     monitor_worker.sd.Stream.assert_not_called()
     events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert [event["event"] for event in events] == ["started", "error"]
-    assert events[0]["blocksize"] == 128
+    assert events == [{"event": "error", "message": "Unsupported WASAPI mode"}]
+    monitor_worker.sd.InputStream.assert_not_called()
+    monitor_worker.sd.OutputStream.assert_not_called()
 
 
 def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch):

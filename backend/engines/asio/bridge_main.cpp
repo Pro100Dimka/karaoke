@@ -54,8 +54,8 @@ struct Engine {
   long input_count = 0;
   long output_count = 0;
   long buffer_size = 0;
-  long input_latency = 0;
-  long output_latency = 0;
+  long input_latency = -1;
+  long output_latency = -1;
   float gain = 1.0F;
   float reverb = 0.0F;
   float echo = 0.0F;
@@ -412,7 +412,6 @@ bool create_buffers(const Options& options) {
     g_engine.channels[index].isInput = g_engine.buffers[index].isInput;
     if (ASIOGetChannelInfo(&g_engine.channels[index]) != ASE_OK || bytes_per_sample(g_engine.channels[index].type) == 0) return false;
   }
-  ASIOGetLatencies(&g_engine.input_latency, &g_engine.output_latency);
   g_engine.output_ready = ASIOOutputReady() == ASE_OK;
   return true;
 }
@@ -474,8 +473,13 @@ int main(int argc, char** argv) {
   }
   ASIOSampleRate rate = 0.0;
   ASIOGetSampleRate(&rate);
+  // Query the running driver after OutputReady negotiation, not the requested
+  // callback size. A failed query must never be presented as zero latency.
+  if (ASIOGetLatencies(&g_engine.input_latency, &g_engine.output_latency) != ASE_OK) {
+    g_engine.input_latency = g_engine.output_latency = -1;
+  }
   std::ostringstream started;
-  started << "{\"event\":\"started\",\"driver\":\"" << escape_json(g_engine.info.name)
+  started << "{\"event\":\"started\",\"driver\":\"" << escape_json(options->driver_name)
           << "\",\"sample_rate\":" << rate << ",\"buffer_size\":" << g_engine.buffer_size
           << ",\"input_latency\":" << g_engine.input_latency << ",\"output_latency\":" << g_engine.output_latency << "}";
   emit(started.str());
