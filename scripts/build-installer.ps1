@@ -2016,6 +2016,9 @@ function Build-Frontend {
 function Verify-Unpacked {
     Require-File (Join-Path $Unpacked $AppExe) "Electron application"
     Require-File (Join-Path $Unpacked "resources\lighting\KeyboardLighting.node") "Keyboard lighting bridge"
+    foreach ($LightingSource in @("LICENSE-Wooting.txt", "LICENSE-HIDAPI.txt", "wooting-v1.8.0.zip", "hidapi-d3013f0.zip")) {
+        Require-File (Join-Path $Unpacked "resources\lighting\sources\$LightingSource") "Keyboard lighting dependency source/license"
+    }
     if (Test-Path -LiteralPath $SceneVideoSource -PathType Leaf) {
         Require-File $PackagedSceneVideo "Karaoke scene video"
     }
@@ -2860,7 +2863,14 @@ function Parallel-FullBuild {
     $script:FrontendChanged = Test-StepNeeded `
         "frontend" `
         $script:FrontendFingerprint `
-        @((Join-Path $Build "frontend\dist\index.html"),(Join-Path $Build "lighting\KeyboardLighting.node")) `
+        @(
+            (Join-Path $Build "frontend\dist\index.html"),
+            (Join-Path $Build "lighting\KeyboardLighting.node"),
+            (Join-Path $Build "lighting\sources\LICENSE-Wooting.txt"),
+            (Join-Path $Build "lighting\sources\LICENSE-HIDAPI.txt"),
+            (Join-Path $Build "lighting\sources\wooting-v1.8.0.zip"),
+            (Join-Path $Build "lighting\sources\hidapi-d3013f0.zip")
+        ) `
         -Force:$force
 
     $script:ModelsChanged = Test-StepNeeded `

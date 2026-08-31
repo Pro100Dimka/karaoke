@@ -26,7 +26,11 @@ const {
 
 const { installBackendFileAuthentication } = require("./backend-media-auth.cjs");
 const { createBackendProcess } = require("./backend-process.cjs");
-const { LightingController, loadWindows } = require("./rgb/controller.cjs");
+const {
+  LightingController,
+  loadWindows,
+  installLightingShutdown
+} = require("./rgb/controller.cjs");
 const { DEV_RENDERER_ORIGIN } = require("./runtime-config.cjs");
 const {
   getPackagedRendererUrl,
@@ -437,7 +441,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  lighting.close().catch(() => {});
   isQuitting = true;
   stopBackend();
 });
+installLightingShutdown(app, lighting);

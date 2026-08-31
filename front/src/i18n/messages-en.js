@@ -1,8 +1,8 @@
 /* Stryker disable all */
 export const enMessages = {
-  "settings.appearance.keyboard_lighting_status.unsupported": "Keyboard found, but OpenRGB does not expose a Direct mode for music synchronization. Built-in lighting effects do not imply support for frequent color updates.",
+  "settings.appearance.keyboard_lighting_status.unsupported": "Keyboard found, but safe real-time lighting control is unavailable for its protocol or current mode.",
   "settings.appearance.keyboard_lighting_enabled.label": "Keyboard lighting",
-  "settings.appearance.keyboard_lighting_enabled.tooltip": "Automatic: Windows Dynamic Lighting or local OpenRGB with SDK Server enabled (port 6742). Compatible keyboards only. Windows may restrict control while the app is not in the foreground.",
+  "settings.appearance.keyboard_lighting_enabled.tooltip": "Built-in Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and VialRGB v1 support. Compatible devices need no separate app. OpenRGB is optional. Windows may restrict background control.",
   "settings.appearance.keyboard_lighting_mode.label": "Lighting effect",
   "settings.appearance.keyboard_lighting_mode.music": "React to music",
   "settings.appearance.keyboard_lighting_mode.theme": "Theme color",
@@ -10,8 +10,8 @@ export const enMessages = {
   "settings.appearance.keyboard_lighting_status.disabled": "Keyboard lighting is off",
   "settings.appearance.keyboard_lighting_status.connecting": "Looking for compatible keyboards…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · keyboards: {count}",
-  "settings.appearance.keyboard_lighting_status.no_devices": "No compatible keyboards found. Check device support and Direct mode in OpenRGB.",
-  "settings.appearance.keyboard_lighting_status.unavailable": "Lighting connection unavailable. Enable OpenRGB SDK Server (127.0.0.1:6742) or check Windows Dynamic Lighting.",
+  "settings.appearance.keyboard_lighting_status.no_devices": "No compatible keyboards found. Supports Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and firmware with VialRGB v1; optionally OpenRGB with Direct mode.",
+  "settings.appearance.keyboard_lighting_status.unavailable": "Built-in lighting control is unavailable. Check keyboard connection and compatibility. OpenRGB is optional.",
   "settings.appearance.keyboard_lighting_status.blocked": "Windows has not granted lighting control. Bring the app to the foreground and check app priority in Dynamic Lighting.",
   "settings.appearance.keyboard_lighting_status.desktop_only": "Lighting is available only in the desktop app.",
   "room.audio.selectedInputUnavailable": "The selected microphone is unavailable in the room. Check the input device in audio settings.",

@@ -94,6 +94,9 @@ test("real Electron media element authenticates localhost playback and preserves
       const native = await app.evaluate(({ app }) => app.lightingProbe);
       expect(["ready", "no_devices", "blocked"]).toContain(native.state);
       expect(Number.isInteger(native.count)).toBe(true);
+      const usb = await app.evaluate(({ app }) => app.usbLightingProbe);
+      expect(["ready", "no_devices", "unsupported"]).toContain(usb.state);
+      expect(Number.isInteger(usb.count)).toBe(true);
     }
     await expect(window.locator("#status")).toHaveText(/playing|loaded/, { timeout: 15_000 });
     const observed = await Promise.race([

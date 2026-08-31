@@ -11,6 +11,7 @@
 #include <mutex>
 #include <vector>
 #include <string>
+#include "usb_lighting.h"
 
 // Resolve stable Node-API exports from the host; no Node/Electron ABI-specific
 // import library or delay-load hook is needed.
@@ -34,6 +35,7 @@ struct Job {
     napi_async_work work{}; napi_deferred deferred{};
     int action = 0, r = 0, g = 0, b = 0;
     uint32_t count = 0; std::string state = "no_devices";
+    bool valid = true;
 };
 template<class Async> auto bounded_get(Async operation) {
     if (operation.wait_for(std::chrono::seconds(2)) != Windows::Foundation::AsyncStatus::Completed) {
@@ -43,9 +45,14 @@ template<class Async> auto bounded_get(Async operation) {
 }
 void execute(napi_env, void* data) {
     auto& job = *static_cast<Job*>(data);
+    if (!job.valid) { job.state = "unavailable"; return; }
     const HRESULT apartment = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     try {
         std::lock_guard<std::mutex> guard(devices_mutex);
+        if (job.action >= 3) {
+            const auto status = usb_lighting_request(job.action - 3, job.r, job.g, job.b);
+            job.count = status.count; job.state = status.state;
+        } else {
         if (job.action == 0) {
             devices.clear();
             for (auto const& info : bounded_get(DeviceInformation::FindAllAsync(LampArray::GetDeviceSelector()))) {
@@ -70,6 +77,7 @@ void execute(napi_env, void* data) {
         }
         job.count = static_cast<uint32_t>(devices.size());
         job.state = available ? "ready" : devices.empty() ? "no_devices" : "blocked";
+        }
     } catch (...) { job.state = "unavailable"; }
     if (SUCCEEDED(apartment)) CoUninitialize();
 }
@@ -88,10 +96,16 @@ void complete(napi_env env, napi_status, void* data) {
 }
 napi_value request(napi_env env, napi_callback_info info) {
     size_t argc = 4; napi_value args[4]{};
-    api.napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    void* base = nullptr;
+    api.napi_get_cb_info(env, info, &argc, args, nullptr, &base);
     auto* job = new Job;
     int* values[] = {&job->action, &job->r, &job->g, &job->b};
-    for (size_t i = 0; i < argc; ++i) api.napi_get_value_int32(env, args[i], values[i]);
+    for (size_t i = 0; i < argc && i < 4; ++i)
+        if (api.napi_get_value_int32(env, args[i], values[i]) != napi_ok) job->valid = false;
+    job->valid = job->valid && argc >= 1 && argc <= 4 && job->action >= 0 && job->action <= 2 &&
+        (job->action != 1 || argc == 4) && job->r >= 0 && job->r <= 255 &&
+        job->g >= 0 && job->g <= 255 && job->b >= 0 && job->b <= 255;
+    job->action += static_cast<int>(reinterpret_cast<intptr_t>(base));
     napi_value promise;
     api.napi_create_promise(env, &job->deferred, &promise);
     api.napi_create_async_work(env, nullptr, text(env, "keyboard-lighting"), execute, complete, job, &job->work);
@@ -106,5 +120,7 @@ extern "C" __declspec(dllexport) napi_value napi_register_module_v1(napi_env env
     napi_value function;
     api.napi_create_function(env, "request", NAPI_AUTO_LENGTH, request, nullptr, &function);
     api.napi_set_named_property(env, exports, "request", function);
+    api.napi_create_function(env, "usbRequest", NAPI_AUTO_LENGTH, request, reinterpret_cast<void*>(3), &function);
+    api.napi_set_named_property(env, exports, "usbRequest", function);
     return exports;
 }

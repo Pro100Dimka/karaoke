@@ -93,7 +93,12 @@ const appearanceRows = ({ settings: { radio, lighting }, tr = translateSaved }) 
     variant: "caption",
     text: tr(`settings.appearance.keyboard_lighting_status.${lighting?.state || "disabled"}`, {
       count: lighting?.count || 0,
-      provider: lighting?.provider === "windows" ? "Windows Dynamic Lighting" : "OpenRGB"
+      provider:
+        {
+          windows: "Windows Dynamic Lighting",
+          usb: "USB · HATOR / Wooting / VialRGB",
+          openrgb: "OpenRGB"
+        }[lighting?.provider] || "USB"
     })
   }
 ];

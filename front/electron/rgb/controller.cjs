@@ -17,8 +17,10 @@ function loadWindows(resourcesPath) {
   return null;
 }
 class LightingController {
-  constructor({ windows = null, openrgb = () => new OpenRgb(), now = Date.now } = {}) {
+  constructor({ windows = null, usb = null, openrgb = () => new OpenRgb(), now = Date.now } = {}) {
     this.windows = windows;
+    this.usb =
+      usb || (windows?.usbRequest ? { request: (...args) => windows.usbRequest(...args) } : null);
     this.openrgb = openrgb;
     this.now = now;
     this.enabled = false;
@@ -50,19 +52,25 @@ class LightingController {
     await this.release();
     this.status = { state: enabled ? "connecting" : "disabled", count: 0 };
     if (!enabled || token !== this.generation) return this.status;
-    if (this.windows?.request) {
-      const status = await this.windows.request(0).catch(() => ({ state: "unavailable" }));
+    let nativeStatus = null;
+    for (const name of ["windows", "usb"]) {
+      const bridge = this[name];
+      if (!bridge?.request) continue;
+      const status = await bridge.request(0).catch(() => ({ state: "unavailable", count: 0 }));
+      const priority = { unavailable: 0, no_devices: 1, unsupported: 2, blocked: 3 };
+      if (!nativeStatus || priority[status.state] > priority[nativeStatus.state])
+        nativeStatus = status;
       if (token !== this.generation) {
-        await this.windows.request(2);
+        await bridge.request(2).catch(() => {});
         return this.status;
       }
       if (status.count > 0 && status.state === "ready") {
-        this.provider = "windows";
+        this.provider = name;
         this.lastInput = this.now();
-        this.status = { ...status, provider: "windows" };
+        this.status = { ...status, provider: name };
         return this.status;
       }
-      await this.windows.request(2).catch(() => {});
+      await bridge.request(2).catch(() => {});
     }
     const client = this.openrgb();
     try {
@@ -84,7 +92,8 @@ class LightingController {
       };
     } catch {
       client.stop();
-      if (token === this.generation) this.status = { state: "unavailable", count: 0 };
+      if (token === this.generation)
+        this.status = nativeStatus || { state: "unavailable", count: 0 };
     }
     return this.status;
   }
@@ -107,20 +116,24 @@ class LightingController {
       if (!this.enabled || token !== this.generation) return this.status;
       if (!active) {
         this.lastRetry = 0;
-        if (this.provider === "windows") await this.release();
+        if (typeof this.provider === "string") await this.release();
         else this.provider?.release();
       } else {
-        if (!this.provider || (this.provider !== "windows" && this.provider.state !== "ready")) {
+        if (
+          !this.provider ||
+          (typeof this.provider !== "string" && this.provider.state !== "ready")
+        ) {
           if (this.now() - (this.lastRetry || 0) < 5000) return this.status;
           this.lastRetry = this.now();
           await this.configure(true);
           token = this.generation;
         }
         if (!this.enabled) return this.status;
-        if (this.provider === "windows") {
-          const status = await this.windows.request(1, ...rgb);
+        if (typeof this.provider === "string") {
+          const { provider } = this;
+          const status = await this[provider].request(1, ...rgb);
           if (token === this.generation) {
-            this.status = { ...status, provider: "windows" };
+            this.status = { ...status, provider };
             if (!status.count) await this.release();
           }
         } else this.provider?.frame(rgb);
@@ -137,7 +150,7 @@ class LightingController {
   async release() {
     const previous = this.provider;
     this.provider = null;
-    if (previous === "windows") await this.windows.request(2).catch(() => {});
+    if (typeof previous === "string") await this[previous].request(2).catch(() => {});
     else previous?.stop();
   }
 
@@ -146,4 +159,29 @@ class LightingController {
     await this.configure(false);
   }
 }
-module.exports = { LightingController, loadWindows };
+function installLightingShutdown(app, lighting) {
+  let pending = false,
+    finished = false;
+  app.on("before-quit", (event) => {
+    if (finished) return;
+    event.preventDefault();
+    if (pending) return;
+    pending = true;
+    let timer;
+    // Allow native restore commands to finish before Electron unloads the addon.
+    // A disconnected/unresponsive device must not prevent application exit.
+    Promise.race([
+      Promise.resolve().then(() => lighting.close()),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, 5000);
+      })
+    ])
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(timer);
+        finished = true;
+        app.quit();
+      });
+  });
+}
+module.exports = { LightingController, loadWindows, installLightingShutdown };

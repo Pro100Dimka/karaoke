@@ -1,8 +1,8 @@
 /* Stryker disable all */
 export const ruMessages = {
-  "settings.appearance.keyboard_lighting_status.unsupported": "Клавиатура найдена, но OpenRGB не предоставляет режим Direct для синхронизации с музыкой. Встроенные эффекты подсветки не означают поддержку частого обновления цветов.",
+  "settings.appearance.keyboard_lighting_status.unsupported": "Клавиатура найдена, но безопасное управление подсветкой в реальном времени недоступно для её протокола или текущего режима.",
   "settings.appearance.keyboard_lighting_enabled.label": "Подсветка клавиатуры",
-  "settings.appearance.keyboard_lighting_enabled.tooltip": "Автоматически: Windows Dynamic Lighting или локальный OpenRGB с включённым SDK Server (порт 6742). Только совместимые клавиатуры. Windows может ограничивать управление, когда приложение не на переднем плане.",
+  "settings.appearance.keyboard_lighting_enabled.tooltip": "Встроенная поддержка Windows Dynamic Lighting, совместимых HATOR/Winbond, Wooting и VialRGB v1. Отдельная программа не нужна для совместимых устройств. OpenRGB — дополнительный вариант. Windows может ограничивать управление в фоне.",
   "settings.appearance.keyboard_lighting_mode.label": "Эффект подсветки",
   "settings.appearance.keyboard_lighting_mode.music": "В такт музыке",
   "settings.appearance.keyboard_lighting_mode.theme": "Цвет темы",
@@ -10,8 +10,8 @@ export const ruMessages = {
   "settings.appearance.keyboard_lighting_status.disabled": "Подсветка клавиатуры выключена",
   "settings.appearance.keyboard_lighting_status.connecting": "Поиск совместимых клавиатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавиатур: {count}",
-  "settings.appearance.keyboard_lighting_status.no_devices": "Совместимые клавиатуры не найдены. Проверьте поддержку устройства и режим Direct в OpenRGB.",
-  "settings.appearance.keyboard_lighting_status.unavailable": "Подключение подсветки недоступно. Включите SDK Server в OpenRGB (127.0.0.1:6742) или проверьте Dynamic Lighting в Windows.",
+  "settings.appearance.keyboard_lighting_status.no_devices": "Совместимые клавиатуры не найдены. Поддерживаются Windows Dynamic Lighting, совместимые HATOR/Winbond, Wooting и прошивки с VialRGB v1; дополнительно — OpenRGB с режимом Direct.",
+  "settings.appearance.keyboard_lighting_status.unavailable": "Встроенное управление подсветкой недоступно. Проверьте подключение и совместимость клавиатуры. OpenRGB не обязателен.",
   "settings.appearance.keyboard_lighting_status.blocked": "Windows не передала управление подсветкой. Верните окно программы на передний план и проверьте приоритет приложений в Dynamic Lighting.",
   "settings.appearance.keyboard_lighting_status.desktop_only": "Подсветка доступна только в настольном приложении.",
   "room.audio.selectedInputUnavailable":

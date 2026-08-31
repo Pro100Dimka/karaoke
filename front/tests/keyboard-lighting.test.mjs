@@ -3,10 +3,46 @@ import { EventEmitter } from "node:events";
 import { afterEach, expect, test, vi } from "vitest";
 import { lightingColor, readLightingMusic, registerLightingSource, observeLightingMedia } from "../src/services/keyboardLighting";
 const require = createRequire(import.meta.url);
-const { LightingController } = require("../electron/rgb/controller.cjs");
+const { LightingController, installLightingShutdown } = require("../electron/rgb/controller.cjs");
 const { parseController, uint32, packet } = require("../electron/rgb/protocol.cjs");
 const { OpenRgb, supportsRealtime } = require("../electron/rgb/openrgb.cjs");
 const controllers = [];
+test("application exit waits for hardware restoration, repeated quit does not duplicate it", async () => {
+  const app = new EventEmitter();
+  app.quit = vi.fn();
+  let resolve;
+  const lighting = {
+    close: vi.fn(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        })
+    )
+  };
+  installLightingShutdown(app, lighting);
+  const event = { preventDefault: vi.fn() };
+  app.emit("before-quit", event);
+  app.emit("before-quit", event);
+  await vi.waitFor(() => expect(lighting.close).toHaveBeenCalledTimes(1));
+  expect(app.quit).not.toHaveBeenCalled();
+  resolve();
+  await vi.waitFor(() => expect(app.quit).toHaveBeenCalledTimes(1));
+  event.preventDefault.mockClear();
+  app.emit("before-quit", event);
+  expect(event.preventDefault).not.toHaveBeenCalled();
+});
+
+test("failed hardware restoration does not trap application exit", async () => {
+  const app = new EventEmitter();
+  app.quit = vi.fn();
+  installLightingShutdown(app, {
+    close: async () => {
+      throw Error("unplugged");
+    }
+  });
+  app.emit("before-quit", { preventDefault() {} });
+  await vi.waitFor(() => expect(app.quit).toHaveBeenCalledTimes(1));
+});
 test("real-time support depends on capabilities, not brand; automatic-save modes are excluded", () => {
   const keyboard = { type: 5, colorCount: 100, name: "Any brand", modes: [{ name: "Direct", flags: 32 }] };
   expect(supportsRealtime(keyboard)).toBe(true);
@@ -64,7 +100,7 @@ test("prefers available Windows keyboards and does not open OpenRGB too", async 
   await c.configure(false);
   expect(windows.request).toHaveBeenCalledWith(2);
 });
-test("unavailable Windows falls back; missing OpenRGB reports unavailable", async () => {
+test("missing OpenRGB does not hide native no-devices diagnostics", async () => {
   const c = controller({
     windows: { request: async () => ({ state: "no_devices", count: 0 }) },
     openrgb: () => ({
@@ -74,7 +110,80 @@ test("unavailable Windows falls back; missing OpenRGB reports unavailable", asyn
       stop() {}
     })
   });
-  expect(await c.configure(true)).toEqual({ state: "unavailable", count: 0 });
+  expect(await c.configure(true)).toEqual({ state: "no_devices", count: 0 });
+});
+
+test("embedded USB needs no OpenRGB and restores lighting on pause and disable", async () => {
+  let clock = 10000;
+  const windows = {
+    request: vi.fn(async () => ({ state: "no_devices", count: 0 })),
+    usbRequest: vi.fn(async () => ({ state: "ready", count: 2 }))
+  };
+  const fallback = vi.fn();
+  const c = controller({ windows, openrgb: fallback, now: () => clock });
+  expect(await c.configure(true)).toMatchObject({ provider: "usb", count: 2 });
+  expect(fallback).not.toHaveBeenCalled();
+  await c.frame(frame);
+  expect(windows.usbRequest).toHaveBeenCalledWith(1, ...frame.rgb);
+  clock += 50;
+  await c.frame({ ...frame, active: false });
+  expect(windows.usbRequest).toHaveBeenLastCalledWith(2);
+  clock += 50;
+  await c.frame(frame);
+  expect(windows.usbRequest).toHaveBeenLastCalledWith(1, ...frame.rgb);
+  await c.configure(false);
+  expect(windows.usbRequest).toHaveBeenLastCalledWith(2);
+});
+
+test("disabling during USB discovery releases handles and never publishes ready", async () => {
+  let resolve;
+  const usb = {
+    request: vi.fn((action) =>
+      action === 0
+        ? new Promise((r) => {
+            resolve = r;
+          })
+        : Promise.resolve({ count: 0 })
+    )
+  };
+  const fallback = vi.fn();
+  const c = controller({ usb, openrgb: fallback });
+  const on = c.configure(true);
+  await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+  const off = c.configure(false);
+  resolve({ state: "ready", count: 1 });
+  await Promise.all([on, off]);
+  expect(c.status.state).toBe("disabled");
+  expect(usb.request).toHaveBeenLastCalledWith(2);
+  expect(fallback).not.toHaveBeenCalled();
+});
+
+test("USB disconnect releases and rediscovers without piling up frames", async () => {
+  let clock = 10000,
+    resolve;
+  const usb = {
+    request: vi.fn((action) =>
+      action === 1
+        ? new Promise((r) => {
+            resolve = r;
+          })
+        : Promise.resolve({ state: "ready", count: 1 })
+    )
+  };
+  const c = controller({ usb, now: () => clock });
+  await c.configure(true);
+  const pending = c.frame(frame);
+  await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+  clock += 100;
+  await c.frame(frame);
+  expect(usb.request.mock.calls.filter(([action]) => action === 1)).toHaveLength(1);
+  resolve({ state: "no_devices", count: 0 });
+  await pending;
+  expect(c.provider).toBeNull();
+  usb.request.mockImplementation(async () => ({ state: "ready", count: 1 }));
+  clock += 6000;
+  await c.frame(frame);
+  expect(c.status).toMatchObject({ provider: "usb", count: 1 });
 });
 test("turning off during discovery never reactivates a stale provider", async () => {
   let resolve;

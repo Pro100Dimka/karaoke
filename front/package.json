@@ -140,6 +140,10 @@
         {
           "from": "../generated/build/lighting/KeyboardLighting.node",
           "to": "lighting/KeyboardLighting.node"
+        },
+        {
+          "from": "../generated/build/lighting/sources",
+          "to": "lighting/sources"
         }
       ],
       "target": "nsis",

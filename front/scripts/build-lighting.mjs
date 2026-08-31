@@ -26,7 +26,8 @@ if (process.platform === "win32") {
     throw new Error("Windows lighting build requires Visual Studio C++ Build Tools and CMake");
   const source = path.join(root, "front/electron/rgb/native");
   const build = path.join(root, "generated/build/lighting");
-  const command = `call "${vcvars}" >nul && "${cmake}" -S "${source}" -B "${build}" -G Ninja -DCMAKE_BUILD_TYPE=Release && "${cmake}" --build "${build}"`;
+  const ctest = path.join(path.dirname(cmake), "ctest.exe");
+  const command = `call "${vcvars}" >nul && "${cmake}" -S "${source}" -B "${build}" -G Ninja -DCMAKE_BUILD_TYPE=Release && "${cmake}" --build "${build}" && "${ctest}" --test-dir "${build}" --output-on-failure`;
   execSync(command, {
     cwd: root,
     stdio: "inherit",

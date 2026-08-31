@@ -18,9 +18,13 @@ app.commandLine.appendSwitch("remote-debugging-port", "0");
 
 app.whenReady().then(async () => {
   if (lightingTest && process.platform === "win32") {
-    const bridge = require(path.resolve(__dirname, "../../../generated/build/lighting/KeyboardLighting.node"));
+    const bridge = require(
+      process.env.ADVOICE_E2E_LIGHTING_MODULE || path.resolve(__dirname, "../../../generated/build/lighting/KeyboardLighting.node")
+    );
     app.lightingProbe = await bridge.request(0);
     await bridge.request(2);
+    app.usbLightingProbe = await bridge.usbRequest(0);
+    await bridge.usbRequest(2);
   }
   installBackendFileAuthentication(session.defaultSession.webRequest, backendBase, token);
   const window = new BrowserWindow({
