@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 from app.services import cache_service
 from tests._shared import make_song, mock_song_lookup, patch_attrs
 
@@ -85,3 +87,39 @@ def test_optimize_missing_song_is_noop(monkeypatch):
     database, _ = mock_song_lookup(monkeypatch, cache_service)
     assert cache_service.optimize_song_files("missing")["freed_bytes"] == 0
     database.close.assert_called_once_with()
+
+
+def test_interrupted_optimization_is_retryable_and_never_commits_early(monkeypatch, tmp_path):
+    current = make_song(tmp_path, output_dir=str(tmp_path), optimized=False)
+    database, _ = mock_song_lookup(monkeypatch, cache_service, current)
+    for name in ("tmp", ".ai-cache"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "data").write_bytes(b"123")
+    patch_attrs(
+        monkeypatch,
+        cache_service.song_service,
+        resolve_output_dir=Mock(return_value=tmp_path),
+    )
+    commit = Mock()
+    monkeypatch.setattr(cache_service, "commit", commit)
+    original_rmtree = cache_service.shutil.rmtree
+
+    def fail_second_directory(path):
+        if path.name == ".ai-cache":
+            raise OSError("injected deletion failure")
+        original_rmtree(path)
+
+    monkeypatch.setattr(cache_service.shutil, "rmtree", fail_second_directory)
+    with pytest.raises(OSError, match="injected deletion failure"):
+        cache_service.optimize_song_files(current.id)
+    assert current.optimized is False
+    commit.assert_not_called()
+    assert not (tmp_path / "tmp").exists()
+    assert (tmp_path / ".ai-cache").exists()
+
+    monkeypatch.setattr(cache_service.shutil, "rmtree", original_rmtree)
+    result = cache_service.optimize_song_files(current.id)
+    assert result["freed_bytes"] == 3
+    assert current.optimized is True
+    assert not (tmp_path / ".ai-cache").exists()
+    commit.assert_called_once_with(database)

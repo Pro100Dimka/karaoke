@@ -35,6 +35,21 @@ export const TRANSFER_TIMEOUTS = Object.freeze({
   close: 30_000,
   import: 5 * 60_000
 });
+export const TRANSFER_CHUNK_BYTES = 32 * 1024;
+export const TRANSFER_RESUME_TTL_MS = 10 * 60_000;
+export async function digestHex(data) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join(
+    ""
+  );
+}
+export function hashChunkManifest(chunkHashes) {
+  const manifest = [...chunkHashes.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([offset, hash]) => `${offset}:${hash}`)
+    .join("\n");
+  return digestHex(new TextEncoder().encode(manifest));
+}
 export const wait = (delayMs) =>
   new Promise((resolve) => {
     globalThis.setTimeout(resolve, delayMs);

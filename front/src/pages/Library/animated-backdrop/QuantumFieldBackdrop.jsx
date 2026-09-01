@@ -77,6 +77,10 @@ export default function QuantumFieldBackdrop() {
         sendThemePalette();
         return;
       }
+      if (event.data?.type === "QFT_DISPOSED") {
+        window.dispatchEvent(new CustomEvent("qft-disposed"));
+        return;
+      }
       if (event.data?.type !== "QFT_SETTINGS") return;
 
       // eslint-disable-next-line no-console -- user-requested settings export
@@ -140,6 +144,7 @@ export default function QuantumFieldBackdrop() {
     radioFrame = requestAnimationFrame(sendRadioSpectrum);
 
     return () => {
+      frame?.contentWindow?.postMessage({ type: "QFT_DISPOSE" }, "*");
       window.removeEventListener("message", handleSettingsMessage);
       themeObserver.disconnect();
       frame?.removeEventListener("load", sendThemePalette);

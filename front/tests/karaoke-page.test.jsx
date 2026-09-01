@@ -219,7 +219,8 @@ beforeEach(() => {
     monitoringEnabled: false,
     setMonitoringEnabled: vi.fn(),
     monitorInputDeviceId: null,
-    updateMicrophone: vi.fn()
+    updateMicrophone: vi.fn(),
+    updateMicrophoneEffects: vi.fn().mockResolvedValue({})
   };
   mocks.transport = {
     returnToLibrary: vi.fn(),
@@ -244,7 +245,7 @@ describe("karaoke page", () => {
     same([mocks.consoleProps.lyricsOffset, 0], [mocks.stageProps.currentTime, 0]);
     fireEvent.mouseMove(page.container.querySelector('[data-role="karaoke"]'));
     fireEvent.click(page.getByTestId("preset"));
-    verify([mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"], [mocks.microphone.updateMicrophone, "toHaveBeenCalled"]);
+    verify([mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"], [mocks.microphone.updateMicrophoneEffects, "toHaveBeenCalled"]);
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(mocks.startMonitoring).toHaveBeenCalled());
     expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(true);
@@ -395,7 +396,7 @@ describe("karaoke page", () => {
     await waitFor(() => expect(mocks.stopMonitoring).toHaveBeenCalled());
     calledWith(
       [mocks.preferences.setEffectPreset, ["custom"]],
-      [mocks.microphone.updateMicrophone, [{ echo: 0.6 }]],
+      [mocks.microphone.updateMicrophoneEffects, [{ echo: 0.6 }]],
       [mocks.microphone.updateMicrophone, [{ volume: 0.9 }]],
       [mocks.preferences.setSpeed, [0.5]]
     );
@@ -405,6 +406,14 @@ describe("karaoke page", () => {
       [mocks.transport.seekTo, [2]],
       [mocks.transport.skip, [5]],
       [mocks.microphone.setMonitoringEnabled, [false]]
+    );
+  });
+  test("rolls an optimistic effect preset back when persistence fails", async () => {
+    mocks.microphone.updateMicrophoneEffects.mockResolvedValueOnce(null);
+    const page = render(<Karaoke />);
+    fireEvent.click(page.getByTestId("preset"));
+    await waitFor(() =>
+      expect(mocks.preferences.setEffectPreset).toHaveBeenLastCalledWith("studio")
     );
   });
   test("opens analysis result and handles every completion path", async () => {

@@ -291,6 +291,34 @@ def test_cancel_all_active_processing_cancels_only_alive_jobs(monkeypatch):
     assert pipeline_service._cancelled_jobs == {"a", "b"}
 
 
+def test_shutdown_stops_admission_cancels_and_joins_with_a_shared_deadline(monkeypatch):
+    alive = {"a": True, "b": True}
+
+    def thread(name):
+        worker = Mock()
+        worker.is_alive.side_effect = lambda: alive[name]
+        worker.join.side_effect = lambda timeout: alive.__setitem__(name, False)
+        return worker
+
+    workers = {name: thread(name) for name in alive}
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _active_jobs=workers,
+        _cancelled_jobs=set(),
+        _accepting_jobs=True,
+        _update_progress=Mock(),
+    )
+
+    result = pipeline_service.shutdown_active_processing(timeout=1.0)
+
+    assert result == {"requested": 2, "finished": 2, "lingering": []}
+    assert pipeline_service._accepting_jobs is False
+    assert pipeline_service._cancelled_jobs == {"a", "b"}
+    assert all(worker.join.call_count == 1 for worker in workers.values())
+    assert pipeline_service._start_background_job("new", Mock()) is False
+
+
 def test_job_entrypoint_releases_runtime_and_cuda_cache(monkeypatch):
     target, current = Mock(side_effect=RuntimeError('worker failed')), Mock()
     monkeypatch.setattr(pipeline_service.threading, "current_thread", Mock(return_value=current))
@@ -307,3 +335,23 @@ def test_job_entrypoint_releases_runtime_and_cuda_cache(monkeypatch):
     assert torch.cuda.empty_cache.call_count >= 1
     pipeline_service._release_active_job("other")
     assert "other" in pipeline_service._active_jobs
+
+
+def test_job_entrypoint_always_releases_storage_reservation(monkeypatch):
+    current, reservation = Mock(), Mock()
+    monkeypatch.setattr(pipeline_service.threading, "current_thread", Mock(return_value=current))
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _active_jobs={"song": current},
+        _cancelled_jobs=set(),
+    )
+
+    raises(
+        RuntimeError,
+        lambda: pipeline_service._job_entrypoint(
+            "song", Mock(side_effect=RuntimeError("failed")), reservation
+        ),
+    )
+
+    reservation.release.assert_called_once_with()

@@ -4,7 +4,11 @@ import {
   TRANSFER_STAGES,
   TRANSFER_LIMITS,
   TRANSFER_TIMEOUTS,
+  TRANSFER_CHUNK_BYTES,
+  TRANSFER_RESUME_TTL_MS,
   cancelOutboundTransferById,
+  digestHex,
+  hashChunkManifest,
   rejectPendingTransfers,
   sendTransferStatus
 } from "./onlineVoiceTransferProtocol";
@@ -59,6 +63,12 @@ function cancelIncomingByTransferId(transfers, participantId, channel, transferI
       transfer.metadata
     );
   }
+  const partial = transfers.resumableIncomingFiles.get(participantId);
+  if (partial?.metadata.transferId === transferId) {
+    globalThis.clearTimeout(partial.resumeTimer);
+    transfers.resumableIncomingFiles.delete(participantId);
+    cleanupIncomingTransfer(partial);
+  }
 }
 
 export function cancelTransfersByCommandId(
@@ -106,13 +116,15 @@ function rejectPendingTransfer(transfers, participantId, channel, message) {
       ? message.error.slice(0, 500)
       : translateSaved("room.receiverCouldNotReceiveTheSong")
   );
+  error.retryable = message.retryable === true;
   const flow = transfers.pendingTransferCredits.get(message.transferId);
   if (flow?.participantId === participantId && flow.channel === channel) {
-    transfers.pendingTransferCredits.delete(message.transferId);
+    flow.error = error;
     flow.waiters.forEach((waiter) => {
       globalThis.clearTimeout(waiter.timer);
       waiter.reject(error);
     });
+    flow.waiters.length = 0;
   }
   for (const store of [
     transfers.pendingTransferAdmissions,
@@ -171,12 +183,10 @@ function normalizeTransferMetadata(message) {
   ) {
     return null;
   }
-  return {
+  const metadata = {
     type: "file-start",
     kind: typeof message.kind === "string" ? message.kind.slice(0, 64) : undefined,
     songId: typeof message.songId === "string" ? message.songId.slice(0, 128) : undefined,
-    commandId: typeof message.commandId === "string" ? message.commandId.slice(0, 128) : undefined,
-    revision: typeof message.revision === "string" ? message.revision.slice(0, 80) : undefined,
     size: message.size,
     transferId,
     filename:
@@ -188,11 +198,62 @@ function normalizeTransferMetadata(message) {
         ? message.mimeType.slice(0, 255)
         : "application/octet-stream"
   };
+  if (typeof message.commandId === "string") metadata.commandId = message.commandId.slice(0, 128);
+  if (typeof message.revision === "string") metadata.revision = message.revision.slice(0, 80);
+  Object.defineProperties(metadata, {
+    chunkSize: {
+      value: TRANSFER_CHUNK_BYTES,
+      enumerable: false
+    },
+    framedChunks: {
+      value: message.chunkSize === TRANSFER_CHUNK_BYTES,
+      enumerable: false
+    }
+  });
+  return metadata;
+}
+
+function resumeIncomingTransfer(transfers, participantId, channel, metadata) {
+  const transfer = transfers.resumableIncomingFiles.get(participantId);
+  if (
+    !transfer ||
+    transfer.metadata.transferId !== metadata.transferId ||
+    transfer.metadata.size !== metadata.size
+  )
+    return false;
+  globalThis.clearTimeout(transfer.resumeTimer);
+  transfers.resumableIncomingFiles.delete(participantId);
+  Object.assign(transfer, {
+    metadata,
+    channel,
+    phase: "receiving",
+    cancelled: false,
+    cleanupStarted: false,
+    received: transfer.written,
+    pendingChunk: null,
+    writeError: null,
+    timer: transfers.createIncomingTransferTimer(participantId, metadata.transferId)
+  });
+  transfers.incomingFiles.set(participantId, transfer);
+  sendTransferStatus(channel, {
+    type: "file-ready",
+    transferId: metadata.transferId,
+    windowBytes: TRANSFER_LIMITS.pendingWriteBytes,
+    resumeOffset: transfer.written
+  });
+  transfers.emitTransferProgress(
+    participantId,
+    TRANSFER_STAGES.RECEIVING,
+    Math.min(99, Math.floor((transfer.written / Math.max(1, metadata.size)) * 100)),
+    metadata
+  );
+  return true;
 }
 
 function handleFileStart(transfers, participantId, channel, message) {
   const metadata = normalizeTransferMetadata(message);
   if (!metadata) return;
+  if (resumeIncomingTransfer(transfers, participantId, channel, metadata)) return;
   if (
     transfers.incomingFiles.has(participantId) ||
     transfers.incomingFileAdmissions.has(participantId)
@@ -243,6 +304,9 @@ function handleFileStart(transfers, participantId, channel, message) {
         typeof globalThis.AbortController === "function" ? new globalThis.AbortController() : null,
       chunkCount: 0,
       received: 0,
+      written: 0,
+      pendingChunk: null,
+      chunkHashes: new Map(),
       lastPercent: -1,
       chunks: Array.isArray(sink?.chunks) ? sink.chunks : [],
       sink,
@@ -312,7 +376,14 @@ const incomingTransferActive = (transfers, participantId, channel, transfer) =>
   transfers.incomingFiles.get(participantId) === transfer &&
   transfer.channel === channel;
 
-function rejectIncomingTransfer(transfers, participantId, channel, transfer, error) {
+function rejectIncomingTransfer(
+  transfers,
+  participantId,
+  channel,
+  transfer,
+  error,
+  retryable = false
+) {
   if (transfers.incomingFiles.get(participantId) === transfer)
     transfers.incomingFiles.delete(participantId);
   transfer.phase = "failed";
@@ -320,7 +391,8 @@ function rejectIncomingTransfer(transfers, participantId, channel, transfer, err
   sendTransferStatus(channel, {
     type: "file-error",
     transferId: transfer.metadata.transferId,
-    error
+    error,
+    retryable
   });
   transfers.emitTransferProgress(
     participantId,
@@ -360,6 +432,19 @@ function handleFileEnd(transfers, participantId, channel, message) {
     );
     return;
   }
+  if (
+    transfer.metadata.framedChunks &&
+    (typeof message.manifestHash !== "string" || !/^[a-f0-9]{64}$/.test(message.manifestHash))
+  ) {
+    rejectIncomingTransfer(
+      transfers,
+      participantId,
+      channel,
+      transfer,
+      translateSaved("room.receivedFileWasNotAccepted")
+    );
+    return;
+  }
 
   transfer.phase = "flushing";
   globalThis.clearTimeout(transfer.timer);
@@ -396,6 +481,13 @@ function handleFileEnd(transfers, participantId, channel, message) {
   )
     .then(async () => {
       if (transfer.writeError) throw transfer.writeError;
+      if (transfer.written !== transfer.metadata.size)
+        throw new Error(translateSaved("room.theSongFileWasIncomplete"));
+      if (
+        transfer.metadata.framedChunks &&
+        (await hashChunkManifest(transfer.chunkHashes)) !== message.manifestHash
+      )
+        throw new Error(translateSaved("room.receivedFileWasNotAccepted"));
       transfer.phase = "finalizing";
       const file = await step(
         transfer.sink.finish(),
@@ -431,7 +523,12 @@ function handleFileEnd(transfers, participantId, channel, message) {
       );
     })
     .catch((error) => {
-      if (transfer.cancelled || transfers.incomingFiles.get(participantId) !== transfer) return;
+      if (
+        transfer.cancelled ||
+        transfers.incomingFiles.get(participantId) !== transfer ||
+        ["paused", "receiving"].includes(transfer.phase)
+      )
+        return;
       rejectIncomingTransfer(
         transfers,
         participantId,
@@ -444,13 +541,44 @@ function handleFileEnd(transfers, participantId, channel, message) {
       transfer.cancelFinalization = null;
       if (transfers.incomingFiles.get(participantId) === transfer && transfer.phase === "complete")
         transfers.incomingFiles.delete(participantId);
-      cleanupIncomingTransfer(transfer);
+      if (!["paused", "receiving"].includes(transfer.phase)) cleanupIncomingTransfer(transfer);
     });
 }
 
 function handleFileCancel(transfers, participantId, channel, message) {
   if (typeof message.transferId !== "string") return;
   cancelIncomingByTransferId(transfers, participantId, channel, message.transferId);
+}
+
+function handleFileChunk(transfers, participantId, channel, message) {
+  const transfer = currentIncomingTransfer(transfers, participantId, channel);
+  const offset = Number(message.offset);
+  const size = Number(message.size);
+  if (
+    !transfer ||
+    transfer.phase !== "receiving" ||
+    message.transferId !== transfer.metadata.transferId ||
+    transfer.pendingChunk ||
+    !Number.isSafeInteger(offset) ||
+    !Number.isSafeInteger(size) ||
+    offset !== transfer.received ||
+    size <= 0 ||
+    size > TRANSFER_CHUNK_BYTES ||
+    offset + size > transfer.metadata.size ||
+    typeof message.sha256 !== "string" ||
+    !/^[a-f0-9]{64}$/.test(message.sha256)
+  ) {
+    if (transfer)
+      rejectIncomingTransfer(
+        transfers,
+        participantId,
+        channel,
+        transfer,
+        translateSaved("room.invalidSongFileSizeReceived")
+      );
+    return;
+  }
+  transfer.pendingChunk = { offset, size, sha256: message.sha256 };
 }
 
 // A song owned by another participant is fetched on demand (library sync, not
@@ -481,6 +609,7 @@ const DATA_MESSAGE_HANDLERS = {
   "file-error": handleTransferConfirmation,
   "file-cancel": handleFileCancel,
   "file-credit": handleFileCredit,
+  "file-chunk": handleFileChunk,
   "file-start": handleFileStart,
   "file-end": handleFileEnd,
   "song-sync-request": handleSongSyncRequest,
@@ -498,9 +627,17 @@ function handleBinaryChunk(transfers, participantId, channel, data) {
   const transfer = currentIncomingTransfer(transfers, participantId, channel);
   const chunk = getBinaryChunk(data);
   if (!transfer || transfer.phase !== "receiving" || !chunk || chunk.byteLength === 0) return;
+  const descriptor =
+    transfer.pendingChunk ||
+    (!transfer.metadata.framedChunks
+      ? { offset: transfer.received, size: chunk.byteLength, sha256: null }
+      : null);
+  transfer.pendingChunk = null;
   if (
+    !descriptor ||
+    descriptor.size !== chunk.byteLength ||
     transfer.chunkCount >= TRANSFER_LIMITS.chunks ||
-    transfer.received + chunk.byteLength > transfer.metadata.size
+    descriptor.offset + chunk.byteLength > transfer.metadata.size
   ) {
     rejectIncomingTransfer(
       transfers,
@@ -512,13 +649,23 @@ function handleBinaryChunk(transfers, participantId, channel, data) {
     return;
   }
 
-  transfer.received += chunk.byteLength;
+  transfer.received = descriptor.offset + chunk.byteLength;
   transfer.chunkCount += 1;
   transfer.writes = transfer.writes
     .then(async () => {
       if (!incomingTransferActive(transfers, participantId, channel, transfer)) return;
-      await transfer.sink.write(chunk);
+      if (descriptor.sha256) {
+        const actualHash = await digestHex(chunk);
+        if (actualHash !== descriptor.sha256) {
+          const error = new Error(translateSaved("room.receivedFileWasNotAccepted"));
+          error.retryable = true;
+          throw error;
+        }
+      }
+      await transfer.sink.write(chunk, descriptor.offset);
       if (!incomingTransferActive(transfers, participantId, channel, transfer)) return;
+      if (descriptor.sha256) transfer.chunkHashes.set(descriptor.offset, descriptor.sha256);
+      transfer.written = descriptor.offset + chunk.byteLength;
       sendTransferStatus(channel, {
         type: "file-credit",
         transferId: transfer.metadata.transferId,
@@ -527,6 +674,18 @@ function handleBinaryChunk(transfers, participantId, channel, data) {
     })
     .catch((error) => {
       if (transfer.writeError || transfer.cancelled) return;
+      if (
+        error?.retryable === true &&
+        preserveIncomingForResume(transfers, participantId, transfer)
+      ) {
+        sendTransferStatus(channel, {
+          type: "file-error",
+          transferId: transfer.metadata.transferId,
+          error: error.message,
+          retryable: true
+        });
+        return;
+      }
       transfer.writeError = error;
       rejectIncomingTransfer(
         transfers,
@@ -552,6 +711,47 @@ function handleBinaryChunk(transfers, participantId, channel, data) {
   );
 }
 
+export function preserveIncomingForResume(transfers, participantId, transfer) {
+  if (
+    !transfer ||
+    !transfer.metadata?.framedChunks ||
+    !["receiving", "flushing"].includes(transfer.phase) ||
+    transfer.cancelled
+  )
+    return false;
+  globalThis.clearTimeout(transfer.timer);
+  transfer.cancelFinalization?.();
+  transfer.cancelFinalization = null;
+  transfers.incomingFiles.delete(participantId);
+  const previous = transfers.resumableIncomingFiles.get(participantId);
+  if (previous && previous !== transfer) cleanupIncomingTransfer(previous);
+  Object.assign(transfer, {
+    channel: null,
+    phase: "paused",
+    received: transfer.written,
+    pendingChunk: null,
+    resumeTimer: globalThis.setTimeout(() => {
+      if (transfers.resumableIncomingFiles.get(participantId) !== transfer) return;
+      transfers.resumableIncomingFiles.delete(participantId);
+      cleanupIncomingTransfer(transfer);
+      transfers.emitTransferProgress(
+        participantId,
+        TRANSFER_STAGES.ERROR,
+        transfer.lastPercent,
+        transfer.metadata
+      );
+    }, TRANSFER_RESUME_TTL_MS)
+  });
+  transfers.resumableIncomingFiles.set(participantId, transfer);
+  transfers.emitTransferProgress(
+    participantId,
+    TRANSFER_STAGES.WAITING,
+    transfer.lastPercent,
+    transfer.metadata
+  );
+  return true;
+}
+
 export function setupDataChannel(transfers, participantId, channel) {
   const previousChannel = transfers.channels.get(participantId);
   if (previousChannel && previousChannel !== channel) {
@@ -563,8 +763,10 @@ export function setupDataChannel(transfers, participantId, channel) {
     }
     const incoming = transfers.incomingFiles.get(participantId);
     if (incoming?.channel === previousChannel) {
-      cleanupIncomingTransfer(incoming);
-      transfers.incomingFiles.delete(participantId);
+      if (!preserveIncomingForResume(transfers, participantId, incoming)) {
+        cleanupIncomingTransfer(incoming);
+        transfers.incomingFiles.delete(participantId);
+      }
     }
     if (previousChannel.readyState !== "closed") previousChannel.close?.();
   }
@@ -599,17 +801,16 @@ export function setupDataChannel(transfers, participantId, channel) {
     }
     const incoming = transfers.incomingFiles.get(participantId);
     if (incoming?.channel === channel) {
-      cleanupIncomingTransfer(incoming);
-      transfers.incomingFiles.delete(participantId);
-      // The data channel itself can close without a full removePeer() (e.g.
-      // renegotiation) — surface the same terminal event here so nothing
-      // waiting on this transfer is left hanging until a generic timeout.
-      transfers.emitTransferProgress(
-        participantId,
-        TRANSFER_STAGES.CANCELLED,
-        incoming.lastPercent,
-        incoming.metadata
-      );
+      if (!preserveIncomingForResume(transfers, participantId, incoming)) {
+        cleanupIncomingTransfer(incoming);
+        transfers.incomingFiles.delete(participantId);
+        transfers.emitTransferProgress(
+          participantId,
+          TRANSFER_STAGES.CANCELLED,
+          incoming.lastPercent,
+          incoming.metadata
+        );
+      }
     }
     if (transfers.channels.get(participantId) === channel) transfers.channels.delete(participantId);
   };

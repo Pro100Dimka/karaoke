@@ -115,33 +115,48 @@ def test_download_worker_reports_verification_failure(monkeypatch, tmp_path):
     reporter.finish.assert_called_once_with(False)
 
 
-def test_start_download_is_idempotent_and_spawns_daemon(monkeypatch, tmp_path):
+def test_start_download_is_idempotent_and_registers_supervised_task(monkeypatch, tmp_path):
     response = {"state": "test"}
     status = Mock(return_value=response)
     monkeypatch.setattr(model_install_service, "status", status)
     patch_attrs(monkeypatch, model_install_service.config, MODELS_DIR=tmp_path / 'models', CACHE_DIR=tmp_path / 'cache')
-    thread = Mock()
-    thread_factory = Mock(return_value=thread)
-    monkeypatch.setattr(model_install_service.threading, "Thread", thread_factory)
+    start_task = Mock(return_value=True)
+    monkeypatch.setattr(model_install_service.background_task_supervisor, "start_task", start_task)
+    reservations = [Mock()]
+    monkeypatch.setattr(model_install_service, "_reserve_model_storage", Mock(return_value=reservations))
 
     model_install_service._set_state(state="downloading", current_model=None, error=None)
     assert model_install_service.start_download() is response
-    thread_factory.assert_not_called()
+    start_task.assert_not_called()
 
     model_install_service._set_state(state="missing", current_model="old", error="old")
     assert model_install_service.start_download() is response
-    thread_factory.assert_called_once_with(
-        target=model_install_service._download_worker,
-        args=((tmp_path / "models").resolve(), (tmp_path / "cache/model-downloads").resolve()),
-        name="ai-model-recovery",
-        daemon=True,
-    )
-    thread.start.assert_called_once_with()
+    start_task.assert_called_once_with(
+        "ai-model-recovery",
+        model_install_service._download_worker,
+            ((tmp_path / "models").resolve(), (tmp_path / "cache/model-downloads").resolve(), reservations),
+        )
     assert model_install_service._state == {
         "state": "downloading",
         "current_model": None,
         "error": None,
     }
+
+
+def test_start_download_fails_closed_during_shutdown(monkeypatch, tmp_path):
+    patch_attrs(
+        monkeypatch,
+        model_install_service.config,
+        MODELS_DIR=tmp_path / "models",
+        CACHE_DIR=tmp_path / "cache",
+    )
+    monkeypatch.setattr(
+        model_install_service.background_task_supervisor, "start_task", Mock(return_value=False)
+    )
+    model_install_service._set_state(state="missing", current_model=None, error=None)
+    result = model_install_service.start_download()
+    assert result["state"] == "error"
+    assert "shutting down" in result["error"]
 
 
 def test_sync_recovery_repairs_before_processing(monkeypatch, tmp_path):

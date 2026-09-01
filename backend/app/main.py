@@ -22,13 +22,13 @@ from app.api.correlation import get_current, new_id, set_current
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
 from app.services import (
     audio_service,
-    cache_service,
-    metadata_enrichment_service,
+    background_task_supervisor,
     pipeline_service,
     recording_service,
-    song_package_service,
-    storage_migration,
+    startup_service,
 )
+from app.services.diagnostics_service import BACKEND_VERSION
+from app.services.storage_budget_service import InsufficientStorageError
 from database import init_db
 
 logger = logging.getLogger(__name__)
@@ -57,49 +57,16 @@ async def lifespan(_app: FastAPI):
             active_loop.default_exception_handler(context)
 
     loop.set_exception_handler(handle_loop_exception)
+    background_task_supervisor.start_accepting()
     init_db()
-    storage_migration.migrate_legacy_song_storage()
-    song_package_service.recover_import_transactions()
-    cache_service.recover_optimization_transactions()
-    metadata_enrichment_service.enqueue_missing()
-    runtime_plan = pipeline_service._configure_ai_runtime()
-    runtime_lines = pipeline_service.format_runtime_plan(runtime_plan)
-    for line in runtime_lines: print(f"[backend] AI runtime: {line}", flush=True)
-    from app.services.app_settings_service import read_settings
-    from app.services.remote_log_service import queue_hardware_snapshot
-
-    settings = read_settings()
-    hardware = runtime_plan.hardware
-    queue_hardware_snapshot(
-        {
-            "cpu": hardware.cpu,
-            "logical_cores": hardware.logical_cores,
-            "ram_bytes": hardware.ram_bytes,
-            "gpus": [
-                {
-                    "name": gpu.name,
-                    "vendor": gpu.vendor,
-                    "memory_bytes": gpu.memory_bytes,
-                }
-                for gpu in hardware.gpus
-            ],
-            "torch_available": hardware.torch_available,
-            "cuda_available": hardware.cuda_available,
-            "cuda_version": hardware.cuda_version,
-            "selected_backends": {
-                name: spec.key for name, spec in runtime_plan.selected.items()
-            },
-            "settings": {
-                "compute_mode": settings.get("compute_mode"),
-                "thread_count": settings.get("thread_count"),
-            },
-        }
-    )
+    startup_service.start()
     try:
         yield
     finally:
         loop.set_exception_handler(previous_exception_handler)
-        pipeline_service.cancel_all_active_processing()
+        background_task_supervisor.stop_accepting()
+        pipeline_service.shutdown_active_processing(timeout=15.0)
+        background_task_supervisor.shutdown(timeout=10.0)
         try:
             recording_service.close_all_sessions()
         finally:
@@ -112,7 +79,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="A&D Voice Backend",
     description="Локальный backend поверх AI-пайплайна: управление песнями, плеер, запись, анализ голоса.",
-    version="0.3.5",
+    version=BACKEND_VERSION,
     lifespan=lifespan,
 )
 
@@ -170,6 +137,19 @@ async def handle_http_exception(request: Request, exc: StarletteHTTPException) -
         status_code=exc.status_code,
         content={"detail": exc.detail, "correlationId": correlation_id},
         headers=exc.headers,
+    )
+
+
+@app.exception_handler(InsufficientStorageError)
+async def handle_insufficient_storage(
+    _request: Request, exc: InsufficientStorageError
+) -> JSONResponse:
+    correlation_id = get_current() or "-"
+    logger.error("Storage preflight rejected %s (request_id=%s)", exc, correlation_id)
+    return JSONResponse(
+        status_code=507,
+        content={"detail": exc.payload(), "correlationId": correlation_id},
+        headers={"X-Request-Id": correlation_id},
     )
 
 

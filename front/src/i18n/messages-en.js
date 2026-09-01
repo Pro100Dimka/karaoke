@@ -1,8 +1,10 @@
 /* Stryker disable all */
 export const enMessages = {
-  "settings.appearance.keyboard_lighting_status.unsupported": "Keyboard found, but safe real-time lighting control is unavailable for its protocol or current mode.",
+  "settings.appearance.keyboard_lighting_status.unsupported":
+    "Keyboard found, but safe real-time lighting control is unavailable for its protocol or current mode.",
   "settings.appearance.keyboard_lighting_enabled.label": "Keyboard lighting",
-  "settings.appearance.keyboard_lighting_enabled.tooltip": "Built-in Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and VialRGB v1 support. Compatible devices need no separate app. OpenRGB is optional. Windows may restrict background control.",
+  "settings.appearance.keyboard_lighting_enabled.tooltip":
+    "Built-in Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and VialRGB v1 support. Compatible devices need no separate app. OpenRGB is optional. Windows may restrict background control.",
   "settings.appearance.keyboard_lighting_mode.label": "Lighting effect",
   "settings.appearance.keyboard_lighting_mode.music": "React to music",
   "settings.appearance.keyboard_lighting_mode.theme": "Theme color",
@@ -10,11 +12,16 @@ export const enMessages = {
   "settings.appearance.keyboard_lighting_status.disabled": "Keyboard lighting is off",
   "settings.appearance.keyboard_lighting_status.connecting": "Looking for compatible keyboards…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · keyboards: {count}",
-  "settings.appearance.keyboard_lighting_status.no_devices": "No compatible keyboards found. Supports Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and firmware with VialRGB v1; optionally OpenRGB with Direct mode.",
-  "settings.appearance.keyboard_lighting_status.unavailable": "Built-in lighting control is unavailable. Check keyboard connection and compatibility. OpenRGB is optional.",
-  "settings.appearance.keyboard_lighting_status.blocked": "Windows has not granted lighting control. Bring the app to the foreground and check app priority in Dynamic Lighting.",
-  "settings.appearance.keyboard_lighting_status.desktop_only": "Lighting is available only in the desktop app.",
-  "room.audio.selectedInputUnavailable": "The selected microphone is unavailable in the room. Check the input device in audio settings.",
+  "settings.appearance.keyboard_lighting_status.no_devices":
+    "No compatible keyboards found. Supports Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and firmware with VialRGB v1; optionally OpenRGB with Direct mode.",
+  "settings.appearance.keyboard_lighting_status.unavailable":
+    "Built-in lighting control is unavailable. Check keyboard connection and compatibility. OpenRGB is optional.",
+  "settings.appearance.keyboard_lighting_status.blocked":
+    "Windows has not granted lighting control. Bring the app to the foreground and check app priority in Dynamic Lighting.",
+  "settings.appearance.keyboard_lighting_status.desktop_only":
+    "Lighting is available only in the desktop app.",
+  "room.audio.selectedInputUnavailable":
+    "The selected microphone is unavailable in the room. Check the input device in audio settings.",
   "audio.mute": "Mute",
   "audio.pause": "Pause",
   "audio.playRecording": "Play recording",
@@ -37,9 +44,15 @@ export const enMessages = {
   "error.screen.restart": "Restart interface",
   "backend.starting": "Starting local server…",
   "backend.starting.slow":
-    "The first launch is taking longer than usual — your antivirus may be scanning the app files. Please wait, this is normal.",
+    "Preparation is taking longer than usual while the library, hardware, or app files are checked. The current stage is shown below.",
   "backend.failed": "Local server did not start.",
   "backend.retry": "Retry",
+  "backend.starting.phase.database": "Checking the database",
+  "backend.starting.phase.storage_migration": "Preparing the song library",
+  "backend.starting.phase.package_recovery": "Recovering song imports",
+  "backend.starting.phase.metadata_scan": "Scanning library metadata",
+  "backend.starting.phase.hardware_detection": "Detecting hardware",
+  "backend.starting.phase.diagnostics_snapshot": "Preparing diagnostics",
   "room.participants": "Room participants",
   "room.heading": "Room · {role}",
   "room.role.host": "host",
@@ -163,6 +176,22 @@ export const enMessages = {
   "settings.ai.models.progress": "AI model readiness",
   "settings.ai.models.button": "Download missing models",
   "settings.ai.models.buttonDownloading": "Downloading…",
+  "settings.advanced.remote_diagnostics.title": "Remote diagnostics",
+  "settings.advanced.remote_diagnostics_enabled.label": "Allow diagnostic uploads",
+  "settings.advanced.remote_diagnostics_enabled.tooltip":
+    "Disabled by default. Data is sent only after you consent",
+  "settings.advanced.remote_diagnostics_errors_enabled.label": "Send warnings and errors",
+  "settings.advanced.remote_diagnostics_errors_enabled.tooltip":
+    "Sends WARNING and ERROR text, the installation identifier, and your online name",
+  "settings.advanced.remote_diagnostics_hardware_enabled.label": "Send hardware details",
+  "settings.advanced.remote_diagnostics_hardware_enabled.tooltip":
+    "Sends CPU, GPU, memory size, and the selected processing mode",
+  "settings.advanced.remote_crash_reports_enabled.label": "Send crash reports",
+  "settings.advanced.remote_crash_reports_enabled.tooltip":
+    "Allows a separate report to be sent after an application crash",
+  "settings.advanced.remote_diagnostics.delete": "Delete my Cloudflare data",
+  "settings.advanced.remote_diagnostics.deleteConfirm":
+    "Delete remote logs and revoke diagnostic consent?",
   "settings.option.language.uk": "Ukrainian",
   "settings.option.language.ru": "Russian",
   "settings.option.language.en": "English",
@@ -656,13 +685,17 @@ export const enMessages = {
   "settings.audio.monitor.compact.estimate": "Latency (estimate): {0} ms · input {1} · output {2}",
   "settings.audio.monitor.compact.unavailable": "Latency: unavailable",
   "settings.audio.monitor.compact.sharedTiming": "Stream latency (estimate): {0} ms",
-  "settings.audio.monitor.compact.sharedTooltip": "Capture-to-playback estimate from WASAPI timestamps and audio-clock position, including the application's queue. Depends on driver timestamp accuracy; not a physical loopback measurement.",
-  "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: driver samples × 1000 / sample rate. Input and output include driver-reported delays, not a physical microphone-to-headphones measurement.",
-  "settings.audio.monitor.compact.estimateTooltip": "PortAudio estimate for the active stream, not a physical measurement. Actual round-trip latency requires a test signal returned from output to input.",
+  "settings.audio.monitor.compact.sharedTooltip":
+    "Capture-to-playback estimate from WASAPI timestamps and audio-clock position, including the application's queue. Depends on driver timestamp accuracy; not a physical loopback measurement.",
+  "settings.audio.monitor.compact.driverTooltip":
+    "ASIOGetLatencies: driver samples × 1000 / sample rate. Input and output include driver-reported delays, not a physical microphone-to-headphones measurement.",
+  "settings.audio.monitor.compact.estimateTooltip":
+    "PortAudio estimate for the active stream, not a physical measurement. Actual round-trip latency requires a test signal returned from output to input.",
   "settings.audio.monitor.buffer.auto": "auto",
   "settings.audio.monitor.inputLatency.label": "Audio backend input estimate (not measured)",
   "settings.audio.monitor.outputLatency.label": "Audio backend output estimate (not measured)",
-  "settings.audio.monitor.endToEnd.unmeasured": "Full microphone → headphones latency: not measured. An output-to-input loopback test is required.",
+  "settings.audio.monitor.endToEnd.unmeasured":
+    "Full microphone → headphones latency: not measured. An output-to-input loopback test is required.",
   "settings.audio.monitor.dspCompute.label": "Last block computation time (not audio latency)",
   "settings.audio.monitor.queueWait.label": "Measured last block wait in the software queue",
   "settings.audio.monitor.callbackFrames.label": "Last audio block, frames",
@@ -723,6 +756,8 @@ export const enMessages = {
     "Could not connect to participant: voice and song transfer unavailable. Check your network and rejoin the room.",
   "room.directParticipantConnectionFailedAndTurnIsUnconfiguredOr":
     "Direct participant connection failed and TURN is unconfigured or unavailable. Voice and song transfer unavailable.",
+  "room.peerConnectionDegradedTryingToRestore":
+    "The connection to {0} degraded. Restoring voice and song transfer…",
   "room.tooManyIceCandidatesReceived": "Too many ICE candidates received",
   "room.participantDisconnectedDuringTransferSendTheFileAgainInterrupted":
     "Participant disconnected during transfer. Send the file again — interrupted transfers cannot be resumed.",

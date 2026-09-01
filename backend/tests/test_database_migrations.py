@@ -130,24 +130,18 @@ def test_interrupted_jobs_are_cancelled():
 
 
 def test_init_db_orchestrates_schema_migrations_and_repairs(monkeypatch):
-    engine, inspector = MagicMock(), Mock()
-    inspector.get_columns.side_effect = [
-        [{"name": "title"}],
-        [{"name": "volume"}],
-        [{"name": "filename"}],
-        [{"name": "pitch_accuracy_percent"}],
-    ]
+    engine = MagicMock()
     connection = engine.begin.return_value.__enter__.return_value
-    patch_attrs(monkeypatch, database, engine=engine, inspect=Mock(return_value=inspector))
+    patch_attrs(monkeypatch, database, engine=engine)
     create_all = Mock()
     monkeypatch.setattr(database.Base.metadata, "create_all", create_all)
-    additive, datetime_repair, settings_repair, interrupted = Mock(), Mock(), Mock(), Mock()
-    patch_attrs(monkeypatch, database, _apply_additive_migrations=additive, _repair_invalid_audio_settings_datetime=datetime_repair, _repair_corrupted_audio_settings=settings_repair, _mark_interrupted_jobs=interrupted)
+    migrate, datetime_repair, settings_repair, interrupted = Mock(), Mock(), Mock(), Mock()
+    patch_attrs(monkeypatch, database, _run_schema_migrations=migrate, _repair_invalid_audio_settings_datetime=datetime_repair, _repair_corrupted_audio_settings=settings_repair, _mark_interrupted_jobs=interrupted)
 
     database.init_db()
 
     create_all.assert_called_once_with(bind=engine)
-    assert additive.call_count == 4
+    migrate.assert_called_once_with(connection)
     datetime_repair.assert_called_once_with(connection)
     settings_repair.assert_called_once_with(connection)
     interrupted.assert_called_once_with(connection)
@@ -206,7 +200,73 @@ def test_init_db_upgrades_a_real_pre_migration_database_in_place(monkeypatch):
             )
         ).one()
         assert recording == ("take.wav", 0, None)
+        history = connection.execute(
+            text("SELECT version, name FROM schema_migrations ORDER BY version")
+        ).all()
+        assert history == [(1, "baseline-additive-columns")]
+    status = database.schema_status()
+    assert status["current"] == status["target"] == database.CURRENT_SCHEMA_VERSION
+    assert status["history"][0]["name"] == "baseline-additive-columns"
     engine.dispose()
+
+
+def test_versioned_migrations_are_idempotent_and_fail_closed_on_history_mismatch(monkeypatch):
+    engine = create_engine("sqlite://", poolclass=StaticPool)
+    applied = []
+
+    def apply(connection):
+        applied.append("run")
+        connection.execute(text("CREATE TABLE IF NOT EXISTS migration_marker (id INTEGER)"))
+
+    migration = database.SchemaMigration(1, "fixture", "checksum-a", apply)
+    monkeypatch.setattr(database, "_schema_migrations", lambda: (migration,))
+    with engine.begin() as connection:
+        database._run_schema_migrations(connection)
+    with engine.begin() as connection:
+        database._run_schema_migrations(connection)
+    assert applied == ["run"]
+
+    monkeypatch.setattr(
+        database,
+        "_schema_migrations",
+        lambda: (database.SchemaMigration(1, "fixture", "checksum-b", apply),),
+    )
+    with engine.begin() as connection:
+        raises(RuntimeError, lambda: database._run_schema_migrations(connection), match="mismatch")
+    engine.dispose()
+
+
+def test_interrupted_versioned_migration_can_be_retried(monkeypatch):
+    engine = create_engine("sqlite://", poolclass=StaticPool)
+    attempts = 0
+
+    def apply(connection):
+        nonlocal attempts
+        attempts += 1
+        connection.execute(text("CREATE TABLE IF NOT EXISTS retry_marker (id INTEGER)"))
+        if attempts == 1:
+            raise RuntimeError("injected migration crash")
+
+    monkeypatch.setattr(
+        database,
+        "_schema_migrations",
+        lambda: (database.SchemaMigration(1, "retry", "checksum", apply),),
+    )
+    raises(
+        RuntimeError,
+        lambda: _run_in_transaction(engine, database._run_schema_migrations),
+        match="injected",
+    )
+    _run_in_transaction(engine, database._run_schema_migrations)
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version FROM schema_migrations")).scalar_one() == 1
+    assert attempts == 2
+    engine.dispose()
+
+
+def _run_in_transaction(engine, action):
+    with engine.begin() as connection:
+        return action(connection)
 
 
 def test_database_dependency_closes_session(monkeypatch):

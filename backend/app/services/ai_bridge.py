@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from AI.artifacts import recover_orphaned_backups as _recover_orphaned_backups
 from AI.lyrics_document import flatten_word_notes, validate_lyrics_document
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
@@ -14,6 +15,11 @@ from app.utils.json_files import read_json
 
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
+
+
+def recover_generated_artifacts(output_dir: str | Path) -> list[Path]:
+    """Recover interrupted AI artifact publication behind the app service boundary."""
+    return _recover_orphaned_backups(Path(output_dir))
 
 
 def process_song(

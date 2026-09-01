@@ -103,7 +103,7 @@ def test_audio_callbacks_expose_dsp_failures_and_silence_monitor_output(monkeypa
     assert not output.any()
 
 
-def test_queue_is_bounded_and_drops_frames_instead_of_blocking_the_audio_thread(monkeypatch):
+def test_queue_overflow_is_bounded_and_marks_the_recording_incomplete(monkeypatch, caplog):
     # TASK 4.1: a real-time audio callback must never block on a full queue —
     # dropping the frame is the only safe option, and the queue itself must
     # have a finite capacity so a slow/stalled writer can't grow RAM forever.
@@ -114,8 +114,43 @@ def test_queue_is_bounded_and_drops_frames_instead_of_blocking_the_audio_thread(
     assert session._queue.full()
 
     input_data = np.zeros((2, 1), dtype=np.float32)
-    session._callback(input_data, 2, None, None)  # must not raise/block even though the queue is full
+    with caplog.at_level("ERROR"):
+        session._callback(input_data, 2, None, None)  # must not raise/block even though the queue is full
     assert session._queue.qsize() == session._queue.maxsize
+    assert session.overflow_stats == {"dropped_blocks": 1, "dropped_frames": 2}
+    assert isinstance(session._overflow_error, recording_service.RecordingOverflowError)
+    assert any("Recording queue overflow" in record.getMessage() for record in caplog.records)
+
+    # Once integrity is lost, later callback blocks are counted as dropped and
+    # are never appended behind the already stalled writer.
+    session._callback(input_data, 2, None, None)
+    assert session.overflow_stats == {"dropped_blocks": 2, "dropped_frames": 4}
+
+
+def test_queue_overflow_never_publishes_a_successful_recording(monkeypatch, tmp_path, caplog):
+    session, _stream = make_session(monkeypatch)
+    temporary = tmp_path / "partial.wav"
+    temporary.write_bytes(b"incomplete")
+    destination = tmp_path / "published.wav"
+    session._temporary_path = temporary
+    session._queue = recording_service.queue.Queue(maxsize=1)
+    session._queue.put_nowait(object())
+
+    session._callback(np.zeros((64, 1), dtype=np.float32), 64, None, None)
+
+    with caplog.at_level("ERROR"), pytest.raises(
+        recording_service.RecordingOverflowError,
+        match="Recording is incomplete",
+    ):
+        session.stop_and_save(destination)
+
+    assert not destination.exists()
+    assert not temporary.exists()
+    assert any(
+        "Discarding incomplete recording" in record.getMessage()
+        and "dropped_frames=64" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_playback_segments_follow_captured_frames_and_pause_boundaries(monkeypatch):

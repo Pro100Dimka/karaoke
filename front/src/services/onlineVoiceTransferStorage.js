@@ -22,12 +22,14 @@ async function createDiskSink(participantId, metadata, getDirectory) {
   const id = `${participantId}-${metadata.transferId}`.replace(/[^a-zA-Z0-9_-]/g, "_");
   const name = `advoice-transfer-${id}.part`;
   const handle = await root.getFileHandle(name, { create: true });
-  const writable = await handle.createWritable();
+  const writable = await handle.createWritable({ keepExistingData: true });
   let state = "open";
   return {
-    write(chunk) {
+    write(chunk, offset) {
       if (state !== "open") throw new Error(translate("room.temporaryTransferFileIsAlreadyClosed"));
-      return writable.write(chunk);
+      return metadata.framedChunks
+        ? writable.write({ type: "write", position: offset, data: chunk })
+        : writable.write(chunk);
     },
     async finish() {
       if (state === "open") {
@@ -65,8 +67,10 @@ export function createTransferSink(participantId, metadata) {
   const chunks = [];
   return {
     chunks,
-    write: (chunk) => chunks.push(chunk),
-    finish: () => new Blob(chunks, { type: metadata.mimeType }),
+    write: (chunk, offset) => {
+      chunks[Math.floor(offset / Math.max(1, metadata.chunkSize || chunk.byteLength))] = chunk;
+    },
+    finish: () => new Blob(chunks.filter(Boolean), { type: metadata.mimeType }),
     cleanup: async () => {
       chunks.length = 0;
     }

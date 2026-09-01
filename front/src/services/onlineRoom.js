@@ -69,6 +69,33 @@ export const normalizeRoomId = (value) =>
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 32);
 
+export function shouldApplyRoomEvent(ordering, message) {
+  if (message.type === "room-state") {
+    if (typeof message.roomEpoch !== "string" || !message.roomEpoch) return true;
+    if (ordering.roomEpoch !== message.roomEpoch) ordering.lastAppliedSequence = 0;
+    ordering.roomEpoch = message.roomEpoch;
+    ordering.lastAppliedSequence = Math.max(
+      ordering.lastAppliedSequence,
+      Number.isSafeInteger(message.eventSequence) ? message.eventSequence : 0
+    );
+    ordering.snapshotVersion = Number.isSafeInteger(message.snapshotVersion)
+      ? message.snapshotVersion
+      : 0;
+    return true;
+  }
+  if (message.roomEpoch === undefined && message.eventSequence === undefined) return true;
+  if (
+    message.roomEpoch !== ordering.roomEpoch ||
+    !Number.isSafeInteger(message.eventSequence) ||
+    message.eventSequence <= ordering.lastAppliedSequence
+  )
+    return false;
+  ordering.lastAppliedSequence = message.eventSequence;
+  if (Number.isSafeInteger(message.snapshotVersion))
+    ordering.snapshotVersion = Math.max(ordering.snapshotVersion, message.snapshotVersion);
+  return true;
+}
+
 function safeUrl(value) {
   const url = new URL(String(value), DEFAULT_SIGNALING_URL);
   if (url.protocol === "http:") url.protocol = "ws:";
@@ -121,6 +148,8 @@ export class OnlineRoomClient {
     this.iceConfig = null;
     this.iceRequest = null;
     this.guestSessionId = null;
+    this.ordering = { roomEpoch: "", lastAppliedSequence: 0, snapshotVersion: 0 };
+    this.clientSequence = 0;
   }
 
   onMessage(listener) {
@@ -162,8 +191,8 @@ export class OnlineRoomClient {
     this.send("ping", { clientTime: Date.now() });
   }
 
-  getIceServers() {
-    if (this.iceConfig?.expiresAt > Date.now() + 30_000)
+  getIceServers({ force = false } = {}) {
+    if (!force && this.iceConfig?.expiresAt > Date.now() + 30_000)
       return Promise.resolve(this.iceConfig.iceServers);
     if (this.iceRequest) return this.iceRequest.promise;
     const requestId = globalThis.crypto?.randomUUID?.() || `ice-${Date.now()}`;
@@ -235,6 +264,8 @@ export class OnlineRoomClient {
     if (!reconnect) {
       this.clockOffsetMs = 0;
       this.clockSynchronized = false;
+      this.ordering = { roomEpoch: "", lastAppliedSequence: 0, snapshotVersion: 0 };
+      this.clientSequence = 0;
     }
     this.clockSamples = [];
     if (typeof globalThis.WebSocket !== "function")
@@ -293,6 +324,9 @@ export class OnlineRoomClient {
         try {
           const message = JSON.parse(data);
           if (!message || typeof message !== "object" || Array.isArray(message)) return;
+          if (!shouldApplyRoomEvent(this.ordering, message)) return;
+          if (message.type === "room-state" && Number.isSafeInteger(message.lastClientSequence))
+            this.clientSequence = Math.max(this.clientSequence, message.lastClientSequence);
           this.lastMessageAt = Date.now();
           if (message.type === "room-closed") {
             this.connectionOptions = null;
@@ -403,7 +437,15 @@ export class OnlineRoomClient {
       const normalized = type.trim();
       if (normalized === "signal" && bytes(JSON.stringify(payload.signal ?? null)) > LIMITS.signal)
         return false;
-      const packet = JSON.stringify({ ...payload, type: normalized });
+      const ordered =
+        this.ordering.roomEpoch &&
+        ["ui", "sync", "presence", "effect-permission"].includes(normalized)
+          ? {
+              roomEpoch: this.ordering.roomEpoch,
+              clientSequence: (this.clientSequence += 1)
+            }
+          : {};
+      const packet = JSON.stringify({ ...payload, ...ordered, type: normalized });
       if (bytes(packet) > LIMITS.message) return false;
       this.socket.send(packet);
       return true;
@@ -420,6 +462,8 @@ export class OnlineRoomClient {
     this.reconnectAttempt = 0;
     this.joined = false;
     this.privateUi = {};
+    this.ordering = { roomEpoch: "", lastAppliedSequence: 0, snapshotVersion: 0 };
+    this.clientSequence = 0;
     this.pendingControl.clear();
     this.iceRequest?.cancel();
     this.iceConfig = null;

@@ -242,9 +242,10 @@ test("mixer changes and commits volumes and effects", () => {
       microphoneLevel={2}
       volumes={{ microphone: 0.4, music: 0.5, vocal: 0.6, melody: 0.7 }}
       onVolumeChange={{ microphone, music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
-      onMicrophoneCommit={commit}
+      onVolumeCommit={{ microphone: commit, music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
       microphoneEffects={{ echo: 0.1, reverb: 0.2, delay: 0.3 }}
       onEffectChange={effect}
+      onEffectCommit={vi.fn()}
       monitoringEnabled
       onMonitoringChange={monitoring}
     />
@@ -270,8 +271,10 @@ test("mixer changes and commits volumes and effects", () => {
       microphoneLevel={0}
       volumes={{}}
       onVolumeChange={{ microphone: vi.fn(), music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
+      onVolumeCommit={{ microphone: vi.fn(), music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
       microphoneEffects={{}}
       onEffectChange={vi.fn()}
+      onEffectCommit={vi.fn()}
     />
   );
 });

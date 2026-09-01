@@ -60,6 +60,29 @@ def test_keyboard_lighting_defaults_and_zero_values_persist(monkeypatch, tmp_pat
     assert saved["keyboard_lighting_mode"] == "theme"
 
 
+def test_remote_diagnostics_require_explicit_persisted_opt_in(monkeypatch, tmp_path):
+    configure_files(monkeypatch, tmp_path)
+    initial = app_settings_service.read_settings()
+    assert initial["remote_diagnostics_enabled"] is False
+    assert initial["remote_diagnostics_errors_enabled"] is False
+    assert initial["remote_diagnostics_hardware_enabled"] is False
+    assert initial["remote_crash_reports_enabled"] is False
+
+    from app.services import remote_log_service
+
+    apply_policy = Mock()
+    monkeypatch.setattr(remote_log_service, "apply_policy", apply_policy)
+    updated = app_settings_service.update_settings(
+        {
+            "remote_diagnostics_enabled": True,
+            "remote_diagnostics_errors_enabled": True,
+        }
+    )
+    assert updated["remote_diagnostics_enabled"] is True
+    assert updated["remote_diagnostics_errors_enabled"] is True
+    apply_policy.assert_called_once_with()
+
+
 def test_directory_normalization_validates_input_and_write_access(monkeypatch, tmp_path):
     raises(ValueError, lambda: app_settings_service._normalize_writable_directory(None, 'Песни'), match='выберите папку')
     raises(ValueError, lambda: app_settings_service._normalize_writable_directory(' ', 'Песни'), match='выберите папку')

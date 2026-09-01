@@ -164,6 +164,7 @@ def test_recording_actions_and_stop_error_mapping(monkeypatch):
         stop.side_effect = error
         with pytest.raises(HTTPException) as mapped: recording.stop_recording("session", database)
         assert mapped.value.status_code == status
+        assert str(error) in str(mapped.value.detail)
         restore.assert_called_once_with(database)
 
 

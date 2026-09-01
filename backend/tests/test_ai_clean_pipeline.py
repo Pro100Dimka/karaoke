@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+import AI.pipeline as pipeline_module
 from AI.artifacts import publish_files_atomically
 from AI.engines.separation import MSSTMelRoformerSeparator
 from AI.engines.text import (
@@ -17,14 +18,15 @@ from AI.engines.text import (
     _fill_unresolved_timed_lines,
     _invalid_runs,
     _repair_collapsed_timed_lines,
+    _timed_line_plan,
+    _timed_line_retry_stages,
     resolve_alignment_language,
     tokenize,
 )
-from AI.errors import ProcessingCancelledError
+from AI.errors import InvalidArtifactError, ProcessingCancelledError
 from AI.lyrics_sources import LyricsDiscovery, TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
-import AI.pipeline as pipeline_module
 
 
 class Separator:
@@ -752,6 +754,44 @@ def test_long_ukrainian_alignment_uses_acoustic_ctc_when_qwen_remains_invalid(
         ("очі", 2.2, 2.8),
     ]
     assert aligner.needs_voice_anchoring is False
+
+
+@pytest.mark.parametrize(
+    ("canonical", "timed"),
+    [
+        ("one two", "one three"),
+        ("один два", "один"),
+        ("hello", "hello extra"),
+        ("don't stop", "do stop"),
+    ],
+)
+def test_timed_line_plan_rejects_non_equivalent_lyrics(canonical, timed):
+    with pytest.raises(InvalidArtifactError, match="do not match"):
+        _timed_line_plan(canonical, (TimedLine(0, timed),), 10.0)
+
+
+@pytest.mark.parametrize(
+    ("canonical", "timed"),
+    [
+        ("Hello, WORLD!", "hello world"),
+        ("Її пісня", "ЇЇ ПІСНЯ"),
+        ("don't stop", "DON'T STOP"),
+    ],
+)
+def test_timed_line_plan_normalization_preserves_equivalent_lyrics(canonical, timed):
+    tokens, entries, groups = _timed_line_plan(canonical, (TimedLine(0, timed),), 10.0)
+    assert len(tokens) == entries[0][2]
+    assert groups == [(0, len(tokens), 0, 10.0)]
+
+
+def test_timed_line_retry_policy_covers_every_unresolved_position():
+    for count in range(1, 9):
+        entries = [(0.0, 0, count)]
+        for missing in range(count):
+            words = [Word(index, index + 0.5, str(index), 1.0, index) for index in range(count)]
+            words[missing] = None
+            stages = list(_timed_line_retry_stages(words, entries, float(count + 1)))
+            assert any(lower <= missing < upper for stage in stages for lower, upper, *_ in stage)
 
 
 def test_timed_russian_lines_use_one_full_ctc_pass_before_qwen(tmp_path, monkeypatch):

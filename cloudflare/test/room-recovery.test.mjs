@@ -191,3 +191,22 @@ test("ICE configuration is private and reused for a participant", async () => {
   assert.equal(h.host.messages.length, 0);
   assert.equal(h.guest.messages.at(-1).requestId, "two");
 });
+
+test("near-expiry ICE configuration rotates instead of reusing stale TURN credentials", async () => {
+  const h = harness();
+  await h.room.webSocketMessage(
+    h.guest,
+    JSON.stringify({ type: "ice-config-request", requestId: "initial" }),
+  );
+  const stale = h.room.iceCredentials.get("guest");
+  stale.expiresAt = Date.now() + 29_000;
+
+  await h.room.webSocketMessage(
+    h.guest,
+    JSON.stringify({ type: "ice-config-request", requestId: "rotated" }),
+  );
+
+  assert.notEqual(h.room.iceCredentials.get("guest"), stale);
+  assert.equal(h.guest.messages.at(-1).requestId, "rotated");
+  assert.ok(h.guest.messages.at(-1).expiresAt > stale.expiresAt);
+});

@@ -6,6 +6,11 @@ SQLite выбрана потому, что это десктоп-програм�
 чего-либо дополнительного пользователем.
 """
 
+import hashlib
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -81,11 +86,112 @@ _AUDIO_COLUMN_MIGRATIONS = {
     "octave": "ALTER TABLE audio_settings ADD COLUMN octave FLOAT DEFAULT 0",
 }
 
+CURRENT_SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class SchemaMigration:
+    version: int
+    name: str
+    checksum: str
+    apply: Callable[[object], None]
+
+
+def _migration_checksum(name: str, statements: list[str]) -> str:
+    payload = "\n".join([name, *statements]).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
 
 def _apply_additive_migrations(connection, existing: set[str], migrations: dict[str, str]) -> None:
     """Apply missing-column migrations without rebuilding user tables."""
     for column, statement in migrations.items():
         if column not in existing: connection.execute(text(statement))
+
+
+def _apply_baseline_schema(connection) -> None:
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    for table, migrations in (
+        ("songs", _SONG_COLUMN_MIGRATIONS),
+        ("audio_settings", _AUDIO_COLUMN_MIGRATIONS),
+        ("recordings", _RECORDING_COLUMN_MIGRATIONS),
+        ("analysis_results", _ANALYSIS_COLUMN_MIGRATIONS),
+    ):
+        if table not in tables:
+            continue
+        existing = {column["name"] for column in inspect(connection).get_columns(table)}
+        _apply_additive_migrations(connection, existing, migrations)
+
+
+def _schema_migrations() -> tuple[SchemaMigration, ...]:
+    statements = [
+        statement
+        for migrations in (
+            _SONG_COLUMN_MIGRATIONS,
+            _AUDIO_COLUMN_MIGRATIONS,
+            _RECORDING_COLUMN_MIGRATIONS,
+            _ANALYSIS_COLUMN_MIGRATIONS,
+        )
+        for statement in migrations.values()
+    ]
+    name = "baseline-additive-columns"
+    return (
+        SchemaMigration(1, name, _migration_checksum(name, statements), _apply_baseline_schema),
+    )
+
+
+def _run_schema_migrations(connection) -> None:
+    connection.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, "
+            "applied_at TEXT NOT NULL)"
+        )
+    )
+    applied = {
+        row.version: row
+        for row in connection.execute(
+            text("SELECT version, name, checksum, applied_at FROM schema_migrations")
+        ).mappings()
+    }
+    for migration in _schema_migrations():
+        previous = applied.get(migration.version)
+        if previous is not None:
+            if previous["name"] != migration.name or previous["checksum"] != migration.checksum:
+                raise RuntimeError(
+                    f"Database migration {migration.version} checksum/history mismatch"
+                )
+            continue
+        migration.apply(connection)
+        connection.execute(
+            text(
+                "INSERT INTO schema_migrations (version, name, checksum, applied_at) "
+                "VALUES (:version, :name, :checksum, :applied_at)"
+            ),
+            {
+                "version": migration.version,
+                "name": migration.name,
+                "checksum": migration.checksum,
+                "applied_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+
+def schema_status() -> dict[str, object]:
+    with engine.connect() as connection:
+        if "schema_migrations" not in inspect(connection).get_table_names():
+            return {"current": 0, "target": CURRENT_SCHEMA_VERSION, "history": []}
+        history = [dict(row) for row in connection.execute(
+            text(
+                "SELECT version, name, checksum, applied_at FROM schema_migrations "
+                "ORDER BY version"
+            )
+        ).mappings()]
+    return {
+        "current": max((int(row["version"]) for row in history), default=0),
+        "target": CURRENT_SCHEMA_VERSION,
+        "history": history,
+    }
 
 
 def _repair_invalid_audio_settings_datetime(connection) -> None:
@@ -194,15 +300,8 @@ def init_db() -> None:
     import models  # noqa: F401  (registers models before create_all)
 
     Base.metadata.create_all(bind=engine)
-    inspector = inspect(engine)
-    song_columns, audio_columns = {column['name'] for column in inspector.get_columns('songs')}, {column['name'] for column in inspector.get_columns('audio_settings')}
-    recording_columns = {column['name'] for column in inspector.get_columns('recordings')}
-    analysis_columns = {column['name'] for column in inspector.get_columns('analysis_results')}
     with engine.begin() as connection:
-        _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
-        _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
-        _apply_additive_migrations(connection, recording_columns, _RECORDING_COLUMN_MIGRATIONS)
-        _apply_additive_migrations(connection, analysis_columns, _ANALYSIS_COLUMN_MIGRATIONS)
+        _run_schema_migrations(connection)
         _repair_invalid_audio_settings_datetime(connection)
         _repair_corrupted_audio_settings(connection)
         _mark_interrupted_jobs(connection)

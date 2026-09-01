@@ -1,4 +1,3 @@
-
 import contextlib
 import json
 import logging
@@ -17,10 +16,14 @@ import config
 import models
 from AI.utils.numeric import clamp01
 from app import repositories
-from app.services import song_artifacts, song_service
-from app.services.db_utils import commit_refresh
-from app.services.microphone_quality import StudioMicrophoneProcessor, RealtimePitchShifter, MonitorEffectsChain
+from app.services import song_artifacts, song_service, storage_budget_service
 from app.services.audio_runtime import hardware_lock, serialized
+from app.services.db_utils import commit_refresh
+from app.services.microphone_quality import (
+    MonitorEffectsChain,
+    RealtimePitchShifter,
+    StudioMicrophoneProcessor,
+)
 from app.services.resource_deletion import delete_with_files
 from app.utils.quarantine import existing_unique_paths
 from database import SessionLocal
@@ -38,6 +41,18 @@ except Exception as exc:  # noqa: BLE001 — библиотека может б�
     sf = SimpleNamespace(SoundFile=None)
     _AUDIO_BACKEND_AVAILABLE = False
     _AUDIO_BACKEND_ERROR = str(exc)
+
+
+class RecordingOverflowError(RuntimeError):
+    """The realtime callback could not hand captured audio to the writer."""
+
+    def __init__(self, dropped_blocks: int, dropped_frames: int):
+        self.dropped_blocks = dropped_blocks
+        self.dropped_frames = dropped_frames
+        super().__init__(
+            "Recording is incomplete because the audio writer could not keep up "
+            f"(dropped blocks: {dropped_blocks}, dropped frames: {dropped_frames})"
+        )
 
 
 class RecordingSession:
@@ -62,6 +77,7 @@ class RecordingSession:
         latency: str | float = "low",
         monitor_mode: str | None = None,
         monitor_owner: str = "recording",
+        storage_reservations: list[storage_budget_service.Reservation] | None = None,
     ):
         self.session_id = session_id
         self.song_id = song_id
@@ -86,6 +102,9 @@ class RecordingSession:
         self._writer_ready = threading.Event()
         self._writer_thread: threading.Thread | None = None
         self._writer_error: BaseException | None = None
+        self._overflow_error: RecordingOverflowError | None = None
+        self._dropped_blocks = 0
+        self._dropped_frames = 0
         self._temporary_path: Path | None = None
         self._frames_written = 0
         self._timeline_frames = 0
@@ -101,6 +120,7 @@ class RecordingSession:
         self._monitor_effects_disabled = False
         self._capture_stopped = False
         self._capture_error = None
+        self._storage_reservations = storage_reservations or []
         self._signal = {"rms_db": -120.0, "clipping": False, "silent": True}
         self.noise_suppression = clamp01(noise_suppression)
         self._quality = StudioMicrophoneProcessor(sample_rate, channels)
@@ -151,10 +171,14 @@ class RecordingSession:
 
     def _enqueue(self, chunk, time_info=None) -> bool:
         if self._writer_error is not None: return False  # writer already died; stop feeding a dead consumer
+        if self._overflow_error is not None:
+            self._mark_overflow(len(chunk))
+            return False
         # Drop the frame rather than block the real-time audio thread.
         try:
             self._queue.put_nowait(chunk)
         except queue.Full:
+            self._mark_overflow(len(chunk))
             return False
         capture_end = self._capture_end_clock(
             time_info,
@@ -164,6 +188,31 @@ class RecordingSession:
             self._timeline_frames += len(chunk)
             self._last_capture_end_clock = capture_end
         return True
+
+    def _mark_overflow(self, frames: int) -> None:
+        self._dropped_blocks += 1
+        self._dropped_frames += max(0, int(frames))
+        self._overflow_error = RecordingOverflowError(
+            self._dropped_blocks,
+            self._dropped_frames,
+        )
+        if self._dropped_blocks == 1:
+            logger.error(
+                "Recording queue overflow: session_id=%s song_id=%s dropped_blocks=%d "
+                "dropped_frames=%d queue_capacity=%d",
+                self.session_id,
+                self.song_id,
+                self._dropped_blocks,
+                self._dropped_frames,
+                self._queue.maxsize,
+            )
+
+    @property
+    def overflow_stats(self) -> dict[str, int]:
+        return {
+            "dropped_blocks": self._dropped_blocks,
+            "dropped_frames": self._dropped_frames,
+        }
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
         try:
@@ -232,6 +281,10 @@ class RecordingSession:
                     if chunk is self._WRITER_STOP: break
                     output.write(chunk)
                     self._frames_written += len(chunk)
+                    if self._storage_reservations:
+                        self._storage_reservations[0].consume(
+                            self._frames_written * self.channels * 3
+                        )
                     if self._frames_written >= self._max_frames:
                         self.limit_reached.set()
                         break
@@ -269,10 +322,19 @@ class RecordingSession:
         thread = self._writer_thread
         if thread is None: return
         if thread.is_alive():
-            self._queue.put(self._WRITER_STOP)
+            try:
+                self._queue.put_nowait(self._WRITER_STOP)
+            except queue.Full:
+                # Capture is already stopped. Make room for the terminal marker
+                # without ever blocking the realtime/API thread on a stalled disk.
+                with contextlib.suppress(queue.Empty):
+                    self._queue.get_nowait()
+                self._queue.put_nowait(self._WRITER_STOP)
             # Bounded: a stuck writer (e.g. a slow/failing disk) must not hang
             # app shutdown indefinitely -- see close_all_sessions() below.
             thread.join(timeout=5.0)
+            if thread.is_alive() and self._writer_error is None:
+                self._writer_error = RuntimeError("Timed out stopping recording writer")
         self._writer_thread = None
 
     def _cleanup_temporary_file(self) -> None:
@@ -343,11 +405,18 @@ class RecordingSession:
         return [dict(segment) for segment in self._playback_segments]
 
     def close(self) -> None:
-        if self._closed: return
+        if self._closed:
+            storage_budget_service.release_all(self._storage_reservations)
+            self._storage_reservations = []
+            return
         self._closed = True
-        self.stop_capture()
-        self._stop_writer()
-        self._cleanup_temporary_file()
+        try:
+            self.stop_capture()
+            self._stop_writer()
+            self._cleanup_temporary_file()
+        finally:
+            storage_budget_service.release_all(self._storage_reservations)
+            self._storage_reservations = []
 
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
         if self._closed: raise RuntimeError("Recording session is already closed")
@@ -358,6 +427,19 @@ class RecordingSession:
         stream_error = self._capture_error
         self._stop_writer()
 
+        if self._overflow_error is not None:
+            error = self._overflow_error
+            logger.error(
+                "Discarding incomplete recording: session_id=%s song_id=%s "
+                "dropped_blocks=%d dropped_frames=%d frames_written=%d",
+                self.session_id,
+                self.song_id,
+                error.dropped_blocks,
+                error.dropped_frames,
+                self._frames_written,
+            )
+            self._cleanup_temporary_file()
+            raise error
         if stream_error is not None:
             logger.error(
                 "Recording device failed to stop: session_id=%s song_id=%s error=%s",
@@ -476,6 +558,16 @@ def start_recording(
     session_id = uuid.uuid4().hex
     session: RecordingSession | None = None
     errors: list[str] = []
+    publish_target = config.SONG_OUTPUT_DIR
+    recording_size = storage_budget_service.recording_bytes(
+        sample_rate, channels, config.MAX_RECORDING_DURATION_SECONDS
+    )
+    storage_reservations = storage_budget_service.reserve_many(
+        [
+            ("recording_capture", config.CACHE_DIR, recording_size),
+            ("recording_publish", publish_target, recording_size),
+        ]
+    )
     for input_id, output_id, rate, frames, monitor, latency in _capture_attempts(
         device_id, output_device_id, sample_rate, blocksize,
         monitoring_enabled or (monitor_owner == "recording" and monitor_mode is not None)
@@ -499,6 +591,7 @@ def start_recording(
                 latency,
                 monitor_mode=monitor_mode,
                 monitor_owner=monitor_owner,
+                storage_reservations=storage_reservations,
             )
             session.start()
             logger.info(
@@ -512,6 +605,7 @@ def start_recording(
                 with contextlib.suppress(Exception): session.close()
             session = None
     if session is None:
+        storage_budget_service.release_all(storage_reservations)
         detail = errors[-1] if errors else "no compatible capture mode"
         raise RuntimeError(f"Could not start recording stream: {detail}")
     with _sessions_lock: _sessions[session_id] = session

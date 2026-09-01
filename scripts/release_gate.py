@@ -1,10 +1,13 @@
 
 
+import contextlib
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -16,7 +19,39 @@ BACKEND = ROOT / "backend"
 FRONT = ROOT / "front"
 CLOUDFLARE = ROOT / "cloudflare"
 GATE_STATE = ROOT / "generated" / "tests" / "release-gate.json"
-GATE_SCHEMA = "release-gate-v2-incremental-mutation"
+GATE_SCHEMA = "release-gate-v3-toolchain-attestation"
+
+
+def runtime_profile() -> dict[str, str]:
+    node = shutil.which("node")
+    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+
+    def version(command: list[str] | None) -> str:
+        if not command or not command[0]:
+            return "missing"
+        try:
+            return subprocess.check_output(command, text=True, stderr=subprocess.STDOUT).strip()
+        except (OSError, subprocess.CalledProcessError) as error:
+            return f"error:{type(error).__name__}"
+
+    environment_keys = (
+        "CI",
+        "RUNNER_OS",
+        "RUNNER_ARCH",
+        "ImageOS",
+        "KARAOKE_RELEASE_PROFILE",
+        "KARAOKE_RELEASE_FULL",
+        "CUDA_PATH",
+    )
+    return {
+        "os": platform.platform(),
+        "machine": platform.machine(),
+        "python": sys.version,
+        "python_executable": str(Path(sys.executable).resolve()),
+        "node": version([node, "--version"] if node else None),
+        "npm": version([npm, "--version"] if npm else None),
+        **{f"env:{key}": os.getenv(key, "") for key in environment_keys},
+    }
 
 
 def release_fingerprint() -> str:
@@ -37,6 +72,14 @@ def release_fingerprint() -> str:
             FRONT / "vitest.config.mjs", FRONT / "stryker.config.mjs",
             FRONT / "playwright.config.mjs", FRONT / "playwright.release.config.mjs",
             CLOUDFLARE / "package.json", CLOUDFLARE / "package-lock.json",
+            ROOT / "VERSION", ROOT / "scripts" / "sync_version.py",
+            ROOT / "scripts" / "frontend_dependency_audit.py",
+            ROOT / "scripts" / "security" / "frontend-audit-allowlist.json",
+            ROOT / "scripts" / "backend_dependency_audit.py",
+            ROOT / "scripts" / "generate_release_sbom.py",
+            ROOT / "scripts" / "backend" / "generate_sbom.py",
+            ROOT / "scripts" / "security" / "backend-audit-allowlist.json",
+            ROOT / "scripts" / "security" / "cloudflare-audit-allowlist.json",
             ROOT / "scripts" / "release_gate.py",
             ROOT / "scripts" / "build-installer.ps1",
             ROOT / "build-installer.bat", ROOT / "start-web.bat",
@@ -44,14 +87,19 @@ def release_fingerprint() -> str:
         ) if path.is_file()
     )
     digest = hashlib.sha256(GATE_SCHEMA.encode())
+    digest.update(json.dumps(runtime_profile(), sort_keys=True).encode("utf-8"))
     for path in sorted(set(files)):
         relative = path.relative_to(ROOT).as_posix()
         if any(part in {"node_modules", "venv", ".runtime", ".stryker-tmp"} for part in path.parts):
             continue
         payload = path.read_bytes()
-        if relative in {
-            "front/package.json", "backend/pyproject.toml",
+        if relative == "VERSION":
+            payload = b"<release-version>\n"
+        elif relative in {
+            "front/package.json", "front/package-lock.json",
+            "backend/pyproject.toml",
             "backend/app/services/diagnostics_service.py",
+            "cloudflare/package.json", "cloudflare/package-lock.json",
         }:
             payload = re.sub(
                 rb'(?m)("version"\s*:\s*"|^version\s*=\s*"|BACKEND_VERSION\s*=\s*")\d+\.\d+\.\d+',
@@ -89,8 +137,11 @@ class StepFailure(Exception):
     process itself, so it can be raised from a worker thread and collected
     by whichever caller is coordinating parallel chains."""
 
-    def __init__(self, label: str, code: int) -> None:
-        super().__init__(f"{label} failed with exit code {code}")
+    def __init__(self, label: str, code: int | str) -> None:
+        message = f"{label} failed with exit code {code}"
+        if isinstance(code, str) and code.startswith("timeout:"):
+            message = f"{label} timed out after {code.removeprefix('timeout:')} seconds"
+        super().__init__(message)
         self.label = label
         self.code = code
 
@@ -103,11 +154,73 @@ class StepFailure(Exception):
 _active_processes: list[subprocess.Popen] = []
 _active_lock = threading.Lock()
 
+STEP_TIMEOUT_SECONDS = {
+    "Version consistency": 60,
+    "Backend static/architecture gate": 600,
+    "Backend full suite + coverage": 5400,
+    "Backend dependency audit": 900,
+    "Frontend production dependency audit": 600,
+    "Frontend complete dependency audit": 600,
+    "Frontend verify": 1800,
+    "Frontend mutation gate": 5400,
+    "Browser user-journey E2E": 1800,
+    "Electron release-critical E2E": 1800,
+    "Online service tests": 600,
+    "Online service dependency audit": 600,
+    "Online service deployment dry run": 600,
+    "Backend SBOM": 600,
+    "Frontend SBOM": 600,
+    "Online service SBOM": 600,
+    "Aggregate CycloneDX release SBOM": 600,
+}
+
+
+def step_timeout(label: str) -> float:
+    override = os.getenv("KARAOKE_RELEASE_STEP_TIMEOUT", "").strip()
+    if override:
+        return max(0.1, float(override))
+    return float(STEP_TIMEOUT_SECONDS.get(label, 1800))
+
+
+def _terminate_process_tree(process: subprocess.Popen, grace_seconds: float = 5.0) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T"],
+            capture_output=True,
+            check=False,
+        )
+        try:
+            process.wait(timeout=grace_seconds)
+            return
+        except subprocess.TimeoutExpired:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                check=False,
+            )
+    else:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=grace_seconds)
+            return
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        process.wait(timeout=5)
+
 
 def _start_step(label: str, command: list[str], cwd: Path, env: dict[str, str] | None) -> subprocess.Popen:
     print(f"\n{'=' * 72}\n{label}\n{'=' * 72}", flush=True)
     print("> " + " ".join(command), flush=True)
-    process = subprocess.Popen(command, cwd=cwd, env=env)
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+        start_new_session=os.name != "nt",
+    )
     with _active_lock:
         _active_processes.append(process)
     return process
@@ -115,7 +228,11 @@ def _start_step(label: str, command: list[str], cwd: Path, env: dict[str, str] |
 
 def _finish_step(label: str, process: subprocess.Popen) -> None:
     try:
-        code = process.wait()
+        try:
+            code = process.wait(timeout=step_timeout(label))
+        except subprocess.TimeoutExpired:
+            _terminate_process_tree(process)
+            raise StepFailure(label, f"timeout:{step_timeout(label):g}") from None
     finally:
         with _active_lock:
             if process in _active_processes:
@@ -160,8 +277,8 @@ def run_parallel(chains: list[list[tuple[str, list[str], Path]]]) -> None:
             with errors_lock:
                 errors.append(error)
             with _active_lock:
-                for process in _active_processes:
-                    process.terminate()
+                for process in list(_active_processes):
+                    _terminate_process_tree(process)
 
     threads = [threading.Thread(target=worker, args=(chain,)) for chain in chains]
     for thread in threads:
@@ -206,6 +323,11 @@ def require_release_environment() -> tuple[str, str]:
 
 
 def main() -> int:
+    run(
+        "Version consistency",
+        [sys.executable, str(ROOT / "scripts" / "sync_version.py"), "--check"],
+        cwd=ROOT,
+    )
     _node, npm = require_release_environment()
     fingerprint = release_fingerprint()
     if cached_release_pass(fingerprint):
@@ -247,23 +369,27 @@ def main() -> int:
             ),
             (
                 "Backend dependency audit",
-                [
-                    sys.executable,
-                    "-m",
-                    "pip_audit",
-                    "--ignore-vuln",
-                    "PYSEC-2025-217",
-                    "--ignore-vuln",
-                    "PYSEC-2026-2288",
-                    "--ignore-vuln",
-                    "PYSEC-2026-2289",
-                    "--ignore-vuln",
-                    "PYSEC-2026-2290",
-                ],
-                BACKEND,
+                [sys.executable, str(ROOT / "scripts" / "backend_dependency_audit.py")],
+                ROOT,
+            ),
+            (
+                "Backend SBOM",
+                [sys.executable, str(ROOT / "scripts" / "backend" / "generate_sbom.py")],
+                ROOT,
             ),
         ],
         [
+            (
+                "Frontend production dependency audit",
+                [sys.executable, str(ROOT / "scripts" / "frontend_dependency_audit.py"), "--scope", "production"],
+                ROOT,
+            ),
+            (
+                "Frontend complete dependency audit",
+                [sys.executable, str(ROOT / "scripts" / "frontend_dependency_audit.py"), "--scope", "all"],
+                ROOT,
+            ),
+            ("Frontend SBOM", [npm, "run", "generate:sbom", "--", "frontend"], FRONT),
             ("Frontend verify", [npm, "run", "verify"], FRONT),
             ("Frontend mutation gate", [npm, "run", "test:mutation"], FRONT),
         ],
@@ -274,7 +400,28 @@ def main() -> int:
     run("Electron release-critical E2E", [npm, "run", "test:e2e:electron-release"], cwd=FRONT)
 
     run("Online service tests", [npm, "test"], cwd=CLOUDFLARE)
-    run("Online service dependency audit", [npm, "audit"], cwd=CLOUDFLARE)
+    run(
+        "Online service dependency audit",
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "frontend_dependency_audit.py"),
+            "--project",
+            "cloudflare",
+            "--scope",
+            "all",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        "Online service SBOM",
+        [shutil.which("node") or "node", str(FRONT / "scripts" / "generate-sbom.mjs"), "cloudflare"],
+        cwd=CLOUDFLARE,
+    )
+    run(
+        "Aggregate CycloneDX release SBOM",
+        [sys.executable, str(ROOT / "scripts" / "generate_release_sbom.py")],
+        cwd=ROOT,
+    )
     run("Online service deployment dry run", [npm, "run", "check"], cwd=CLOUDFLARE)
 
     save_release_pass()

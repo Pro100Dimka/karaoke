@@ -62,6 +62,7 @@ function useAppActions() {
   return {
     form,
     error,
+    replace: updateSettings,
     change: (name, value) => name === "theme" && applyTheme(value),
     save: (name, value) =>
       queue(name, async (latest) => {

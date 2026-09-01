@@ -6,7 +6,7 @@ from pathlib import Path
 
 import config
 from app import repositories
-from app.services import revision_cache, song_service
+from app.services import revision_cache, song_service, storage_budget_service
 from app.services.db_utils import commit
 from database import SessionLocal
 
@@ -60,8 +60,11 @@ def invalidate_cache_size() -> None:
 
 def free_space() -> dict:
     usage = shutil.disk_usage(config.CACHE_DIR)
+    capacity = storage_budget_service.capacity(config.CACHE_DIR)
     return {
         "free_bytes": usage.free,
+        "reserved_bytes": capacity["reserved_bytes"],
+        "available_bytes": capacity["available_bytes"],
         "free_human": _human(usage.free),
         "total_bytes": usage.total,
         "total_human": _human(usage.total),
@@ -75,7 +78,10 @@ def _remove_intermediates(output_dir: Path) -> tuple[int, list[str]]:
         if not target.exists():
             continue
         freed += _dir_size_bytes(target)
-        shutil.rmtree(target, ignore_errors=True)
+        # A failed deletion must abort before the database advertises the song
+        # as optimized. Already removed intermediate directories are harmless;
+        # a retry removes the remainder and only then commits optimized=True.
+        shutil.rmtree(target)
         actions.append(f"удалена временная папка {name}/")
     return freed, actions
 
@@ -90,14 +96,6 @@ def clear_temp_files() -> int:
     )
     invalidate_cache_size()
     return freed
-
-
-def recover_optimization_state(_output_dir: Path, *, committed: bool) -> None:
-    del committed
-
-
-def recover_optimization_transactions() -> None:
-    return None
 
 
 def optimize_song_files(song_id: str) -> dict:

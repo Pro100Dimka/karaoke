@@ -5,7 +5,8 @@ import {
   OnlineRoomClient,
   createRoomId,
   getOrCreateGuestSessionId,
-  normalizeRoomId
+  normalizeRoomId,
+  shouldApplyRoomEvent
 } from "../src/services/onlineRoom.js";
 import { same, verify } from "./helpers/assertions.mjs";
 class FakeSocket {
@@ -39,6 +40,59 @@ afterEach(() => {
   delete globalThis.WebSocket;
 });
 describe("online room service", () => {
+  test("applies only the newest authoritative room epoch and sequence", () => {
+    const ordering = { roomEpoch: "", lastAppliedSequence: 0, snapshotVersion: 0 };
+    expect(
+      shouldApplyRoomEvent(ordering, {
+        type: "room-state",
+        roomEpoch: "epoch-2",
+        eventSequence: 10,
+        snapshotVersion: 4
+      })
+    ).toBe(true);
+    const events = [
+      { roomEpoch: "epoch-2", eventSequence: 12, snapshotVersion: 5 },
+      { roomEpoch: "epoch-2", eventSequence: 11, snapshotVersion: 4 },
+      { roomEpoch: "epoch-2", eventSequence: 12, snapshotVersion: 5 },
+      { roomEpoch: "epoch-1", eventSequence: 99, snapshotVersion: 99 },
+      { roomEpoch: "epoch-2", eventSequence: 13, snapshotVersion: 6 }
+    ];
+    expect(events.map((event) => shouldApplyRoomEvent(ordering, event))).toEqual([true, false, false, false, true]);
+    expect(ordering).toEqual({
+      roomEpoch: "epoch-2",
+      lastAppliedSequence: 13,
+      snapshotVersion: 6
+    });
+  });
+  test("adds the authoritative epoch and monotonic sender sequence to shared mutations", async () => {
+    installSocket();
+    const client = new OnlineRoomClient("ws://example.test/");
+    const connection = client.connect({ id: "ABCD", name: "Singer" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    socket.onmessage({
+      data: JSON.stringify({
+        type: "room-state",
+        roomEpoch: "epoch-current",
+        eventSequence: 8,
+        snapshotVersion: 3,
+        lastClientSequence: 20,
+        self: { id: "guest", role: "guest" },
+        participants: []
+      })
+    });
+    await connection;
+
+    expect(client.send("ui", { state: { query: "Queen" } })).toBe(true);
+    expect(JSON.parse(socket.send.mock.calls.at(-1)[0])).toEqual({
+      type: "ui",
+      roomEpoch: "epoch-current",
+      clientSequence: 21,
+      state: { query: "Queen" }
+    });
+    client.disconnect();
+  });
   test("loads deployment limits from the active module instance", async () => {
     const service = await loadOnlineRoomService();
     verify([service.DEFAULT_SIGNALING_URL, "toBe", "wss://karaoke-studio-online.pro100dimka-and.workers.dev"]);
@@ -200,9 +254,7 @@ describe("online room service", () => {
 
     // No storage available (privacy mode, restricted context) must not
     // throw -- reconnect identity is a nice-to-have, not required.
-    expect(getOrCreateGuestSessionId(undefined, { randomUUID: () => "no-storage-id" })).toBe(
-      "no-storage-id"
-    );
+    expect(getOrCreateGuestSessionId(undefined, { randomUUID: () => "no-storage-id" })).toBe("no-storage-id");
   });
   test("only a guest connection carries a reconnect session id, never the host", async () => {
     installSocket();
@@ -346,10 +398,7 @@ describe("online room service", () => {
     const connection = client.connect({ id: "ABCD" });
     FakeSocket.instances.at(-1).onclose({ code: 4001, reason: "denied", wasClean: false });
     await expect(connection).rejects.toThrow();
-    expect(error).toHaveBeenCalledWith(
-      "Room WebSocket closed",
-      expect.objectContaining({ code: 4001, reason: "denied", wasClean: false })
-    );
+    expect(error).toHaveBeenCalledWith("Room WebSocket closed", expect.objectContaining({ code: 4001, reason: "denied", wasClean: false }));
   });
   test("disconnect does not close sockets already closing or closed", async () => {
     installSocket();

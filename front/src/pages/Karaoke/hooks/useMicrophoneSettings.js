@@ -37,6 +37,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     () => getAudioPreferences().monitorInputDeviceId
   );
   const effectsInitializedRef = useRef(false);
+  const confirmedEffectsRef = useRef(microphoneEffects);
+  const effectMutationRef = useRef(0);
   const mountedRef = useMountedRef();
   const { run: enqueueUpdate } = useAsyncQueue();
   useEffect(
@@ -60,7 +62,15 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         setAudioDriver(normalized.audioDriver);
         setMonitoringEnabled(normalized.monitoringEnabled);
         setDirectOutputDeviceId(normalized.outputDeviceId);
-        setMicrophoneEffects((current) => normalizeAudioEffects({ ...current, ...event.detail }));
+        const normalizedEffects = normalizeAudioEffects({
+          ...confirmedEffectsRef.current,
+          ...event.detail
+        });
+        confirmedEffectsRef.current = normalizedEffects;
+        const mutationSequence = Number(event.detail.__microphoneEffectSequence) || 0;
+        if (!mutationSequence || mutationSequence === effectMutationRef.current) {
+          setMicrophoneEffects(normalizedEffects);
+        }
       };
       globalThis.addEventListener(AUDIO_SETTINGS_CHANGED_EVENT, syncAudioSettings);
       return () => globalThis.removeEventListener(AUDIO_SETTINGS_CHANGED_EVENT, syncAudioSettings);
@@ -77,7 +87,9 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     setDirectOutputDeviceId(normalized.outputDeviceId);
     if (!effectsInitializedRef.current) {
       effectsInitializedRef.current = true;
-      setMicrophoneEffects(normalizeAudioEffects(audioSettings));
+      const normalizedEffects = normalizeAudioEffects(audioSettings);
+      confirmedEffectsRef.current = normalizedEffects;
+      setMicrophoneEffects(normalizedEffects);
     }
   }, [audioSettings]);
   const updateMicrophone = useCallback(
@@ -102,6 +114,42 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       }),
     [enqueueUpdate, mountedRef, onError]
   );
+  const updateMicrophoneEffects = useCallback(
+    (patch) => {
+      const mutationSequence = effectMutationRef.current + 1;
+      effectMutationRef.current = mutationSequence;
+      setMicrophoneEffects((current) => normalizeAudioEffects({ ...current, ...patch }));
+      return enqueueUpdate(async () => {
+        try {
+          const updated = await api.updateAudioSettings(patch);
+          const normalizedEffects = normalizeAudioEffects({
+            ...confirmedEffectsRef.current,
+            ...updated
+          });
+          confirmedEffectsRef.current = normalizedEffects;
+          globalThis.dispatchEvent(
+            new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, {
+              detail: { ...updated, __microphoneEffectSequence: mutationSequence }
+            })
+          );
+          return updated;
+        } catch (error) {
+          if (mountedRef.current && mutationSequence === effectMutationRef.current) {
+            setMicrophoneEffects(confirmedEffectsRef.current);
+          }
+          if (mountedRef.current) {
+            onError(
+              translateSaved("karaoke.failedToSaveMicrophoneSettings", {
+                0: getErrorMessage(error, translateSaved("room.transfer.unknownError"))
+              })
+            );
+          }
+          return null;
+        }
+      });
+    },
+    [enqueueUpdate, mountedRef, onError]
+  );
   return {
     microphoneVolume,
     setMicrophoneVolume,
@@ -113,6 +161,7 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     monitoringEnabled,
     setMonitoringEnabled,
     monitorInputDeviceId,
-    updateMicrophone
+    updateMicrophone,
+    updateMicrophoneEffects
   };
 }

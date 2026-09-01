@@ -180,7 +180,7 @@ describe("online room provider", () => {
       voiceError: "",
       transferStatus: null
     });
-    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(19);
+    expect(Object.values(result.current).filter((value) => typeof value === "function")).toHaveLength(20);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
@@ -277,7 +277,9 @@ describe("online room provider", () => {
       commandId: "guest-play"
     };
     act(() => hook.result.current.syncCommand(sharedPlay));
-    expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", { state: sharedPlay });
+    expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", {
+      state: { ...sharedPlay, positionAt: expect.any(Number) }
+    });
     mocks.clients[0].send.mockClear();
     act(() => hook.result.current.syncCommand({ type: "open-library" }));
     expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", { state: { type: "open-library" } });
@@ -1096,7 +1098,8 @@ describe("online room provider", () => {
     const expectedFile = {
       kind: "library-song-package",
       commandId: sent.commandId,
-      songId: "song-1"
+      songId: "song-1",
+      revision: "sha256:" + "a".repeat(64)
     };
     expect(voice.canAcceptFile("peer", expectedFile)).toBe(true);
     expect(voice.canAcceptFile("attacker", expectedFile)).toBe(false);
@@ -1106,12 +1109,13 @@ describe("online room provider", () => {
         kind: "library-song-package",
         songId: "song-1",
         commandId: sent.commandId,
+        revision: expectedFile.revision,
         filename: "song-1.karaoke.zip"
       });
     });
     expect(await syncResult).toBe(true);
     expect(mocks.importSongPackage).toHaveBeenCalledWith(expect.any(Blob), "song-1.karaoke.zip", {
-      expectedRevision: undefined
+      expectedRevision: expectedFile.revision
     });
     expect(hook.result.current.transferStatus).toBeNull();
   });

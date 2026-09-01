@@ -6,6 +6,7 @@ import {
   cancelTransfersByCommandId,
   createIncomingTransferTimer,
   emitTransferProgress,
+  preserveIncomingForResume,
   sendFile,
   sendSongSyncError,
   setupDataChannel,
@@ -20,6 +21,7 @@ export default class OnlineVoiceTransferSession {
     Object.assign(this, handlers);
     this.channels = new Map();
     this.incomingFiles = new Map();
+    this.resumableIncomingFiles = new Map();
     this.incomingFileAdmissions = new Map();
     this.pendingTransferConfirmations = new Map();
     this.pendingTransferAdmissions = new Map();
@@ -93,9 +95,10 @@ export default class OnlineVoiceTransferSession {
     }
     this.incomingFileAdmissions.delete(id);
     const incoming = this.incomingFiles.get(id);
-    cleanupIncomingTransfer(incoming);
+    const preserved = preserveIncomingForResume(this, id, incoming);
+    if (!preserved) cleanupIncomingTransfer(incoming);
     this.incomingFiles.delete(id);
-    if (incoming)
+    if (incoming && !preserved)
       this.emitTransferProgress(
         id,
         TRANSFER_STAGES.CANCELLED,
@@ -124,5 +127,7 @@ export default class OnlineVoiceTransferSession {
       new Error(translateSaved("room.fileTransferCanceled"))
     );
     this.outboundTransfers.clear();
+    for (const transfer of this.resumableIncomingFiles.values()) cleanupIncomingTransfer(transfer);
+    this.resumableIncomingFiles.clear();
   }
 }

@@ -154,6 +154,24 @@ describe("application shell", () => {
     await Promise.resolve();
     expect(mocks.getHealth).toHaveBeenCalledTimes(2);
   });
+  test("backend loader shows deferred startup progress before opening the app", async () => {
+    vi.useFakeTimers();
+    mocks.getHealth
+      .mockResolvedValueOnce({
+        status: "starting",
+        startup: { ready: false, phase: "storage_migration", progress: 20 }
+      })
+      .mockResolvedValueOnce({ status: "ok", startup: { ready: true, phase: "ready", progress: 100 } });
+    const view = render(
+      <BackendBootLoader>
+        <div>ready-after-recovery</div>
+      </BackendBootLoader>
+    );
+    await act(async () => Promise.resolve());
+    expect(view.getByText("backend.starting.phase.storage_migration · 20%")).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(5);
+    expect(view.getByText("ready-after-recovery")).not.toBeNull();
+  });
   test("backend loader exposes a terminal error and can retry", async () => {
     vi.useFakeTimers();
     mocks.getHealth.mockRejectedValue(new Error("offline"));

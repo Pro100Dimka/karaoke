@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import models
 from app.api.errors import http_error
-from app.services import app_settings_service, diagnostics_service, song_service
+from app.services import app_settings_service, diagnostics_service, remote_log_service, song_service
 from database import get_db
 
 router = APIRouter(tags=["application"])
@@ -26,6 +26,10 @@ class AppSettingsPatch(BaseModel):
     keyboard_lighting_enabled: bool | None = None
     keyboard_lighting_mode: Literal["music", "theme"] | None = None
     keyboard_lighting_brightness: float | None = Field(default=None, ge=0, le=1)
+    remote_diagnostics_enabled: bool | None = None
+    remote_diagnostics_errors_enabled: bool | None = None
+    remote_diagnostics_hardware_enabled: bool | None = None
+    remote_crash_reports_enabled: bool | None = None
     songs_folder: str | None = Field(default=None, max_length=4096)
     ai_folder: str | None = Field(default=None, max_length=4096)
     cache_folder: str | None = Field(default=None, max_length=4096)
@@ -39,6 +43,26 @@ def get_settings() -> dict:
 @router.patch("/settings")
 def update_settings(patch: AppSettingsPatch) -> dict:
     with http_error(ValueError, 422): return app_settings_service.update_settings(patch.model_dump(exclude_none=True))
+
+
+@router.get("/settings/remote-diagnostics")
+def remote_diagnostics_policy() -> dict:
+    return remote_log_service.diagnostics_policy_preview()
+
+
+@router.delete("/settings/remote-diagnostics")
+def delete_remote_diagnostics() -> dict:
+    if not remote_log_service.delete_remote_diagnostics():
+        raise HTTPException(status_code=503, detail="Could not delete remote diagnostics")
+    settings = app_settings_service.update_settings(
+        {
+            "remote_diagnostics_enabled": False,
+            "remote_diagnostics_errors_enabled": False,
+            "remote_diagnostics_hardware_enabled": False,
+            "remote_crash_reports_enabled": False,
+        }
+    )
+    return {"deleted": True, "settings": settings}
 
 
 @router.get("/preferences")

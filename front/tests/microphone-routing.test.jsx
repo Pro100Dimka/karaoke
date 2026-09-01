@@ -187,6 +187,34 @@ describe("microphone settings", () => {
     expect(nextError).toHaveBeenCalledOnce();
     verify([nextError.mock.calls[0][0], "toContain", translateSaved("неизвестная ошибка")]);
   });
+  test("effect mutations roll back on failure and preserve a newer queued value", async () => {
+    const onError = vi.fn();
+    const hook = renderHook(() =>
+      useMicrophoneSettings({
+        audioSettings: { reverb: 0.1, echo: 0.2, delay: 0, noise_suppression: 0.35, octave: 0 },
+        onError
+      })
+    );
+    mocks.updateAudioSettings.mockRejectedValueOnce(new Error("device busy"));
+    await act(async () => {
+      await hook.result.current.updateMicrophoneEffects({ echo: 0.8 });
+    });
+    expect(hook.result.current.microphoneEffects.echo).toBe(0.2);
+
+    mocks.updateAudioSettings
+      .mockRejectedValueOnce(new Error("obsolete failure"))
+      .mockResolvedValueOnce({ echo: 0.7 });
+    let first;
+    let second;
+    await act(async () => {
+      first = hook.result.current.updateMicrophoneEffects({ echo: 0.4 });
+      second = hook.result.current.updateMicrophoneEffects({ echo: 0.7 });
+      await Promise.all([first, second]);
+    });
+    expect(hook.result.current.microphoneEffects.echo).toBe(0.7);
+    expect(mocks.updateAudioSettings).toHaveBeenLastCalledWith({ echo: 0.7 });
+    expect(onError).toHaveBeenCalledTimes(2);
+  });
   test("ignores microphone updates that settle after unmount", async () => {
     let resolveUpdate;
     mocks.updateAudioSettings.mockReturnValueOnce(

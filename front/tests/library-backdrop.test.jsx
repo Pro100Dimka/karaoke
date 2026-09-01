@@ -81,3 +81,19 @@ test("library backdrop cleans up its window message listener on unmount", () => 
   add.mockRestore();
   remove.mockRestore();
 });
+
+test("library backdrop explicitly disposes iframe audio, RAF and WebGL resources", () => {
+  const runtime = fs.readFileSync("src/pages/Library/animated-backdrop/qftRuntime.js", "utf8");
+  const { container, unmount } = render(<LibraryBackdrop />);
+  const frame = container.querySelector("iframe");
+  const postMessage = vi.spyOn(frame.contentWindow, "postMessage");
+
+  unmount();
+
+  expect(postMessage).toHaveBeenCalledWith({ type: "QFT_DISPOSE" }, "*");
+  expect(runtime).toContain("window.__QFT_DISPOSE__ = dispose;");
+  expect(runtime).toContain("AUDIO.ctx?.close?.()");
+  expect(runtime).toContain("renderer.forceContextLoss?.()");
+  expect(runtime).toContain("cancelAnimationFrame(id)");
+  expect(runtime).toContain("target.removeEventListener?.(type, handler, options)");
+});

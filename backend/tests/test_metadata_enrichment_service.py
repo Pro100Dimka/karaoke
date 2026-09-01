@@ -160,3 +160,18 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
     invalidate.assert_called_once_with(song)
     database.close.assert_called_once_with()
     assert "song" not in metadata._active
+
+
+def test_enqueue_registers_supervised_task_and_rolls_back_when_admission_is_closed(monkeypatch):
+    start = Mock(return_value=True)
+    monkeypatch.setattr(metadata.background_task_supervisor, "start_task", start)
+    monkeypatch.setattr(metadata, "_active", set())
+    assert metadata.enqueue("song") is True
+    start.assert_called_once_with("metadata-song", metadata._run_enrichment, ("song",))
+    assert metadata.enqueue("song") is False
+
+    monkeypatch.setattr(metadata, "_active", set())
+    start.reset_mock(return_value=True)
+    start.return_value = False
+    assert metadata.enqueue("closed") is False
+    assert "closed" not in metadata._active

@@ -501,6 +501,13 @@ describe("API domains", () => {
       method: "PATCH",
       body: {}
     });
+    await assertRequest(settingsApi.getRemoteDiagnosticsPolicy, {
+      path: "/settings/remote-diagnostics"
+    });
+    await assertRequest(settingsApi.deleteRemoteDiagnostics, {
+      path: "/settings/remote-diagnostics",
+      method: "DELETE"
+    });
     await assertRequest(settingsApi.getUiPreferences, { path: "/preferences" });
     await assertRequest(() => settingsApi.updateUiPreferences("karaoke room", { radio: true }), {
       path: "/preferences/karaoke%20room",

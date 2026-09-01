@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { FakeChannel, FakePeer, stream, track } from "./helpers/webrtc.mjs";
 
 let OnlineVoiceMesh;
+let OnlineVoiceTransferSession;
 let preferLowLatencyOpus;
 const makeMesh = () => new OnlineVoiceMesh({ send: vi.fn(() => true) });
 const setupChannel = (peer = "guest") => {
@@ -13,6 +14,7 @@ const setupChannel = (peer = "guest") => {
 beforeEach(async () => {
   vi.resetModules();
   ({ default: OnlineVoiceMesh, preferLowLatencyOpus } = await import("../src/services/onlineVoiceMesh.js"));
+  ({ default: OnlineVoiceTransferSession } = await import("../src/services/onlineVoiceTransferSession.js"));
   FakePeer.instances = [];
   globalThis.RTCPeerConnection = FakePeer;
 });
@@ -367,6 +369,222 @@ describe("online voice mesh", () => {
       percent: 100,
       metadata
     });
+  });
+  test("resumes a song transfer after a disconnect without resending confirmed chunks", async () => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {
+        subtle: {
+          digest: vi.fn(async (_algorithm, data) => {
+            const bytes = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data);
+            const hash = new Uint8Array(32);
+            bytes.forEach((value, index) => {
+              hash[index % hash.length] = (hash[index % hash.length] + value + index) & 0xff;
+            });
+            return hash.buffer;
+          })
+        }
+      }
+    });
+    let sender;
+    let receiver;
+    let generation = 0;
+    let interrupted = false;
+    const sentBinaryBytes = [];
+    const resumeOffsets = [];
+    const closePair = (left, right) => {
+      if (left.readyState !== "open") return;
+      left.readyState = "closed";
+      right.readyState = "closed";
+      left.onclose?.();
+      right.onclose?.();
+    };
+    const connect = () => {
+      const index = generation;
+      generation += 1;
+      sentBinaryBytes[index] = 0;
+      const left = { readyState: "open", bufferedAmount: 0, label: "song" };
+      const right = { readyState: "open", bufferedAmount: 0, label: "song" };
+      left.close = vi.fn(() => closePair(left, right));
+      right.close = vi.fn(() => closePair(left, right));
+      left.send = vi.fn((data) => {
+        if (data instanceof ArrayBuffer) sentBinaryBytes[index] += data.byteLength;
+        right.onmessage?.({ data });
+      });
+      right.send = vi.fn((data) => {
+        if (typeof data === "string") {
+          const message = JSON.parse(data);
+          if (message.type === "file-ready" && index > 0) resumeOffsets.push(message.resumeOffset);
+        }
+        left.onmessage?.({ data });
+      });
+      sender.setupDataChannel("receiver", left);
+      receiver.setupDataChannel("sender", right);
+      return { left, right };
+    };
+    const senderConnection = {
+      version: () => 1,
+      hasPeer: () => true,
+      invite: vi.fn(async () => {
+        connect();
+        return true;
+      })
+    };
+    const receiverConnection = { version: () => 1, hasPeer: () => true, invite: vi.fn() };
+    let received;
+    sender = new OnlineVoiceTransferSession(senderConnection, {});
+    receiver = new OnlineVoiceTransferSession(receiverConnection, {
+      canAcceptFile: () => true,
+      onFile: async (_participantId, file) => {
+        received = file;
+        return true;
+      },
+      onTransferProgress: ({ stage, percent }) => {
+        if (!interrupted && stage === "receiving" && percent >= 90) {
+          interrupted = true;
+          const left = sender.channels.get("receiver");
+          const right = receiver.channels.get("sender");
+          closePair(left, right);
+        }
+      }
+    });
+    connect();
+    const bytes = new Uint8Array(20 * 32 * 1024);
+    bytes.forEach((_value, index) => {
+      bytes[index] = index % 251;
+    });
+    const payload = new Blob([bytes], { type: "application/zip" });
+    try {
+      await sender.sendFile("receiver", payload, {
+        resumable: true,
+        kind: "song-package",
+        songId: "song",
+        revision: "revision"
+      });
+      expect(generation).toBe(2);
+      expect(resumeOffsets[0]).toBeGreaterThan(0);
+      expect(sentBinaryBytes[1]).toBe(payload.size - resumeOffsets[0]);
+      expect(new Uint8Array(await received.arrayBuffer())).toEqual(bytes);
+    } finally {
+      sender.stop();
+      receiver.stop();
+      if (cryptoDescriptor) Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
+      else delete globalThis.crypto;
+    }
+  });
+  test("re-requests a corrupted song chunk and verifies the final hash manifest", async () => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {
+        subtle: {
+          digest: vi.fn(async (_algorithm, data) => {
+            const bytes = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data);
+            const hash = new Uint8Array(32);
+            bytes.forEach((value, index) => {
+              hash[index % hash.length] = (hash[index % hash.length] + value + index) & 0xff;
+            });
+            return hash.buffer;
+          })
+        }
+      }
+    });
+    const senderConnection = { version: () => 1, hasPeer: () => true, invite: vi.fn() };
+    const receiverConnection = { version: () => 1, hasPeer: () => true, invite: vi.fn() };
+    let received;
+    const sender = new OnlineVoiceTransferSession(senderConnection, {});
+    const receiver = new OnlineVoiceTransferSession(receiverConnection, {
+      canAcceptFile: () => true,
+      onFile: async (_participantId, file) => {
+        received = file;
+        return true;
+      }
+    });
+    const left = { readyState: "open", bufferedAmount: 0, label: "song" };
+    const right = { readyState: "open", bufferedAmount: 0, label: "song" };
+    let binaryIndex = 0;
+    let corrupted = false;
+    let starts = 0;
+    left.close = vi.fn(() => {
+      left.readyState = "closed";
+    });
+    right.close = vi.fn(() => {
+      right.readyState = "closed";
+    });
+    left.send = vi.fn((data) => {
+      if (typeof data === "string" && JSON.parse(data).type === "file-start") starts += 1;
+      let delivered = data;
+      if (data instanceof ArrayBuffer) {
+        binaryIndex += 1;
+        if (!corrupted && binaryIndex === 2) {
+          const copy = new Uint8Array(data.slice(0));
+          copy[0] ^= 0xff;
+          delivered = copy.buffer;
+          corrupted = true;
+        }
+      }
+      right.onmessage?.({ data: delivered });
+    });
+    right.send = vi.fn((data) => left.onmessage?.({ data }));
+    sender.setupDataChannel("receiver", left);
+    receiver.setupDataChannel("sender", right);
+    const bytes = new Uint8Array(3 * 32 * 1024);
+    bytes.forEach((_value, index) => {
+      bytes[index] = index % 239;
+    });
+    try {
+      await sender.sendFile("receiver", new Blob([bytes]), {
+        resumable: true,
+        kind: "song-package",
+        songId: "song",
+        revision: "revision"
+      });
+      expect(corrupted).toBe(true);
+      expect(starts).toBe(2);
+      expect(new Uint8Array(await received.arrayBuffer())).toEqual(bytes);
+    } finally {
+      sender.stop();
+      receiver.stop();
+      if (cryptoDescriptor) Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
+      else delete globalThis.crypto;
+    }
+  });
+  test("deletes resumable partial storage on expiry and explicit cancellation", async () => {
+    vi.useFakeTimers();
+    const mesh = makeMesh();
+    const startPartial = (transferId) => {
+      const channel = new FakeChannel();
+      mesh.setupDataChannel("host", channel);
+      channel.onmessage({
+        data: JSON.stringify({
+          type: "file-start",
+          transferId,
+          size: 100,
+          chunkSize: 32 * 1024
+        })
+      });
+      const transfer = mesh.transfers.incomingFiles.get("host");
+      channel.readyState = "closed";
+      channel.onclose();
+      return transfer;
+    };
+
+    const expired = startPartial("expires");
+    expect(mesh.transfers.resumableIncomingFiles.get("host")).toBe(expired);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(mesh.transfers.resumableIncomingFiles.has("host")).toBe(false);
+    expect(expired.sink.chunks).toEqual([]);
+
+    const cancelled = startPartial("cancelled");
+    const control = new FakeChannel();
+    mesh.setupDataChannel("host", control);
+    control.onmessage({
+      data: JSON.stringify({ type: "file-cancel", transferId: "cancelled" })
+    });
+    expect(mesh.transfers.resumableIncomingFiles.has("host")).toBe(false);
+    expect(cancelled.sink.chunks).toEqual([]);
+    mesh.stop();
   });
   test("normalizes missing outbound metadata and validates every input boundary", async () => {
     const mesh = makeMesh();
@@ -1482,6 +1700,7 @@ describe("online voice mesh", () => {
     expect(mesh.peers.has("guest")).toBe(true);
     peer.connectionState = "failed";
     peer.onconnectionstatechange();
+    vi.advanceTimersByTime(15_000);
     expect(mesh.peers.has("guest")).toBe(false);
     expect(closed).toHaveBeenCalledWith("guest");
     const transient = mesh.createPeer("transient");
@@ -1833,8 +2052,45 @@ describe("online voice mesh", () => {
     const current = mesh.createPeer("current");
     current.connectionState = "disconnected";
     current.onconnectionstatechange();
-    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(25_000);
     expect(mesh.peers.has("current")).toBe(false);
+  });
+  test("rotates TURN credentials and ICE-restarts before dropping a degraded peer", async () => {
+    vi.useFakeTimers();
+    const mesh = makeMesh();
+    const rotated = [
+      {
+        urls: ["turn:turn.cloudflare.com:3478?transport=udp"],
+        username: "rotated-user",
+        credential: "rotated-password"
+      }
+    ];
+    mesh.roomClient.getIceServers = vi.fn().mockResolvedValue(rotated);
+    mesh.onPeerRecovering = vi.fn();
+    mesh.onPeerRecovered = vi.fn();
+    await mesh.invite("guest");
+    const peer = mesh.peers.get("guest");
+    mesh.roomClient.send.mockClear();
+    peer.createOffer.mockClear();
+
+    peer.connectionState = "failed";
+    peer.onconnectionstatechange();
+    await mesh.recoveryPromises.get("guest");
+
+    expect(mesh.onPeerRecovering).toHaveBeenCalledWith("guest");
+    expect(mesh.roomClient.getIceServers).toHaveBeenLastCalledWith({ force: true });
+    expect(peer.setConfiguration).toHaveBeenLastCalledWith({ iceServers: rotated });
+    expect(peer.createOffer).toHaveBeenLastCalledWith({ iceRestart: true });
+    expect(mesh.roomClient.send).toHaveBeenCalledWith("signal", {
+      targetId: "guest",
+      signal: { description: peer.localDescription }
+    });
+
+    peer.connectionState = "connected";
+    peer.onconnectionstatechange();
+    expect(mesh.onPeerRecovered).toHaveBeenCalledWith("guest");
+    vi.advanceTimersByTime(15_000);
+    expect(mesh.peers.get("guest")).toBe(peer);
   });
   test("clears channels, rejects receiver errors and expires stalled imports", () => {
     vi.useFakeTimers();

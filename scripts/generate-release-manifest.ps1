@@ -9,6 +9,9 @@ param(
     [string] $InstallerDirectory,
 
     [Parameter(Mandatory = $true)]
+    [string] $SbomFile,
+
+    [Parameter(Mandatory = $true)]
     [string] $OutputFile,
 
     [string] $BuildId = ""
@@ -123,6 +126,22 @@ if (Test-Path -LiteralPath $pythonExe) {
     }
 }
 
+if (-not (Test-Path -LiteralPath $SbomFile -PathType Leaf)) {
+    throw "Mandatory release SBOM does not exist: $SbomFile"
+}
+$sha = [Security.Cryptography.SHA256]::Create()
+$stream = [IO.File]::OpenRead($SbomFile)
+try {
+    $sbom = [ordered]@{
+        path = (Split-Path $SbomFile -Leaf)
+        sha256 = ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace("-","").ToLowerInvariant()
+    }
+}
+finally {
+    $stream.Dispose()
+    $sha.Dispose()
+}
+
 $manifest = [ordered]@{
     appVersion             = $packageJson.version
     sourceRevisionOrBuildId = (Get-BuildId $BuildId)
@@ -132,6 +151,7 @@ $manifest = [ordered]@{
     dependencies           = $dependencies
     models                 = $models
     ffmpeg                 = $ffmpegVersion
+    sbom                   = $sbom
     files                  = $files
 }
 

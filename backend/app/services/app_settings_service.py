@@ -39,6 +39,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "keyboard_lighting_enabled": False,
     "keyboard_lighting_mode": "music",
     "keyboard_lighting_brightness": 0.5,
+    "remote_diagnostics_enabled": False,
+    "remote_diagnostics_errors_enabled": False,
+    "remote_diagnostics_hardware_enabled": False,
+    "remote_crash_reports_enabled": False,
 }
 
 UI_PREFERENCES_FILE = config.DATA_DIR / "ui-preferences.json"
@@ -156,6 +160,19 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
                 from AI.service import reset_ai_service
                 reset_ai_service()
             updated = _read_settings_unlocked()
+            diagnostics_policy_changed = any(
+                key in patch
+                for key in (
+                    "remote_diagnostics_enabled",
+                    "remote_diagnostics_errors_enabled",
+                    "remote_diagnostics_hardware_enabled",
+                    "remote_crash_reports_enabled",
+                )
+            )
+            if diagnostics_policy_changed:
+                from app.services.remote_log_service import apply_policy
+
+                apply_policy()
             if ai_runtime_changed:
                 from app.services.remote_log_service import queue_hardware_snapshot
 

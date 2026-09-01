@@ -24,7 +24,10 @@ const sourceFiles = new Set(
 function resolveImport(importerPath, specifier) {
   if (!specifier.startsWith(".")) return null;
 
-  const basePath = path.resolve(path.dirname(importerPath), specifier);
+  // Vite resource queries change how a module is loaded, not which source
+  // file owns it (`worker.js?worker&url`, `icon.svg?raw`, etc.).
+  const sourceSpecifier = specifier.split(/[?#]/, 1)[0];
+  const basePath = path.resolve(path.dirname(importerPath), sourceSpecifier);
   const candidates = [
     basePath,
     ...[".js", ".jsx", ".ts", ".tsx", ".css"].map((extension) => `${basePath}${extension}`),

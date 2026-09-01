@@ -20,7 +20,7 @@ import config
 import models
 from AI.lyrics_document import flatten_word_notes, validate_lyrics_document
 from AI.version import AI_BUILD_ID
-from app.services import revision_cache, song_artifacts, song_service
+from app.services import revision_cache, song_artifacts, song_service, storage_budget_service
 from app.services.db_utils import commit_refresh
 from app.utils.atomic_files import atomic_write
 from app.utils.hashing import sha256_file, sha256_stream
@@ -275,37 +275,43 @@ def build_package(song: models.Song, *, expected_revision: str | None = None) ->
         current_revision = content_revision(song)
         if expected_revision is not None and current_revision != expected_revision: raise ValueError("Song revision changed before package export")
 
-        with tempfile.NamedTemporaryFile(
-            prefix="karaoke-song-", suffix=".karaoke.zip", dir=config.CACHE_DIR, delete=False,
-        ) as package:
-            package_path = Path(package.name)
-        try:
-            manifest = _manifest(song)
-            if manifest["content_revision"] != current_revision: raise ValueError("Song revision changed before package snapshot")
-            with zipfile.ZipFile(package_path, "w", zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
-                archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-                # After processing, source_path usually already points at
-                # output/instrumental.flac (see pipeline finalization) — don't
-                # store that file a second time under source/, it would just
-                # double the archive size for no benefit (import discards the
-                # source/ copy and aliases source_path to output/instrumental.flac
-                # anyway). Only write a distinct source/ entry when it's actually
-                # a different file.
-                if source.resolve() != (output_dir / "instrumental.flac").resolve():
-                    archive.write(source, f"source/{source.name}")
-                for name in REQUIRED_OUTPUT_PATHS:
-                    path = output_dir / name
-                    if not path.is_file(): raise ValueError(f"Song artifact is missing: {name}")
-                    archive.write(path, f"output/{name}")
-            with zipfile.ZipFile(package_path) as archive:
-                members = _safe_members(archive)
-                exported_manifest = _read_manifest(archive)
-                _validate_semantic_package(archive, members, exported_manifest)
-                if exported_manifest.get("content_revision") != current_revision: raise ValueError("Exported package revision differs from requested revision")
-            return package_path
-        except Exception:
-            package_path.unlink(missing_ok=True)
-            raise
+        package_payload = storage_budget_service.tree_size(output_dir)
+        if source.resolve() != (output_dir / "instrumental.flac").resolve():
+            package_payload += storage_budget_service.tree_size(source)
+        with storage_budget_service.reserve(
+            "song_package_export", config.CACHE_DIR, package_payload
+        ):
+            with tempfile.NamedTemporaryFile(
+                prefix="karaoke-song-", suffix=".karaoke.zip", dir=config.CACHE_DIR, delete=False,
+            ) as package:
+                package_path = Path(package.name)
+            try:
+                manifest = _manifest(song)
+                if manifest["content_revision"] != current_revision: raise ValueError("Song revision changed before package snapshot")
+                with zipfile.ZipFile(package_path, "w", zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
+                    archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+                    # After processing, source_path usually already points at
+                    # output/instrumental.flac (see pipeline finalization) — don't
+                    # store that file a second time under source/, it would just
+                    # double the archive size for no benefit (import discards the
+                    # source/ copy and aliases source_path to output/instrumental.flac
+                    # anyway). Only write a distinct source/ entry when it's actually
+                    # a different file.
+                    if source.resolve() != (output_dir / "instrumental.flac").resolve():
+                        archive.write(source, f"source/{source.name}")
+                    for name in REQUIRED_OUTPUT_PATHS:
+                        path = output_dir / name
+                        if not path.is_file(): raise ValueError(f"Song artifact is missing: {name}")
+                        archive.write(path, f"output/{name}")
+                with zipfile.ZipFile(package_path) as archive:
+                    members = _safe_members(archive)
+                    exported_manifest = _read_manifest(archive)
+                    _validate_semantic_package(archive, members, exported_manifest)
+                    if exported_manifest.get("content_revision") != current_revision: raise ValueError("Exported package revision differs from requested revision")
+                return package_path
+            except Exception:
+                package_path.unlink(missing_ok=True)
+                raise
 
 def _member_path(member: zipfile.ZipInfo) -> PurePosixPath:
     name = member.filename
@@ -867,8 +873,12 @@ def import_package(db: Session, package_path: Path, *, expected_revision: str | 
             if existing is not None and _same_revision(existing, revision): return existing
             slug = existing.slug if existing is not None else song_service.make_unique_slug(db, base_slug)
             output_dir = song_service.resolve_output_dir(existing) if existing is not None else config.SONG_OUTPUT_DIR / slug
-            return _publish_imported_package(
-                db, archive, members, manifest, existing, source_member,
-                song_id=song_id, title=title, slug=slug,
-                final_source_name=final_source_name, output_dir=output_dir,
-            )
+            package_bytes = sum(member.file_size for member in members if not member.is_dir())
+            with storage_budget_service.reserve(
+                "song_package_import", output_dir, package_bytes
+            ):
+                return _publish_imported_package(
+                    db, archive, members, manifest, existing, source_member,
+                    song_id=song_id, title=title, slug=slug,
+                    final_source_name=final_source_name, output_dir=output_dir,
+                )

@@ -99,7 +99,7 @@ test("hero and cover reflect saved theme and song counts", () => {
   mocks.noSettings = true;
   verify([() => render(<LibraryHero songCount={0} readyCount={0} />), "not.toThrow"]);
 });
-test("large song collections render through the window virtualizer", () => {
+test("large song collections render every library card", () => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   const songs = Array.from({ length: 60 }, (_, index) => ({
     id: `song-${index}`,
@@ -128,8 +128,7 @@ test("large song collections render through the window virtualizer", () => {
       recordings={{ setSong: vi.fn() }}
     />
   );
-  expect(container.querySelectorAll('[role="button"]').length).toBeGreaterThan(0);
-  expect(container.querySelectorAll('[role="button"]').length).toBeLessThan(songs.length);
+  expect(container.querySelectorAll('[role="button"]')).toHaveLength(songs.length);
 });
 test("song card progress prefers the slowest real participant over the room placeholder", () => {
   const statuses = [

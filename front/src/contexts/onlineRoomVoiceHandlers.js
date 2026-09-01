@@ -41,6 +41,20 @@ export function createVoiceMeshHandlers({
     );
     setVoiceError(`${participant?.name || participantId}: ${message}`);
   };
+  handlers.onPeerRecovering = (participantId) => {
+    if (!isCurrentConnection()) return;
+    const participant = participantsRef.current.find(
+      ({ id: participantKey }) => participantKey === participantId
+    );
+    setVoiceError(
+      translateSaved("room.peerConnectionDegradedTryingToRestore", {
+        0: participant?.name || participantId
+      })
+    );
+  };
+  handlers.onPeerRecovered = () => {
+    if (isCurrentConnection()) setVoiceError("");
+  };
   handlers.onTransferProgress = ({ participantId, stage, percent, metadata }) => {
     if (!isCurrentConnection()) return;
     const commandId = metadata?.commandId;
@@ -243,6 +257,7 @@ export function createVoiceMeshHandlers({
       blob = await api.exportSongPackage(message.songId, revision);
       if (!isCurrentConnection()) return;
       await voice.sendFile(participantId, blob, {
+        resumable: true,
         kind: "library-song-package",
         songId: message.songId,
         commandId: message.commandId,

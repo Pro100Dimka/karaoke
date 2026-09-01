@@ -37,6 +37,15 @@ def test_reprocess_song_uses_existing_vocals(monkeypatch, tmp_path):
     service.reprocess_song.assert_called_once_with(tmp_path, language="uk")
 
 
+def test_artifact_recovery_stays_behind_the_app_service_boundary(monkeypatch, tmp_path):
+    recovered = [tmp_path / "lyricsSync.json"]
+    implementation = Mock(return_value=recovered)
+    monkeypatch.setattr(bridge, "_recover_orphaned_backups", implementation)
+
+    assert bridge.recover_generated_artifacts(tmp_path) == recovered
+    implementation.assert_called_once_with(tmp_path)
+
+
 def test_training_stems_use_the_fast_separator_only(monkeypatch, tmp_path):
     service = Mock()
     monkeypatch.setattr(bridge, "get_ai_service", lambda: service)

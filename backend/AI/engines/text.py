@@ -475,6 +475,83 @@ def _fill_unresolved_timed_lines(
                 remaining -= weight
 
 
+def _timed_line_plan(text: str, lines, span: float):
+    tokens, entries, flattened = tokenize(text), [], []
+    for line in lines:
+        lower, line_tokens = len(flattened), tokenize(line.text)
+        flattened.extend(line_tokens)
+        entries.append((float(line.start), lower, len(flattened)))
+
+    def normalized(values):
+        return [
+            "".join(char for char in value.casefold() if char.isalnum() or char == "'")
+            for value in values
+        ]
+
+    if normalized(flattened) != normalized(tokens):
+        raise InvalidArtifactError("Synchronized lyric lines do not match canonical lyrics")
+
+    groups, first = [], 0
+    while first < len(entries):
+        last = first + 1
+        while last < len(entries) and entries[last][0] - entries[first][0] < 24:
+            last += 1
+        start = max(0, entries[first][0] - 0.75)
+        end = min(span, (entries[last][0] if last < len(entries) else span) + 0.75)
+        groups.append((entries[first][1], entries[last - 1][2], start, end))
+        first = last
+    return tokens, entries, groups
+
+
+def _timed_line_retry_stages(words, entries, span: float):
+    """Yield retry policies in order, observing words filled by earlier stages."""
+    per_line = []
+    for index, (start, lower, upper) in enumerate(entries):
+        if any(word is None for word in words[lower:upper]):
+            end = entries[index + 1][0] if index + 1 < len(entries) else span
+            per_line.append((lower, upper, max(0, start - 0.5), min(span, end + 0.5)))
+    yield per_line
+
+    contexts = []
+    for index, (_, lower, upper) in enumerate(entries):
+        if any(word is None for word in words[lower:upper]):
+            first, last = max(0, index - 1), min(len(entries), index + 2)
+            start = max(0, entries[first][0] - 1)
+            end = min(span, (entries[last][0] if last < len(entries) else span) + 1)
+            contexts.append((entries[first][1], entries[last - 1][2], start, end))
+    yield contexts
+
+    triads = []
+    for _, lower, upper in entries:
+        for index in range(lower + 1, upper - 1):
+            if words[index] is None and words[index - 1] is not None and words[index + 1] is not None:
+                start = max(0, words[index - 1].start - 0.5)
+                end = min(span, words[index + 1].end + 0.5)
+                triads.append((index - 1, index + 2, start, end))
+    yield triads
+
+    singles = []
+    for _, lower, upper in entries:
+        for index in range(lower + 1, upper - 1):
+            if words[index] is None and words[index - 1] is not None and words[index + 1] is not None:
+                center = (words[index - 1].end + words[index + 1].start) / 2
+                start = max(words[index - 1].start, center - 1)
+                end = min(words[index + 1].end, center + 1)
+                if end > start:
+                    singles.append((index, index + 1, start, end))
+    yield singles
+
+    wide_singles = []
+    for line_index, (line_start, lower, upper) in enumerate(entries):
+        line_end = entries[line_index + 1][0] if line_index + 1 < len(entries) else span
+        for index in range(lower, upper):
+            if words[index] is None:
+                wide_singles.append(
+                    (index, index + 1, max(0, line_start - 0.75), min(span, line_end + 0.75))
+                )
+    yield wide_singles
+
+
 def _load(model_class, name, role, **options):
     import torch
 
@@ -783,22 +860,8 @@ class Qwen3ForcedAligner(Aligner):
 
         from ..audio import read_mono
 
-        tokens, span = tokenize(text), duration(audio)
-        entries, flattened = [], []
-        for line in lines:
-            lower, line_tokens = len(flattened), tokenize(line.text)
-            flattened.extend(line_tokens)
-            entries.append((float(line.start), lower, len(flattened)))
-
-        def normalized(values):
-            return [
-                "".join(char for char in value.casefold()
-                        if char.isalnum() or char == "'")
-                for value in values
-            ]
-        if normalized(flattened) != normalized(tokens):
-            raise InvalidArtifactError(
-                "Synchronized lyric lines do not match canonical lyrics")
+        span = duration(audio)
+        tokens, entries, groups = _timed_line_plan(text, lines, span)
         samples, rate = read_mono(audio)
         samples = samples.astype(np.float32)
         resolved = resolve_alignment_language(text, language)
@@ -818,17 +881,6 @@ class Qwen3ForcedAligner(Aligner):
                 "falling back to Qwen",
                 flush=True,
             )
-        groups, first = [], 0
-        while first < len(entries):
-            last = first + 1
-            while last < len(entries) and entries[last][0] - entries[first][0] < 24:
-                last += 1
-            start = max(0, entries[first][0] - 0.75)
-            end = min(span, (entries[last][0] if last <
-                      len(entries) else span) + 0.75)
-            groups.append(
-                (entries[first][1], entries[last - 1][2], start, end))
-            first = last
         words: list[Word | None] = [None] * len(tokens)
 
         def apply(specs):
@@ -862,60 +914,9 @@ class Qwen3ForcedAligner(Aligner):
                             words[index] = candidate
 
         apply(groups)
-        if any(word is None for word in words):
-            per_line = []
-            for index, (start, lower, upper) in enumerate(entries):
-                if any(word is None for word in words[lower:upper]):
-                    end = entries[index + 1][0] if index + \
-                        1 < len(entries) else span
-                    per_line.append(
-                        (lower, upper, max(0, start - 0.5), min(span, end + 0.5)))
-            apply(per_line)
-        if any(word is None for word in words):
-            contexts = []
-            for index, (_, lower, upper) in enumerate(entries):
-                if any(word is None for word in words[lower:upper]):
-                    first, last = max(
-                        0, index - 1), min(len(entries), index + 2)
-                    start = max(0, entries[first][0] - 1)
-                    end = min(
-                        span, (entries[last][0] if last < len(entries) else span) + 1)
-                    contexts.append(
-                        (entries[first][1], entries[last - 1][2], start, end))
-            apply(contexts)
-        triads = []
-        for _, lower, upper in entries:
-            for index in range(lower + 1, upper - 1):
-                if words[index] is None and words[index - 1] is not None and words[index + 1] is not None:
-                    start = max(0, words[index - 1].start - 0.5)
-                    end = min(span, words[index + 1].end + 0.5)
-                    triads.append((index - 1, index + 2, start, end))
-        if triads:
-            apply(triads)
-        singles = []
-        for _, lower, upper in entries:
-            for index in range(lower + 1, upper - 1):
-                if words[index] is None and words[index - 1] is not None and words[index + 1] is not None:
-                    center = (words[index - 1].end +
-                              words[index + 1].start) / 2
-                    start = max(words[index - 1].start, center - 1)
-                    end = min(words[index + 1].end, center + 1)
-                    if end > start:
-                        singles.append((index, index + 1, start, end))
-        if singles:
-            apply(singles)
-        wide_singles = []
-        for line_index, (line_start, lower, upper) in enumerate(entries):
-            line_end = entries[line_index +
-                               1][0] if line_index + 1 < len(entries) else span
-            for index in range(lower, upper):
-                if words[index] is None:
-                    wide_singles.append((
-                        index, index +
-                        1, max(0, line_start - 0.75), min(span, line_end + 0.75)
-                    ))
-        if wide_singles:
-            apply(wide_singles)
+        for retry_specs in _timed_line_retry_stages(words, entries, span):
+            if any(word is None for word in words):
+                apply(retry_specs)
         if any(word is None for word in words):
             variable = {
                 "Russian": "KARAOKE_AI_CTC_RU_MODEL",

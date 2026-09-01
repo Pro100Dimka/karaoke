@@ -30,6 +30,26 @@ def test_application_router_translates_service_validation(monkeypatch):
     with pytest.raises(HTTPException) as unknown: application.update_ui_preferences("unknown", {})
     assert (unknown.value.status_code == 422) and (application.about()['name'] == 'A&D Voice')
 
+    preview = {"enabled": False, "errors": False}
+    delete = Mock(return_value=True)
+    patch_attrs(
+        monkeypatch,
+        application.remote_log_service,
+        diagnostics_policy_preview=Mock(return_value=preview),
+        delete_remote_diagnostics=delete,
+    )
+    update.side_effect = None
+    update.return_value = {}
+    assert application.remote_diagnostics_policy() == preview
+    assert application.delete_remote_diagnostics() == {"deleted": True, "settings": {}}
+    delete.assert_called_once_with()
+    assert update.call_args.args[0] == {
+        "remote_diagnostics_enabled": False,
+        "remote_diagnostics_errors_enabled": False,
+        "remote_diagnostics_hardware_enabled": False,
+        "remote_crash_reports_enabled": False,
+    }
+
 
 def test_application_history_merges_and_sorts_processing_and_recordings():
     songs = [
@@ -75,7 +95,11 @@ def test_diagnostics_router_forwards_all_services(monkeypatch):
     }
     patch_attrs(monkeypatch, diagnostics.diagnostics_service, pipeline_health=Mock(return_value=health), versions=Mock(return_value={'v': 1}), recent_errors=Mock(return_value=[{'e': 1}]))
     patch_attrs(monkeypatch, diagnostics.model_install_service, status=Mock(return_value={'s': 1}), start_download=Mock(return_value={'s': 2}))
-    assert (diagnostics.health()['status'] == 'ok') and (diagnostics.pipeline_health() == health) and (diagnostics.models_health() == health) and (diagnostics.ai_models_status() == {'s': 1}) and (diagnostics.download_ai_models() == {'s': 2}) and (diagnostics.versions() == {'v': 1}) and (diagnostics.errors() == {'errors': [{'e': 1}]})
+    monkeypatch.setattr(diagnostics.background_task_supervisor, "snapshot", Mock(return_value={'tasks': []}))
+    monkeypatch.setattr(diagnostics.storage_budget_service, "snapshot", Mock(return_value={'count': 0}))
+    monkeypatch.setattr(diagnostics.startup_service, "snapshot", Mock(return_value={'ready': True, 'status': 'ready'}))
+    monkeypatch.setattr(diagnostics.database, "schema_status", Mock(return_value={'current': 1}))
+    assert (diagnostics.health()['status'] == 'ok') and (diagnostics.pipeline_health() == health) and (diagnostics.models_health() == health) and (diagnostics.ai_models_status() == {'s': 1}) and (diagnostics.download_ai_models() == {'s': 2}) and (diagnostics.versions() == {'v': 1}) and (diagnostics.errors() == {'errors': [{'e': 1}]}) and (diagnostics.background_tasks() == {'tasks': [], 'storage': {'count': 0}}) and (diagnostics.database_schema() == {'current': 1})
 
 
 def test_cache_router_success_and_empty_optimization(monkeypatch):
@@ -101,10 +125,11 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
     loop, previous = Mock(), Mock()
     loop.get_exception_handler.return_value = previous
     monkeypatch.setattr(main.asyncio, "get_running_loop", Mock(return_value=loop))
-    initialize, migrate, close, stop, reset_ai = Mock(), Mock(), Mock(side_effect=RuntimeError('close failed')), Mock(), Mock()
+    initialize, start_startup, close, stop, reset_ai = Mock(), Mock(), Mock(side_effect=RuntimeError('close failed')), Mock(), Mock()
     monkeypatch.setattr(main, "init_db", initialize)
-    recover_imports, recover_optimization, cancel_processing = Mock(), Mock(), Mock()
-    patch_many(monkeypatch, (main.storage_migration, "migrate_legacy_song_storage", migrate), (main.song_package_service, "recover_import_transactions", recover_imports), (main.cache_service, "recover_optimization_transactions", recover_optimization), (main.pipeline_service, "cancel_all_active_processing", cancel_processing), (main.recording_service, "close_all_sessions", close), (main.audio_service, "stop_monitoring", stop), (main.ai_service, "reset_ai_service", reset_ai))
+    shutdown_processing = Mock()
+    start_background, stop_background, shutdown_background = Mock(), Mock(), Mock()
+    patch_many(monkeypatch, (main.startup_service, "start", start_startup), (main.pipeline_service, "shutdown_active_processing", shutdown_processing), (main.background_task_supervisor, "start_accepting", start_background), (main.background_task_supervisor, "stop_accepting", stop_background), (main.background_task_supervisor, "shutdown", shutdown_background), (main.recording_service, "close_all_sessions", close), (main.audio_service, "stop_monitoring", stop), (main.ai_service, "reset_ai_service", reset_ai))
 
     async def exercise():
         with pytest.raises(RuntimeError, match="close failed"):
@@ -112,10 +137,11 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
 
     asyncio.run(exercise())
     initialize.assert_called_once_with()
-    migrate.assert_called_once_with()
-    recover_imports.assert_called_once_with()
-    recover_optimization.assert_called_once_with()
-    cancel_processing.assert_called_once_with()
+    start_startup.assert_called_once_with()
+    start_background.assert_called_once_with()
+    stop_background.assert_called_once_with()
+    shutdown_processing.assert_called_once_with(timeout=15.0)
+    shutdown_background.assert_called_once_with(timeout=10.0)
     stop.assert_called_once_with()
     reset_ai.assert_called_once_with()
     assert loop.set_exception_handler.call_args_list[-1].args == (previous,)
@@ -131,7 +157,7 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
 def test_lifespan_handler_uses_loop_default_without_previous(monkeypatch):
     loop = Mock()
     loop.get_exception_handler.return_value = None
-    patch_many(monkeypatch, (main.asyncio, "get_running_loop", Mock(return_value=loop)), (main, "init_db", Mock()), (main.storage_migration, "migrate_legacy_song_storage", Mock()), (main.song_package_service, "recover_import_transactions", Mock()), (main.cache_service, "recover_optimization_transactions", Mock()), (main.recording_service, "close_all_sessions", Mock()), (main.audio_service, "stop_monitoring", Mock()), (main.ai_service, "reset_ai_service", Mock()))
+    patch_many(monkeypatch, (main.asyncio, "get_running_loop", Mock(return_value=loop)), (main, "init_db", Mock()), (main.startup_service, "start", Mock()), (main.pipeline_service, "shutdown_active_processing", Mock()), (main.background_task_supervisor, "start_accepting", Mock()), (main.background_task_supervisor, "stop_accepting", Mock()), (main.background_task_supervisor, "shutdown", Mock()), (main.recording_service, "close_all_sessions", Mock()), (main.audio_service, "stop_monitoring", Mock()), (main.ai_service, "reset_ai_service", Mock()))
 
     async def exercise():
         async with main.lifespan(main.app):

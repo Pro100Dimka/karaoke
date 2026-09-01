@@ -3,23 +3,33 @@ import test from "node:test";
 
 import {
   EFFECT_LIMITS,
+  handleLogDelete,
+  handleLogRegistration,
   handleLogUpload,
   KaraokeRoom,
+  LogRateLimiter,
   normalizeParticipantEffects,
+  purgeExpiredLogs,
   pruneRecentGuests,
   reclaimGuestId,
-  ROOM_PROTOCOL_VERSION
+  ROOM_PROTOCOL_VERSION,
 } from "../src/worker.js";
 import worker from "../src/worker.js";
 import { PARTICIPANT_EFFECT_LIMITS } from "../../front/src/contexts/onlineRoomEffects.js";
 import { ROOM_PROTOCOL_VERSION as FRONTEND_ROOM_PROTOCOL_VERSION } from "../../front/src/services/roomProtocol.js";
 
 test("health reports whether TURN credentials are configured", async () => {
-  const withoutTurn = await worker.fetch(new Request("https://worker.test/health"), {});
-  const withTurn = await worker.fetch(new Request("https://worker.test/health"), {
-    TURN_KEY_ID: "id",
-    TURN_KEY_API_TOKEN: "token"
-  });
+  const withoutTurn = await worker.fetch(
+    new Request("https://worker.test/health"),
+    {},
+  );
+  const withTurn = await worker.fetch(
+    new Request("https://worker.test/health"),
+    {
+      TURN_KEY_ID: "id",
+      TURN_KEY_API_TOKEN: "token",
+    },
+  );
   assert.equal((await withoutTurn.json()).turnConfigured, false);
   assert.equal((await withTurn.json()).turnConfigured, true);
 });
@@ -36,7 +46,8 @@ const joinRequest = (params = {}) => {
   const url = new URL("https://worker.test/rooms/ABCD1234");
   url.searchParams.set("v", String(ROOM_PROTOCOL_VERSION));
   url.searchParams.set("name", "Guest");
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(params))
+    url.searchParams.set(key, value);
   return new Request(url, { headers: { Upgrade: "websocket" } });
 };
 
@@ -64,16 +75,29 @@ class FakeSocket {
   }
 }
 
+const withoutOrdering = ({
+  roomEpoch: _roomEpoch,
+  eventSequence: _eventSequence,
+  eventId: _eventId,
+  snapshotVersion: _snapshotVersion,
+  domain: _domain,
+  ...message
+}) => message;
+
 test("fetch rejects a join attempt with a missing or wrong protocol version", async () => {
   const room = new KaraokeRoom({ getWebSockets: () => [] });
 
   const missing = await room.fetch(
-    new Request("https://worker.test/rooms/ABCD1234?name=Guest", { headers: { Upgrade: "websocket" } })
+    new Request("https://worker.test/rooms/ABCD1234?name=Guest", {
+      headers: { Upgrade: "websocket" },
+    }),
   );
   assert.equal(missing.status, 400);
   assert.equal((await missing.json()).expected, ROOM_PROTOCOL_VERSION);
 
-  const wrong = await room.fetch(joinRequest({ v: String(ROOM_PROTOCOL_VERSION + 1) }));
+  const wrong = await room.fetch(
+    joinRequest({ v: String(ROOM_PROTOCOL_VERSION + 1) }),
+  );
   assert.equal(wrong.status, 400);
 });
 test("fetch lets a correctly-versioned join proceed past the version gate", async () => {
@@ -82,7 +106,10 @@ test("fetch lets a correctly-versioned join proceed past the version gate", asyn
   // isn't exercised here (that needs the Workers runtime's WebSocketPair,
   // unavailable under plain `node --test`), only that the version check
   // itself doesn't false-positive on a valid client.
-  const full = Array.from({ length: 12 }, (_, index) => new FakeSocket({ id: `p${index}`, role: "guest" }));
+  const full = Array.from(
+    { length: 12 },
+    (_, index) => new FakeSocket({ id: `p${index}`, role: "guest" }),
+  );
   const room = new KaraokeRoom({ getWebSockets: () => full });
 
   const response = await room.fetch(joinRequest());
@@ -98,7 +125,11 @@ test("rejects signaling payloads by UTF-8 byte size", async () => {
 
   await room.webSocketMessage(
     sender,
-    JSON.stringify({ type: "signal", targetId: "target", signal: "я".repeat(33_000) })
+    JSON.stringify({
+      type: "signal",
+      targetId: "target",
+      signal: "я".repeat(33_000),
+    }),
   );
 
   assert.equal(target.messages.length, 0);
@@ -110,7 +141,10 @@ test("answers a private clock probe without broadcasting it", async () => {
   const target = new FakeSocket({ id: "target", role: "guest" });
   const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
 
-  await room.webSocketMessage(sender, JSON.stringify({ type: "ping", clientTime: 1234 }));
+  await room.webSocketMessage(
+    sender,
+    JSON.stringify({ type: "ping", clientTime: 1234 }),
+  );
 
   assert.equal(sender.messages.at(-1).type, "pong");
   assert.equal(sender.messages.at(-1).clientTime, 1234);
@@ -133,13 +167,13 @@ test("a guest can acknowledge an imported song without being disconnected", asyn
         songId: "song-1",
         commandId: "command-1",
         revision,
-        requesterId: "forged-id"
-      }
-    })
+        requesterId: "forged-id",
+      },
+    }),
   );
 
   assert.equal(sender.closed, null);
-  assert.deepEqual(host.messages.at(-1), {
+  assert.deepEqual(withoutOrdering(host.messages.at(-1)), {
     type: "sync",
     fromId: "guest",
     sentAt: host.messages.at(-1).sentAt,
@@ -148,8 +182,8 @@ test("a guest can acknowledge an imported song without being disconnected", asyn
       songId: "song-1",
       commandId: "command-1",
       revision,
-      requesterId: "guest"
-    }
+      requesterId: "guest",
+    },
   });
   assert.equal(Number.isFinite(host.messages.at(-1).sentAt), true);
 });
@@ -171,9 +205,9 @@ test("a guest can ask the host to start a song owned by any room participant", a
         ownerId: "owner",
         commandId: "command-2",
         revision,
-        requesterId: "forged-id"
-      }
-    })
+        requesterId: "forged-id",
+      },
+    }),
   );
 
   assert.equal(sender.closed, null);
@@ -183,42 +217,62 @@ test("a guest can ask the host to start a song owned by any room participant", a
     ownerId: "owner",
     commandId: "command-2",
     revision,
-    requesterId: "guest"
+    requesterId: "guest",
   });
   assert.deepEqual(owner.messages.at(-1).state, host.messages.at(-1).state);
 });
 
 test("an owner can lock remote effect control and unlock it again", async () => {
   const owner = new FakeSocket({ id: "owner", name: "Owner", role: "guest" });
-  const controller = new FakeSocket({ id: "controller", name: "Controller", role: "guest" });
+  const controller = new FakeSocket({
+    id: "controller",
+    name: "Controller",
+    role: "guest",
+  });
   const room = new KaraokeRoom({ getWebSockets: () => [owner, controller] });
 
-  await room.webSocketMessage(owner, JSON.stringify({ type: "effect-permission", locked: true }));
+  await room.webSocketMessage(
+    owner,
+    JSON.stringify({ type: "effect-permission", locked: true }),
+  );
   assert.equal(owner.participant.effectsLocked, true);
   assert.equal(controller.messages.at(-1).participant.effectsLocked, true);
 
   await room.webSocketMessage(
     controller,
-    JSON.stringify({ type: "effect-control", targetId: "owner", effects: { volume: 9 } })
+    JSON.stringify({
+      type: "effect-control",
+      targetId: "owner",
+      effects: { volume: 9 },
+    }),
   );
   assert.equal(controller.messages.at(-1).type, "effect-control-denied");
-  assert.equal(owner.messages.some(({ type }) => type === "effect-control"), false);
+  assert.equal(
+    owner.messages.some(({ type }) => type === "effect-control"),
+    false,
+  );
 
-  await room.webSocketMessage(owner, JSON.stringify({ type: "effect-permission", locked: false }));
+  await room.webSocketMessage(
+    owner,
+    JSON.stringify({ type: "effect-permission", locked: false }),
+  );
   await room.webSocketMessage(
     controller,
     JSON.stringify({
       type: "effect-control",
       targetId: "owner",
-      effects: { volume: 9, reverb: 0.6, unsupported: 1 }
-    })
+      effects: { volume: 9, reverb: 0.6, unsupported: 1 },
+    }),
   );
   assert.deepEqual(owner.messages.at(-1), {
     type: "effect-control",
     fromId: "controller",
-    effects: { volume: 2, reverb: 0.6 }
+    effects: { volume: 2, reverb: 0.6 },
   });
-  assert.deepEqual(normalizeParticipantEffects({ echo: -1, delay: 2 }), { echo: 0, delay: 1 });
+  assert.deepEqual(normalizeParticipantEffects({ echo: -1, delay: 2 }), {
+    echo: 0,
+    delay: 1,
+  });
 });
 
 class FakeR2 {
@@ -235,7 +289,7 @@ class FakeR2 {
     this.objects.set(key, value);
   }
 
-  async list({ prefix }) {
+  async list({ prefix = "" } = {}) {
     return {
       objects: [...this.objects.keys()]
         .filter((key) => key.startsWith(prefix))
@@ -245,101 +299,281 @@ class FakeR2 {
   }
 
   async delete(keys) {
-    for (const key of Array.isArray(keys) ? keys : [keys]) this.objects.delete(key);
+    for (const key of Array.isArray(keys) ? keys : [keys])
+      this.objects.delete(key);
   }
 }
 
-const logRequest = (payload) =>
+const logRequest = (payload, token) =>
   new Request("https://worker.test/logs", {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": "127.0.0.1" },
+    headers: {
+      "content-type": "application/json",
+      "cf-connecting-ip": "127.0.0.1",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   });
 
-test("stores a plain-text log message in the user's single log file", async () => {
+const logLimiter = {
+  getByName: () => ({
+    fetch: async () => new Response(JSON.stringify({ ok: true })),
+  }),
+};
+
+async function registerLogDevice(bucket) {
+  const response = await handleLogRegistration(
+    new Request("https://worker.test/logs/register", {
+      method: "POST",
+      headers: { "cf-connecting-ip": "127.0.0.1" },
+    }),
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
+  );
+  assert.equal(response.status, 200);
+  return response.json();
+}
+
+test("rejects legacy unsigned uploads instead of trusting a caller-selected file", async () => {
   const bucket = new FakeR2();
   const response = await handleLogUpload(
     logRequest({ user: "Studio PC", message: "something went wrong" }),
-    { LOGS: bucket }
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
   );
-  assert.equal(response.status, 200);
-  const [key] = [...bucket.objects.keys()];
-  assert.equal(key, "Studio PC.json");
-  assert.equal(JSON.parse(bucket.objects.get(key)).events[0].message, "something went wrong");
+  assert.equal(response.status, 400);
+  assert.equal(bucket.objects.size, 0);
 });
 
-test("appends installed-backend batches to one file per device", async () => {
+test("registers a token and appends authenticated batches to one file per device", async () => {
   const bucket = new FakeR2();
+  const credentials = await registerLogDevice(bucket);
   const response = await handleLogUpload(
-    logRequest({
-      device_id: "pc-abcdef123456",
-      display_name: "Singer",
-      events: [{ timestamp: "2026-08-27T00:00:00Z", level: "WARNING", message: "warning" }],
-    }),
-    { LOGS: bucket }
+    logRequest(
+      {
+        device_id: credentials.device_id,
+        display_name: "Singer",
+        events: [
+          {
+            timestamp: "2026-08-27T00:00:00Z",
+            level: "WARNING",
+            message: "warning",
+          },
+        ],
+      },
+      credentials.upload_token,
+    ),
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
   );
   assert.equal(response.status, 200);
   await handleLogUpload(
-    logRequest({
-      device_id: "pc-abcdef123456",
-      display_name: "Renamed singer",
-      events: [{ timestamp: "2026-08-27T00:01:00Z", level: "ERROR", message: "error" }],
-      hardware: { cpu: "Test CPU" },
-    }),
-    { LOGS: bucket }
+    logRequest(
+      {
+        device_id: credentials.device_id,
+        display_name: "Renamed singer",
+        events: [
+          {
+            timestamp: "2026-08-27T00:01:00Z",
+            level: "ERROR",
+            message: "error",
+          },
+        ],
+        hardware: { cpu: "Test CPU" },
+      },
+      credentials.upload_token,
+    ),
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
   );
-  assert.deepEqual([...bucket.objects.keys()], ["pc-abcdef123456.json"]);
-  const stored = JSON.parse(bucket.objects.get("pc-abcdef123456.json"));
+  assert.deepEqual(
+    [...bucket.objects.keys()],
+    [`${credentials.device_id}.json`],
+  );
+  const stored = JSON.parse(
+    bucket.objects.get(`${credentials.device_id}.json`),
+  );
   assert.equal(stored.display_name, "Renamed singer");
   assert.equal(stored.hardware.cpu, "Test CPU");
-  assert.deepEqual(stored.events, [
-    { timestamp: "2026-08-27T00:00:00Z", level: "WARNING", message: "warning" },
-    { timestamp: "2026-08-27T00:01:00Z", level: "ERROR", message: "error" },
-  ]);
+  assert.deepEqual(
+    stored.events.map(({ level, message }) => ({ level, message })),
+    [
+      { level: "WARNING", message: "warning" },
+      { level: "ERROR", message: "error" },
+    ],
+  );
+  assert.equal(
+    stored.events.every(({ id, received_at: receivedAt }) => id && receivedAt),
+    true,
+  );
+
+  const forged = await handleLogUpload(
+    logRequest(
+      {
+        device_id: credentials.device_id,
+        events: [{ level: "ERROR", message: "forged" }],
+      },
+      "wrong-token",
+    ),
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
+  );
+  assert.equal(forged.status, 401);
+  assert.equal(
+    JSON.parse(bucket.objects.get(`${credentials.device_id}.json`)).events
+      .length,
+    2,
+  );
 });
 
 test("rejects batches without hardware, warnings or errors", async () => {
+  const bucket = new FakeR2();
+  const credentials = await registerLogDevice(bucket);
   const response = await handleLogUpload(
-    logRequest({ device_id: "pc-abcdef123456", events: [{ level: "INFO", message: "noise" }] }),
-    { LOGS: new FakeR2() }
+    logRequest(
+      {
+        device_id: credentials.device_id,
+        events: [{ level: "INFO", message: "noise" }],
+      },
+      credentials.upload_token,
+    ),
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
   );
   assert.equal(response.status, 400);
 });
 
 test("reports an R2 write failure as retryable JSON", async () => {
+  const bucket = new FakeR2();
+  const credentials = await registerLogDevice(bucket);
+  bucket.put = async () => {
+    throw new Error("quota");
+  };
   const response = await handleLogUpload(
-    logRequest({ user: "failing-pc", message: "error" }),
-    { LOGS: { get: async () => null, put: async () => { throw new Error("quota"); } } }
+    logRequest(
+      {
+        device_id: credentials.device_id,
+        events: [{ level: "ERROR", message: "error" }],
+      },
+      credentials.upload_token,
+    ),
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
   );
   assert.equal(response.status, 503);
   assert.match((await response.json()).error, /retry later/);
 });
 
+test("the authenticated installation can delete its one Cloudflare log file", async () => {
+  const bucket = new FakeR2();
+  const credentials = await registerLogDevice(bucket);
+  const request = new Request(
+    `https://worker.test/logs/${credentials.device_id}`,
+    {
+      method: "DELETE",
+      headers: {
+        authorization: `Bearer ${credentials.upload_token}`,
+        "cf-connecting-ip": "127.0.0.1",
+      },
+    },
+  );
+  const response = await handleLogDelete(
+    request,
+    { LOGS: bucket, LOG_RATE_LIMITER: logLimiter },
+    credentials.device_id,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(bucket.objects.size, 0);
+});
+
+test("distributed log limiter persists the count in Durable Object storage", async () => {
+  let stored;
+  const limiter = new LogRateLimiter({
+    storage: {
+      get: async () => stored,
+      put: async (_key, value) => {
+        stored = value;
+      },
+    },
+  });
+  for (let index = 0; index < 30; index += 1) {
+    assert.equal((await limiter.fetch()).status, 200);
+  }
+  assert.equal((await limiter.fetch()).status, 429);
+});
+
+test("daily retention removes only expired per-device log files", async () => {
+  const bucket = new FakeR2();
+  bucket.objects.set(
+    "expired.json",
+    JSON.stringify({ expires_at: "2026-01-01T00:00:00Z" }),
+  );
+  bucket.objects.set(
+    "current.json",
+    JSON.stringify({ expires_at: "2027-01-01T00:00:00Z" }),
+  );
+  bucket.objects.set("unknown.json", "invalid");
+
+  assert.equal(
+    await purgeExpiredLogs(
+      bucket ? { LOGS: bucket } : {},
+      Date.parse("2026-06-01T00:00:00Z"),
+    ),
+    1,
+  );
+  assert.deepEqual([...bucket.objects.keys()].sort(), [
+    "current.json",
+    "unknown.json",
+  ]);
+});
+
 test("closes the room and disconnects every remaining guest when the host leaves", async () => {
-  const host = new FakeSocket({ id: "host", name: "Host", role: "host", micMuted: false });
-  const guest = new FakeSocket({ id: "guest", name: "Guest", role: "guest", micMuted: false });
+  const host = new FakeSocket({
+    id: "host",
+    name: "Host",
+    role: "host",
+    micMuted: false,
+  });
+  const guest = new FakeSocket({
+    id: "guest",
+    name: "Guest",
+    role: "guest",
+    micMuted: false,
+  });
   const deletedKeys = [];
   const room = new KaraokeRoom({
     getWebSockets: () => [guest],
-    storage: { delete: async (keys) => deletedKeys.push(...keys), deleteAlarm: async () => {} },
+    storage: {
+      delete: async (keys) => deletedKeys.push(...keys),
+      deleteAlarm: async () => {},
+    },
   });
 
   await room.webSocketClose(host, 1000, "Client left room");
 
-  assert.deepEqual(guest.messages.at(-1), { type: "room-closed", reason: "host-left" });
+  assert.deepEqual(withoutOrdering(guest.messages.at(-1)), {
+    type: "room-closed",
+    reason: "host-left",
+  });
   assert.deepEqual(guest.closed, { code: 4000, reason: "Host left the room" });
   assert.ok(deletedKeys.includes("hostToken"));
   assert.ok(deletedKeys.includes("sharedUi"));
 });
 
 test("a guest leaving only removes them from the participant list, without closing the room", async () => {
-  const guest = new FakeSocket({ id: "guest", name: "Guest", role: "guest", micMuted: false });
-  const secondGuest = new FakeSocket({ id: "guest-2", name: "Guest 2", role: "guest", micMuted: false });
+  const guest = new FakeSocket({
+    id: "guest",
+    name: "Guest",
+    role: "guest",
+    micMuted: false,
+  });
+  const secondGuest = new FakeSocket({
+    id: "guest-2",
+    name: "Guest 2",
+    role: "guest",
+    micMuted: false,
+  });
   const room = new KaraokeRoom({ getWebSockets: () => [secondGuest] });
 
   await room.webSocketClose(guest, 1000, "gone");
 
-  assert.deepEqual(secondGuest.messages.at(-1), { type: "participant-left", participantId: "guest" });
+  assert.deepEqual(withoutOrdering(secondGuest.messages.at(-1)), {
+    type: "participant-left",
+    participantId: "guest",
+  });
   assert.equal(secondGuest.closed, null);
 });
 
@@ -366,14 +600,22 @@ test("a departing guest's session token is remembered for a later reconnect, unl
     micMuted: false,
     sessionToken: "should-be-ignored",
   });
-  const hostRoom = new KaraokeRoom({ getWebSockets: () => [], storage: { delete: async () => {}, deleteAlarm: async () => {} } });
+  const hostRoom = new KaraokeRoom({
+    getWebSockets: () => [],
+    storage: { delete: async () => {}, deleteAlarm: async () => {} },
+  });
   await hostRoom.webSocketClose(host, 1000, "Client left room");
   assert.equal(hostRoom.recentGuests.size, 0);
 });
 
 test("reclaimGuestId returns and consumes a matching, still-fresh entry", () => {
-  const recentGuests = new Map([["token-a", { id: "guest-1", disconnectedAt: 1_000 }]]);
-  assert.equal(reclaimGuestId(recentGuests, "token-a", 1_000 + 44_000), "guest-1");
+  const recentGuests = new Map([
+    ["token-a", { id: "guest-1", disconnectedAt: 1_000 }],
+  ]);
+  assert.equal(
+    reclaimGuestId(recentGuests, "token-a", 1_000 + 44_000),
+    "guest-1",
+  );
   // One-time consumption: a second reconnect attempt with the same token
   // (e.g. a duplicate/retried request) must not reclaim the same identity
   // twice -- the entry is gone once it's been used.
@@ -381,7 +623,9 @@ test("reclaimGuestId returns and consumes a matching, still-fresh entry", () => 
 });
 
 test("reclaimGuestId ignores an unknown token or one past its grace window", () => {
-  const recentGuests = new Map([["token-a", { id: "guest-1", disconnectedAt: 1_000 }]]);
+  const recentGuests = new Map([
+    ["token-a", { id: "guest-1", disconnectedAt: 1_000 }],
+  ]);
   assert.equal(reclaimGuestId(recentGuests, "does-not-exist", 1_000), null);
   assert.equal(reclaimGuestId(recentGuests, "", 1_000), null);
   assert.equal(reclaimGuestId(recentGuests, "token-a", 1_000 + 45_001), null);
@@ -402,10 +646,13 @@ test("host can broadcast shared library filters including sort", async () => {
   const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
   const filters = { genre: "Rock", key: "Am", status: "done", sort: "artist" };
 
-  await room.webSocketMessage(sender, JSON.stringify({ type: "ui", state: { filters } }));
+  await room.webSocketMessage(
+    sender,
+    JSON.stringify({ type: "ui", state: { filters } }),
+  );
 
   assert.equal(sender.closed, null);
-  assert.deepEqual(target.messages.at(-1), {
+  assert.deepEqual(withoutOrdering(target.messages.at(-1)), {
     type: "ui",
     fromId: "sender",
     state: { filters },
@@ -428,10 +675,13 @@ test("host can broadcast all shared karaoke preferences", async () => {
     effectPreset: "studio",
   };
 
-  await room.webSocketMessage(sender, JSON.stringify({ type: "ui", state: { karaoke } }));
+  await room.webSocketMessage(
+    sender,
+    JSON.stringify({ type: "ui", state: { karaoke } }),
+  );
 
   assert.equal(sender.closed, null);
-  assert.deepEqual(target.messages.at(-1), {
+  assert.deepEqual(withoutOrdering(target.messages.at(-1)), {
     type: "ui",
     fromId: "sender",
     state: { karaoke },
@@ -445,14 +695,46 @@ test("a guest broadcasts shared filters to everyone including itself", async () 
 
   await room.webSocketMessage(
     sender,
-    JSON.stringify({ type: "ui", state: { filters: { genre: "Rock" } } })
+    JSON.stringify({ type: "ui", state: { filters: { genre: "Rock" } } }),
   );
 
   assert.equal(sender.closed, null);
-  assert.deepEqual(sender.messages.at(-1), {
-    type: "ui", fromId: "sender", state: { filters: { genre: "Rock" } },
+  assert.deepEqual(withoutOrdering(sender.messages.at(-1)), {
+    type: "ui",
+    fromId: "sender",
+    state: { filters: { genre: "Rock" } },
   });
   assert.deepEqual(target.messages.at(-1), sender.messages.at(-1));
+});
+
+test("stale, duplicated and previous-epoch room mutations never replace newer state", async () => {
+  const sender = new FakeSocket({ id: "sender", role: "guest" });
+  const target = new FakeSocket({ id: "target", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [sender, target] });
+  const send = (clientSequence, query, roomEpoch = room.roomEpoch) =>
+    room.webSocketMessage(
+      sender,
+      JSON.stringify({
+        type: "ui",
+        roomEpoch,
+        clientSequence,
+        state: { query },
+      }),
+    );
+
+  await send(3, "newest");
+  await send(2, "older");
+  await send(3, "duplicate");
+  await send(4, "previous epoch", "obsolete-epoch");
+
+  assert.equal(room.sharedUi.query, "newest");
+  assert.equal(target.messages.length, 1);
+  assert.equal(target.messages[0].eventSequence, 1);
+  assert.equal(target.messages[0].eventId, `${room.roomEpoch}:1`);
+
+  await send(4, "authoritative");
+  assert.equal(room.sharedUi.query, "authoritative");
+  assert.equal(target.messages.at(-1).eventSequence, 2);
 });
 
 test("a guest can operate the validated shared karaoke transport", async () => {
@@ -482,17 +764,31 @@ test("remembers the host's last karaoke-player state and hands it to the next jo
   const host = new FakeSocket({ id: "host", role: "host" });
   const room = new KaraokeRoom({
     getWebSockets: () => [host],
-    storage: { get: async (key) => key === "hostToken" ? "owner-token" : undefined, put: async () => {} },
+    storage: {
+      get: async (key) => (key === "hostToken" ? "owner-token" : undefined),
+      put: async () => {},
+    },
     acceptWebSocket: () => {},
   });
-  const playbackState = { type: "karaoke-player", action: "seek", songId: "song", position: 42, commandId: "cmd-1" };
+  const playbackState = {
+    type: "karaoke-player",
+    action: "seek",
+    songId: "song",
+    position: 42,
+    commandId: "cmd-1",
+  };
 
-  await room.webSocketMessage(host, JSON.stringify({ type: "sync", state: playbackState }));
+  await room.webSocketMessage(
+    host,
+    JSON.stringify({ type: "sync", state: playbackState }),
+  );
   assert.deepEqual(room.playbackState.state, playbackState);
   assert.equal(typeof room.playbackState.sentAt, "number");
 
   const late = new FakeSocket(null);
-  late.serializeAttachment = (value) => { late.participant = value; };
+  late.serializeAttachment = (value) => {
+    late.participant = value;
+  };
   const previousPair = globalThis.WebSocketPair;
   globalThis.WebSocketPair = class {
     constructor() {
@@ -514,7 +810,9 @@ test("remembers the host's last karaoke-player state and hands it to the next jo
 
 test("a room with no playback yet omits playbackState from room-state", async () => {
   const late = new FakeSocket(null);
-  late.serializeAttachment = (value) => { late.participant = value; };
+  late.serializeAttachment = (value) => {
+    late.participant = value;
+  };
   const previousPair = globalThis.WebSocketPair;
   globalThis.WebSocketPair = class {
     constructor() {
@@ -525,7 +823,10 @@ test("a room with no playback yet omits playbackState from room-state", async ()
   try {
     const room = new KaraokeRoom({
       getWebSockets: () => [],
-      storage: { get: async (key) => key === "hostToken" ? "owner-token" : undefined, put: async () => {} },
+      storage: {
+        get: async (key) => (key === "hostToken" ? "owner-token" : undefined),
+        put: async () => {},
+      },
       acceptWebSocket: () => {},
     });
     await room.fetch(joinRequest({ role: "guest" })).catch(() => {});
@@ -544,11 +845,11 @@ test("any participant can broadcast their own effects and shared library songs",
 
   await room.webSocketMessage(
     sender,
-    JSON.stringify({ type: "ui", state: { participantEffects, songs } })
+    JSON.stringify({ type: "ui", state: { participantEffects, songs } }),
   );
 
   assert.equal(sender.closed, null);
-  assert.deepEqual(target.messages.at(-1), {
+  assert.deepEqual(withoutOrdering(target.messages.at(-1)), {
     type: "ui",
     fromId: "sender",
     state: { participantEffects, songs },
@@ -562,7 +863,10 @@ test("invalid UI state is rejected without disconnecting the room", async () => 
 
   await room.webSocketMessage(
     host,
-    JSON.stringify({ type: "ui", state: { oversized: "x".repeat(129 * 1024) } })
+    JSON.stringify({
+      type: "ui",
+      state: { oversized: "x".repeat(129 * 1024) },
+    }),
   );
 
   assert.equal(host.closed, null);

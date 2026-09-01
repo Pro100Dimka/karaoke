@@ -29,6 +29,7 @@ export default function BackendBootLoader({ children }) {
     ready: MOCK_API_ENABLED,
     retry: 0,
     slow: false,
+    startup: null,
     theme: getSavedTheme()
   });
   useEffect(() => {
@@ -50,7 +51,23 @@ export default function BackendBootLoader({ children }) {
     (async () => {
       for (let attempt = 0; active && attempt < MAX_STARTUP_ATTEMPTS; attempt += 1) {
         try {
-          await api.getHealth();
+          const health = await api.getHealth();
+          if (health.startup && !health.startup.ready) {
+            if (health.startup.error) {
+              if (active)
+                setState((value) => ({ ...value, failed: true, startup: health.startup }));
+              return;
+            }
+            if (active) {
+              setState((value) => ({
+                ...value,
+                slow: value.slow || !!health.startup.budget_exceeded,
+                startup: health.startup
+              }));
+            }
+            await wait(BACKEND_BOOT_RETRY_MS);
+            continue;
+          }
           recordStartupMilestone("backend-healthy");
           await hydrateUiPreferences(api).catch(() => {});
           if (active) setState((value) => ({ ...value, ready: true }));
@@ -70,6 +87,8 @@ export default function BackendBootLoader({ children }) {
   }, [state.ready, state.retry]);
   if (state.ready) return children;
   const t = (key) => translateMessage(getSavedLanguage(), key);
+  const phase = state.startup?.phase;
+  const phaseText = phase ? t(`backend.starting.phase.${phase}`) : null;
   return (
     <Stack
       role="status"
@@ -91,8 +110,19 @@ export default function BackendBootLoader({ children }) {
       <Stack align="center" gap="var(--space-2)">
         <Typography variant="h1">A&amp;D Voice</Typography>
         <Typography tone="muted">
-          {t(state.failed ? "backend.failed" : state.slow ? "backend.starting.slow" : "backend.starting")}
+          {t(
+            state.failed
+              ? "backend.failed"
+              : state.slow
+                ? "backend.starting.slow"
+                : "backend.starting"
+          )}
         </Typography>
+        {!state.failed && phaseText && (
+          <Typography tone="muted">
+            {phaseText} · {state.startup.progress}%
+          </Typography>
+        )}
         {state.failed && (
           <Button
             variant="contained"

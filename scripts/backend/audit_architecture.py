@@ -6,16 +6,50 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2] / "backend"
 EXCLUDED_PARTS = {"AI", "AIOLD", "engines", "tests", ".venv", "venv"}
 MAX_FUNCTION_LINES = 80
+MAX_MODULE_LINES = 700
 
 # Compatibility adapters necessarily assemble old payload formats in one place.
 # Keep narrow, named exceptions visible instead of weakening the global rule.
 FUNCTION_LINE_LIMITS = {
     (Path("app/services/ai_bridge.py"), "_repair_impossible_alignment_chunks"): 101,
     (Path("app/services/ai_bridge.py"), "_build_legacy_karaoke_timeline"): 130,
+    (Path("app/services/app_settings_service.py"), "update_settings"): 83,
+    (Path("app/services/audio_service.py"), "_configure_monitoring"): 86,
+    (Path("app/services/audio_service.py"), "_launch_monitor_process"): 108,
+    (Path("app/services/kar_dataset_service.py"), "_word_events"): 86,
+    (Path("app/services/kar_dataset_service.py"), "_midi_audio_match"): 104,
+    (Path("app/services/kar_dataset_service.py"), "_download_audio"): 149,
+    (Path("app/services/kar_dataset_service.py"), "prepare_kar_file"): 127,
+    (Path("app/services/kfn_dataset_service.py"), "prepare_kfn_file"): 167,
+    (Path("app/services/pipeline_service.py"), "_run_job"): 83,
+    (Path("app/services/recording_service.py"), "__init__"): 102,
+    (Path("app/services/recording_service.py"), "start_recording"): 81,
+    (Path("app/services/recording_service.py"), "stop_recording"): 87,
+    (Path("app/services/recording_service.py"), "attach_room_audio"): 86,
+    (Path("AI/engines/text.py"), "align_timed_lines"): 130,
+    (Path("AI/engines/text.py"), "align_long_text"): 101,
+}
+
+MODULE_LINE_LIMITS = {
+    Path("app/services/kar_dataset_service.py"): 1350,
+    Path("AI/engines/text.py"): 1170,
+    Path("app/services/pipeline_service.py"): 1180,
+    Path("app/services/recording_service.py"): 1050,
+    Path("app/services/audio_service.py"): 960,
+    Path("app/services/song_package_service.py"): 890,
+    Path("app/routers/songs.py"): 710,
 }
 
 
-def python_files() -> list[Path]: return [path for path in ROOT.rglob('*.py') if not EXCLUDED_PARTS.intersection(path.relative_to(ROOT).parts)]
+def python_files() -> list[Path]:
+    files = [
+        path for path in ROOT.rglob("*.py")
+        if not EXCLUDED_PARTS.intersection(path.relative_to(ROOT).parts)
+    ]
+    # The forced-alignment engine is a known production hotspot even though
+    # third-party/legacy AI trees are intentionally excluded from this audit.
+    files.append(ROOT / "AI" / "engines" / "text.py")
+    return sorted(set(files))
 
 
 def imported_module(node: ast.AST) -> str | None:
@@ -46,7 +80,7 @@ def _function_complexity(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[s
             branches += 1
         if isinstance(child, ast.Try) and child.finalbody:
             cleanup_paths += 1
-        if isinstance(child, ast.With) or isinstance(child, ast.AsyncWith):
+        if isinstance(child, (ast.With, ast.AsyncWith)):
             cleanup_paths += 1
         if isinstance(child, (ast.Return, ast.Raise)):
             exit_points += 1
@@ -80,6 +114,12 @@ def audit_file(path: Path) -> tuple[list[str], list[str]]:
     except (OSError, SyntaxError, UnicodeError) as exc: return [f"{relative}: cannot parse file: {exc}"], []
 
     errors: list[str] = []; warnings: list[str] = []; parts = relative.parts
+    module_lines = len(path.read_text(encoding="utf-8").splitlines())
+    module_limit = MODULE_LINE_LIMITS.get(relative, MAX_MODULE_LINES)
+    if module_lines > module_limit:
+        errors.append(
+            f"{relative}: module has {module_lines} lines (budget {module_limit})"
+        )
 
     for node in ast.walk(tree):
         module = imported_module(node)
@@ -120,10 +160,10 @@ def audit_file(path: Path) -> tuple[list[str], list[str]]:
             )
 
             if length > limit:
-                warnings.append(
+                errors.append(
                     f"{relative}:{node.lineno}: "
                     f"function {node.name!r} has {length} lines "
-                    f"(advisory limit {limit})"
+                    f"(budget {limit})"
                 )
 
             complexity = _function_complexity(node)

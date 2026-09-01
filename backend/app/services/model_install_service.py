@@ -9,6 +9,7 @@ import config
 from AI.errors import ProcessingCancelledError
 from AI.install_models import ProgressReporter, install_one, is_valid
 from AI.model_registry import MODELS
+from app.services import background_task_supervisor, storage_budget_service
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,11 @@ def _recover_models(models_root: Path, cache_dir: Path, reporter: ProgressReport
     _install_missing_models(models_root, cache_dir, reporter, verification_failure_message=verification_message, log_repairs=log_repairs)
 
 
-def _download_worker(models_root: Path, cache_dir: Path) -> None:
+def _download_worker(
+    models_root: Path,
+    cache_dir: Path,
+    storage_reservations: list[storage_budget_service.Reservation] | None = None,
+) -> None:
     reporter = ProgressReporter(models_root, config.CACHE_DIR / "model-recovery-progress.txt")
     reporter.start()
     try:
@@ -126,6 +131,26 @@ def _download_worker(models_root: Path, cache_dir: Path) -> None:
         reporter.finish(False)
         logger.exception("AI model recovery failed")
         _set_state(state="error", current_model=None, error=str(exc)[:2000])
+    finally:
+        storage_budget_service.release_all(storage_reservations or [])
+
+
+def _reserve_model_storage(
+    models_root: Path, cache_dir: Path
+) -> list[storage_budget_service.Reservation]:
+    missing_bytes = sum(
+        max(0, model.expected_bytes)
+        for model in MODELS
+        if not is_valid(models_root, model)
+    )
+    if missing_bytes <= 0:
+        return []
+    return storage_budget_service.reserve_many(
+        [
+            ("ai_model_install", models_root, missing_bytes),
+            ("ai_model_download", cache_dir, missing_bytes),
+        ]
+    )
 
 
 def ensure_ready_sync(cancelled=None) -> dict[str, object]:
@@ -146,6 +171,11 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
     reporter.start()
     cache_dir = (config.CACHE_DIR / "model-downloads").resolve()
     try:
+        reservations = _reserve_model_storage(models_root, cache_dir)
+    except Exception as exc:
+        _set_state(state="error", current_model=None, error=str(exc)[:2000])
+        raise
+    try:
         _recover_models(models_root, cache_dir, reporter, verification_message="Model verification failed after recovery", log_repairs=True)
         reporter.finish(True)
         _set_state(state="ready", current_model=None, error=None)
@@ -155,6 +185,8 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
         logger.exception("Synchronous AI model recovery failed")
         _set_state(state="error", current_model=None, error=str(exc)[:2000])
         raise
+    finally:
+        storage_budget_service.release_all(reservations)
 
 
 def start_download() -> dict[str, object]:
@@ -163,10 +195,18 @@ def start_download() -> dict[str, object]:
         _state.update(state="downloading", current_model=None, error=None)
 
     models_root, cache_dir = config.MODELS_DIR.resolve(), (config.CACHE_DIR / 'model-downloads').resolve()
-    threading.Thread(
-        target=_download_worker,
-        args=(models_root, cache_dir),
-        name="ai-model-recovery",
-        daemon=True,
-    ).start()
+    try:
+        reservations = _reserve_model_storage(models_root, cache_dir)
+    except Exception as exc:
+        _set_state(state="error", current_model=None, error=str(exc)[:2000])
+        raise
+    if not background_task_supervisor.start_task(
+        "ai-model-recovery", _download_worker, (models_root, cache_dir, reservations)
+    ):
+        storage_budget_service.release_all(reservations)
+        _set_state(
+            state="error",
+            current_model=None,
+            error="Application is shutting down; model download was not started",
+        )
     return status()

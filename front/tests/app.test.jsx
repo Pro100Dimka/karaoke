@@ -20,9 +20,12 @@ vi.mock("../src/components/OnlineRoomDock", () => ({
   OnlineRoomDock: () => <div data-testid="room" />
 }));
 vi.mock("../src/components/RoomRadioSync", () => ({ default: () => <div data-testid="radio" /> }));
+vi.mock("../src/components/KeyboardLighting", () => ({
+  default: () => <div data-testid="lighting" />
+}));
 test("composes the application providers and global room controls", () => {
   const result = render(<App />);
-  for (const id of ["boundary", "loader", "contexts", "router", "layout", "room", "radio"]) {
+  for (const id of ["boundary", "loader", "contexts", "router", "layout", "room", "radio", "lighting"]) {
     expect(result.getByTestId(id)).not.toBeNull();
   }
 });

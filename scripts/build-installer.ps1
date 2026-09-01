@@ -70,12 +70,68 @@ $AsioSdk = Join-Path $Downloads "engines\asio-sdk"
 $Models = Join-Path $Downloads "models"
 $MsstEngine = Join-Path $Downloads "engines\msst"
 
-$Vs = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
+function Find-VisualStudioInstallation {
+    $Override = $env:ADVOICE_VS_PATH
+    if ($Override) {
+        $ResolvedOverride = [IO.Path]::GetFullPath($Override)
+        if (-not (Test-Path -LiteralPath $ResolvedOverride -PathType Container)) {
+            throw "ADVOICE_VS_PATH does not point to a Visual Studio installation: $ResolvedOverride"
+        }
+        return $ResolvedOverride
+    }
+
+    $VsWhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path -LiteralPath $VsWhere -PathType Leaf)) {
+        throw "Visual Studio locator was not found. Install Visual Studio 2022 Build Tools or Community with 'Desktop development with C++' and CMake, or set ADVOICE_VS_PATH."
+    }
+    $Installation = (& $VsWhere -latest -products * `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -requires Microsoft.VisualStudio.Component.VC.CMake.Project `
+        -property installationPath | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or -not $Installation) {
+        throw "No compatible Visual Studio installation was found. Required components: Microsoft.VisualStudio.Component.VC.Tools.x86.x64 and Microsoft.VisualStudio.Component.VC.CMake.Project."
+    }
+    return [IO.Path]::GetFullPath($Installation.Trim())
+}
+
+$Vs = Find-VisualStudioInstallation
 $VcVars = Join-Path $Vs "VC\Auxiliary\Build\vcvars64.bat"
 $CMake = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $Ninja = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
 
 $AppName = "A&D Voice"
+
+# Validate the exact checked-out source before a clean build changes any
+# version-bearing manifest. A failed gate must leave the working tree byte-for-byte
+# unchanged so retrying the same release input cannot accidentally bump twice.
+if (-not $Worker) {
+    if ($SkipReleaseGate) {
+        Write-Warning "Release gate skipped by -SkipReleaseGate. Tests, mutation checks and browser E2E are NOT being run."
+    }
+    else {
+        Write-Host "Running mandatory release gate..."
+        $ReleaseGate = Join-Path $Root "verify-release.bat"
+        if (-not (Test-Path -LiteralPath $ReleaseGate -PathType Leaf)) {
+            throw "Release gate was not found: $ReleaseGate"
+        }
+        $PreviousReleaseFull = $env:KARAOKE_RELEASE_FULL
+        try {
+            if ($Mode -eq "clean") { $env:KARAOKE_RELEASE_FULL = "1" }
+            & $ReleaseGate
+            if ($LASTEXITCODE -ne 0) {
+                throw "Release gate failed. Installer build is blocked."
+            }
+        }
+        finally {
+            if ($null -eq $PreviousReleaseFull) {
+                Remove-Item Env:KARAOKE_RELEASE_FULL -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:KARAOKE_RELEASE_FULL = $PreviousReleaseFull
+            }
+        }
+    }
+}
 
 # Repeated full/fast builds keep the current application version so unchanged
 # components and the installer can be reused. A clean release build explicitly
@@ -88,52 +144,21 @@ if (-not $Worker -and $Mode -eq "clean") {
         }
         return "{0}.{1}.{2}" -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1)
     }
-    function Get-VersionBumpedContent([string]$Path, [string]$Pattern, [string]$Replacement) {
-        # Windows PowerShell 5.1's Get-Content -Raw guesses the system ANSI
-        # codepage for BOM-less files instead of UTF-8, which silently mangles
-        # the Cyrillic comments/strings these files contain. Decode the bytes
-        # as UTF-8 explicitly on both the read and write side.
-        $bytes = [IO.File]::ReadAllBytes($Path)
-        $content = [Text.Encoding]::UTF8.GetString($bytes)
-        $updated = [regex]::Replace($content, $Pattern, $Replacement, "Multiline")
-        if ($updated -eq $content) { throw "Could not find a version to bump in $Path" }
-        return $updated
+    $VersionFile = Join-Path $Root "VERSION"
+    if (-not (Test-Path -LiteralPath $VersionFile -PathType Leaf)) {
+        throw "Canonical VERSION file was not found: $VersionFile"
     }
-
-    $PackageJsonPath = Join-Path $Frontend "package.json"
-    $PyprojectPath = Join-Path $Backend "pyproject.toml"
-    $DiagnosticsPath = Join-Path $Backend "app\services\diagnostics_service.py"
-
-    $PackageJsonText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($PackageJsonPath))
-    $CurrentVersion = ($PackageJsonText | ConvertFrom-Json).version
-    if (-not $CurrentVersion) { throw "front/package.json does not define version" }
+    $CurrentVersion = (Get-Content -LiteralPath $VersionFile -Raw).Trim()
     $NextVersion = Get-NextPatchVersion $CurrentVersion
-    $EscapedCurrent = [regex]::Escape($CurrentVersion)
-
-    # Compute and validate every file's replacement before writing any of them.
-    # Writing eagerly per-file would leave earlier files bumped and later ones
-    # stale if a later pattern fails to match, permanently desyncing the
-    # versions and breaking every subsequent build with the same error.
-    $PackageJsonUpdated = Get-VersionBumpedContent $PackageJsonPath `
-        ('"version": "' + $EscapedCurrent + '"') `
-        ('"version": "' + $NextVersion + '"')
-    $PyprojectUpdated = Get-VersionBumpedContent $PyprojectPath `
-        ('^version = "' + $EscapedCurrent + '"') `
-        ('version = "' + $NextVersion + '"')
-    $DiagnosticsUpdated = Get-VersionBumpedContent $DiagnosticsPath `
-        ('BACKEND_VERSION = "' + $EscapedCurrent + '"') `
-        ('BACKEND_VERSION = "' + $NextVersion + '"')
-
-    $Utf8NoBom = New-Object Text.UTF8Encoding($false)
-    [IO.File]::WriteAllText($PackageJsonPath, $PackageJsonUpdated, $Utf8NoBom)
-    [IO.File]::WriteAllText($PyprojectPath, $PyprojectUpdated, $Utf8NoBom)
-    [IO.File]::WriteAllText($DiagnosticsPath, $DiagnosticsUpdated, $Utf8NoBom)
+    $VersionSync = Join-Path $Root "scripts\sync_version.py"
+    & $Python $VersionSync --set $NextVersion
+    if ($LASTEXITCODE -ne 0) { throw "Version synchronization failed." }
 
     Write-Host "Build version bumped: $CurrentVersion -> $NextVersion"
 }
 
-$AppVersion = (Get-Content -LiteralPath (Join-Path $Frontend "package.json") -Raw | ConvertFrom-Json).version
-if (-not $AppVersion) { throw "front/package.json does not define version" }
+$AppVersion = (Get-Content -LiteralPath (Join-Path $Root "VERSION") -Raw).Trim()
+if (-not $AppVersion) { throw "VERSION does not define an application version" }
 $AppExe = "A&D Voice.exe"
 
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
@@ -156,6 +181,10 @@ $SmokeScript = Join-Path $Root "scripts\smoke-packaged-backend.ps1"
 $ChecksumScript = Join-Path $Root "scripts\generate-checksums.ps1"
 $ManifestScript = Join-Path $Root "scripts\generate-release-manifest.ps1"
 $ManifestFile = Join-Path $InstallerDir "release-manifest.json"
+$ReleaseSbomScript = Join-Path $Root "scripts\generate_release_sbom.py"
+$BackendSbomScript = Join-Path $Root "scripts\backend\generate_sbom.py"
+$GeneratedSbomFile = Join-Path $Root "generated\sbom\release.cdx.json"
+$SbomFile = Join-Path $InstallerDir "release.cdx.json"
 $SizeReportScript = Join-Path $Root "scripts\generate-size-report.ps1"
 $SizeReportFile = Join-Path $InstallerDir "size-report.json"
 $script:BackendChanged = $false
@@ -166,6 +195,7 @@ $script:BackendFingerprint = ""
 $script:AsioFingerprint = ""
 $script:FrontendFingerprint = ""
 $script:ModelsFingerprint = ""
+$script:StepRequiredOutputs = @{}
 $LegacyV23SchemaVersion = "2026.08.11-v23-parallel-safe"
 
 # Increment ONLY the component whose OUTPUT FORMAT/BUILD RULES changed.
@@ -177,28 +207,11 @@ $ModelsSchemaVersion    = "models-7z-v2"
 $FinalizeSchemaVersion  = "finalize-v1"
 $ElectronSchemaVersion  = "electron-v4-recoverable-downloads-optional-scene"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
-$InstallerSchemaVersion = "installer-bootstrap-v2-theme-model-choice"
+$InstallerSchemaVersion = "installer-bootstrap-v3-mandatory-sbom"
 $IsoSchemaVersion       = "iso-optional-models-v8-runtime-msst"
 $IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
-
-if (-not $Worker) {
-    if ($SkipReleaseGate) {
-        Write-Warning "Release gate skipped by -SkipReleaseGate. Tests, mutation checks and browser E2E are NOT being run."
-    }
-    else {
-        Write-Host "Running mandatory release gate..."
-        $ReleaseGate = Join-Path $Root "verify-release.bat"
-        if (-not (Test-Path -LiteralPath $ReleaseGate -PathType Leaf)) {
-            throw "Release gate was not found: $ReleaseGate"
-        }
-        & $ReleaseGate
-        if ($LASTEXITCODE -ne 0) {
-            throw "Release gate failed. Installer build is blocked."
-        }
-    }
-}
 
 function Write-Header([string]$Text) {
     Write-Host ""
@@ -246,6 +259,7 @@ function Set-InstallerOutputPath([string]$Path) {
     $script:InstallerExe = Join-Path $resolved ("A&D Voice Setup {0}.exe" -f $AppVersion)
     $script:ChecksumFile = Join-Path $resolved "SHA256SUMS.txt"
     $script:ManifestFile = Join-Path $resolved "release-manifest.json"
+    $script:SbomFile = Join-Path $resolved "release.cdx.json"
     $script:SizeReportFile = Join-Path $resolved "size-report.json"
 }
 
@@ -522,6 +536,50 @@ function Get-StatePath([string]$Name) {
     return Join-Path $StateDir "$Name.sha256"
 }
 
+function Get-OutputStatePath([string]$Name) {
+    return Join-Path $StateDir "$Name.outputs.json"
+}
+
+function Get-FileSha256([string]$Path) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace("-","").ToLowerInvariant()
+    }
+    finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
+
+function Get-OutputManifestJson([string[]]$Paths) {
+    $records = @()
+    foreach ($path in @($Paths | Sort-Object -Unique)) {
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $item = Get-Item -LiteralPath $path
+            $records += [ordered]@{
+                path = [IO.Path]::GetFullPath($path)
+                size = $item.Length
+                sha256 = Get-FileSha256 $path
+            }
+            continue
+        }
+        if (Test-Path -LiteralPath $path -PathType Container) {
+            $rootPath = [IO.Path]::GetFullPath($path).TrimEnd('\')
+            foreach ($file in Get-ChildItem -LiteralPath $path -File -Recurse | Sort-Object FullName) {
+                $records += [ordered]@{
+                    path = $file.FullName.Substring($rootPath.Length).TrimStart('\').Replace('\','/')
+                    size = $file.Length
+                    sha256 = Get-FileSha256 $file.FullName
+                }
+            }
+            continue
+        }
+        $records += [ordered]@{ path = [IO.Path]::GetFullPath($path); missing = $true }
+    }
+    return ConvertTo-Json -InputObject @($records) -Depth 4 -Compress
+}
+
 function Get-State([string]$Name) {
     $path = Get-StatePath $Name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "" }
@@ -531,6 +589,12 @@ function Get-State([string]$Name) {
 function Set-State([string]$Name, [string]$Fingerprint) {
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
     $Fingerprint | Set-Content -LiteralPath (Get-StatePath $Name) -Encoding ASCII
+    $outputs = if ($script:StepRequiredOutputs.ContainsKey($Name)) {
+        [string[]]$script:StepRequiredOutputs[$Name]
+    }
+    else { @() }
+    Get-OutputManifestJson $outputs |
+        Set-Content -LiteralPath (Get-OutputStatePath $Name) -Encoding UTF8
 }
 
 function Test-StepNeeded(
@@ -539,6 +603,7 @@ function Test-StepNeeded(
     [string[]]$RequiredOutputs = @(),
     [switch]$Force
 ) {
+    $script:StepRequiredOutputs[$Name] = @($RequiredOutputs)
     if ($Force) {
         Write-Host "  $Name`: forced"
         return $true
@@ -556,6 +621,18 @@ function Test-StepNeeded(
         return $true
     }
 
+    $outputStatePath = Get-OutputStatePath $Name
+    if (-not (Test-Path -LiteralPath $outputStatePath -PathType Leaf)) {
+        Write-Host "  $Name`: output integrity state missing"
+        return $true
+    }
+    $savedOutputs = (Get-Content -LiteralPath $outputStatePath -Raw -ErrorAction SilentlyContinue).Trim()
+    $actualOutputs = Get-OutputManifestJson $RequiredOutputs
+    if ($savedOutputs -ne $actualOutputs) {
+        Write-Host "  $Name`: cached output changed or corrupted"
+        return $true
+    }
+
     Write-Host "  $Name`: unchanged [skip]"
     return $false
 }
@@ -566,6 +643,7 @@ function Migrate-StateIfCompatible(
     [string[]]$LegacyFingerprints = @(),
     [string[]]$RequiredOutputs = @()
 ) {
+    $script:StepRequiredOutputs[$Name] = @($RequiredOutputs)
     $saved = Get-State $Name
 
     if ($saved -eq $NewFingerprint) {
@@ -756,7 +834,13 @@ function Get-InnoInputFingerprint {
             $SignScript,
             $ChecksumScript,
             $ManifestScript,
-            $SizeReportScript
+            $SizeReportScript,
+            $ReleaseSbomScript,
+            $BackendSbomScript,
+            (Join-Path $Frontend "scripts\generate-sbom.mjs"),
+            (Join-Path $Backend "requirements-lock.txt"),
+            (Join-Path $Frontend "package-lock.json"),
+            (Join-Path $Root "cloudflare\package-lock.json")
         )),
         $AppName,
         $AppVersion,
@@ -1537,10 +1621,38 @@ function New-DistributionIsoImage(
         -VolumeName $VolumeName
 }
 
+function Get-DirectoryBytes([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return [int64]0 }
+    [int64]$total = 0
+    Get-ChildItem -LiteralPath $Path -File -Recurse -ErrorAction SilentlyContinue |
+        ForEach-Object { $total += [int64]$_.Length }
+    return $total
+}
+
+function Assert-BuildStorageBudget {
+    $target = [IO.Path]::GetFullPath($Build)
+    $rootPath = [IO.Path]::GetPathRoot($target)
+    $drive = [IO.DriveInfo]::new($rootPath)
+    [int64]$inputBytes = (Get-DirectoryBytes (Join-Path $Backend "venv")) +
+        (Get-DirectoryBytes $Models)
+    [int64]$floor = if ($Mode -in @("installer", "setup")) { 4GB } else { 8GB }
+    [int64]$required = [Math]::Max($floor, ($inputBytes * 2) + 2GB)
+    [int64]$free = $drive.AvailableFreeSpace
+    Write-Host "Build storage preflight:"
+    Write-Host "  Required scratch: $([Math]::Round($required / 1GB, 2)) GB"
+    Write-Host "  Free on $rootPath`: $([Math]::Round($free / 1GB, 2)) GB"
+    Write-Host ""
+    if ($free -lt $required) {
+        throw "Insufficient build storage: required=$required bytes, free=$free bytes, target=$target"
+    }
+}
+
 function Check-Environment {
     Write-Host ""
     Write-Host "[0/7] Checking build environment..."
     Write-Host ""
+
+    Assert-BuildStorageBudget
 
     Require-Directory $Backend "Backend directory"
     Require-Directory $Frontend "Frontend directory"
@@ -2401,6 +2513,40 @@ function Create-Checksums {
     Require-File $ChecksumFile "SHA-256 checksum file"
 }
 
+function Create-ReleaseSbom {
+    Write-Host ""
+    Write-Host "Creating mandatory aggregate CycloneDX SBOM..."
+
+    Require-File $Python "Backend Python"
+    Require-File $BackendSbomScript "Backend SBOM generator"
+    Require-File $ReleaseSbomScript "Aggregate SBOM generator"
+
+    & $Python $BackendSbomScript
+    if ($LASTEXITCODE -ne 0) { throw "Backend SBOM generation failed." }
+
+    Push-Location $Frontend
+    try {
+        & $script:NodeExe "scripts\generate-sbom.mjs" "frontend"
+        if ($LASTEXITCODE -ne 0) { throw "Frontend SBOM generation failed." }
+    }
+    finally { Pop-Location }
+
+    Push-Location (Join-Path $Root "cloudflare")
+    try {
+        & $script:NodeExe (Join-Path $Frontend "scripts\generate-sbom.mjs") "cloudflare"
+        if ($LASTEXITCODE -ne 0) { throw "Cloudflare SBOM generation failed." }
+    }
+    finally { Pop-Location }
+
+    & $Python $ReleaseSbomScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Aggregate SBOM generation failed (unknown licenses block the release)."
+    }
+    Require-File $GeneratedSbomFile "Generated aggregate SBOM"
+    Copy-Item -LiteralPath $GeneratedSbomFile -Destination $SbomFile -Force
+    Require-File $SbomFile "Release SBOM artifact"
+}
+
 function Create-ReleaseManifest {
     Write-Host ""
     Write-Host "Creating release manifest..."
@@ -2414,6 +2560,7 @@ function Create-ReleaseManifest {
         -BackendDir $Backend `
         -FrontendDir $Frontend `
         -InstallerDirectory $InstallerDir `
+        -SbomFile $SbomFile `
         -OutputFile $ManifestFile
 
     if ($LASTEXITCODE -ne 0) {
@@ -2533,6 +2680,7 @@ function Reset-IsoView {
 function Build-IsoView {
     Require-File $InstallerExe "Installer executable"
     Require-File $ChecksumFile "SHA-256 checksum file"
+    Require-File $SbomFile "Release SBOM artifact"
     Require-File $RuntimeArchive "Application runtime archive"
 
     Write-Host ""
@@ -2552,6 +2700,11 @@ function Build-IsoView {
         $ChecksumFile `
         (Join-Path $IsoView "SHA256SUMS.txt") `
         "SHA-256 checksum file"
+
+    New-IsoHardLink `
+        $SbomFile `
+        (Join-Path $IsoView "release.cdx.json") `
+        "Release SBOM artifact"
 
     New-IsoHardLink `
         $RuntimeArchive `
@@ -3008,17 +3161,18 @@ try {
             "installer" `
             $installerFp `
             @($legacyInstallerFp) `
-            @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile))
+            @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile,$SbomFile))
 
         $setupNeeded = Test-StepNeeded `
             "installer" `
             $installerFp `
-            @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile)
+            @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile,$SbomFile)
 
         if ($setupNeeded) {
             Write-StepEstimate "installer"
             $sw = [Diagnostics.Stopwatch]::StartNew()
             Build-Installer
+            Create-ReleaseSbom
             Create-Checksums
             Create-ReleaseManifest
             Create-SizeReport
@@ -3144,7 +3298,7 @@ try {
         "installer" `
         $installerFp `
         @($legacyInstallerFp) `
-        @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile))
+        @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile,$SbomFile))
 
     $legacyIsoFp = Get-LegacyV23IsoFingerprint `
         $legacyInstallerFp `
@@ -3295,13 +3449,14 @@ try {
     $installerNeeded = Test-StepNeeded `
         "installer" `
         $installerFp `
-        @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile) `
+        @($InstallerExe,$ChecksumFile,$ManifestFile,$SizeReportFile,$SbomFile) `
         -Force:($Mode -eq "clean")
 
     if ($installerNeeded) {
         Write-StepEstimate "installer"
         $sw = [Diagnostics.Stopwatch]::StartNew()
         Build-Installer
+        Create-ReleaseSbom
         Create-Checksums
         Create-ReleaseManifest
         Create-SizeReport

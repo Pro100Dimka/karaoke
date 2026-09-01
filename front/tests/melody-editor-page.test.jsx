@@ -30,7 +30,7 @@ vi.mock("../src/api/client", () => ({
     updateUiPreferences: mocks.updateUiPreferences
   }
 }));
-vi.mock("../src/pages/MelodyEditor/EditorControls", () => ({
+vi.mock("../src/pages/MelodyEditor/controls", () => ({
   default: ({ song, onBack }) => (
     <button type="button" data-testid="editor" onClick={onBack}>
       {song.id}:{song.title}

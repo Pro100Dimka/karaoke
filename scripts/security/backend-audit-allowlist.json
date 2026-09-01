@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "exceptions": [
+    {
+      "advisory": "PYSEC-2025-217",
+      "package": "transformers",
+      "owner": "A&D Voice release maintainer",
+      "reason": "The application loads its bundled trusted model set and does not expose X-CLIP checkpoint conversion for user-supplied repositories; upgrade remains required when a compatible release is available.",
+      "expires": "2026-10-01"
+    },
+    {
+      "advisory": "PYSEC-2026-2288",
+      "package": "transformers",
+      "owner": "A&D Voice release maintainer",
+      "reason": "The affected Trainer checkpoint restore path is not used by the inference-only application; the current AI stack is not yet compatible with transformers 5.x.",
+      "expires": "2026-10-01"
+    },
+    {
+      "advisory": "PYSEC-2026-2289",
+      "package": "transformers",
+      "owner": "A&D Voice release maintainer",
+      "reason": "Only bundled trusted model configuration is loaded and arbitrary Hugging Face repository IDs are not accepted; upgrade to a compatible fixed transformers release is tracked.",
+      "expires": "2026-10-01"
+    },
+    {
+      "advisory": "PYSEC-2026-2290",
+      "package": "transformers",
+      "owner": "A&D Voice release maintainer",
+      "reason": "The LightGlue model path is not used and the application does not load attacker-selected repositories; upgrade remains required before this temporary exception expires.",
+      "expires": "2026-10-01"
+    }
+  ]
+}

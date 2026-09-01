@@ -128,6 +128,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const playbackEndedRef = useRef(null);
+  const effectPresetMutationRef = useRef(0);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
   const { data: directOutputDevices } = usePolling(
@@ -167,7 +168,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setMonitoringEnabled,
     monitorInputDeviceId
   } = microphoneSettings;
-  const { updateMicrophone } = microphoneSettings;
+  const { updateMicrophone, updateMicrophoneEffects } = microphoneSettings;
   const [roomMonitoringEnabled, setRoomMonitoringEnabled] = useState(false);
   const effectiveMonitoringEnabled = onlineRoomState ? roomMonitoringEnabled : monitoringEnabled;
   const monitoringEnabledRef = useRef(monitoringEnabled);
@@ -361,15 +362,19 @@ export default function Karaoke({ onOpenAppSettings }) {
     if (!Number.isFinite(next) || !song?.id) return;
     setTimingOffsets({ ...timingOffsets, [timingPreferenceKey]: next });
   };
-  const applyEffectPreset = (preset) => {
+  const applyEffectPreset = async (preset) => {
+    const previousPreset = effectPreset;
+    const mutationSequence = effectPresetMutationRef.current + 1;
+    effectPresetMutationRef.current = mutationSequence;
     setEffectPreset(preset.id);
-    setMicrophoneEffects((effects) => ({
-      ...effects,
+    const updated = await updateMicrophoneEffects({
       reverb: preset.reverb,
       echo: preset.echo,
       delay: preset.delay
-    }));
-    updateMicrophone({ reverb: preset.reverb, echo: preset.echo, delay: preset.delay });
+    });
+    if (updated === null && mutationSequence === effectPresetMutationRef.current) {
+      setEffectPreset(previousPreset);
+    }
   };
   const handleAnalysisClose = () => {
     updateAnalysisRecordingId(null);
@@ -378,10 +383,15 @@ export default function Karaoke({ onOpenAppSettings }) {
   const handleEffectChange = (key, value) => {
     setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
   };
-  const handleEffectCommit = (key, value) => {
+  const handleEffectCommit = async (key, value) => {
+    const previousPreset = effectPreset;
+    const mutationSequence = effectPresetMutationRef.current + 1;
+    effectPresetMutationRef.current = mutationSequence;
     setEffectPreset("custom");
-    setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
-    updateMicrophone({ [key]: value });
+    const updated = await updateMicrophoneEffects({ [key]: value });
+    if (updated === null && mutationSequence === effectPresetMutationRef.current) {
+      setEffectPreset(previousPreset);
+    }
   };
   const handleMonitoringChange = async (enabled) => {
     try {

@@ -1,11 +1,14 @@
 import { getIn, setIn } from "formik";
 import { ArrowLeft, Settings2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../../api/client";
+import { useAppDialog } from "../../contexts/AppDialog";
 import { useI18n } from "../../i18n";
 import { Button, Modal, RenderFormikFields, Tabs, Typography, useGetForm } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 import * as platform from "../../utils/platform";
-import { Service, SERVICE_ICONS, ServiceCards } from "./Services";
+import { Service, SERVICE_ICONS } from "./Services";
+import advanced from "./rows/advanced";
 import appearance from "./rows/appearance";
 import audio from "./rows/audio";
 import processing from "./rows/processing";
@@ -14,6 +17,7 @@ import useSettings from "./use-settings";
 
 export default function Settings({ isOpen = true, onClose, initialTab = "appearance" }) {
   const { t } = useI18n();
+  const { confirm } = useAppDialog();
   const s = useSettings(isOpen);
   const [tab, setTab] = useState(initialTab);
   const [service, setService] = useState();
@@ -43,32 +47,48 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
     }
   });
 
-  const run = async (fn) => {
-    formik.setStatus();
-    try {
-      await fn();
-    } catch (e) {
-      formik.setStatus(getErrorMessage(e));
-    }
-  };
+  const run = useCallback(
+    async (fn) => {
+      formik.setStatus();
+      try {
+        await fn();
+      } catch (e) {
+        formik.setStatus(getErrorMessage(e));
+      }
+    },
+    [formik]
+  );
 
-  const save = (tag, value) =>
-    run(async () => {
-      if (tag.startsWith("audio.")) return s.audio.update(tag.slice(6), value);
-      if (Object.is(value, s.app.form?.[tag] ?? "")) return;
+  const save = useCallback(
+    (tag, value) =>
+      run(async () => {
+        if (tag.startsWith("audio.")) return s.audio.update(tag.slice(6), value);
+        if (Object.is(value, s.app.form?.[tag] ?? "")) return;
 
-      s.app.change(tag, value);
-      await s.app.save(tag, value);
-    });
+        s.app.change(tag, value);
+        await s.app.save(tag, value);
+      }),
+    [run, s.app, s.audio]
+  );
+
+  const removeDiagnostics = useCallback(
+    () =>
+      run(async () => {
+        if (!(await confirm(t("settings.advanced.remote_diagnostics.deleteConfirm")))) return;
+        const response = await api.deleteRemoteDiagnostics();
+        if (response?.settings) s.app.replace((current) => ({ ...current, ...response.settings }));
+      }),
+    [confirm, run, s.app, t]
+  );
 
   const rows = useMemo(
     () => ({
       appearance: appearance({ settings: s, tr: t }),
       audio: audio({ settings: s, run, tr: t }),
       ai: processing({ tr: t }),
-      advanced: [{ md: 12, render: () => <ServiceCards open={setService} /> }]
+      advanced: advanced({ open: setService, removeDiagnostics, settings: s, tr: t })
     }),
-    [s, t]
+    [removeDiagnostics, run, s, t]
   );
 
   useEffect(() => {
@@ -86,7 +106,7 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
 
     previous.current = incoming;
     if (next !== formik.values) formik.setValues(next, false);
-  }, [incoming, rows, formik.values, formik.setValues]);
+  }, [formik, incoming, rows]);
 
   const renderTab = (id) => {
     if (!s.app.form && id !== "advanced")

@@ -1,8 +1,10 @@
 /* Stryker disable all */
 export const ruMessages = {
-  "settings.appearance.keyboard_lighting_status.unsupported": "Клавиатура найдена, но безопасное управление подсветкой в реальном времени недоступно для её протокола или текущего режима.",
+  "settings.appearance.keyboard_lighting_status.unsupported":
+    "Клавиатура найдена, но безопасное управление подсветкой в реальном времени недоступно для её протокола или текущего режима.",
   "settings.appearance.keyboard_lighting_enabled.label": "Подсветка клавиатуры",
-  "settings.appearance.keyboard_lighting_enabled.tooltip": "Встроенная поддержка Windows Dynamic Lighting, совместимых HATOR/Winbond, Wooting и VialRGB v1. Отдельная программа не нужна для совместимых устройств. OpenRGB — дополнительный вариант. Windows может ограничивать управление в фоне.",
+  "settings.appearance.keyboard_lighting_enabled.tooltip":
+    "Встроенная поддержка Windows Dynamic Lighting, совместимых HATOR/Winbond, Wooting и VialRGB v1. Отдельная программа не нужна для совместимых устройств. OpenRGB — дополнительный вариант. Windows может ограничивать управление в фоне.",
   "settings.appearance.keyboard_lighting_mode.label": "Эффект подсветки",
   "settings.appearance.keyboard_lighting_mode.music": "В такт музыке",
   "settings.appearance.keyboard_lighting_mode.theme": "Цвет темы",
@@ -10,10 +12,14 @@ export const ruMessages = {
   "settings.appearance.keyboard_lighting_status.disabled": "Подсветка клавиатуры выключена",
   "settings.appearance.keyboard_lighting_status.connecting": "Поиск совместимых клавиатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавиатур: {count}",
-  "settings.appearance.keyboard_lighting_status.no_devices": "Совместимые клавиатуры не найдены. Поддерживаются Windows Dynamic Lighting, совместимые HATOR/Winbond, Wooting и прошивки с VialRGB v1; дополнительно — OpenRGB с режимом Direct.",
-  "settings.appearance.keyboard_lighting_status.unavailable": "Встроенное управление подсветкой недоступно. Проверьте подключение и совместимость клавиатуры. OpenRGB не обязателен.",
-  "settings.appearance.keyboard_lighting_status.blocked": "Windows не передала управление подсветкой. Верните окно программы на передний план и проверьте приоритет приложений в Dynamic Lighting.",
-  "settings.appearance.keyboard_lighting_status.desktop_only": "Подсветка доступна только в настольном приложении.",
+  "settings.appearance.keyboard_lighting_status.no_devices":
+    "Совместимые клавиатуры не найдены. Поддерживаются Windows Dynamic Lighting, совместимые HATOR/Winbond, Wooting и прошивки с VialRGB v1; дополнительно — OpenRGB с режимом Direct.",
+  "settings.appearance.keyboard_lighting_status.unavailable":
+    "Встроенное управление подсветкой недоступно. Проверьте подключение и совместимость клавиатуры. OpenRGB не обязателен.",
+  "settings.appearance.keyboard_lighting_status.blocked":
+    "Windows не передала управление подсветкой. Верните окно программы на передний план и проверьте приоритет приложений в Dynamic Lighting.",
+  "settings.appearance.keyboard_lighting_status.desktop_only":
+    "Подсветка доступна только в настольном приложении.",
   "room.audio.selectedInputUnavailable":
     "Выбранный микрофон недоступен в комнате. Проверьте выбор устройства в настройках звука.",
   "audio.mute": "Выключить звук",
@@ -34,7 +40,7 @@ export const ruMessages = {
   "error.screen.restart": "Перезапустить интерфейс",
   "backend.starting": "Запускаем локальный сервер…",
   "backend.starting.slow":
-    "Первый запуск занимает больше времени, чем обычно — возможно, антивирус проверяет файлы приложения. Подождите, это нормально.",
+    "Подготовка занимает больше времени, чем обычно: проверяется библиотека, оборудование или файлы приложения. Текущий этап показан ниже.",
   "app.controls": "Управление",
   "library.sort.relevance": "По умолчанию",
   "library.sort.title": "Название",
@@ -42,6 +48,12 @@ export const ruMessages = {
   "library.sort.recent": "Недавно добавленные",
   "backend.failed": "Локальный сервер не запустился.",
   "backend.retry": "Повторить",
+  "backend.starting.phase.database": "Проверка базы данных",
+  "backend.starting.phase.storage_migration": "Подготовка библиотеки песен",
+  "backend.starting.phase.package_recovery": "Восстановление импорта песен",
+  "backend.starting.phase.metadata_scan": "Проверка метаданных библиотеки",
+  "backend.starting.phase.hardware_detection": "Определение оборудования",
+  "backend.starting.phase.diagnostics_snapshot": "Подготовка диагностики",
   "room.participants": "Участники комнаты",
   "room.heading": "Комната · {role}",
   "room.role.host": "ведущий",
@@ -164,6 +176,23 @@ export const ruMessages = {
   "settings.ai.models.progress": "Готовность AI-моделей",
   "settings.ai.models.button": "Скачать недостающие модели",
   "settings.ai.models.buttonDownloading": "Загрузка…",
+  "settings.advanced.remote_diagnostics.title": "Удалённая диагностика",
+  "settings.advanced.remote_diagnostics_enabled.label": "Разрешить отправку диагностики",
+  "settings.advanced.remote_diagnostics_enabled.tooltip":
+    "По умолчанию выключено. Данные отправляются только после вашего согласия",
+  "settings.advanced.remote_diagnostics_errors_enabled.label": "Отправлять предупреждения и ошибки",
+  "settings.advanced.remote_diagnostics_errors_enabled.tooltip":
+    "Отправляет текст WARNING и ERROR, идентификатор установки и имя в сети",
+  "settings.advanced.remote_diagnostics_hardware_enabled.label":
+    "Отправлять сведения об оборудовании",
+  "settings.advanced.remote_diagnostics_hardware_enabled.tooltip":
+    "Отправляет процессор, видеокарту, объём памяти и выбранный режим обработки",
+  "settings.advanced.remote_crash_reports_enabled.label": "Отправлять отчёты о сбоях",
+  "settings.advanced.remote_crash_reports_enabled.tooltip":
+    "Разрешает отправку отдельного отчёта при аварийном завершении программы",
+  "settings.advanced.remote_diagnostics.delete": "Удалить мои данные из Cloudflare",
+  "settings.advanced.remote_diagnostics.deleteConfirm":
+    "Удалить удалённые логи и отозвать согласие на диагностику?",
   "settings.option.language.uk": "Украинский",
   "settings.option.language.ru": "Русский",
   "settings.option.language.en": "English",
@@ -732,6 +761,8 @@ export const ruMessages = {
     "Не удалось соединиться с участником: голос и передача песни недоступны. Проверьте сеть и подключитесь к комнате повторно.",
   "room.directParticipantConnectionFailedAndTurnIsUnconfiguredOr":
     "Прямое соединение с участником не установлено, TURN не настроен или недоступен. Голос и передача песни недоступны.",
+  "room.peerConnectionDegradedTryingToRestore":
+    "Связь с участником {0} ухудшилась. Восстанавливаем голос и передачу песни…",
   "room.tooManyIceCandidatesReceived": "Получено слишком много ICE-кандидатов",
   "room.participantDisconnectedDuringTransferSendTheFileAgainInterrupted":
     "Участник отключился во время передачи. Отправьте файл заново — продолжить прерванную передачу нельзя.",

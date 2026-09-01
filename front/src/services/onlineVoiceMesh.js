@@ -5,6 +5,7 @@ import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-cont
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 import { resolveMicrophoneDevice } from "./microphoneDevice";
+import OnlineVoicePeerRecovery from "./onlineVoicePeerRecovery";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
@@ -60,6 +61,9 @@ export default class OnlineVoiceMesh {
     this.invitePromises = new Map();
     this.signalPromises = new Map();
     this.peerVersions = new Map();
+    this.peerInitiators = new Set();
+    this.recovery = new OnlineVoicePeerRecovery(this, preferLowLatencyOpus);
+    this.recoveryPromises = this.recovery.promises;
     this.transfers = new OnlineVoiceTransferSession(
       {
         version: () => this.lifecycleVersion,
@@ -91,6 +95,8 @@ export default class OnlineVoiceMesh {
     this.disconnectTimers = new Map();
     this.connectTimers = new Map();
     this.onPeerError = null;
+    this.onPeerRecovering = null;
+    this.onPeerRecovered = null;
     this.iceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
   }
 
@@ -115,25 +121,29 @@ export default class OnlineVoiceMesh {
     const { lifecycleVersion } = this;
     let capturedStream;
     let persistedSettings;
-    const startPromise = api.getAudioSettings().catch(() => null).then(async (settings) => {
-      persistedSettings = settings;
-      const deviceId = await resolveMicrophoneDevice(settings);
-      if (lifecycleVersion !== this.lifecycleVersion) throw new Error(translateSaved("room.microphoneLaunchCanceled"));
-      return navigator.mediaDevices.getUserMedia({
-        audio: {
-          ...MICROPHONE_CAPTURE_CONSTRAINTS,
-          // Browser AEC adds a capture look-ahead/buffer that is audible in
-          // realtime self-monitoring on consumer USB headsets. The studio
-          // graph already provides our own noise gate and dynamics, so keep
-          // Chromium's latency-heavy voice processing out of the duet path.
-          echoCancellation: false,
-          channelCount: 1,
-          latency: { ideal: 0 },
-          sampleRate: { ideal: 48_000 },
-          ...(deviceId && { deviceId: { exact: deviceId } })
-        }
-      });
-    })
+    const startPromise = api
+      .getAudioSettings()
+      .catch(() => null)
+      .then(async (settings) => {
+        persistedSettings = settings;
+        const deviceId = await resolveMicrophoneDevice(settings);
+        if (lifecycleVersion !== this.lifecycleVersion)
+          throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+        return navigator.mediaDevices.getUserMedia({
+          audio: {
+            ...MICROPHONE_CAPTURE_CONSTRAINTS,
+            // Browser AEC adds a capture look-ahead/buffer that is audible in
+            // realtime self-monitoring on consumer USB headsets. The studio
+            // graph already provides our own noise gate and dynamics, so keep
+            // Chromium's latency-heavy voice processing out of the duet path.
+            echoCancellation: false,
+            channelCount: 1,
+            latency: { ideal: 0 },
+            sampleRate: { ideal: 48_000 },
+            ...(deviceId && { deviceId: { exact: deviceId } })
+          }
+        });
+      })
       .then(async (stream) => {
         capturedStream = stream;
         if (lifecycleVersion !== this.lifecycleVersion) {
@@ -325,21 +335,21 @@ export default class OnlineVoiceMesh {
         this.disconnectTimers.delete(participantId);
       }
       if (["failed", "closed"].includes(peer.connectionState)) {
-        if (peer.connectionState === "failed") this.reportPeerFailure(participantId);
-        this.removePeer(participantId);
+        if (peer.connectionState === "closed") this.removePeer(participantId);
+        else this.recoverPeer(participantId, peer);
         return;
       }
       if (peer.connectionState === "disconnected") {
         const timer = globalThis.setTimeout(() => {
           this.disconnectTimers.delete(participantId);
           if (isCurrentPeer() && peer.connectionState === "disconnected") {
-            this.reportPeerFailure(participantId);
-            this.removePeer(participantId);
+            this.recoverPeer(participantId, peer);
           }
         }, 10_000);
         this.disconnectTimers.set(participantId, timer);
       }
       if (peer.connectionState === "connected") {
+        this.recovery.connected(participantId);
         const connectTimer = this.connectTimers.get(participantId);
         if (connectTimer) globalThis.clearTimeout(connectTimer);
         this.connectTimers.delete(participantId);
@@ -351,7 +361,7 @@ export default class OnlineVoiceMesh {
       globalThis.setTimeout(() => {
         this.connectTimers.delete(participantId);
         if (isCurrentPeer() && peer.connectionState !== "connected") {
-          this.reportPeerFailure(participantId);
+          this.recovery.fail(participantId);
           this.removePeer(participantId);
         }
       }, 30_000)
@@ -359,15 +369,8 @@ export default class OnlineVoiceMesh {
     return peer;
   }
 
-  reportPeerFailure(participantId) {
-    const relay = this.iceServers.some(({ urls }) =>
-      (Array.isArray(urls) ? urls : [urls]).some((url) => /^turns?:/.test(url))
-    );
-    const message = relay
-      ? translateSaved("room.couldNotConnectToParticipantVoiceAndSongTransfer")
-      : translateSaved("room.directParticipantConnectionFailedAndTurnIsUnconfiguredOr");
-    console.error("Room peer connection failed", { participantId, relayAvailable: relay });
-    this.onPeerError?.(participantId, message);
+  recoverPeer(participantId, peer) {
+    return this.recovery.recover(participantId, peer);
   }
 
   async optimizeAudioSenders(peer) {
@@ -462,6 +465,7 @@ export default class OnlineVoiceMesh {
     const pendingInvite = this.invitePromises.get(participantId);
     if (pendingInvite) return pendingInvite;
     const { lifecycleVersion } = this;
+    this.peerInitiators.add(participantId);
     const peer = this.createPeer(participantId);
     const isCurrentPeer = () =>
       lifecycleVersion === this.lifecycleVersion &&
@@ -524,6 +528,7 @@ export default class OnlineVoiceMesh {
         )
           return false;
         const peer = this.createPeer(fromId);
+        if (peer.setConfiguration) peer.setConfiguration({ iceServers: this.iceServers });
         const isCurrentPeer = () =>
           lifecycleVersion === this.lifecycleVersion &&
           (this.peerVersions.get(fromId) || 0) === peerVersion &&
@@ -619,6 +624,8 @@ export default class OnlineVoiceMesh {
     this.pendingInvites.delete(participantId);
     this.invitePromises.delete(participantId);
     this.signalPromises.delete(participantId);
+    this.peerInitiators.delete(participantId);
+    this.recovery.remove(participantId);
     this.peerEffectsEnabled.delete(participantId);
     this.transfers.removePeer(participantId);
     if (existed) this.onPeerClosed?.(participantId);
@@ -640,6 +647,8 @@ export default class OnlineVoiceMesh {
     this.pendingInvites.clear();
     this.invitePromises.clear();
     this.signalPromises.clear();
+    this.peerInitiators.clear();
+    this.recovery.stop();
     this.peerEffectsEnabled.clear();
     for (const timer of this.disconnectTimers.values()) {
       globalThis.clearTimeout(timer);

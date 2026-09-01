@@ -69,17 +69,68 @@ def test_remote_batch_transport_uses_structured_device_payload(monkeypatch):
     response = Mock()
     opener = Mock(return_value=response)
     patch_attrs(monkeypatch, remote_log_service.urllib.request, urlopen=opener)
+    monkeypatch.setattr(
+        remote_log_service,
+        "_log_credentials",
+        lambda: {"device_id": "pc-aaaaaaaaaaaaaaaaaaaaaaaa", "upload_token": "t" * 32},
+    )
     payload = {"device_id": "pc-one", "events": [{"level": "WARNING", "message": "warning"}]}
     assert remote_log_service._send(payload) is True
     request = opener.call_args.args[0]
     assert request.full_url == remote_log_service._LOG_UPLOAD_URL
     assert request.method == "POST"
     assert request.headers["User-agent"] == remote_log_service._CLIENT_USER_AGENT
-    assert json.loads(request.data)["device_id"] == "pc-one"
+    assert json.loads(request.data)["device_id"] == "pc-aaaaaaaaaaaaaaaaaaaaaaaa"
+    assert request.headers["Authorization"] == f"Bearer {'t' * 32}"
     response.close.assert_called_once()
 
     monkeypatch.setattr(remote_log_service.urllib.request, "urlopen", Mock(side_effect=OSError))
     assert remote_log_service._send(payload) is False
+
+
+def test_remote_log_registration_is_persisted_atomically(monkeypatch, tmp_path):
+    credentials_path = tmp_path / "credentials.json"
+    monkeypatch.setattr(remote_log_service, "_credentials_path", lambda: credentials_path)
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = json.dumps({
+        "device_id": "pc-aaaaaaaaaaaaaaaaaaaaaaaa",
+        "upload_token": "s" * 32,
+    }).encode()
+    monkeypatch.setattr(remote_log_service.urllib.request, "urlopen", Mock(return_value=response))
+
+    credentials = remote_log_service._register_credentials()
+
+    assert credentials == {
+        "device_id": "pc-aaaaaaaaaaaaaaaaaaaaaaaa",
+        "upload_token": "s" * 32,
+    }
+    assert json.loads(credentials_path.read_text(encoding="utf-8")) == credentials
+
+
+def test_remote_record_deletion_requires_saved_credentials_and_clears_them(monkeypatch, tmp_path):
+    credentials_path = tmp_path / "credentials.json"
+    credentials_path.write_text(json.dumps({
+        "device_id": "pc-aaaaaaaaaaaaaaaaaaaaaaaa",
+        "upload_token": "s" * 32,
+    }), encoding="utf-8")
+    response = Mock()
+    opener = Mock(return_value=response)
+    patch_attrs(
+        monkeypatch,
+        remote_log_service,
+        _credentials_path=lambda: credentials_path,
+        clear_pending=Mock(),
+    )
+    monkeypatch.setattr(remote_log_service.urllib.request, "urlopen", opener)
+
+    assert remote_log_service.delete_remote_diagnostics() is True
+    request = opener.call_args.args[0]
+    assert request.method == "DELETE"
+    assert request.headers["Authorization"] == f"Bearer {'s' * 32}"
+    assert not credentials_path.exists()
+    remote_log_service.clear_pending.assert_called_once_with()
 
 
 def test_remote_logs_batch_after_silence_and_ignore_info(monkeypatch):
@@ -95,6 +146,7 @@ def test_remote_logs_batch_after_silence_and_ignore_info(monkeypatch):
         _persistent_device_id=lambda: "pc-stable",
         _current_online_name=lambda: "Singer",
         _send=sent,
+        _remote_policy=lambda: {"enabled": True, "errors": True, "hardware": True, "crashes": False},
     )
     remote_log_service.queue_log(logging.INFO, "noise")
     remote_log_service.queue_log(logging.WARNING, "first")
@@ -125,6 +177,7 @@ def test_remote_failed_batch_is_retained_with_exponential_retry(monkeypatch):
         _persistent_device_id=lambda: "pc-stable",
         _current_online_name=lambda: "Singer",
         _send=Mock(return_value=False),
+        _remote_policy=lambda: {"enabled": True, "errors": True, "hardware": False, "crashes": False},
     )
     remote_log_service.queue_log(logging.ERROR, "keep me")
     remote_log_service.flush_pending()
@@ -156,3 +209,57 @@ def test_remote_name_fallback_and_log_handler(monkeypatch):
     monkeypatch.setattr(remote_log_service, "_DISABLED", True)
     handler.emit(logging.LogRecord("test", logging.ERROR, __file__, 1, "off", (), None))
     assert sent.call_count == 1
+
+
+def test_new_install_never_queues_or_sends_remote_diagnostics_without_consent(monkeypatch):
+    schedule, send = Mock(), Mock(return_value=True)
+    patch_attrs(
+        monkeypatch,
+        remote_log_service,
+        _DISABLED=False,
+        _PENDING_EVENTS=[],
+        _PENDING_HARDWARE=None,
+        _FLUSH_TIMER=None,
+        _schedule_flush_locked=schedule,
+        _send=send,
+        _remote_policy=lambda: {
+            "enabled": False,
+            "errors": False,
+            "hardware": False,
+            "crashes": False,
+        },
+    )
+
+    remote_log_service.queue_log(logging.ERROR, "private failure")
+    remote_log_service.queue_hardware_snapshot({"cpu": "Private CPU"})
+    remote_log_service.flush_pending()
+
+    assert remote_log_service._PENDING_EVENTS == []
+    assert remote_log_service._PENDING_HARDWARE is None
+    schedule.assert_not_called()
+    send.assert_not_called()
+
+
+def test_revoking_remote_diagnostics_clears_pending_payload_and_timer(monkeypatch):
+    timer = Mock()
+    patch_attrs(
+        monkeypatch,
+        remote_log_service,
+        _DISABLED=False,
+        _PENDING_EVENTS=[{"level": "ERROR", "message": "queued"}],
+        _PENDING_HARDWARE={"cpu": "queued"},
+        _FLUSH_TIMER=timer,
+        _remote_policy=lambda: {
+            "enabled": False,
+            "errors": False,
+            "hardware": False,
+            "crashes": False,
+        },
+    )
+
+    remote_log_service.apply_policy()
+
+    assert remote_log_service._PENDING_EVENTS == []
+    assert remote_log_service._PENDING_HARDWARE is None
+    assert remote_log_service._FLUSH_TIMER is None
+    timer.cancel.assert_called_once()

@@ -77,12 +77,28 @@ test("installer run changes keep every generated report in the current run", () 
   matches(installerBuilder, [
     /\$script:ManifestFile = Join-Path \$resolved "release-manifest\.json"/,
     /\$script:SizeReportFile = Join-Path \$resolved "size-report\.json"/,
+    /\$script:SbomFile = Join-Path \$resolved "release\.cdx\.json"/,
     /\$ChecksumScript,\s+\$ManifestScript,\s+\$SizeReportScript/,
-    /@\(\$InstallerExe,\$ChecksumFile,\$ManifestFile,\$SizeReportFile\)/
+    /@\(\$InstallerExe,\$ChecksumFile,\$ManifestFile,\$SizeReportFile,\$SbomFile\)/
   ]);
   matches(releaseManifest, [
     /GetDirectoryName\(\[IO\.Path\]::GetFullPath\(\$OutputFile\)\)/,
     /\[IO\.Directory\]::CreateDirectory\(\$outputDirectory\)/
+  ]);
+});
+test("every installer path generates, hashes and publishes the aggregate SBOM", () => {
+  assert.equal((installerBuilder.match(/Create-ReleaseSbom\s+Create-Checksums/g) ?? []).length, 2);
+  matches(installerBuilder, [
+    /function Create-ReleaseSbom/,
+    /unknown licenses block the release/,
+    /Copy-Item -LiteralPath \$GeneratedSbomFile -Destination \$SbomFile -Force/,
+    /Require-File \$SbomFile "Release SBOM artifact"/,
+    /New-IsoHardLink\s+`\s+\$SbomFile\s+`\s+\(Join-Path \$IsoView "release\.cdx\.json"\)/
+  ]);
+  matches(releaseManifest, [
+    /\[Parameter\(Mandatory = \$true\)\]\s+\[string\] \$SbomFile/,
+    /Mandatory release SBOM does not exist/,
+    /sha256 = \(\[BitConverter\]::ToString\(\$sha\.ComputeHash\(\$stream\)\)\)/
   ]);
 });
 test("clean builds tolerate locked stale Electron runs", () => {
@@ -90,6 +106,60 @@ test("clean builds tolerate locked stale Electron runs", () => {
     /\[switch\]\$AllowLockedRemainder/,
     /Remove-Directory \$Build -AllowLockedRemainder/,
     /Locked stale build files were left in place/
+  ]);
+});
+test("clean release validation happens before source version mutation", () => {
+  const gate = installerBuilder.indexOf('Write-Host "Running mandatory release gate..."');
+  const mutation = installerBuilder.indexOf("& $Python $VersionSync --set $NextVersion");
+  assert.ok(gate >= 0 && mutation >= 0 && gate < mutation);
+  assert.match(
+    installerBuilder,
+    /Validate the exact checked-out source before a clean build changes any\s+# version-bearing manifest/,
+  );
+});
+test("clean builds synchronize every version mirror from the canonical VERSION file", () => {
+  matches(installerBuilder, [
+    /\$VersionFile = Join-Path \$Root "VERSION"/,
+    /\$CurrentVersion = \(Get-Content -LiteralPath \$VersionFile -Raw\)\.Trim\(\)/,
+    /\$VersionSync = Join-Path \$Root "scripts\\sync_version\.py"/,
+    /& \$Python \$VersionSync --set \$NextVersion/,
+    /\$AppVersion = \(Get-Content -LiteralPath \(Join-Path \$Root "VERSION"\) -Raw\)\.Trim\(\)/,
+  ]);
+  excludes(installerBuilder, [
+    /WriteAllText\(\$PackageJsonPath/,
+    /WriteAllText\(\$PyprojectPath/,
+    /WriteAllText\(\$DiagnosticsPath/,
+  ]);
+});
+test("clean releases force a fresh gate and restore the caller environment", () => {
+  matches(installerBuilder, [
+    /\$PreviousReleaseFull = \$env:KARAOKE_RELEASE_FULL/,
+    /if \(\$Mode -eq "clean"\) \{ \$env:KARAOKE_RELEASE_FULL = "1" \}/,
+    /Remove-Item Env:KARAOKE_RELEASE_FULL -ErrorAction SilentlyContinue/,
+    /\$env:KARAOKE_RELEASE_FULL = \$PreviousReleaseFull/,
+  ]);
+});
+test("native build toolchain is discovered across Visual Studio editions", () => {
+  matches(installerBuilder, [
+    /function Find-VisualStudioInstallation/,
+    /\$env:ADVOICE_VS_PATH/,
+    /Microsoft Visual Studio\\Installer\\vswhere\.exe/,
+    /-products \*/,
+    /Microsoft\.VisualStudio\.Component\.VC\.Tools\.x86\.x64/,
+    /Microsoft\.VisualStudio\.Component\.VC\.CMake\.Project/,
+    /\$Vs = Find-VisualStudioInstallation/,
+  ]);
+  excludes(installerBuilder, [/\$Vs = "C:\\Program Files \(x86\)\\Microsoft Visual Studio\\2022\\BuildTools"/]);
+});
+test("incremental build cache verifies output size and SHA-256 before skipping", () => {
+  matches(installerBuilder, [
+    /function Get-OutputManifestJson/,
+    /function Get-FileSha256/,
+    /\$sha\.ComputeHash\(\$stream\)/,
+    /Get-OutputStatePath \$Name/,
+    /output integrity state missing/,
+    /cached output changed or corrupted/,
+    /\$savedOutputs -ne \$actualOutputs/,
   ]);
 });
 test("installer window toggles native fullscreen through the trusted IPC boundary", () => {

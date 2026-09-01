@@ -27,7 +27,6 @@ from starlette.concurrency import run_in_threadpool
 import config
 import models
 import schemas
-from AI.artifacts import recover_orphaned_backups
 from app.api.dependencies import SongDependency
 from app.api.errors import http_error
 from app.services import (
@@ -41,8 +40,10 @@ from app.services import (
     song_editor_service,
     song_package_service,
     song_service,
+    storage_budget_service,
 )
 from app.services.db_utils import commit, commit_refresh
+from app.services.storage_budget_service import InsufficientStorageError
 from app.utils.files import read_text_tail
 from app.utils.json_files import read_json, write_json
 from app.utils.uploads import save_upload_limited
@@ -151,7 +152,14 @@ async def add_song(
         delete=False,
     ) as temporary:
         temporary_path = Path(temporary.name)
+    upload_reservation = None
     try:
+        upload_size = int(getattr(file, "size", 0) or config.MAX_AUDIO_UPLOAD_BYTES)
+        upload_reservation = storage_budget_service.reserve(
+            "song_upload",
+            config.UPLOAD_TEMP_DIR,
+            min(upload_size, config.MAX_AUDIO_UPLOAD_BYTES),
+        )
         await save_upload_limited(
             file,
             temporary_path,
@@ -189,6 +197,7 @@ async def add_song(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
+        if upload_reservation is not None: upload_reservation.release()
         temporary_path.unlink(missing_ok=True)
 
 
@@ -203,7 +212,14 @@ async def inspect_song_identity(file: UploadFile = File(...)):
         delete=False,
     ) as temporary:
         temporary_path = Path(temporary.name)
+    upload_reservation = None
     try:
+        upload_size = int(getattr(file, "size", 0) or config.MAX_AUDIO_UPLOAD_BYTES)
+        upload_reservation = storage_budget_service.reserve(
+            "song_identity_upload",
+            config.UPLOAD_TEMP_DIR,
+            min(upload_size, config.MAX_AUDIO_UPLOAD_BYTES),
+        )
         await save_upload_limited(
             file,
             temporary_path,
@@ -250,6 +266,7 @@ async def inspect_song_identity(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
+        if upload_reservation is not None: upload_reservation.release()
         temporary_path.unlink(missing_ok=True)
 
 
@@ -373,6 +390,8 @@ def export_song_package(
         package_path, slug = song_package_service.build_package_for_song(
             db, song_id, expected_revision=expected_revision,
         )
+    except InsufficientStorageError as exc:
+        raise HTTPException(status_code=507, detail=exc.payload()) from exc
     except (OSError, ValueError) as exc:
         detail = str(exc)
         raise HTTPException(
@@ -401,7 +420,14 @@ async def import_song_package(
         delete=False,
     ) as temporary:
         temporary_path = Path(temporary.name)
+    upload_reservation = None
     try:
+        upload_size = int(getattr(file, "size", 0) or song_package_service.MAX_PACKAGE_BYTES)
+        upload_reservation = storage_budget_service.reserve(
+            "song_package_upload",
+            config.CACHE_DIR,
+            min(upload_size, song_package_service.MAX_PACKAGE_BYTES),
+        )
         await save_upload_limited(
             file,
             temporary_path,
@@ -409,14 +435,19 @@ async def import_song_package(
             chunk_size=1024 * 1024,
             too_large_message="Song package is too large",
         )
+        upload_reservation.release()
+        upload_reservation = None
         return song_package_service.import_package(db, temporary_path, expected_revision=expected_revision)
     except HTTPException:
         raise
+    except InsufficientStorageError as exc:
+        raise HTTPException(status_code=507, detail=exc.payload()) from exc
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not import song package: {exc}"
         ) from exc
     finally:
+        if upload_reservation is not None: upload_reservation.release()
         temporary_path.unlink(missing_ok=True)
 
 
@@ -605,7 +636,7 @@ def get_result(song: SongDependency, response: Response):
 
     out_dir = song_service.resolve_output_dir(song)
     with song_service.song_content_lock(song.id):
-        recover_orphaned_backups(out_dir)
+        ai_bridge.recover_generated_artifacts(out_dir)
         lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
     if not isinstance(lyrics_sync, dict): lyrics_sync = {}
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"

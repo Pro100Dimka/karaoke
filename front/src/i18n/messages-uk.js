@@ -1,8 +1,10 @@
 /* Stryker disable all */
 export const ukMessages = {
-  "settings.appearance.keyboard_lighting_status.unsupported": "Клавіатуру знайдено, але безпечне керування підсвічуванням у реальному часі недоступне для її протоколу або поточного режиму.",
+  "settings.appearance.keyboard_lighting_status.unsupported":
+    "Клавіатуру знайдено, але безпечне керування підсвічуванням у реальному часі недоступне для її протоколу або поточного режиму.",
   "settings.appearance.keyboard_lighting_enabled.label": "Підсвічування клавіатури",
-  "settings.appearance.keyboard_lighting_enabled.tooltip": "Вбудована підтримка Windows Dynamic Lighting, сумісних HATOR/Winbond, Wooting і VialRGB v1. Окрема програма не потрібна для сумісних пристроїв. OpenRGB — додатковий варіант. Windows може обмежувати керування у фоні.",
+  "settings.appearance.keyboard_lighting_enabled.tooltip":
+    "Вбудована підтримка Windows Dynamic Lighting, сумісних HATOR/Winbond, Wooting і VialRGB v1. Окрема програма не потрібна для сумісних пристроїв. OpenRGB — додатковий варіант. Windows може обмежувати керування у фоні.",
   "settings.appearance.keyboard_lighting_mode.label": "Ефект підсвічування",
   "settings.appearance.keyboard_lighting_mode.music": "У такт музиці",
   "settings.appearance.keyboard_lighting_mode.theme": "Колір теми",
@@ -10,11 +12,16 @@ export const ukMessages = {
   "settings.appearance.keyboard_lighting_status.disabled": "Підсвічування клавіатури вимкнено",
   "settings.appearance.keyboard_lighting_status.connecting": "Пошук сумісних клавіатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавіатур: {count}",
-  "settings.appearance.keyboard_lighting_status.no_devices": "Сумісних клавіатур не знайдено. Підтримуються Windows Dynamic Lighting, сумісні HATOR/Winbond, Wooting і прошивки з VialRGB v1; додатково — OpenRGB з режимом Direct.",
-  "settings.appearance.keyboard_lighting_status.unavailable": "Вбудоване керування підсвічуванням недоступне. Перевірте підключення та сумісність клавіатури. OpenRGB не обов’язковий.",
-  "settings.appearance.keyboard_lighting_status.blocked": "Windows не надала керування підсвічуванням. Поверніть вікно програми на передній план та перевірте пріоритет програм у Dynamic Lighting.",
-  "settings.appearance.keyboard_lighting_status.desktop_only": "Підсвічування доступне лише в настільній програмі.",
-  "room.audio.selectedInputUnavailable": "Вибраний мікрофон недоступний у кімнаті. Перевірте вибір пристрою в налаштуваннях звуку.",
+  "settings.appearance.keyboard_lighting_status.no_devices":
+    "Сумісних клавіатур не знайдено. Підтримуються Windows Dynamic Lighting, сумісні HATOR/Winbond, Wooting і прошивки з VialRGB v1; додатково — OpenRGB з режимом Direct.",
+  "settings.appearance.keyboard_lighting_status.unavailable":
+    "Вбудоване керування підсвічуванням недоступне. Перевірте підключення та сумісність клавіатури. OpenRGB не обов’язковий.",
+  "settings.appearance.keyboard_lighting_status.blocked":
+    "Windows не надала керування підсвічуванням. Поверніть вікно програми на передній план та перевірте пріоритет програм у Dynamic Lighting.",
+  "settings.appearance.keyboard_lighting_status.desktop_only":
+    "Підсвічування доступне лише в настільній програмі.",
+  "room.audio.selectedInputUnavailable":
+    "Вибраний мікрофон недоступний у кімнаті. Перевірте вибір пристрою в налаштуваннях звуку.",
   "audio.mute": "Вимкнути звук",
   "audio.pause": "Пауза",
   "audio.playRecording": "Відтворити запис",
@@ -37,9 +44,15 @@ export const ukMessages = {
   "error.screen.restart": "Перезапустити інтерфейс",
   "backend.starting": "Запускаємо локальний сервер…",
   "backend.starting.slow":
-    "Перший запуск триває довше, ніж зазвичай — можливо, антивірус перевіряє файли застосунку. Зачекайте, це нормально.",
+    "Підготовка триває довше, ніж зазвичай: перевіряється бібліотека, обладнання або файли застосунку. Поточний етап показано нижче.",
   "backend.failed": "Локальний сервер не запустився.",
   "backend.retry": "Повторити",
+  "backend.starting.phase.database": "Перевірка бази даних",
+  "backend.starting.phase.storage_migration": "Підготовка бібліотеки пісень",
+  "backend.starting.phase.package_recovery": "Відновлення імпорту пісень",
+  "backend.starting.phase.metadata_scan": "Перевірка метаданих бібліотеки",
+  "backend.starting.phase.hardware_detection": "Визначення обладнання",
+  "backend.starting.phase.diagnostics_snapshot": "Підготовка діагностики",
   "room.participants": "Учасники кімнати",
   "room.heading": "Кімната · {role}",
   "room.role.host": "ведучий",
@@ -163,6 +176,23 @@ export const ukMessages = {
   "settings.ai.models.progress": "Готовність AI-моделей",
   "settings.ai.models.button": "Завантажити відсутні моделі",
   "settings.ai.models.buttonDownloading": "Завантаження…",
+  "settings.advanced.remote_diagnostics.title": "Віддалена діагностика",
+  "settings.advanced.remote_diagnostics_enabled.label": "Дозволити надсилання діагностики",
+  "settings.advanced.remote_diagnostics_enabled.tooltip":
+    "Типово вимкнено. Дані надсилаються лише після вашої згоди",
+  "settings.advanced.remote_diagnostics_errors_enabled.label": "Надсилати попередження та помилки",
+  "settings.advanced.remote_diagnostics_errors_enabled.tooltip":
+    "Надсилає текст WARNING і ERROR, ідентифікатор інсталяції та ім’я в мережі",
+  "settings.advanced.remote_diagnostics_hardware_enabled.label":
+    "Надсилати відомості про обладнання",
+  "settings.advanced.remote_diagnostics_hardware_enabled.tooltip":
+    "Надсилає процесор, відеокарту, обсяг пам’яті та вибраний режим обробки",
+  "settings.advanced.remote_crash_reports_enabled.label": "Надсилати звіти про збої",
+  "settings.advanced.remote_crash_reports_enabled.tooltip":
+    "Дозволяє надсилання окремого звіту після аварійного завершення програми",
+  "settings.advanced.remote_diagnostics.delete": "Видалити мої дані з Cloudflare",
+  "settings.advanced.remote_diagnostics.deleteConfirm":
+    "Видалити віддалені журнали та відкликати згоду на діагностику?",
   "settings.option.language.uk": "Українська",
   "settings.option.language.ru": "Російська",
   "settings.option.language.en": "English",
@@ -657,15 +687,20 @@ export const ukMessages = {
   "settings.audio.monitor.compact.estimate": "Затримка (оцінка): {0} мс · вхід {1} · вихід {2}",
   "settings.audio.monitor.compact.unavailable": "Затримка: немає даних",
   "settings.audio.monitor.compact.sharedTiming": "Затримка потоку (оцінка): {0} мс",
-  "settings.audio.monitor.compact.sharedTooltip": "Оцінка шляху від захоплення до відтворення за часовими мітками WASAPI та позицією аудіогодинника, включно з чергою програми. Залежить від точності драйвера та не замінює фізичний loopback-вимір.",
-  "settings.audio.monitor.compact.driverTooltip": "ASIOGetLatencies: відліки драйвера × 1000 / частота. Вхід і вихід включають затримки, повідомлені драйвером, але це не фізичний вимір мікрофон → навушники.",
-  "settings.audio.monitor.compact.estimateTooltip": "Оцінка PortAudio для активного потоку, не фізичний вимір. Точну повну затримку можна виміряти тестовим сигналом із поверненням виходу на вхід.",
+  "settings.audio.monitor.compact.sharedTooltip":
+    "Оцінка шляху від захоплення до відтворення за часовими мітками WASAPI та позицією аудіогодинника, включно з чергою програми. Залежить від точності драйвера та не замінює фізичний loopback-вимір.",
+  "settings.audio.monitor.compact.driverTooltip":
+    "ASIOGetLatencies: відліки драйвера × 1000 / частота. Вхід і вихід включають затримки, повідомлені драйвером, але це не фізичний вимір мікрофон → навушники.",
+  "settings.audio.monitor.compact.estimateTooltip":
+    "Оцінка PortAudio для активного потоку, не фізичний вимір. Точну повну затримку можна виміряти тестовим сигналом із поверненням виходу на вхід.",
   "settings.audio.monitor.buffer.auto": "авто",
   "settings.audio.monitor.inputLatency.label": "Оцінка входу аудіобекендом (не вимірювання)",
   "settings.audio.monitor.outputLatency.label": "Оцінка виходу аудіобекендом (не вимірювання)",
-  "settings.audio.monitor.endToEnd.unmeasured": "Повна затримка мікрофон → навушники: не виміряна. Потрібен тест із поверненням звуку з виходу на вхід.",
+  "settings.audio.monitor.endToEnd.unmeasured":
+    "Повна затримка мікрофон → навушники: не виміряна. Потрібен тест із поверненням звуку з виходу на вхід.",
   "settings.audio.monitor.dspCompute.label": "Час обчислень останнього блоку (не затримка звуку)",
-  "settings.audio.monitor.queueWait.label": "Виміряне очікування останнього блоку в програмній черзі",
+  "settings.audio.monitor.queueWait.label":
+    "Виміряне очікування останнього блоку в програмній черзі",
   "settings.audio.monitor.callbackFrames.label": "Останній блок аудіо, відліків",
   "settings.audio.monitor.glitchCount.label": "Події збою поточного потоку",
   "settings.audio.monitor.splitEngine.label": "Окремі WASAPI-потоки входу та виходу",
@@ -724,6 +759,8 @@ export const ukMessages = {
     "Не вдалося з'єднатися з учасником: голос і передавання пісні недоступні. Перевірте мережу та підключіться до кімнати знову.",
   "room.directParticipantConnectionFailedAndTurnIsUnconfiguredOr":
     "Пряме з'єднання з учасником не встановлено, TURN не налаштовано або недоступний. Голос і передавання пісні недоступні.",
+  "room.peerConnectionDegradedTryingToRestore":
+    "Зв'язок з учасником {0} погіршився. Відновлюємо голос і передавання пісні…",
   "room.tooManyIceCandidatesReceived": "Отримано надто багато ICE-кандидатів",
   "room.participantDisconnectedDuringTransferSendTheFileAgainInterrupted":
     "Учасник відключився під час передавання. Надішліть файл знову — продовжити перерване передавання неможливо.",

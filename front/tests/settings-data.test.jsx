@@ -8,6 +8,7 @@ vi.mock("../src/hooks/usePolling", () => ({ usePolling: () => ({ data: null, ref
 vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: vi.fn() }) }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => ({}) }));
 import useSettings from "../src/pages/Settings/use-settings";
+import advancedRows from "../src/pages/Settings/rows/advanced";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -29,6 +30,23 @@ test("keyboard lighting persists false and zero without replacing them with null
   });
   expect(state.save).toHaveBeenCalledWith({ keyboard_lighting_enabled: false });
   expect(state.save).toHaveBeenCalledWith({ keyboard_lighting_brightness: 0 });
+});
+
+test("remote diagnostic consent is represented by universal settings fields", () => {
+  const disabled = advancedRows({
+    open: vi.fn(),
+    settings: { app: { form: { remote_diagnostics_enabled: false } } },
+    tr: (key) => key
+  });
+  const fields = disabled.filter(({ tag }) => tag);
+  expect(fields.map(({ tag }) => tag)).toEqual([
+    "remote_diagnostics_enabled",
+    "remote_diagnostics_errors_enabled",
+    "remote_diagnostics_hardware_enabled",
+    "remote_crash_reports_enabled"
+  ]);
+  expect(fields.slice(1).every(({ disabled: value }) => value)).toBe(true);
+  expect(fields.every(({ label }, index) => label === `settings.advanced.${fields[index].tag}.label`)).toBe(true);
 });
 
 test("queued writes ignore stale responses and recover after a rejected request", async () => {

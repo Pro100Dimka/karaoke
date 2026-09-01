@@ -4,6 +4,7 @@
   "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
   "author": "A&D Voice",
   "private": true,
+  "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "postinstall": "patch-package",
@@ -23,7 +24,7 @@
     "audit:css": "node scripts/audit-css-full.mjs --strict",
     "audit:exports": "node scripts/audit-exports.mjs",
     "check:sizes": "node scripts/check-file-sizes.mjs",
-    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run audit:semantic-density && npm run check:sizes && npm run audit:duplicates && npm run audit:media-auth && npm run audit:release-gate && npm run audit:portability && npm run audit:architecture && npm run audit:localization",
+    "audit": "npm run check:syntax && npm run audit:openapi-contract && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run audit:semantic-density && npm run check:sizes && npm run audit:duplicates && npm run audit:media-auth && npm run audit:release-gate && npm run audit:portability && npm run audit:architecture && npm run audit:localization",
     "audit:react": "node scripts/audit-react.mjs",
     "audit:cycles": "node scripts/audit-cycles.mjs",
     "audit:complexity": "node scripts/audit-complexity.mjs",

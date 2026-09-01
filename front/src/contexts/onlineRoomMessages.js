@@ -123,6 +123,7 @@ export function createOnlineRoomMessageHandler(options) {
             percent: 0
           });
           return voice.sendFile(command.requesterId, blob, {
+            resumable: true,
             kind: "song-package",
             songId: command.songId,
             commandId: command.commandId,

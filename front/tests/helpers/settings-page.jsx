@@ -2,6 +2,9 @@ import { vi } from "vitest";
 const fixture = vi.hoisted(() => ({ settings: null }));
 vi.mock("../../src/pages/Settings/use-settings", () => ({ default: () => fixture.settings }));
 vi.mock("../../src/pages/Settings/ModelStatus", () => ({ default: () => null }));
+vi.mock("../../src/contexts/AppDialog", () => ({
+  useAppDialog: () => ({ alert: vi.fn(), confirm: vi.fn().mockResolvedValue(true) })
+}));
 vi.mock("../../src/theme/ui", async (importOriginal) => ({
   ...(await importOriginal()),
   Modal: ({ children, titleProps }) => (

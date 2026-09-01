@@ -1,5 +1,13 @@
 import { afterEach, beforeEach } from "vitest";
 
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // UI assertions use Russian unless a localization test explicitly chooses another locale.
 beforeEach(() => {
   if (!globalThis.localStorage) {

@@ -289,6 +289,8 @@ class CacheSizeOut(BaseModel):
 
 class FreeSpaceOut(BaseModel):
     free_bytes: int
+    reserved_bytes: int = 0
+    available_bytes: int = 0
     free_human: str
     total_bytes: int
     total_human: str
@@ -309,6 +311,7 @@ class OptimizeResultOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
     version: str
+    startup: dict[str, object] | None = None
 
 
 class PipelineHealthOut(BaseModel):

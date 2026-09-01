@@ -21,7 +21,7 @@ from sqlalchemy import select
 import config
 import models
 from app import repositories
-from app.services import revision_cache, song_service
+from app.services import background_task_supervisor, revision_cache, song_service
 from app.services.db_utils import commit
 from database import SessionLocal
 
@@ -609,13 +609,12 @@ def enqueue(song_id: str) -> bool:
     with _lock:
         if song_id in _active: return False
         _active.add(song_id)
-    threading.Thread(
-        target=_run_enrichment,
-        args=(song_id,),
-        name=f"metadata-{song_id[:8]}",
-        daemon=True,
-    ).start()
-    return True
+    started = background_task_supervisor.start_task(
+        f"metadata-{song_id}", _run_enrichment, (song_id,)
+    )
+    if not started:
+        with _lock: _active.discard(song_id)
+    return started
 
 
 def _run_enrichment(song_id: str) -> None:

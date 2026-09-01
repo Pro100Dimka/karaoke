@@ -37,6 +37,7 @@ from app.services import (
     model_install_service,
     revision_cache,
     song_service,
+    storage_budget_service,
 )
 from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit
@@ -61,6 +62,7 @@ _processing_condition = threading.Condition(threading.RLock())
 _processing_queue: list[str] = []
 _processing_active: set[str] = set()
 _cancelled_jobs: set[str] = set()
+_accepting_jobs = True
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
 
@@ -461,12 +463,59 @@ def cancel_all_active_processing() -> int:
     return len(song_ids)
 
 
+def start_accepting_jobs() -> None:
+    global _accepting_jobs
+    with _active_jobs_lock:
+        _accepting_jobs = True
+
+
+def stop_accepting_jobs() -> None:
+    global _accepting_jobs
+    with _active_jobs_lock:
+        _accepting_jobs = False
+
+
+def shutdown_active_processing(timeout: float = 15.0) -> dict[str, object]:
+    """Stop admission, cancel active jobs and wait for their finalizers.
+
+    The wait is bounded so a third-party AI call cannot deadlock application
+    shutdown. Any thread left after the deadline remains visible in the result
+    and in logs instead of being silently treated as successfully stopped.
+    """
+    stop_accepting_jobs()
+    with _active_jobs_lock:
+        active = {
+            song_id: thread
+            for song_id, thread in _active_jobs.items()
+            if thread.is_alive()
+        }
+    for song_id in active:
+        try:
+            cancel_processing(song_id)
+        except Exception:
+            logger.exception("Could not request cancellation for %s", song_id)
+
+    deadline = time.monotonic() + max(0.0, timeout)
+    for thread in active.values():
+        if thread is threading.current_thread():
+            continue
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    lingering = [song_id for song_id, thread in active.items() if thread.is_alive()]
+    if lingering:
+        logger.error("AI jobs exceeded shutdown deadline: %s", ", ".join(lingering))
+    return {
+        "requested": len(active),
+        "finished": len(active) - len(lingering),
+        "lingering": lingering,
+    }
+
+
 def _release_active_job(song_id: str) -> None:
     with _active_jobs_lock:
         if _active_jobs.get(song_id) is threading.current_thread(): _active_jobs.pop(song_id, None)
 
 
-def _job_entrypoint(song_id: str, target) -> None:
+def _job_entrypoint(song_id: str, target, storage_reservation=None) -> None:
     try:
         target(song_id)
     finally:
@@ -490,15 +539,22 @@ def _job_entrypoint(song_id: str, target) -> None:
         torch = sys.modules.get("torch")
         with contextlib.suppress(AttributeError, RuntimeError):
             if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
+        if storage_reservation is not None:
+            storage_reservation.release()
 
 
-def _start_background_job(song_id: str, target) -> bool:
+def _start_background_job(song_id: str, target, *, storage_reservation=None) -> bool:
     with _active_jobs_lock:
+        if not _accepting_jobs:
+            if storage_reservation is not None: storage_reservation.release()
+            return False
         _cancelled_jobs.discard(song_id)
-        if is_processing(song_id): return False
+        if is_processing(song_id):
+            if storage_reservation is not None: storage_reservation.release()
+            return False
         thread = threading.Thread(
             target=_job_entrypoint,
-            args=(song_id, target),
+            args=(song_id, target, storage_reservation),
             daemon=True,
         )
         _active_jobs[song_id] = thread
@@ -506,17 +562,42 @@ def _start_background_job(song_id: str, target) -> bool:
             thread.start()
         except Exception:
             _active_jobs.pop(song_id, None)
+            if storage_reservation is not None: storage_reservation.release()
             raise
         return True
 
 
 def start_processing(song_id: str, processing_mode: str = "auto") -> bool:
+    paths = _load_job_paths(song_id)
+    reservation = None
+    if paths is not None:
+        source_path, out_dir = paths
+        reservation = storage_budget_service.reserve(
+            "song_processing",
+            out_dir,
+            storage_budget_service.processing_bytes(Path(source_path)),
+        )
     return _start_background_job(
-        song_id, lambda current_song_id: _run_job(current_song_id, processing_mode)
+        song_id,
+        lambda current_song_id: _run_job(current_song_id, processing_mode),
+        storage_reservation=reservation,
     )
 
 
-def start_reprocessing(song_id: str) -> bool: return _start_background_job(song_id, _run_reprocessing)
+def start_reprocessing(song_id: str) -> bool:
+    paths = _load_job_paths(song_id)
+    reservation = None
+    if paths is not None:
+        _source_path, out_dir = paths
+        vocals = out_dir / "vocals.flac"
+        reservation = storage_budget_service.reserve(
+            "song_reprocessing",
+            out_dir,
+            storage_budget_service.processing_bytes(vocals, reuse_vocals=True),
+        )
+    return _start_background_job(
+        song_id, _run_reprocessing, storage_reservation=reservation
+    )
 
 
 def cancel_processing(song_id: str) -> bool:
@@ -971,7 +1052,6 @@ def _run_reprocessing(song_id: str) -> None:
     with _song_session(song_id) as (_db, song):
         if song is None: return
         out_dir = song_service.resolve_output_dir(song)
-        optimized = bool(getattr(song, "optimized", False))
     # A song's output_dir may live under a *historical* library root (the user
     # changed the storage location after the song was created) rather than the
     # current one — resolve_output_dir already trusts every root in
@@ -987,7 +1067,6 @@ def _run_reprocessing(song_id: str) -> None:
         )
         return
     with song_service.song_content_lock(song_id):
-        cache_service.recover_optimization_state(out_dir, committed=optimized)
         _clear_generated_results(out_dir)
     _run_job(song_id, reuse_vocals=True)
 

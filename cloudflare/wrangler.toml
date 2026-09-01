@@ -3,13 +3,24 @@ main = "src/index.js"
 compatibility_date = "2026-08-03"
 workers_dev = true
 
+[triggers]
+crons = ["17 3 * * *"]
+
 [[durable_objects.bindings]]
 name = "ROOMS"
 class_name = "KaraokeRoom"
 
+[[durable_objects.bindings]]
+name = "LOG_RATE_LIMITER"
+class_name = "LogRateLimiter"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["KaraokeRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["LogRateLimiter"]
 
 # Collects client error logs (backend, frontend and Electron main process --
 # see backend/app/services/remote_log_service.py and POST /diagnostics/client-log)

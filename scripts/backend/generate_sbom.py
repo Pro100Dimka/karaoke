@@ -30,6 +30,21 @@ def _license(distribution: metadata.Distribution) -> str:
     for classifier in distribution.metadata.get_all("Classifier", []):
         if classifier.startswith("License :: "):
             return classifier.removeprefix("License :: ").strip()
+    for relative in distribution.files or ():
+        if "license" not in str(relative).lower():
+            continue
+        try:
+            license_text = distribution.locate_file(relative).read_text(
+                encoding="utf-8", errors="ignore"
+            )[:4000]
+        except OSError:
+            continue
+        if "Apache License, Version 2.0" in license_text:
+            return "Apache-2.0"
+        if "MIT License" in license_text:
+            return "MIT"
+        if "Redistribution and use in source and binary forms" in license_text:
+            return "BSD"
     return "UNKNOWN"
 
 

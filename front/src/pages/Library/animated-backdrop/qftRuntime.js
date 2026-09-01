@@ -77,6 +77,24 @@ import * as THREE from 'three';
             waveformTerrainHeight: 20.0
         };
 
+        let disposed = false;
+        const lifecycleListeners = [];
+        const scheduledFrames = new Set();
+        const listen = (target, type, handler, options) => {
+            if (!target?.addEventListener) return;
+            target.addEventListener(type, handler, options);
+            lifecycleListeners.push([target, type, handler, options]);
+        };
+        const scheduleFrame = (callback) => {
+            if (disposed) return 0;
+            const id = requestAnimationFrame((timestamp) => {
+                scheduledFrames.delete(id);
+                if (!disposed) callback(timestamp);
+            });
+            scheduledFrames.add(id);
+            return id;
+        };
+
         // --- AUDIO SYSTEM ---
         const AUDIO = {
             ctx: null, analyser: null, source: null, gainNode: null, data: null,
@@ -487,7 +505,7 @@ import * as THREE from 'three';
         controls.maxPolarAngle = Math.PI * 0.85;
         controls.minPolarAngle = Math.PI * 0.15;
 
-        controls.addEventListener('change', () => {
+        listen(controls, 'change', () => {
             const dist = camera.position.length();
             const zoomPercent = Math.round((1 - (dist - CONFIG.minZoom) / (CONFIG.maxZoom - CONFIG.minZoom)) * 100);
             if (zoomIndicator) zoomIndicator.textContent = Math.max(0, Math.min(100, zoomPercent)) + '%';
@@ -501,7 +519,7 @@ import * as THREE from 'three';
         let mouseVelocity = new THREE.Vector2();
         let prevMouse = new THREE.Vector2();
 
-        window.addEventListener('mousemove', (e) => {
+        listen(window, 'mousemove', (e) => {
             const newMouse = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
             mouseVelocity.subVectors(newMouse, prevMouse);
             prevMouse.copy(newMouse);
@@ -512,7 +530,7 @@ import * as THREE from 'three';
             if (target) mouseWorldPos.copy(target);
         });
 
-        window.addEventListener('keydown', (e) => {
+        listen(window, 'keydown', (e) => {
             if (e.key === '+' || e.key === '=') { camera.position.multiplyScalar(0.9); controls.update(); }
             else if (e.key === '-' || e.key === '_') { camera.position.multiplyScalar(1.1); controls.update(); }
             else if (e.key === '0') { camera.position.normalize().multiplyScalar(CONFIG.defaultZoom); controls.update(); }
@@ -2029,7 +2047,7 @@ void main() {
         gui.domElement.inert = true;
         gui.domElement.setAttribute('aria-hidden', 'true');
         // НЕ УДАЛЯТЬ: GUI сохранён для будущей настройки, но полностью скрыт в режиме фона.
-        document.getElementById('gui-toggle')?.addEventListener('click', () => {
+        listen(document.getElementById('gui-toggle'), 'click', () => {
             gui.domElement.classList.toggle('hidden');
         });
 
@@ -2109,14 +2127,14 @@ void main() {
                     Math.abs(material.uniforms.uColor3.value.g - c3.g),
                     Math.abs(material.uniforms.uColor3.value.b - c3.b)
                 );
-                if (Math.abs(material.uniforms.uNoiseScale.value - d.s) > 0.01 || colorDelta > 0.01) requestAnimationFrame(step);
+                if (Math.abs(material.uniforms.uNoiseScale.value - d.s) > 0.01 || colorDelta > 0.01) scheduleFrame(step);
             }
             step();
         }
 
         gui.add(STATE, 'field', Object.keys(FIELD_TYPES)).name('⚡ Field Type').onChange(applyFieldAppearance);
 
-        window.addEventListener('message', (event) => {
+        listen(window, 'message', (event) => {
             if (event.source !== window.parent) return;
             if (event.data?.type === 'QFT_AUDIO') {
                 AUDIO.applyExternalSpectrum(event.data.bands, event.data.bass, event.data.active);
@@ -2249,8 +2267,8 @@ void main() {
             }, 150);
         };
         gui.onChange(({ property, value }) => scheduleSettingsLog({ property, value }));
-        gui.domElement.addEventListener('input', () => scheduleSettingsLog(), true);
-        gui.domElement.addEventListener('change', () => scheduleSettingsLog(), true);
+        listen(gui.domElement, 'input', () => scheduleSettingsLog(), true);
+        listen(gui.domElement, 'change', () => scheduleSettingsLog(), true);
 
         // ═══════ UI & EVENTS ═══════
         const overlay = document.getElementById('overlay');
@@ -2342,14 +2360,14 @@ void main() {
             const rect = progressContainer.getBoundingClientRect();
             AUDIO.seek((e.clientX - rect.left) / rect.width * AUDIO.getDuration());
         };
-        document.getElementById('screenshot-btn')?.addEventListener('click', () => {
+        listen(document.getElementById('screenshot-btn'), 'click', () => {
             composer.render();
             const a = document.createElement('a');
             a.download = 'quantum-' + Date.now() + '.png';
             a.href = renderer.domElement.toDataURL('image/png');
             a.click();
         });
-        document.getElementById('fullscreen-btn')?.addEventListener('click', () => {
+        listen(document.getElementById('fullscreen-btn'), 'click', () => {
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
         });
 
@@ -2358,7 +2376,7 @@ void main() {
         clock.connect(document);
 
         function animate(timestamp) {
-            requestAnimationFrame(animate);
+            scheduleFrame(animate);
             clock.update(timestamp);
             const dt = clock.getDelta(), elapsed = clock.getElapsed();
 
@@ -2522,7 +2540,7 @@ void main() {
             composer.render();
         }
 
-        window.addEventListener('resize', () => {
+        listen(window, 'resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -2533,5 +2551,48 @@ void main() {
 
         // НЕ УДАЛЯТЬ: локальный микрофон/loopback оставлен для будущей ручной настройки.
         // В режиме фона аудиореакция приходит напрямую из анализатора радио приложения.
+
+        function dispose() {
+            if (disposed) return;
+            disposed = true;
+            clearTimeout(settingsLogTimer);
+            for (const id of scheduledFrames) cancelAnimationFrame(id);
+            scheduledFrames.clear();
+            for (const [target, type, handler, options] of lifecycleListeners.splice(0)) {
+                target.removeEventListener?.(type, handler, options);
+            }
+            AUDIO.stopCurrentSource();
+            try { AUDIO.analyser?.disconnect?.(); } catch (e) { }
+            AUDIO.active = false;
+            AUDIO.ctx?.close?.().catch?.(() => {});
+            AUDIO.ctx = null;
+            clock.disconnect?.();
+            controls.dispose?.();
+            gui.destroy?.();
+            scene.traverse((object) => {
+                object.geometry?.dispose?.();
+                const materials = Array.isArray(object.material) ? object.material : [object.material];
+                for (const item of materials) {
+                    if (!item) continue;
+                    for (const value of Object.values(item)) {
+                        if (value?.isTexture) value.dispose?.();
+                    }
+                    item.dispose?.();
+                }
+            });
+            composer.dispose?.();
+            renderer.dispose?.();
+            renderer.forceContextLoss?.();
+            renderer.domElement.remove();
+            themeBackdrop.remove();
+            window.parent.postMessage({ type: 'QFT_DISPOSED' }, '*');
+        }
+
+        window.__QFT_DISPOSE__ = dispose;
+        listen(window, 'pagehide', dispose, { once: true });
+        listen(window, 'beforeunload', dispose, { once: true });
+        listen(window, 'message', (event) => {
+            if (event.source === window.parent && event.data?.type === 'QFT_DISPOSE') dispose();
+        });
 
         animate();
