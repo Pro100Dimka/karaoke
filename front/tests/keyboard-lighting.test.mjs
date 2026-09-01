@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   lightingColor,
+  advanceMusicLighting,
   musicLightingColor,
   readLightingMusic,
   registerLightingSource,
@@ -94,6 +95,30 @@ test("lighting disabled by default; validates frames and limits update rate", as
   clock += 50;
   await c.frame(frame);
   expect(client.frame).toHaveBeenCalledTimes(1);
+});
+test("identical theme-color keepalive frames do not restart the keyboard effect", async () => {
+  let clock = 10000;
+  const windows = {
+    request: vi.fn(async () => ({ state: "no_devices", count: 0 })),
+    usbRequest: vi.fn(async () => ({ state: "ready", count: 1 }))
+  };
+  const c = controller({ windows, now: () => clock });
+  await c.configure(true);
+  await c.frame({ active: true, rgb: [47, 255, 141] });
+  clock += 80;
+  await c.frame({ active: true, rgb: [47, 255, 141] });
+  clock += 80;
+  await c.frame({ active: true, rgb: [47, 255, 141] });
+
+  expect(windows.usbRequest.mock.calls.filter(([action]) => action === 1)).toEqual([[1, 47, 255, 141]]);
+  expect(c.lastInput).toBe(clock);
+
+  clock += 80;
+  await c.frame({ active: true, rgb: [184, 92, 255] });
+  expect(windows.usbRequest.mock.calls.filter(([action]) => action === 1)).toEqual([
+    [1, 47, 255, 141],
+    [1, 184, 92, 255]
+  ]);
 });
 test("prefers available Windows keyboards and does not open OpenRGB too", async () => {
   const windows = { request: vi.fn(async () => ({ state: "ready", count: 1 })) };
@@ -222,6 +247,71 @@ test("music selection prioritizes active karaoke and unregisters without losing 
   expect(musicLightingColor(1, 1, 0)).toEqual([255, 0, 0]);
   expect(musicLightingColor(1, 1, 1 / 3)).toEqual([0, 255, 0]);
   expect(musicLightingColor(1, 0, 2 / 3)).toEqual([0, 0, 41]);
+});
+test("music lighting reacts smoothly and stays inside the selected theme palette", () => {
+  let state = undefined;
+  const palette = ["#ff0055", "#7a0033"];
+  const frames = [];
+  for (const level of [0, 0, 1, 1, 0, 0]) {
+    const next = advanceMusicLighting(state, { active: true, level }, palette, 1, 80);
+    state = next.state;
+    frames.push(next.rgb);
+  }
+
+  for (let index = 1; index < frames.length; index += 1) {
+    const delta = Math.max(...frames[index].map((channel, channelIndex) =>
+      Math.abs(channel - frames[index - 1][channelIndex])
+    ));
+    expect(delta).toBeLessThanOrEqual(18);
+  }
+  expect(frames.every((rgb) => rgb[1] === 0 && rgb[2] <= rgb[0])).toBe(true);
+  expect(frames[3][0]).toBeGreaterThan(frames[1][0]);
+  expect(frames[5][0]).toBeGreaterThan(0);
+});
+
+test("inactive music settles on a dim theme color and never releases to firmware RGB", () => {
+  let state;
+  for (let index = 0; index < 8; index += 1) {
+    state = advanceMusicLighting(state, { active: true, level: 1 }, ["#00ff88"], 1, 80).state;
+  }
+  for (let index = 0; index < 40; index += 1) {
+    state = advanceMusicLighting(state, { active: false, level: 0 }, ["#00ff88"], 1, 80).state;
+  }
+  expect(state.rgb[1]).toBeGreaterThan(20);
+  expect(state.rgb[0]).toBe(0);
+  expect(state.rgb[2]).toBeLessThan(state.rgb[1]);
+});
+
+test("bass produces a visible bloom without a one-frame brightness flash", () => {
+  let state;
+  for (let index = 0; index < 20; index += 1) {
+    state = advanceMusicLighting(state, { active: true, level: 0.08 }, ["#ff174f", "#a20b1d"], 1, 80).state;
+  }
+  const quiet = state.rgb.reduce((sum, channel) => sum + channel, 0);
+  const frames = [];
+  for (let index = 0; index < 8; index += 1) {
+    const next = advanceMusicLighting(state, { active: true, level: 0.9 }, ["#ff174f", "#a20b1d"], 1, 80);
+    state = next.state;
+    frames.push(next.rgb);
+  }
+  const bloom = frames.at(-1).reduce((sum, channel) => sum + channel, 0);
+  expect(bloom - quiet).toBeGreaterThan(55);
+  expect(Math.max(...frames[0].map((value, index) => Math.abs(value - (frames[1]?.[index] ?? value))))).toBeLessThanOrEqual(18);
+});
+test("playing music has a clearly visible theme-colored brightness floor", () => {
+  let state;
+  for (let index = 0; index < 24; index += 1) {
+    state = advanceMusicLighting(
+      state,
+      { active: true, level: 0.08 },
+      ["#ff174f", "#a20b1d"],
+      0.5,
+      80
+    ).state;
+  }
+  expect(state.rgb[0]).toBeGreaterThanOrEqual(70);
+  expect(state.rgb[1]).toBeLessThan(state.rgb[0]);
+  expect(state.rgb[2]).toBeLessThan(state.rgb[0]);
 });
 test("unsupported media analysis does not modify the playback element", () => {
   const media = { pause: vi.fn(), play: vi.fn() };

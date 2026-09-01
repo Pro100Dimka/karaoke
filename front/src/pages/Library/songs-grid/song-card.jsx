@@ -1,5 +1,5 @@
 import { Ellipsis } from "lucide-react";
-import { memo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import {
@@ -44,6 +44,10 @@ export default memo(
     const actions = getSongActions({ ...handlers, song, isReady, isWorking, activate });
     const split = isReady || !handlers.canManageLibrary ? 2 : 1;
     const token = apiToken();
+    const waveformFetchParams = useMemo(
+      () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
+      [token]
+    );
     const action = ([Icon, label, variant, onClick, disabled], close) => (
       <IconButton
         key={label}
@@ -58,29 +62,20 @@ export default memo(
     const [tone = "default", text = status] = statuses[status] || [];
     return (
       <Card
-        variant="laser"
-        tilt={false}
-        interactive={isReady}
-        sx={{ contentVisibility: "auto" }}
-        style={{ "--card-sheen": "transparent", "--card-sheen-soft": "transparent" }}
-        cardPanel={{
-          style: {
-            background: `
-            radial-gradient(ellipse at 28% 14%, color-mix(in srgb, var(--ui-primary-hover) 8%, transparent), transparent 42%),
-            linear-gradient(108deg, color-mix(in srgb, var(--ui-bg-deep) 88%, transparent),
-            color-mix(in srgb, var(--ui-surface) 92%, transparent) 58%,
-            color-mix(in srgb, var(--ui-bg-deep) 94%, transparent))`
-          }
+        className="library-song-card"
+        sx={{
+          contentVisibility: "auto",
+          overflow: "hidden",
+          background: `linear-gradient(
+            108deg,
+            color-mix(in srgb, var(--ui-surface) 8%, var(--ui-bg-deep)),
+            color-mix(in srgb, var(--ui-surface) 14%, var(--ui-bg-deep)) 58%,
+            color-mix(in srgb, var(--ui-surface) 5%, var(--ui-bg-deep))
+          )`,
+          borderColor: "color-mix(in srgb, var(--ui-primary) 72%, var(--ui-border))",
+          boxShadow: "0 0 var(--space-3) color-mix(in srgb, var(--ui-primary) 28%, transparent)"
         }}
       >
-        {isReady && (
-          <Button
-            variant="text"
-            aria-label={tr("library.openInKaraoke", { 0: song.title })}
-            onClick={activate}
-            sx={{ position: "absolute", inset: 0, zIndex: 0, padding: 0, borderRadius: "inherit" }}
-          />
-        )}
         <Stack direction="row" sx={{ position: "relative", zIndex: 1, pointerEvents: "none" }}>
           <SongCoverArt cardIndex={cardIndex} song={song} />
           <Stack
@@ -135,7 +130,7 @@ export default memo(
                         compact
                         progress={transfer?.percent ?? song.progress_percent}
                         url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
-                        fetchParams={token ? { headers: { "X-ADVoice-Token": token } } : undefined}
+                        fetchParams={waveformFetchParams}
                       />
                     </Stack>
                   )}

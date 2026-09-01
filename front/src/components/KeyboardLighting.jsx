@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import useAppSettings from "../hooks/useAppSettings";
 import {
+  advanceMusicLighting,
   lightingColor,
-  musicLightingColor,
   readLightingMusic
 } from "../services/keyboardLighting";
 import { configureLighting, isElectron, sendLightingFrame } from "../utils/platform";
@@ -10,20 +10,17 @@ import { configureLighting, isElectron, sendLightingFrame } from "../utils/platf
 export default function KeyboardLighting() {
   const { settings } = useAppSettings();
   const latest = useRef(settings);
-  const animation = useRef({ hue: 0, level: 0, peak: 0.05 });
+  const animation = useRef();
   latest.current = settings;
   const enabled = !!settings?.keyboard_lighting_enabled;
   useEffect(() => {
     if (!isElectron()) return undefined;
     let cancelled = false,
       busy = false,
-      primaryColor = getComputedStyle(document.documentElement)
-        .getPropertyValue("--color-primary")
-        .trim();
+      palette = readThemePalette();
     const themeObserver = new MutationObserver(() => {
-      primaryColor = getComputedStyle(document.documentElement)
-        .getPropertyValue("--color-primary")
-        .trim();
+      palette = readThemePalette();
+      animation.current = undefined;
     });
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -41,22 +38,22 @@ export default function KeyboardLighting() {
         const { current } = latest,
           music = readLightingMusic();
         const theme = current.keyboard_lighting_mode === "theme";
-        const rawLevel = Math.min(1, Math.max(0, Number(music.level) || 0));
-        const frame = animation.current;
-        frame.peak = Math.max(rawLevel, frame.peak * 0.985, 0.025);
-        const normalized = Math.min(1, rawLevel / frame.peak);
-        const attack = Math.max(0, normalized - frame.level);
-        frame.hue = (frame.hue + 0.008 + normalized * 0.025 + attack * 0.14) % 1;
-        frame.level += (normalized - frame.level) * (normalized > frame.level ? 0.72 : 0.2);
+        const frame = advanceMusicLighting(
+          animation.current,
+          music,
+          palette,
+          current.keyboard_lighting_brightness,
+          80
+        );
+        animation.current = frame.state;
         await sendLightingFrame({
-          active: theme || music.active,
+          // While the feature is enabled we retain hardware control. Sending
+          // inactive during a quiet passage restores the keyboard's onboard
+          // rainbow animation, which looks like an unrelated RGB flash.
+          active: true,
           rgb: theme
-            ? lightingColor(primaryColor, current.keyboard_lighting_brightness, 1, "theme")
-            : musicLightingColor(
-                current.keyboard_lighting_brightness,
-                frame.level,
-                frame.hue
-              )
+            ? lightingColor(palette[0], current.keyboard_lighting_brightness, 1, "theme")
+            : frame.rgb
         });
       } catch {
         /* Optional peripheral failures never affect audio. */
@@ -64,7 +61,7 @@ export default function KeyboardLighting() {
         busy = false;
       }
     };
-    const timer = setInterval(tick, 50);
+    const timer = setInterval(tick, 80);
     const stop = () => {
       cancelled = true;
       clearInterval(timer);
@@ -78,4 +75,11 @@ export default function KeyboardLighting() {
     };
   }, [enabled]);
   return null;
+}
+
+function readThemePalette() {
+  const style = getComputedStyle(document.documentElement);
+  return ["--color-primary", "--color-secondary"].map((name) =>
+    style.getPropertyValue(name).trim()
+  );
 }

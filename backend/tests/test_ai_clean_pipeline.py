@@ -1,3 +1,4 @@
+import os
 import sys
 import threading
 import time
@@ -23,7 +24,12 @@ from AI.engines.text import (
     resolve_alignment_language,
     tokenize,
 )
-from AI.errors import InvalidArtifactError, ProcessingCancelledError
+from AI.errors import (
+    AlignmentTimeoutError,
+    EngineUnavailableError,
+    InvalidArtifactError,
+    ProcessingCancelledError,
+)
 from AI.lyrics_sources import LyricsDiscovery, TimedLine, _expand_notation, discover_lyrics
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
@@ -457,6 +463,195 @@ def test_forced_aligner_does_not_expect_timestamps_for_punctuation(monkeypatch):
     words = aligner.align("vocals.flac", text, "ru")
 
     assert [word.text for word in words] == ["Ты", "станешь", "слаще", "А", "я"]
+
+
+def test_isolated_forced_aligner_honours_cancellation_before_model_start():
+    aligner = Qwen3ForcedAligner("production-model", isolated=True)
+    aligner.set_cancelled(lambda: True)
+
+    with pytest.raises(ProcessingCancelledError, match="cancelled"):
+        aligner.align_long_text("vocals.flac", "words", "en")
+
+
+def test_isolated_forced_aligner_terminates_running_worker_on_cancellation(monkeypatch):
+    process = Mock()
+    process.is_alive.return_value = True
+    results = Mock()
+    from queue import Empty
+
+    results.get.side_effect = Empty
+    context = Mock()
+    context.Queue.return_value = results
+    context.Process.return_value = process
+    monkeypatch.setattr(
+        "AI.engines.alignment_process.multiprocessing.get_context",
+        Mock(return_value=context),
+    )
+    monkeypatch.setenv("KARAOKE_AI_ENABLE_HEAVY_ALIGNER", "1")
+    aligner = Qwen3ForcedAligner("production-model", isolated=True)
+    aligner.set_cancelled(Mock(side_effect=[False, False, True]))
+
+    with pytest.raises(ProcessingCancelledError, match="cancelled"):
+        aligner.align_long_text("vocals.flac", "words", "en")
+
+    process.start.assert_called_once_with()
+    process.terminate.assert_called_once_with()
+
+
+def test_forced_alignment_has_a_bounded_default_deadline(monkeypatch):
+    from AI.engines.alignment_process import alignment_timeout_seconds
+
+    monkeypatch.delenv("KARAOKE_AI_ALIGN_TIMEOUT_SECONDS", raising=False)
+    assert alignment_timeout_seconds() == 60.0
+    monkeypatch.setenv("KARAOKE_AI_ALIGN_TIMEOUT_SECONDS", "4")
+    assert alignment_timeout_seconds() == 30.0
+
+
+def test_forced_alignment_deadline_terminates_the_running_worker(monkeypatch):
+    from queue import Empty
+
+    from AI.engines.alignment_process import IsolatedAlignmentProcess
+
+    process = Mock()
+    process.is_alive.return_value = True
+    results = Mock()
+    results.get.side_effect = Empty
+    context = Mock()
+    context.Queue.return_value = results
+    context.Process.return_value = process
+    monkeypatch.setenv("KARAOKE_AI_ALIGN_TIMEOUT_SECONDS", "30")
+    monkeypatch.setattr(
+        "AI.engines.alignment_process.multiprocessing.get_context",
+        Mock(return_value=context),
+    )
+    monkeypatch.setattr(
+        "AI.engines.alignment_process.time.monotonic",
+        Mock(side_effect=[0.0, 31.0]),
+    )
+
+    worker = IsolatedAlignmentProcess("production-model")
+    with pytest.raises(AlignmentTimeoutError, match="30-second"):
+        worker.run("align_long_text", "vocals.flac", "words", "en")
+
+    process.terminate.assert_called_once_with()
+
+
+def test_alignment_deadline_uses_uniform_fallback_even_in_strict_mode(monkeypatch):
+    aligner = SimpleNamespace(
+        align_long_text=Mock(
+            side_effect=AlignmentTimeoutError(
+                "Forced alignment exceeded the 120-second limit"
+            )
+        ),
+        set_cancelled=Mock(),
+    )
+    pipeline = KaraokePipeline(
+        config=SimpleNamespace(allow_fallback=False),
+        engines=SimpleNamespace(aligner=aligner),
+    )
+    fallback = [Word(0.0, 1.0, "hello", 0.1)]
+    monkeypatch.setattr(
+        pipeline_module.UniformTextFallback,
+        "align",
+        Mock(return_value=fallback),
+    )
+
+    words = pipeline._align("vocals.flac", "hello", "en", [])
+
+    assert [word.text for word in words] == ["hello"]
+    pipeline_module.UniformTextFallback.align.assert_called_once()
+
+
+def test_cuda_alignment_failure_uses_safe_fallback_even_in_strict_mode(monkeypatch):
+    aligner = SimpleNamespace(
+        align_long_text=Mock(
+            side_effect=EngineUnavailableError("CUDA error: unknown error")
+        ),
+        set_cancelled=Mock(),
+    )
+    pipeline = KaraokePipeline(
+        config=SimpleNamespace(allow_fallback=False),
+        engines=SimpleNamespace(aligner=aligner),
+    )
+    monkeypatch.setattr(
+        pipeline_module.UniformTextFallback,
+        "align",
+        Mock(return_value=[Word(0.0, 1.0, "hello", 0.0)]),
+    )
+
+    words = pipeline._align("vocals.flac", "hello", "en", [])
+
+    assert [word.text for word in words] == ["hello"]
+
+
+def test_production_alignment_does_not_start_heavy_qwen_without_explicit_opt_in(
+    monkeypatch, tmp_path
+):
+    audio = tmp_path / "vocals.wav"
+    sf.write(audio, np.zeros(44100, dtype=np.float32), 44100)
+    model = SimpleNamespace(align=Mock(side_effect=AssertionError("must not start")))
+    aligner = Qwen3ForcedAligner("production-model", isolated=False)
+    aligner._model = model
+    monkeypatch.delenv("KARAOKE_AI_ENABLE_HEAVY_ALIGNER", raising=False)
+
+    with pytest.raises(EngineUnavailableError, match="disabled"):
+        aligner.align_long_text(audio, "かわいそうかわいそう", "en")
+
+    model.align.assert_not_called()
+
+
+def test_failed_ctc_does_not_fall_through_to_heavy_qwen(monkeypatch, tmp_path):
+    audio = tmp_path / "vocals.wav"
+    sf.write(audio, np.zeros(44100, dtype=np.float32), 44100)
+    model = SimpleNamespace(align=Mock(side_effect=AssertionError("must not start")))
+    aligner = Qwen3ForcedAligner("production-model", isolated=False)
+    aligner._model = model
+    monkeypatch.setenv("KARAOKE_AI_CTC_RU_MODEL", "ctc-model")
+    monkeypatch.delenv("KARAOKE_AI_ENABLE_HEAVY_ALIGNER", raising=False)
+    monkeypatch.setattr(aligner, "_ctc_full", Mock(return_value=None))
+
+    with pytest.raises(EngineUnavailableError, match="disabled"):
+        aligner.align_long_text(audio, "неподдерживаемый текст", "ru")
+
+    model.align.assert_not_called()
+
+
+def test_unsupported_language_is_rejected_before_spawning_alignment_worker(monkeypatch):
+    aligner = Qwen3ForcedAligner("production-model", isolated=True)
+    monkeypatch.delenv("KARAOKE_AI_ENABLE_HEAVY_ALIGNER", raising=False)
+    monkeypatch.setattr(
+        aligner,
+        "_run_isolated",
+        Mock(side_effect=AssertionError("worker must not spawn")),
+    )
+
+    with pytest.raises(EngineUnavailableError, match="disabled"):
+        aligner.align_long_text("vocals.flac", "かわいそうかわいそう", "en")
+
+    aligner._run_isolated.assert_not_called()
+
+
+def test_alignment_worker_caps_cpu_threads_and_cuda_memory(monkeypatch):
+    from AI.engines.alignment_process import configure_worker_resource_limits
+
+    cuda = SimpleNamespace(set_per_process_memory_fraction=Mock())
+    torch = SimpleNamespace(cuda=cuda, set_num_threads=Mock())
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    monkeypatch.delenv("KARAOKE_AI_ALIGN_GPU_MEMORY_FRACTION", raising=False)
+
+    configure_worker_resource_limits("cuda")
+
+    torch.set_num_threads.assert_called_once_with(2)
+    cuda.set_per_process_memory_fraction.assert_called_once_with(0.5)
+    assert os.environ["OMP_NUM_THREADS"] == "2"
+
+
+def test_processing_stage_percentages_reserve_progress_for_post_alignment_work():
+    from app.services.pipeline_service import _AI_STAGE_PLAN
+
+    percentages = [_AI_STAGE_PLAN[name][0] for name in ("align", "notes", "validate", "complete")]
+    assert percentages == sorted(set(percentages))
+    assert percentages[0] <= 94.0
 
 
 def test_forced_aligner_merges_japanese_model_words_into_canonical_lyric_token(

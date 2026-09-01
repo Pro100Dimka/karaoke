@@ -128,7 +128,9 @@ test("large song collections render every library card", () => {
       recordings={{ setSong: vi.fn() }}
     />
   );
-  expect(view.getAllByRole("button", { name: /Song \d+/ })).toHaveLength(songs.length);
+  expect(view.container.querySelectorAll(".library-song-card")).toHaveLength(songs.length);
+  expect(view.getAllByRole("button", { name: /Воспроизвести|Відтворити/ })).toHaveLength(songs.length);
+  expect(view.queryByRole("button", { name: /Song \d+/ })).toBeNull();
 });
 test("song card progress prefers the slowest real participant over the room placeholder", () => {
   const statuses = [
@@ -145,6 +147,8 @@ test("processing signal clamps progress and exposes an accessible value", () => 
   expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
   rerender(<ProcessingSignal progress="bad" compact />);
   expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+  rerender(<ProcessingSignal progress={15} url="audio-not-ready-yet" />);
+  expect(getByRole("progressbar").querySelector(".ui-waveform__fallback").style.display).toBe("block");
 });
 test("processing songs keep the active job before the stable queue", () => {
   const queuedA = { id: "a", status: "queued" };

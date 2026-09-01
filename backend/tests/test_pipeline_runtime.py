@@ -163,6 +163,24 @@ def test_semantic_progress_keeps_advancing_for_long_separation(monkeypatch):
     at_40 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
     assert (10.0 < at_20 < 42.0) and (at_20 < at_40 < 42.0)
 
+
+def test_long_alignment_never_claims_the_post_processing_98_percent(monkeypatch):
+    monkeypatch.setattr(pipeline_service, "_progress_runtime", {
+        "song": {
+            "stage": "align",
+            "direct_percent": 84.0,
+            "stage_started_at": 0.0,
+            "detail": "alignment",
+            "completed_stage_seconds": {},
+        }
+    })
+    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=300.0))
+
+    telemetry = pipeline_service.get_processing_telemetry("song")
+
+    assert telemetry["stage"] == "align"
+    assert telemetry["progress_percent"] < 95.0
+
 def test_update_progress_logs_but_still_applies_an_unexpected_transition(monkeypatch, caplog):
     current = SimpleNamespace(status=models.SongStatus.DONE)
     mock_song_lookup(monkeypatch, pipeline_service, current)

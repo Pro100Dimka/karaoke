@@ -41,13 +41,19 @@ def test_youtube_quality_rejects_static_and_low_quality_candidates(monkeypatch):
     assert metadata._youtube_video_is_acceptable("DAaLa3vF8sU", "Song", "Artist") is False
 
 
-def test_youtube_quality_rejects_live_fan_and_ai_clips():
-    for title in (
-        "Artist - Song (Live in Concert)",
-        "Artist - Song | Фан-клип с оригинальным сюжетом",
-        "Artist - Song (Нейросеть AI Generated Music Video)",
-    ):
-        assert metadata._candidate_score(title, "Artist", "Song", "Artist") is None
+def test_youtube_quality_keeps_live_and_fan_clips_as_ranked_fallbacks_but_rejects_ai():
+    live = metadata._candidate_score(
+        "Artist - Song (Live in Concert)", "Artist", "Song", "Artist"
+    )
+    fan = metadata._candidate_score(
+        "Artist - Song | Фан-клип с оригинальным сюжетом", "Artist", "Song", "Artist"
+    )
+    plain = metadata._candidate_score("Artist - Song", "Artist", "Song", "Artist")
+    assert live is not None and fan is not None and plain is not None
+    assert live < plain and fan < plain
+    assert metadata._candidate_score(
+        "Artist - Song (Нейросеть AI Generated Music Video)", "Artist", "Song", "Artist"
+    ) is None
 
 
 def test_official_video_scores_above_an_unverified_clip():
@@ -60,18 +66,25 @@ def test_official_video_scores_above_an_unverified_clip():
     assert official is not None and generic is not None and official > generic
 
 
-def test_video_normalization_rejects_a_clip_with_wrong_duration(monkeypatch, tmp_path):
+def test_video_normalization_accepts_normal_video_intro_duration(monkeypatch, tmp_path):
     source = tmp_path / "source.mp4"
     destination = tmp_path / "clip.mp4"
     source.write_bytes(b"video")
     monkeypatch.setattr(metadata, "_video_info", Mock(return_value=(1920, 1080, 206.0)))
     monkeypatch.setattr(metadata, "_video_has_motion", Mock(return_value=True))
+    monkeypatch.setattr(metadata, "_detected_crop", Mock(return_value="crop=1920:1080:0:0"))
 
+    # Let the fake encoder publish a sufficiently large destination.
+    def encoded(*_args, **_kwargs):
+        temporary = destination.with_name(f".{destination.stem}-normalizing{destination.suffix}")
+        temporary.write_bytes(b"0" * 1_000_001)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(metadata, "_ffmpeg_output", encoded)
     assert metadata._normalize_video(
         source,
         destination,
         expected_duration=193.0,
-    ) is False
+    ) is True
 
 def test_youtube_download_has_a_format_fallback_and_quiet_logger(monkeypatch, tmp_path):
     captured = {}

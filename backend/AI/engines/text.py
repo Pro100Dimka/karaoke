@@ -8,6 +8,7 @@ from math import ceil
 from ..audio import duration
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..models import Word
+from .alignment_process import IsolatedAlignerMixin
 from .alignment_tokens import reconcile_words
 from .base import Aligner, Transcriber
 from .device import select_torch_device
@@ -15,12 +16,7 @@ from .device import select_torch_device
 ASR_PIPELINE_VERSION = "clean-v1"
 LONG_TEXT_ALIGNMENT_VERSION = "clean-v2"
 LANGUAGES = {"en": "English", "ru": "Russian", "uk": "Ukrainian"}
-# A single aligner call covers everything up to this length; only songs
-# longer than this fall back to windowing. Set generously above ordinary
-# song lengths so windowing's seam artifacts stay a rare-outlier fallback,
-# not the everyday path.
 WINDOWED_ALIGNMENT_THRESHOLD_SECONDS = 600.0
-
 _NUMBER_RE = re.compile(r"\d+")
 _NUMBER_CONFIG = {
     "Russian": {
@@ -706,12 +702,12 @@ class Qwen3Transcriber(Transcriber):
         _park_loaded(self._model)
 
 
-class Qwen3ForcedAligner(Aligner):
+class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
     name = "qwen3-forced-aligner"
-
-    def __init__(self, model: str):
+    def __init__(self, model: str, *, isolated: bool | None = None):
         self.model_name, self._model, self._ctc = model, None, {}
         self.needs_voice_anchoring = True
+        self._configure_isolation(model, model != "test-model" if isolated is None else isolated)
 
     def _load(self):
         try:
@@ -724,6 +720,7 @@ class Qwen3ForcedAligner(Aligner):
         return _activate_loaded(self._model, "aligner")
 
     def close(self) -> None:
+        self._stop_worker()
         for aligner in self._ctc.values():
             getattr(aligner, "close", lambda: None)()
         self._ctc.clear()
@@ -857,6 +854,10 @@ class Qwen3ForcedAligner(Aligner):
         return self._validate(self._raw(audio, text, language), tokenize(text), duration(audio))
 
     def align_timed_lines(self, audio, text, lines, language):
+        self._ensure_alignment_backend(resolve_alignment_language(text, language))
+        return self._run_isolated("align_timed_lines", audio, text, lines, language)
+
+    def _align_timed_lines_local(self, audio, text, lines, language):
         import numpy as np
 
         from ..audio import read_mono
@@ -882,6 +883,7 @@ class Qwen3ForcedAligner(Aligner):
                 "falling back to Qwen",
                 flush=True,
             )
+        self._ensure_heavy_alignment()
         words: list[Word | None] = [None] * len(tokens)
 
         def apply(specs):
@@ -1049,6 +1051,10 @@ class Qwen3ForcedAligner(Aligner):
         return words
 
     def align_long_text(self, audio, text, language):
+        self._ensure_alignment_backend(resolve_alignment_language(text, language))
+        return self._run_isolated("align_long_text", audio, text, language)
+
+    def _align_long_text_local(self, audio, text, language):
         import numpy as np
 
         from ..audio import read_mono
@@ -1066,8 +1072,8 @@ class Qwen3ForcedAligner(Aligner):
             samples = samples.astype(np.float32)
             if ctc_words := self._ctc_full(samples, rate, tokens, span, resolved):
                 return ctc_words
-        # Windowing exists only because a single aligner call has *some*
-        # practical limit -- it is not a quality improvement, it's a
+        self._ensure_heavy_alignment()
+        # Windowing is a necessary fallback for the model's practical limit,
         # necessary evil that trades one long, consistent alignment for
         # several short ones stitched together at boundaries that are never
         # perfectly seamless (as every attempt to patch the seam coverage

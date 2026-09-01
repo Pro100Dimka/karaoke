@@ -17,6 +17,7 @@ __pycache__/
 audits/
 venv/
 .stryker-tmp/
+.VSCodeCounter/
 env/
 ENV/
 downloads/

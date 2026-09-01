@@ -9,12 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifacts import publish_files_atomically
-from .audio import audio_buffer_cache, decode_audio, duration
+from .audio import PREDECODED_MIX_NAME, audio_buffer_cache, decode_audio, duration
 from .config import CoreConfig
 from .engines.device import release_torch_memory
 from .engines.registry import EngineRegistry
 from .engines.text import UniformTextFallback, tokenize
-from .errors import EngineUnavailableError, ProcessingCancelledError
+from .errors import AlignmentTimeoutError, EngineUnavailableError, ProcessingCancelledError
 from .lyrics_document import validate_lyrics_document, words_with_notes
 from .lyrics_sources import LyricsDiscovery, TimedLine, discover_lyrics
 from .models import StageReport, Word
@@ -31,6 +31,16 @@ from .word_voicing import anchor_words_to_voice, voice_activity_intervals
 ProgressCallback = callable
 CancelCallback = callable
 logger = logging.getLogger(__name__)
+
+
+def _prepare_mix(source: Path, output: Path, mix: Path, sample_rate: int) -> str:
+    """Consume the strict upload decode instead of decoding the source twice."""
+    validated = output / PREDECODED_MIX_NAME
+    if validated.is_file():
+        validated.replace(mix)
+        return "ffmpeg-validated-upload"
+    decode_audio(source, mix, sample_rate, 2)
+    return "ffmpeg"
 
 
 def _process_rss_bytes() -> int:
@@ -133,6 +143,8 @@ class KaraokePipeline:
 
             memory = psutil.virtual_memory()
             keep_warm = memory.total >= 32 * 1024**3 and memory.available >= 10 * 1024**3
+        except ProcessingCancelledError:
+            raise
         except Exception:
             pass
         for engine in engines:
@@ -190,9 +202,12 @@ class KaraokePipeline:
         language: str | None,
         direct: list[Word],
         timed_lines: tuple[TimedLine, ...] = (),
+        cancelled=None,
     ) -> list[Word]:
         if direct:
             return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(direct)]
+        set_cancelled = getattr(self.engines.aligner, "set_cancelled", None)
+        if callable(set_cancelled): set_cancelled(cancelled)
         try:
             if timed_lines and hasattr(self.engines.aligner, "align_timed_lines"):
                 words = self.engines.aligner.align_timed_lines(
@@ -200,10 +215,16 @@ class KaraokePipeline:
                 )
             else:
                 words = self.engines.aligner.align_long_text(vocals, text, language)
-        except Exception:
-            if not self.config.allow_fallback:
+        except Exception as error:
+            # A timed-out child has already been terminated. Do not leave the
+            # whole song failed after minutes of useful work: publish a safe,
+            # approximate word layout and let processing reach a terminal state.
+            if not isinstance(error, EngineUnavailableError) and not self.config.allow_fallback:
                 raise
+            logger.warning("Acoustic alignment unavailable; using uniform timing: %s", error)
             words = UniformTextFallback().align(vocals, text, language)
+        finally:
+            if callable(set_cancelled): set_cancelled(None)
         return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(words)]
 
     def run(self, request: PipelineRequest) -> PipelineResult:
@@ -236,8 +257,8 @@ class KaraokePipeline:
 
             self._notify(request, "decode", 3, "Декодирование исходной записи")
             started = time.perf_counter()
-            decode_audio(source, mix, self.config.sample_rate, 2)
-            self._stage(reports, "decode", "ffmpeg", started)
+            decoder = _prepare_mix(source, output, mix, self.config.sample_rate)
+            self._stage(reports, "decode", decoder, started)
 
             self._notify(request, "separate", 10, "Разделение голоса и минуса")
             started = time.perf_counter()
@@ -278,11 +299,18 @@ class KaraokePipeline:
             text, direct, timed_lines = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
+            # Alignment may run in a killable child process. Release the ASR
+            # model before that child allocates its aligner on the same GPU;
+            # keeping both resident caused VRAM paging and apparent hangs at
+            # the 98% boundary on 6–8 GB cards.
+            self._park_engines(self.engines.transcriber)
             self._notify(request, "align", 84, "Синхронизация слов с голосом")
             try:
-                words = self._align(vocals, text, request.language, direct, timed_lines)
+                words = self._align(
+                    vocals, text, request.language, direct, timed_lines, request.cancelled
+                )
             finally:
-                self._park_engines(self.engines.transcriber, self.engines.aligner)
+                self._park_engines(self.engines.aligner)
             # Timed-line alignment already uses short acoustic windows anchored
             # by the provider's LRC timestamps. Re-anchoring those words against
             # global VAD can merge repeated adjacent lines and collapse one of
@@ -296,7 +324,7 @@ class KaraokePipeline:
                 )
             self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
 
-            self._notify(request, "notes", 84, "Построение мелодии голоса")
+            self._notify(request, "notes", 94, "Построение мелодии голоса")
             started = time.perf_counter()
             notes = build_vocal_notes(
                 pitch, words=words, min_note=self.config.min_note_sec,
@@ -359,7 +387,9 @@ class KaraokePipeline:
             self._notify(request, "align", 70, "Синхронизация текста по vocals.flac")
             started = time.perf_counter()
             try:
-                words = self._align(vocals, text, request.language, [], timed_lines)
+                words = self._align(
+                    vocals, text, request.language, [], timed_lines, request.cancelled
+                )
             finally:
                 self._park_engines(self.engines.transcriber, self.engines.aligner)
             if not timed_lines and getattr(
@@ -370,7 +400,7 @@ class KaraokePipeline:
                 )
             self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
 
-        self._notify(request, "notes", 84, "Построение мелодии голоса")
+        self._notify(request, "notes", 94, "Построение мелодии голоса")
         started = time.perf_counter()
         notes = build_vocal_notes(
             pitch, words=words, min_note=self.config.min_note_sec,

@@ -19,11 +19,20 @@ async function closeProcessingModal(page) {
   await expect(modal).toBeHidden();
 }
 
+test("processing modal keeps a visible signal while its audio is not ready", async ({ page }) => {
+  await page.goto("/");
+  const modal = page.getByRole("dialog", { name: /Обработка песни|Обробка пісні/ });
+  const signal = modal.getByRole("progressbar");
+  await expect(signal).toBeVisible();
+  await expect(signal.locator(".ui-waveform__fallback")).toBeVisible();
+  expect((await signal.boundingBox()).height).toBeGreaterThan(0);
+});
+
 test("library boots and remains interactive", async ({ page }) => {
   await page.goto("/");
   await closeProcessingModal(page);
   await expect(page.getByRole("banner", { name: "A&D Voice" })).toBeVisible();
-  const ready = page.getByRole("button", { name: /Тестовая песня/ });
+  const ready = page.getByText("Тестовая песня", { exact: true });
   const processing = page.getByText("Песня в обработке", { exact: true });
   await expect(ready).toBeVisible();
   await expect(processing).toBeVisible();
@@ -34,6 +43,21 @@ test("library boots and remains interactive", async ({ page }) => {
   await expect(processing).toBeHidden();
   await search.fill("");
   await expect(processing).toBeVisible();
+});
+
+test("library card background stays identical across states and hover", async ({ page }) => {
+  await page.goto("/");
+  await closeProcessingModal(page);
+  const cards = page.locator(".library-song-card");
+  await expect(cards).toHaveCount(2);
+  const backgrounds = await cards.evaluateAll((elements) => elements.map((element) => getComputedStyle(element).backgroundImage));
+
+  expect(new Set(backgrounds).size).toBe(1);
+  await expect(cards.first()).not.toHaveAttribute("data-variant");
+  await expect(cards.last()).not.toHaveAttribute("data-variant");
+
+  await cards.first().hover();
+  expect(await cards.first().evaluate((element) => getComputedStyle(element).backgroundImage)).toBe(backgrounds[0]);
 });
 
 test("song import enters the visible processing flow", async ({ page }) => {

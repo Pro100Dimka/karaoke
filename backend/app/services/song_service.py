@@ -1,7 +1,10 @@
 
 import base64
 import contextlib
+import os
 import re
+import subprocess
+import tempfile
 import threading
 import unicodedata
 import weakref
@@ -412,6 +415,7 @@ def _persist_song(
             return saved
         except Exception:
             destination.unlink(missing_ok=True)
+            (output_dir / ".validated-mix.wav").unlink(missing_ok=True)
             for cover in output_dir.glob("cover.*"): cover.unlink(missing_ok=True)
             with contextlib.suppress(OSError): output_dir.rmdir()
             raise
@@ -449,14 +453,20 @@ class InvalidAudioError(ValueError):
     """The uploaded container cannot be decoded completely and safely."""
 
 
-def _validate_audio_source(source: Path) -> None:
+def _validate_audio_source(source: Path) -> Path:
     from AI.audio import run_ffmpeg
     from AI.errors import AICoreError
 
     _check_duration_limit(source)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".validated-mix-", suffix=".wav", dir=source.parent
+    )
+    os.close(descriptor)
+    normalized = Path(temporary_name)
     try:
-        # Decode the complete first audio stream before creating a Song row.
-        # Strict decoder errors reject truncated containers before persistence.
+        # Decode once, strictly, into the exact format the pipeline needs. The
+        # pipeline consumes this file instead of decoding the upload a second
+        # time, so validation adds no duplicate full-song pass.
         run_ffmpeg(
             [
                 "-xerror",
@@ -464,15 +474,17 @@ def _validate_audio_source(source: Path) -> None:
                 "explode",
                 "-i",
                 str(source),
-                "-map",
-                "0:a:0",
-                "-f",
-                "null",
-                "-",
+                "-map", "0:a:0",
+                "-vn",
+                "-ar", "44100",
+                "-ac", "2",
+                str(normalized),
             ],
             timeout=20 * 60,
         )
-    except (AICoreError, OSError, RuntimeError) as exc:
+        return normalized
+    except (AICoreError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        normalized.unlink(missing_ok=True)
         raise InvalidAudioError("errors.audioFileCorruptedOrUnsupported") from exc
 
 
@@ -485,26 +497,35 @@ def create_song_from_path(
 ) -> models.Song:
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0: raise ValueError("Audio file is empty")
-    if extension in config.ALLOWED_AUDIO_EXTENSIONS:
+    validated_mix = (
         _validate_audio_source(temporary_source)
-
-    detected_artist, detected_title = _read_source_identity(
-        temporary_source, safe_name, clean_title)
-    resolved_title = clean_title if title.strip() else detected_title
-    resolved_artist = artist.strip() or None if artist is not None else detected_artist
-
-    def move_source(destination: Path) -> None:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        move_path(temporary_source, destination)
-
-    return _persist_song(
-        db,
-        title=resolved_title,
-        artist=resolved_artist,
-        original_filename=safe_name,
-        extension=extension,
-        write_source=move_source,
+        if extension in config.ALLOWED_AUDIO_EXTENSIONS
+        else None
     )
+
+    try:
+        detected_artist, detected_title = _read_source_identity(
+            temporary_source, safe_name, clean_title)
+        resolved_title = clean_title if title.strip() else detected_title
+        resolved_artist = artist.strip() or None if artist is not None else detected_artist
+
+        def move_source(destination: Path) -> None:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            move_path(temporary_source, destination)
+            if validated_mix is not None:
+                move_path(validated_mix, destination.parent / ".validated-mix.wav")
+
+        return _persist_song(
+            db,
+            title=resolved_title,
+            artist=resolved_artist,
+            original_filename=safe_name,
+            extension=extension,
+            write_source=move_source,
+        )
+    finally:
+        if validated_mix is not None:
+            validated_mix.unlink(missing_ok=True)
 
 
 def list_songs(db: Session) -> list[models.Song]:

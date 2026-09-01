@@ -20,7 +20,7 @@ const handlers = () => ({
   onProcess: vi.fn(),
   onReprocess: vi.fn()
 });
-test("ready song opens from card click and keyboard but not nested actions", () => {
+test("ready song opens only from its explicit play action", () => {
   const actions = handlers();
   const song = {
     id: "song",
@@ -32,9 +32,9 @@ test("ready song opens from card click and keyboard but not nested actions", () 
     difficulty_override: "easy"
   };
   const view = render(<LibrarySongCard cardIndex={1} song={song} canManageLibrary {...actions} />);
-  const card = view.getByRole("button", { name: /Открыть Title|Відкрити Title/ });
-  expect(card.tagName).toBe("BUTTON");
-  fireEvent.click(card);
+  expect(view.queryByRole("button", { name: /Открыть Title|Відкрити Title/ })).toBeNull();
+  expect(view.container.querySelector(".library-song-card").hasAttribute("data-interactive")).toBe(false);
+  fireEvent.click(view.getByRole("button", { name: /Воспроизвести|Відтворити/ }));
   expect(actions.onOpenKaraoke).toHaveBeenCalledOnce();
   const nested = view.getByRole("button", { name: /Прослушать записи|Прослухати записи/ });
   fireEvent.click(nested);
@@ -52,6 +52,21 @@ test("ready song opens from card click and keyboard but not nested actions", () 
   expect(actions.onOpenSettings).toHaveBeenCalledWith("song");
   expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
   verify([actions.onOpenKaraoke, "toHaveBeenCalledOnce"], [view.container.textContent, "toContain", "120 BPM"]);
+});
+test("song status and clickability never change the library card surface", () => {
+  const ready = render(<LibrarySongCard song={{ id: "ready", title: "Ready", status: "done" }} {...handlers()} />);
+  const failed = render(<LibrarySongCard song={{ id: "failed", title: "Failed", status: "error" }} {...handlers()} />);
+  const readyCard = ready.container.querySelector(".ui-card");
+  const failedCard = failed.container.querySelector(".ui-card");
+
+  expect(readyCard.classList.contains("library-song-card")).toBe(true);
+  expect(failedCard.classList.contains("library-song-card")).toBe(true);
+  expect(readyCard.getAttribute("data-variant")).toBeNull();
+  expect(failedCard.getAttribute("data-variant")).toBeNull();
+  expect(readyCard.style.background).toBe(failedCard.style.background);
+  expect(readyCard.style.background).not.toBe("");
+  expect(ready.queryByRole("button", { name: /Открыть Ready|Відкрити Ready/ })).toBeNull();
+  expect(readyCard.hasAttribute("data-interactive")).toBe(false);
 });
 test("working song shows progress and opens its processing modal", () => {
   const actions = handlers();

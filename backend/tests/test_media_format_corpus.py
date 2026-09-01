@@ -8,7 +8,8 @@ import pytest
 import soundfile
 
 import config
-from AI.audio import decode_audio
+from AI import pipeline
+from AI.audio import PREDECODED_MIX_NAME
 from app.services import song_service
 from tests._shared import patch_attrs
 
@@ -68,8 +69,7 @@ def test_real_media_corpus_imports_and_normalizes(
     monkeypatch.setenv("FFMPEG_BINARY", config.FFMPEG_EXE)
     song = song_service.create_song_from_path(database, filename, filename, source)
     stored = Path(song.source_path)
-    normalized = stored.with_name("normalized.wav")
-    decode_audio(stored, normalized, sample_rate=44_100, channels=2)
+    normalized = stored.with_name(PREDECODED_MIX_NAME)
     info = soundfile.info(normalized)
     assert info.samplerate == 44_100 and info.channels == 2 and info.frames > 0
 
@@ -89,3 +89,19 @@ def test_corrupted_audio_is_rejected_before_song_or_partial_is_created(monkeypat
         song_service.create_song_from_path(database, "Broken", source.name, source)
     database.add.assert_not_called()
     assert not library.exists() or not any(library.rglob("*"))
+
+
+def test_pipeline_consumes_upload_decode_without_decoding_source_again(monkeypatch, tmp_path):
+    source, output, mix = tmp_path / "source.mp3", tmp_path / "song", tmp_path / "work" / "mix.wav"
+    output.mkdir()
+    mix.parent.mkdir()
+    source.write_bytes(b"original")
+    validated = output / PREDECODED_MIX_NAME
+    validated.write_bytes(b"already decoded")
+    decode = Mock(side_effect=AssertionError("source was decoded twice"))
+    monkeypatch.setattr(pipeline, "decode_audio", decode)
+
+    assert pipeline._prepare_mix(source, output, mix, 44_100) == "ffmpeg-validated-upload"
+    assert mix.read_bytes() == b"already decoded"
+    assert not validated.exists()
+    decode.assert_not_called()

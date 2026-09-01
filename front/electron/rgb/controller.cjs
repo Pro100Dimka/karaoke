@@ -29,6 +29,7 @@ class LightingController {
     this.generation = 0;
     this.lastFrame = 0;
     this.lastInput = 0;
+    this.lastOutput = null;
     this.lastRetry = 0;
     this.status = { state: "disabled", count: 0 };
     this.configQueue = Promise.resolve();
@@ -109,6 +110,8 @@ class LightingController {
     )
       return this.status;
     this.lastInput = this.now();
+    const output = active ? rgb.join(",") : null;
+    if (active && this.provider && output === this.lastOutput) return this.status;
     if (!this.enabled || this.busy || this.now() - this.lastFrame < 45) return this.status;
     this.lastFrame = this.now();
     this.busy = true;
@@ -136,9 +139,13 @@ class LightingController {
           const status = await this[provider].request(1, ...rgb);
           if (token === this.generation) {
             this.status = { ...status, provider };
-            if (!status.count) await this.release();
+            if (status.count) this.lastOutput = output;
+            else await this.release();
           }
-        } else this.provider?.frame(rgb);
+        } else {
+          this.provider?.frame(rgb);
+          this.lastOutput = output;
+        }
       }
     } catch (error) {
       console.error("Keyboard lighting frame failed", error?.stack || error);
@@ -153,6 +160,7 @@ class LightingController {
   async release() {
     const previous = this.provider;
     this.provider = null;
+    this.lastOutput = null;
     if (typeof previous === "string") await this[previous].request(2).catch(() => {});
     else previous?.stop();
   }

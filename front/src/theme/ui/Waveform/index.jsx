@@ -47,6 +47,7 @@ export default function Waveform({
   url,
   fetchParams,
   retryKey = 0,
+  fallbackWhileLoading = true,
   interactive = true,
   compact = false
 }) {
@@ -156,7 +157,7 @@ export default function Waveform({
         aria-hidden="true"
         sx={{
           width: "stretch",
-          display: real ? "none" : "block",
+          display: real || (url && !fallbackWhileLoading) ? "none" : "block",
           position: "absolute",
           inset: 0,
         }}

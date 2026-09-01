@@ -145,6 +145,12 @@ export default function useLibrary() {
     [songsQuery.data, statusQuery.data]
   );
   const processingSongs = useMemo(() => getProcessingSongs(currentSongs), [currentSongs]);
+  const selectedProcessingSong = useMemo(
+    () =>
+      currentSongs.find(({ id }) => id === processingSong?.id) ??
+      processingSong,
+    [currentSongs, processingSong]
+  );
   const processingActive = hasActiveSongProcessing(currentSongs);
   useEffect(() => {
     setProcessingLoadActive(processingActive);
@@ -348,9 +354,9 @@ export default function useLibrary() {
       active: processingActive,
       cancel: cancelProcessing,
       close: closeProcessing,
-      song: processingSong,
+      song: selectedProcessingSong,
       songs: processingSongs,
-      status: statusQuery.data?.song_id === processingSong?.id ? statusQuery.data : null,
+      status: statusQuery.data?.song_id === selectedProcessingSong?.id ? statusQuery.data : null,
       track
     },
     query,

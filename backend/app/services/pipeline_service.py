@@ -158,7 +158,7 @@ _AI_STAGE_PLAN = {
     "vocal": (48.0, 10, "Очищаем голос и переводим его в моно"),
     "analysis": (70.0, 18, "Определяем темп, тональность и мелодию голоса"),
     "transcribe": (84.0, 30, "Распознаём текст вокала"),
-    "align": (98.0, 20, "Синхронизируем слова с голосом"),
+    "align": (94.0, 20, "Синхронизируем слова с голосом"),
     "notes": (98.0, 8, "Строим вокальные ноты"),
     "validate": (99.7, 3, "Проверяем результат"),
     "complete": (100.0, 1, "Завершаем обработку"),
@@ -730,6 +730,9 @@ def _create_ai_progress_callback(
         with _progress_runtime_lock:
             if (runtime := _progress_runtime.get(song_id)) is not None:
                 now = time.monotonic()
+                bounded_percent = max(
+                    bounded_percent, float(runtime.get("direct_percent", 0.0))
+                )
                 previous_stage = runtime.get("stage")
                 if previous_stage and previous_stage != stage:
                     completed = runtime.setdefault(

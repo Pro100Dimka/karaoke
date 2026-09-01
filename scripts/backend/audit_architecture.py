@@ -26,8 +26,8 @@ FUNCTION_LINE_LIMITS = {
     (Path("app/services/recording_service.py"), "start_recording"): 81,
     (Path("app/services/recording_service.py"), "stop_recording"): 87,
     (Path("app/services/recording_service.py"), "attach_room_audio"): 86,
-    (Path("AI/engines/text.py"), "align_timed_lines"): 130,
-    (Path("AI/engines/text.py"), "align_long_text"): 101,
+    (Path("AI/engines/text.py"), "_align_timed_lines_local"): 130,
+    (Path("AI/engines/text.py"), "_align_long_text_local"): 101,
 }
 
 MODULE_LINE_LIMITS = {

@@ -43,6 +43,48 @@ export function musicLightingColor(brightness, level, phase) {
   );
 }
 
+const clamp01 = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+const parseColor = (hex) => {
+  const value = /^#[a-f\d]{6}$/i.test(hex || "") ? hex : "#ffffff";
+  return [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16));
+};
+
+/**
+ * Build a slow bass envelope constrained to the active theme palette.
+ * The channel slew limit prevents a single analyzer spike from becoming a
+ * full-brightness hardware flash, including on keyboards with coarse firmware.
+ */
+export function advanceMusicLighting(
+  previous,
+  sample,
+  palette,
+  brightness,
+  elapsedMs = 80
+) {
+  const state = previous || { envelope: 0, rgb: [0, 0, 0] };
+  const active = !!sample?.active;
+  const targetLevel = active ? clamp01(sample?.level) : 0;
+  const milliseconds = Math.min(250, Math.max(16, Number(elapsedMs) || 80));
+  const response = 1 - Math.exp(-milliseconds / (targetLevel > state.envelope ? 360 : 900));
+  const envelope = state.envelope + (targetLevel - state.envelope) * response;
+  const colors = (Array.isArray(palette) ? palette : [palette]).filter(Boolean);
+  const primary = parseColor(colors[0]);
+  const secondary = parseColor(colors[1] || colors[0]);
+  const blend = Math.min(0.32, envelope * 0.32);
+  // Keep a dim theme-colored floor even between tracks/analyser dropouts.
+  // Releasing control here would restart the keyboard firmware's rainbow mode.
+  const gain = clamp01(brightness) * (active ? 0.62 + envelope * 0.38 : 0.45);
+  const target = primary.map((channel, index) =>
+    Math.round((channel * (1 - blend) + secondary[index] * blend) * gain)
+  );
+  const limit = 18 * (milliseconds / 80);
+  const rgb = target.map((channel, index) => {
+    const before = Number(state.rgb?.[index]) || 0;
+    return Math.round(before + Math.max(-limit, Math.min(limit, channel - before)));
+  });
+  return { rgb, state: { envelope, rgb } };
+}
+
 // Read a copy of already playing media. Never re-route the original element,
 // open the microphone, or connect audible analysis output.
 export function observeLightingMedia(media, register = registerLightingSource) {
@@ -65,7 +107,8 @@ export function observeLightingMedia(media, register = registerLightingSource) {
       Math.max(2, Math.ceil((250 * analyser.fftSize) / context.sampleRate))
     );
     for (let i = 1; i < end; i++) sum += samples[i] / 255;
-    return { active: true, level: Math.min(1, (sum / (end - 1)) ** 1.8) };
+    const bass = sum / Math.max(1, end - 1);
+    return { active: true, level: Math.min(1, bass ** 1.35 * 1.45) };
   });
   const attach = () => {
     if (disposed || source || !stream?.getAudioTracks().length) return;
@@ -74,7 +117,7 @@ export function observeLightingMedia(media, register = registerLightingSource) {
       source = context.createMediaStreamSource(stream);
       analyser = context.createAnalyser();
       analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.6;
+      analyser.smoothingTimeConstant = 0.72;
       samples = new Uint8Array(analyser.frequencyBinCount);
       silent = context.createGain();
       silent.gain.value = 0;

@@ -22,10 +22,6 @@ export default function ProcessingSignal({ progress = 0, compact = false, url, f
         progress={value / 100}
         url={url}
         fetchParams={fetchParams}
-        // A symbolic import has no decodable source at first. The backend
-        // exposes original.flac once matching/downloading finishes, so retry
-        // only during the early preparation stages and then keep the cached
-        // real peaks for the rest of the job.
         retryKey={url ? Math.min(8, Math.floor(value / 5)) : 0}
         compact={compact}
         interactive={false}

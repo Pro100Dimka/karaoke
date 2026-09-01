@@ -55,14 +55,17 @@ _YOUTUBE_URL_ID_RE = re.compile(
     r"(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:watch\?(?:[^#]*&)?v=|embed/|shorts/|live/))([\w-]{11})",
     re.IGNORECASE,
 )
-_LOW_QUALITY_VIDEO_HINTS = (
+_REJECT_VIDEO_HINTS = (
     "audio only", "official audio", "lyric", "lyrics", "karaoke", "visualizer",
     "static image", "still image", "slowed", "nightcore", "8d audio", "cover version",
     "reaction", "tutorial", "instrumental", "full album", "topic - auto-generated",
-    "live", "concert", "fan clip", "fan-made", "fanmade", "ai generated", "ai-generated",
     "tribute", "текст песни", "слова песни", "караоке", "аудио", "обложка",
-    "концерт", "концертн", "живое выступление", "фан-клип", "фан клип", "нейро", "нейросет",
-    "кавер", "трибьют",
+    "нейро", "нейросет", "ai generated", "ai-generated", "кавер", "трибьют",
+)
+_VIDEO_HINT_PENALTIES = (
+    ("live", 18), ("concert", 18), ("концерт", 18), ("живое выступление", 18),
+    ("fan clip", 28), ("fan-made", 28), ("fanmade", 28),
+    ("фан-клип", 28), ("фан клип", 28),
 )
 _GOOD_VIDEO_HINT_SCORES = (
     ("official music video", 60),
@@ -129,12 +132,12 @@ def _candidate_score(
     expected_normalized = " ".join(title.casefold().split())
     if any(
         hint in normalized and hint not in expected_normalized
-        for hint in _LOW_QUALITY_VIDEO_HINTS
+        for hint in _REJECT_VIDEO_HINTS
     ):
         return None
     title_words = _words(title)
     candidate_words = _words(candidate_title)
-    if title_words and len(title_words & candidate_words) < max(1, (len(title_words) + 1) // 2):
+    if title_words and not title_words & candidate_words:
         return None
     artist_words = _words(artist)
     author_words = _words(author)
@@ -145,6 +148,7 @@ def _candidate_score(
         (weight for hint, weight in _GOOD_VIDEO_HINT_SCORES if hint in normalized),
         0,
     )
+    score -= sum(weight for hint, weight in _VIDEO_HINT_PENALTIES if hint in normalized)
     return score
 
 
@@ -211,7 +215,7 @@ def _youtube_video_id(title: str, artist: str | None) -> str | None:
             "type": "video",
             "videoEmbeddable": "true",
             "videoCategoryId": "10",
-            "maxResults": 8,
+            "maxResults": 16,
             "key": api_key,
         })
         payload = json.loads(_request(url).decode("utf-8"))
@@ -236,7 +240,7 @@ def _youtube_video_id(title: str, artist: str | None) -> str | None:
     # copyrighted video file is copied into the song library.
     url = "https://www.youtube.com/results?" + urllib.parse.urlencode({"search_query": query})
     page = html.unescape(_request(url).decode("utf-8", errors="ignore"))
-    candidates = list(dict.fromkeys(_YOUTUBE_ID_RE.findall(page)))[:8]
+    candidates = list(dict.fromkeys(_YOUTUBE_ID_RE.findall(page)))[:16]
     ranked = []
     for video_id in candidates:
         try:
@@ -351,10 +355,13 @@ def _normalize_video(
     if not info:
         return False
     width, height, duration = info
-    if width < 1280 or height < 720 or duration < 30 or not _video_has_motion(source, duration):
+    if width < 640 or height < 360 or duration < 20 or not _video_has_motion(source, duration):
         return False
     if expected_duration and expected_duration > 0:
-        maximum_drift = max(8.0, expected_duration * 0.05)
+        # Music videos often contain an intro/outro that is absent from the
+        # album audio. Reject a genuinely different recording, not a normal
+        # video edit of the same song.
+        maximum_drift = max(45.0, expected_duration * 0.25)
         if abs(duration - expected_duration) > maximum_drift:
             return False
     crop = _detected_crop(source, width, height, duration)
@@ -405,6 +412,7 @@ def _download_youtube_video(
             "bestvideo[vcodec^=avc1][ext=mp4][height>=720]/"
             "best[vcodec^=avc1][ext=mp4][height>=720]/"
             "bestvideo[ext=mp4][height>=720]/best[ext=mp4][height>=720]/"
+            "bestvideo[height>=360]/best[height>=360]/"
             "bestvideo/best"
         ),
         "outtmpl": str(output_dir / ".clip-download.%(ext)s"),

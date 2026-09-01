@@ -14,6 +14,8 @@ import soundfile as sf
 
 from .errors import AICoreError
 
+PREDECODED_MIX_NAME = ".validated-mix.wav"
+
 
 def resolve_ffmpeg() -> str:
     configured = os.getenv("FFMPEG_BINARY", "").strip()
