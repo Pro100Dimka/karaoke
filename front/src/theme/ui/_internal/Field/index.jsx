@@ -42,12 +42,7 @@ export default function Field({
       data-error={!!error || undefined}
       style={mergeSx(sx, style)}
     >
-      <FieldLabel
-        htmlFor={controlId}
-        label={label}
-        tooltip={tooltip}
-        required={required}
-      />
+      <FieldLabel htmlFor={controlId} label={label} tooltip={tooltip} required={required} />
 
       {control}
 

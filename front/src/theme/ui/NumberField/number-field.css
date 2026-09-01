@@ -3,7 +3,7 @@
     padding-inline-end: 0;
   }
 
-  .ui-number-field>.ui-text-field-input {
+  .ui-number-field > .ui-text-field-input {
     appearance: textfield;
     -moz-appearance: textfield;
   }
@@ -15,7 +15,7 @@
     -webkit-appearance: none;
   }
 
-  .ui-number-field>.ui-text-field-slot:last-child {
+  .ui-number-field > .ui-text-field-slot:last-child {
     align-self: stretch;
     padding: 0;
     border-inline-start: 1px solid var(--field-border);
@@ -60,13 +60,13 @@
     opacity: var(--states-disabled-opacity);
   }
 
-  .ui-number-field-step+.ui-number-field-step {
+  .ui-number-field-step + .ui-number-field-step {
     border-block-start: 1px solid var(--field-border);
   }
 
-  .ui-number-field-step>svg {
-    inline-size: .75rem;
-    block-size: .75rem;
+  .ui-number-field-step > svg {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
   }
 
   @media (hover: hover) and (pointer: fine) {

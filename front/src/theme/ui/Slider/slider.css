@@ -30,13 +30,14 @@
   .ui-slider::-webkit-slider-runnable-track {
     block-size: var(--slider-track, 0.260417vw);
     border-radius: var(--shape-round);
-    background: linear-gradient(90deg,
-        var(--slider-fill, var(--ui-primary)) 0%,
-        var(--slider-fill-end, var(--color-accent, var(--ui-primary))) var(--slider-value),
-        var(--slider-rest,
-          color-mix(in srgb, var(--field-border) 70%, transparent)) var(--slider-value),
-        var(--slider-rest,
-          color-mix(in srgb, var(--field-border) 70%, transparent)) 100%);
+    background: linear-gradient(
+      90deg,
+      var(--slider-fill, var(--ui-primary)) 0%,
+      var(--slider-fill-end, var(--color-accent, var(--ui-primary))) var(--slider-value),
+      var(--slider-rest, color-mix(in srgb, var(--field-border) 70%, transparent))
+        var(--slider-value),
+      var(--slider-rest, color-mix(in srgb, var(--field-border) 70%, transparent)) 100%
+    );
     box-shadow: inset 0vw 0vw 0vw 0.052083vw color-mix(in srgb, var(--ui-text) 5%, transparent);
   }
 
@@ -60,16 +61,17 @@
   .ui-slider::-moz-range-track {
     block-size: var(--slider-track, 0.260417vw);
     border-radius: var(--shape-round);
-    background: var(--slider-rest,
-        color-mix(in srgb, var(--field-border) 70%, transparent));
+    background: var(--slider-rest, color-mix(in srgb, var(--field-border) 70%, transparent));
   }
 
   .ui-slider::-moz-range-progress {
     block-size: var(--slider-track, 0.260417vw);
     border-radius: var(--shape-round);
-    background: linear-gradient(90deg,
-        var(--slider-fill, var(--ui-primary)),
-        var(--slider-fill-end, var(--color-accent, var(--ui-primary))));
+    background: linear-gradient(
+      90deg,
+      var(--slider-fill, var(--ui-primary)),
+      var(--slider-fill-end, var(--color-accent, var(--ui-primary)))
+    );
   }
 
   .ui-slider::-moz-range-thumb {
@@ -135,13 +137,14 @@
   }
 
   .ui-slider[data-orientation="vertical"]::-webkit-slider-runnable-track {
-    background: linear-gradient(0deg,
-        var(--slider-fill, var(--ui-primary)) 0%,
-        var(--slider-fill-end, var(--color-accent, var(--ui-primary))) var(--slider-value),
-        var(--slider-rest,
-          color-mix(in srgb, var(--field-border) 70%, transparent)) var(--slider-value),
-        var(--slider-rest,
-          color-mix(in srgb, var(--field-border) 70%, transparent)) 100%);
+    background: linear-gradient(
+      0deg,
+      var(--slider-fill, var(--ui-primary)) 0%,
+      var(--slider-fill-end, var(--color-accent, var(--ui-primary))) var(--slider-value),
+      var(--slider-rest, color-mix(in srgb, var(--field-border) 70%, transparent))
+        var(--slider-value),
+      var(--slider-rest, color-mix(in srgb, var(--field-border) 70%, transparent)) 100%
+    );
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -150,9 +153,7 @@
     }
 
     .ui-slider-frame:hover .ui-text-field-outline {
-      border-color: color-mix(in srgb,
-          var(--ui-primary) 55%,
-          var(--field-border));
+      border-color: color-mix(in srgb, var(--ui-primary) 55%, var(--field-border));
     }
   }
 

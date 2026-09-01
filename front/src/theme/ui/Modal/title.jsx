@@ -9,7 +9,7 @@ export default function ModalTitle({
   onImageError,
   eyebrow,
   title,
-  description,
+  description
 }) {
   return (
     <Stack className="ui-modal-title" direction="row" align="center" gap="var(--space-4)">
@@ -19,9 +19,19 @@ export default function ModalTitle({
         </Primitive>
       )}
       <Stack gap="var(--space-1)" className="ui-modal-title-copy">
-        {eyebrow && <Typography variant="caption" className="ui-modal-title-eyebrow">{eyebrow}</Typography>}
-        <Typography variant="h3" noWrap>{title}</Typography>
-        {description && <Typography variant="body2" tone="muted" >{description}</Typography>}
+        {eyebrow && (
+          <Typography variant="caption" className="ui-modal-title-eyebrow">
+            {eyebrow}
+          </Typography>
+        )}
+        <Typography variant="h3" noWrap>
+          {title}
+        </Typography>
+        {description && (
+          <Typography variant="body2" tone="muted">
+            {description}
+          </Typography>
+        )}
       </Stack>
     </Stack>
   );

@@ -52,8 +52,15 @@ const project = process.argv[2] || "frontend";
 if (!/^[a-z][a-z0-9-]*$/.test(project)) throw new Error(`Invalid SBOM project name: ${project}`);
 const outputPath = resolve(process.cwd(), `../generated/sbom/${project}.json`);
 await mkdir(resolve(outputPath, ".."), { recursive: true });
-await writeFile(outputPath, `${JSON.stringify({ packageCount: packages.length, packages }, null, 2)}\n`, "utf8");
+await writeFile(
+  outputPath,
+  `${JSON.stringify({ packageCount: packages.length, packages }, null, 2)}\n`,
+  "utf8"
+);
 
-const unknown = packages.filter((pkg) => !pkg.license || pkg.license === "UNKNOWN").map((pkg) => pkg.name);
+const unknown = packages
+  .filter((pkg) => !pkg.license || pkg.license === "UNKNOWN")
+  .map((pkg) => pkg.name);
 console.log(`Wrote ${packages.length} packages to ${outputPath}`);
-if (unknown.length > 0) console.log(`${unknown.length} package(s) have no declared license: ${unknown.join(", ")}`);
+if (unknown.length > 0)
+  console.log(`${unknown.length} package(s) have no declared license: ${unknown.join(", ")}`);

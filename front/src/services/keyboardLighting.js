@@ -59,13 +59,7 @@ const parseColor = (hex) => {
  * The channel slew limit prevents a single analyzer spike from becoming a
  * full-brightness hardware flash, including on keyboards with coarse firmware.
  */
-export function advanceMusicLighting(
-  previous,
-  sample,
-  palette,
-  brightness,
-  elapsedMs = 80
-) {
+export function advanceMusicLighting(previous, sample, palette, brightness, elapsedMs = 80) {
   const state = previous || { envelope: 0, rgb: [0, 0, 0] };
   const active = !!sample?.active;
   const targetLevel = active ? clamp01(sample?.level) : 0;

@@ -3,7 +3,11 @@ import { acquireMicrophone } from "../../../services/microphoneCapture";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
-export default function usePitchDetection({ isPlaying, monitorInputDeviceId, getLocalVoiceStream }) {
+export default function usePitchDetection({
+  isPlaying,
+  monitorInputDeviceId,
+  getLocalVoiceStream
+}) {
   const [sungMidi, setSungMidi] = useState(null);
   const [isPitchDetected, setIsPitchDetected] = useState(false);
   const [isPitchAttacking, setIsPitchAttacking] = useState(false);
@@ -45,7 +49,9 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
           stream = await getLocalVoiceStream();
           if (!stream) return;
         } else {
-          microphoneLease = await acquireMicrophone(monitorInputDeviceId, { disabledEffects: true });
+          microphoneLease = await acquireMicrophone(monitorInputDeviceId, {
+            disabledEffects: true
+          });
           stream = microphoneLease.stream;
         }
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;

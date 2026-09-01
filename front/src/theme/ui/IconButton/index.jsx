@@ -44,11 +44,7 @@ const IconButton = forwardRef(
         style={{ "--control-size": `${buttonSize}px` }}
         {...props}
       >
-        {Icon ? (
-          <Icon size={actualIconSize} aria-hidden="true" />
-        ) : (
-          children
-        )}
+        {Icon ? <Icon size={actualIconSize} aria-hidden="true" /> : children}
       </Button>
     );
   }

@@ -55,8 +55,8 @@
     color: var(--ui-text-muted);
   }
 
-  .ui-select-start-icon>svg,
-  .ui-select-end-icon>svg {
+  .ui-select-start-icon > svg,
+  .ui-select-end-icon > svg {
     display: block;
     inline-size: 1rem;
     block-size: 1rem;
@@ -80,7 +80,7 @@
   }
 
   .ui-select-actions {
-    gap: var(--space-1, calc(var(--spacing) * .5));
+    gap: var(--space-1, calc(var(--spacing) * 0.5));
     margin-inline-start: auto;
   }
 
@@ -106,9 +106,11 @@
     border-radius: var(--control-radius);
 
     background:
-      radial-gradient(circle at 82% 0,
+      radial-gradient(
+        circle at 82% 0,
         color-mix(in srgb, var(--ui-primary) 14%, transparent),
-        transparent 42%),
+        transparent 42%
+      ),
       color-mix(in srgb, var(--overlay-bg) 94%, transparent);
     box-shadow:
       var(--shadows-3),
@@ -119,7 +121,7 @@
 
   .ui-select-options {
     display: grid;
-    gap: .125rem;
+    gap: 0.125rem;
   }
 
   .ui-select-group {
@@ -133,7 +135,7 @@
     color: var(--ui-primary);
     font-size: var(--typography-caption-size);
     font-weight: 800;
-    letter-spacing: .04em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
@@ -149,7 +151,7 @@
     min-block-size: var(--control-size, var(--control-md));
 
     padding-inline: var(--control-pad, var(--control-pad-md));
-    padding-block: .5em;
+    padding-block: 0.5em;
 
     border: 0;
     border-radius: var(--shape-sm);
@@ -173,9 +175,11 @@
   }
 
   .ui-select-option[data-selected] {
-    background: linear-gradient(90deg,
-        color-mix(in srgb, var(--ui-primary) 22%, var(--overlay-bg)),
-        color-mix(in srgb, var(--ui-primary) 8%, var(--overlay-bg)));
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ui-primary) 22%, var(--overlay-bg)),
+      color-mix(in srgb, var(--ui-primary) 8%, var(--overlay-bg))
+    );
     box-shadow:
       inset 0 0 0 var(--hairline) color-mix(in srgb, var(--ui-primary) 70%, transparent),
       0 0 var(--space-2) color-mix(in srgb, var(--ui-primary) 14%, transparent);
@@ -201,8 +205,8 @@
     color: var(--ui-primary);
   }
 
-  .ui-select-option-mark>svg,
-  .ui-select-option-icon>svg {
+  .ui-select-option-mark > svg,
+  .ui-select-option-icon > svg {
     inline-size: 100%;
     block-size: 100%;
   }
@@ -213,7 +217,7 @@
 
   .ui-select-option-content {
     display: grid;
-    gap: .15rem;
+    gap: 0.15rem;
 
     flex: 1 1 auto;
     min-inline-size: 0;

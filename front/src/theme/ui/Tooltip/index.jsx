@@ -1,21 +1,9 @@
 /* eslint-disable consistent-return */
-import {
-  cloneElement,
-  isValidElement,
-  useEffect,
-  useId,
-  useRef,
-  useState
-} from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./tooltip.css";
 
-export default function Tooltip({
-  title,
-  children,
-  placement = "top",
-  disabled = false
-}) {
+export default function Tooltip({ title, children, placement = "top", disabled = false }) {
   const id = useId();
   const triggerRef = useRef(null);
 

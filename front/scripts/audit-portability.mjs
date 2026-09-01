@@ -35,10 +35,8 @@ try {
 const [main, backendProcess, installer] = [
   "front/electron/main.cjs",
   "front/electron/backend-process.cjs",
-  "scripts/karaoke-studio.iss",
-].map((file) =>
-  fs.readFileSync(path.join(root, file), "utf8")
-);
+  "scripts/karaoke-studio.iss"
+].map((file) => fs.readFileSync(path.join(root, file), "utf8"));
 
 [
   [main.includes("path.dirname(process.execPath)"), "executable root is missing"],
@@ -49,7 +47,7 @@ const [main, backendProcess, installer] = [
     /require\(["']\.\/backend-process\.cjs["']\)/.test(main) &&
       /require\(["']\.\/backend-endpoint\.cjs["']\)/.test(backendProcess) &&
       /chooseRuntimeBackendEndpoint\s*\(/.test(backendProcess),
-    "dynamic backend endpoint is not connected to Electron startup",
+    "dynamic backend endpoint is not connected to Electron startup"
   ],
   [/^PrivilegesRequired=lowest$/m.test(installer), "installer requires elevation"],
   [
@@ -70,10 +68,10 @@ const [main, backendProcess, installer] = [
   }),
   [
     /path\.join\(INSTALL_DATA_ROOT,\s*["']cache["']\)/.test(backendProcess),
-    "backend cache is not rooted inside the installation data directory",
+    "backend cache is not rooted inside the installation data directory"
   ],
   [
     installer.includes("{app}\\.install\\app-runtime.zip"),
-    "missing self-contained runtime archive path",
-  ],
+    "missing self-contained runtime archive path"
+  ]
 ].forEach(([ok, message]) => check(ok, message));

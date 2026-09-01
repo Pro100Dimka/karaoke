@@ -35,14 +35,17 @@ export default function useOnlineRoomAudio({
   const localMonitorRef = useRef(null);
   const outputDeviceIdRef = useRef("");
 
-  const applyOutputRoute = useCallback((deviceId) => {
-    const normalized = typeof deviceId === "string" ? deviceId : "";
-    outputDeviceIdRef.current = normalized;
-    remoteAudioRef.current.forEach((audio) => routeMediaOutput(audio, normalized));
-    remoteEffectsRef.current.forEach(({ context }) => routeMediaOutput(context, normalized));
-    routeMediaOutput(voiceRef.current, normalized);
-    routeMediaOutput(localMonitorRef.current?.context, normalized);
-  }, [voiceRef]);
+  const applyOutputRoute = useCallback(
+    (deviceId) => {
+      const normalized = typeof deviceId === "string" ? deviceId : "";
+      outputDeviceIdRef.current = normalized;
+      remoteAudioRef.current.forEach((audio) => routeMediaOutput(audio, normalized));
+      remoteEffectsRef.current.forEach(({ context }) => routeMediaOutput(context, normalized));
+      routeMediaOutput(voiceRef.current, normalized);
+      routeMediaOutput(localMonitorRef.current?.context, normalized);
+    },
+    [voiceRef]
+  );
 
   useEffect(() => {
     const route = (event) => applyOutputRoute(event.detail?.deviceId);

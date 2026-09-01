@@ -26,7 +26,8 @@ export function drawPianoRoll(context, frame, palette, pitch) {
   for (const note of frame.notes) {
     const height = clamp(frame.rowHeight * 0.72, 5, 15);
     const y = frame.y(note.note) + (frame.rowHeight - height) / 2;
-    const opacity = note.state === "past" ? clamp(0.58 * (1 - (frame.time - note.end) / 2.8), 0.08, 0.58) : 1;
+    const opacity =
+      note.state === "past" ? clamp(0.58 * (1 - (frame.time - note.end) / 2.8), 0.08, 0.58) : 1;
     const gradient = context.createLinearGradient(0, y, 0, y + height);
     gradient.addColorStop(0, note.state === "current" ? palette.text : palette.highlight);
     gradient.addColorStop(0.34, palette.hover);

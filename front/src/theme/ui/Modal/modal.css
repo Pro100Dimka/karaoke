@@ -21,7 +21,7 @@
     will-change: auto;
   }
 
-  .ui-modal-dialog.ui-card--neon>.ui-card__fx {
+  .ui-modal-dialog.ui-card--neon > .ui-card__fx {
     transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
     transform-origin: center;
     transform-style: preserve-3d;
@@ -29,14 +29,14 @@
     transition: transform 0.15s ease-out;
   }
 
-  .ui-modal-dialog>.ui-card__panel {
+  .ui-modal-dialog > .ui-card__panel {
     inline-size: auto;
     block-size: auto;
     max-block-size: calc(100dvh - var(--space-8));
     overflow: hidden;
   }
 
-  .ui-modal-dialog>.ui-card__panel>.ui-card__content {
+  .ui-modal-dialog > .ui-card__panel > .ui-card__content {
     display: flex;
     flex-direction: column;
     inline-size: auto;
@@ -68,9 +68,7 @@
     padding: var(--space-4) var(--space-5);
     border-block-start: var(--hairline) solid var(--color-border);
     background:
-      linear-gradient(90deg,
-        color-mix(in srgb, var(--color-primary) 6%, transparent),
-        transparent),
+      linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 6%, transparent), transparent),
       var(--color-surface-glass);
   }
 
@@ -113,10 +111,11 @@
     min-inline-size: 0vw;
     padding: var(--space-5) var(--space-8) var(--space-4) var(--space-5);
     border-block-end: var(--hairline) solid var(--color-border);
-    background:
-      linear-gradient(90deg,
-        color-mix(in srgb, var(--color-primary) 10%, transparent),
-        transparent);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-primary) 10%, transparent),
+      transparent
+    );
   }
 
   .ui-modal-title-media {
@@ -129,20 +128,17 @@
     border: var(--hairline) solid var(--color-border-strong);
     border-radius: var(--radius-lg);
     color: var(--color-primary-hover);
-    background:
-      color-mix(in srgb,
-        var(--color-primary) 12%,
-        var(--color-surface-glass));
+    background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-glass));
     box-shadow: var(--shadow-neon-soft);
   }
 
-  .ui-modal-title-media> :is(img, svg) {
+  .ui-modal-title-media > :is(img, svg) {
     inline-size: 100%;
     block-size: 100%;
     object-fit: cover;
   }
 
-  .ui-modal-title-media>svg {
+  .ui-modal-title-media > svg {
     inline-size: var(--space-5);
     block-size: var(--space-5);
   }

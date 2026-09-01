@@ -4,7 +4,15 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { clamp } from "../../../utils/math";
 import { pianoPitchRange, pianoRollFrame } from "./geometry";
 
-function RollGraphics({ currentTime, currentTimeRef, isPitchDetected, notes, palette, size, sung }) {
+function RollGraphics({
+  currentTime,
+  currentTimeRef,
+  isPitchDetected,
+  notes,
+  palette,
+  size,
+  sung
+}) {
   const graphicsRef = useRef(null);
   // See the comment on pianoRollFrame: useTick below fires every Pixi frame
   // while playing, so the pitch range is memoized here rather than
@@ -29,9 +37,7 @@ function RollGraphics({ currentTime, currentTimeRef, isPitchDetected, notes, pal
         const height = clamp(frame.rowHeight * 0.72, 5, 15);
         const y = frame.y(note.note) + (frame.rowHeight - height) / 2;
         const opacity =
-          note.state === "past"
-            ? clamp(0.58 * (1 - (frame.time - note.end) / 2.8), 0.08, 0.58)
-            : 1;
+          note.state === "past" ? clamp(0.58 * (1 - (frame.time - note.end) / 2.8), 0.08, 0.58) : 1;
         graphics.lineStyle(note.state === "current" ? 1.8 : 1.1, palette.highlight, opacity);
         graphics.beginFill(note.state === "current" ? palette.hover : palette.primary, opacity);
         graphics.drawRoundedRect(
@@ -46,12 +52,7 @@ function RollGraphics({ currentTime, currentTimeRef, isPitchDetected, notes, pal
       graphics.lineStyle(2.2, palette.hover, 1);
       graphics.moveTo(frame.playhead, 0);
       graphics.lineTo(frame.playhead, frame.height);
-      if (
-        isPitchDetected &&
-        Number.isFinite(sung) &&
-        sung >= frame.min &&
-        sung <= frame.max
-      ) {
+      if (isPitchDetected && Number.isFinite(sung) && sung >= frame.min && sung <= frame.max) {
         graphics.lineStyle(2, palette.success, 1);
         graphics.beginFill(palette.text, 1);
         graphics.drawCircle(

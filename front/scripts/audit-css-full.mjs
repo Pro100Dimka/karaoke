@@ -326,7 +326,7 @@ const main = async () => {
   const attestedFiles = [
     ...cssFiles,
     ...sourceFiles,
-    ...(await exists(CONFIG) ? [CONFIG] : []),
+    ...((await exists(CONFIG)) ? [CONFIG] : []),
     fileURLToPath(import.meta.url)
   ];
 

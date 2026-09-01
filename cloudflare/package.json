@@ -2,7 +2,7 @@
   "name": "a-and-d-voice-online",
   "private": true,
   "type": "module",
-  "version": "0.3.41",
+  "version": "0.3.42",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

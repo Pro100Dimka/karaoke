@@ -15,11 +15,23 @@ assert.equal(
   "playwright test -c playwright.release.config.mjs"
 );
 assert.equal(pkg.scripts["verify:release"], "python ../scripts/release_gate.py");
-assert.equal(pkg.scripts["build:electron"], undefined, "Alternative Electron installer command exists");
+assert.equal(
+  pkg.scripts["build:electron"],
+  undefined,
+  "Alternative Electron installer command exists"
+);
 assert.equal(pkg.build?.win?.target, "dir", "electron-builder must only create unpacked runtime");
-assert.equal(pkg.build?.nsis, undefined, "NSIS must not compete with the Inno production installer");
+assert.equal(
+  pkg.build?.nsis,
+  undefined,
+  "NSIS must not compete with the Inno production installer"
+);
 assert.equal(pkg.build?.mac, undefined, "Unverified DMG release target must not be published");
-assert.equal(pkg.build?.linux, undefined, "Unverified AppImage release target must not be published");
+assert.equal(
+  pkg.build?.linux,
+  undefined,
+  "Unverified AppImage release target must not be published"
+);
 for (const required of [
   "Backend full suite + coverage",
   "Frontend verify",

@@ -28,8 +28,12 @@ export default function useOnlineRoomCommands({
         roomRef.current &&
         (roomRef.current.host || ["karaoke-player", "open-library"].includes(state?.type))
       )
-        return clientRef.current?.send("sync", { state: state?.type === "karaoke-player"
-          ? { ...state, positionAt: clientRef.current?.serverNow?.() ?? Date.now() } : state });
+        return clientRef.current?.send("sync", {
+          state:
+            state?.type === "karaoke-player"
+              ? { ...state, positionAt: clientRef.current?.serverNow?.() ?? Date.now() }
+              : state
+        });
       return false;
     },
     [clientRef, roomRef]

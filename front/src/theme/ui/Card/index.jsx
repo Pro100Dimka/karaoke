@@ -42,12 +42,7 @@ const Card = forwardRef(
       <Primitive
         ref={ref}
         as={as}
-        className={cx(
-          "ui-card",
-          isNeon && "ui-card--neon",
-          !tilt && "ui-card--no-tilt",
-          className
-        )}
+        className={cx("ui-card", isNeon && "ui-card--neon", !tilt && "ui-card--no-tilt", className)}
         data-surface={surface}
         data-variant={variant || undefined}
         data-interactive={interactive || undefined}
@@ -56,7 +51,7 @@ const Card = forwardRef(
         style={{
           "--card-shadow": `var(--shadows-${elevation})`,
           ...style,
-          ...disablePadding && { padding: 0 },
+          ...(disablePadding && { padding: 0 })
         }}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
@@ -65,22 +60,13 @@ const Card = forwardRef(
         {isNeon ? (
           <>
             <span className="ui-card__fx ui-card__glow" aria-hidden="true" />
-            <span
-              className="ui-card__fx ui-card__glow-mid"
-              aria-hidden="true"
-            />
+            <span className="ui-card__fx ui-card__glow-mid" aria-hidden="true" />
             <span className="ui-card__fx ui-card__edge" aria-hidden="true" />
             <span className="ui-card__fx ui-card__glint" aria-hidden="true" />
-            <div
-              {...cardPanel}
-              className={cx("ui-card__panel", cardPanel?.className)}
-            >
+            <div {...cardPanel} className={cx("ui-card__panel", cardPanel?.className)}>
               <span className="ui-card__fx ui-card__sheen" aria-hidden="true" />
 
-              <div
-                {...cardContent}
-                className={cx("ui-card__content", cardContent?.className)}
-              >
+              <div {...cardContent} className={cx("ui-card__content", cardContent?.className)}>
                 {children}
               </div>
             </div>

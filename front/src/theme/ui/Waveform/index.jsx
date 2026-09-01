@@ -16,7 +16,9 @@ const fallbackPath = (() => {
     x: (index / (COUNT - 1)) * WIDTH,
     halfHeight: 1 + sample * (center - 3)
   }));
-  const upper = points.map(({ x, halfHeight }) => `${x.toFixed(2)} ${(center - halfHeight).toFixed(2)}`);
+  const upper = points.map(
+    ({ x, halfHeight }) => `${x.toFixed(2)} ${(center - halfHeight).toFixed(2)}`
+  );
   const lower = points
     .map(({ x, halfHeight }) => `${x.toFixed(2)} ${(center + halfHeight).toFixed(2)}`)
     .reverse();
@@ -83,9 +85,7 @@ export default function Waveform({
           hideScrollbar: true,
           interact: false,
           normalize: true,
-          ...(cached
-            ? { duration: cached.duration, peaks: cached.peaks }
-            : { fetchParams, url }),
+          ...(cached ? { duration: cached.duration, peaks: cached.peaks } : { fetchParams, url }),
           progressColor: [color("--color-highlight"), color("--color-primary-hover")],
           waveColor: [color("--color-primary"), color("--color-secondary")]
         });
@@ -159,11 +159,11 @@ export default function Waveform({
           width: "stretch",
           display: real || (url && !fallbackWhileLoading) ? "none" : "block",
           position: "absolute",
-          inset: 0,
+          inset: 0
         }}
       >
-        <defs  >
-          <linearGradient id={gradient} >
+        <defs>
+          <linearGradient id={gradient}>
             <stop stopColor="var(--color-primary)" />
             <stop offset=".5" stopColor="var(--color-highlight)" />
             <stop offset="1" stopColor="var(--color-secondary)" />

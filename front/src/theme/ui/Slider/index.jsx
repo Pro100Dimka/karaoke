@@ -9,14 +9,7 @@ import "./slider.css";
 
 const clamp = (value, min, max) => clampRange(Number(value) || 0, min, max);
 
-const COMMIT_KEYS = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-  "Home",
-  "End"
-]);
+const COMMIT_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]);
 
 const Slider = forwardRef(
   (
@@ -57,11 +50,7 @@ const Slider = forwardRef(
     const hintId = hint ? `${controlId}-hint` : undefined;
     const errorId = error ? `${controlId}-error` : undefined;
     const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
-    const [current, setCurrent] = useControllable(
-      value,
-      defaultValue ?? min,
-      onChange
-    );
+    const [current, setCurrent] = useControllable(value, defaultValue ?? min, onChange);
 
     const safe = clamp(current, min, max);
     const percent = ((safe - min) / Math.max(0.000001, max - min)) * 100;
@@ -135,9 +124,13 @@ const Slider = forwardRef(
           {control}
         </OutlinedInput>
         {error ? (
-          <small id={errorId} className="ui-field-message" data-error>{error}</small>
+          <small id={errorId} className="ui-field-message" data-error>
+            {error}
+          </small>
         ) : hint ? (
-          <small id={hintId} className="ui-field-message">{hint}</small>
+          <small id={hintId} className="ui-field-message">
+            {hint}
+          </small>
         ) : null}
       </div>
     );

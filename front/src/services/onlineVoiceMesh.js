@@ -3,8 +3,8 @@ import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
-import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 import { resolveMicrophoneDevice } from "./microphoneDevice";
+import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 import OnlineVoicePeerRecovery from "./onlineVoicePeerRecovery";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.

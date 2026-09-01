@@ -146,9 +146,7 @@ export default function useLibrary() {
   );
   const processingSongs = useMemo(() => getProcessingSongs(currentSongs), [currentSongs]);
   const selectedProcessingSong = useMemo(
-    () =>
-      currentSongs.find(({ id }) => id === processingSong?.id) ??
-      processingSong,
+    () => currentSongs.find(({ id }) => id === processingSong?.id) ?? processingSong,
     [currentSongs, processingSong]
   );
   const processingActive = hasActiveSongProcessing(currentSongs);

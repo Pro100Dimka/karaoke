@@ -508,16 +508,17 @@ export function OnlineRoomProvider({ children }) {
     // Effects now run once on the sender and arrive as a normal WebRTC track.
     effectPeople.forEach((id) => applyParticipantEffects(id, false));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
-  const { openKaraoke, roomClockNow, syncCommand, syncUi, getLocalVoiceStream } = useOnlineRoomCommands({
-    api,
-    clientRef,
-    connectionTokenRef,
-    hostSongCommandRef,
-    onTransferStatus: setTransferStatus,
-    participantsRef,
-    roomRef,
-    voiceRef
-  });
+  const { openKaraoke, roomClockNow, syncCommand, syncUi, getLocalVoiceStream } =
+    useOnlineRoomCommands({
+      api,
+      clientRef,
+      connectionTokenRef,
+      hostSongCommandRef,
+      onTransferStatus: setTransferStatus,
+      participantsRef,
+      roomRef,
+      voiceRef
+    });
   const value = useOnlineRoomValue({
     getLocalVoiceStream,
     createRoom,

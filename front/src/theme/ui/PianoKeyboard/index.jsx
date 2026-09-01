@@ -68,7 +68,12 @@ export default function PianoKeyboard({
   return (
     <Primitive
       data-role="piano-keyboard"
-      sx={{ position: "relative", overflow: "hidden", background: "#f1f0f3", boxShadow: "var(--space-2) 0 var(--space-4) #0005" }}
+      sx={{
+        position: "relative",
+        overflow: "hidden",
+        background: "#f1f0f3",
+        boxShadow: "var(--space-2) 0 var(--space-4) #0005"
+      }}
       style={{ width, height }}
     >
       {whiteKeyGeometry.map(({ midi, top, height: keyHeight }) => (

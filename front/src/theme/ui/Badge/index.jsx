@@ -23,11 +23,7 @@ export default function Badge({
   const content = numeric && badgeContent > max ? `${max}+` : badgeContent;
 
   return (
-    <span
-      className={`ui-badge ${className}`.trim()}
-      data-overlap={overlap}
-      {...props}
-    >
+    <span className={`ui-badge ${className}`.trim()} data-overlap={overlap} {...props}>
       {children}
       <span
         className={`ui-badge__badge ${badgeClassName}`.trim()}

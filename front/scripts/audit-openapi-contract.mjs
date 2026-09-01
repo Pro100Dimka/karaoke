@@ -85,7 +85,8 @@ function extractCalls(source, file) {
     ) {
       const path = literalPathFromNode(node.arguments[0]);
       if (path && path.startsWith("/")) {
-        const method = node.callee.name === "createFileUrl" ? "GET" : methodFromArguments(node.arguments);
+        const method =
+          node.callee.name === "createFileUrl" ? "GET" : methodFromArguments(node.arguments);
         calls.push({ path: path.split("?")[0], method: method.toLowerCase(), file });
       }
     }
@@ -129,15 +130,21 @@ for (const call of frontendCalls) {
   if (match) calledBackendPaths.add(`${match.path}#${call.method}`);
 }
 const uncalledBackendEndpoints = schemaPaths.flatMap(({ path, methods }) =>
-  methods.filter((method) => !calledBackendPaths.has(`${path}#${method}`)).map((method) => `${method.toUpperCase()} ${path}`)
+  methods
+    .filter((method) => !calledBackendPaths.has(`${path}#${method}`))
+    .map((method) => `${method.toUpperCase()} ${path}`)
 );
 
-console.log(`Checked ${frontendCalls.length} frontend calls against ${schemaPaths.length} backend paths.`);
+console.log(
+  `Checked ${frontendCalls.length} frontend calls against ${schemaPaths.length} backend paths.`
+);
 
 if (orphanedFrontendCalls.length > 0) {
   console.error("\nFrontend calls with no matching backend endpoint:");
   for (const call of orphanedFrontendCalls) {
-    console.error(`  ${call.method.toUpperCase()} ${call.path.replace(/\0PARAM\0/g, "{param}")}  (${call.file})`);
+    console.error(
+      `  ${call.method.toUpperCase()} ${call.path.replace(/\0PARAM\0/g, "{param}")}  (${call.file})`
+    );
   }
 }
 

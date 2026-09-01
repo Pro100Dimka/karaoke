@@ -26,5 +26,4 @@
   .ui-processing-signal[data-compact] {
     min-block-size: var(--space-8);
   }
-
 }

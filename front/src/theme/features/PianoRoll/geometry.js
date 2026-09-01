@@ -56,11 +56,7 @@ export function pianoRollFrame(notes, currentTime, size, pitchRange) {
       left: Math.max(keyboard, x(note.start)),
       right: Math.min(width, x(note.end)),
       state:
-        time >= note.start && time < note.end
-          ? "current"
-          : note.end <= time
-            ? "past"
-            : "future"
+        time >= note.start && time < note.end ? "current" : note.end <= time ? "past" : "future"
     }));
   const connections = visibleNotes.slice(1).flatMap((note, index) => {
     const previous = visibleNotes[index];
@@ -81,16 +77,16 @@ export function pianoRollFrame(notes, currentTime, size, pitchRange) {
   });
   return {
     end,
-height,
-keyboard,
-lane,
-max,
-min,
-playhead: x(time),
-rowHeight,
-start,
-time,
-width,
+    height,
+    keyboard,
+    lane,
+    max,
+    min,
+    playhead: x(time),
+    rowHeight,
+    start,
+    time,
+    width,
     x,
     y,
     connections,
