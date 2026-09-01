@@ -11,13 +11,13 @@ import struct
 import subprocess
 import tempfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import config
-from AI.lyrics_document import validate_lyrics_document
 from app.services import kar_dataset_service, song_service
+from app.services.kar_alignment import retime_words
 from app.utils.json_files import write_json
 
 AES: Any
@@ -351,6 +351,31 @@ def _write_embedded_audio(entry: KfnEntry, target: Path) -> bool:
     return ready
 
 
+def _refine_kfn_vocals(document, target: Path):
+    match = kar_dataset_service._midi_audio_match(
+        document,
+        target / "vocals.flac",
+        max_offset_seconds=kar_dataset_service._MAX_VOCAL_AUDIO_OFFSET_SECONDS,
+    )
+    if match["score"] < kar_dataset_service._MIN_MELODY_MATCH_SCORE:
+        return None
+    offset = round(
+        float(match["offset_seconds"]) - kar_dataset_service._VOCAL_DISPLAY_LEAD_SECONDS, 3
+    )
+    scale = float(match["time_scale"])
+    match = {**match, "offset_seconds": offset, "display_lead_seconds": 0.1}
+    document = replace(
+        document,
+        bpm=float(match["audio_bpm"]),
+        duration=max(0, document.duration * scale + offset),
+        words=retime_words(document.words, scale, offset),
+    )
+    return document, kar_dataset_service._lyrics_payload(document, "kfn"), {
+        **match,
+        "status": "vocal-stem-refined",
+    }
+
+
 def prepare_kfn_file(
     path: str | Path,
     *,
@@ -423,13 +448,7 @@ def prepare_kfn_file(
         )
         with source.open("rb") as source_stream:
             digest = hashlib.file_digest(source_stream, "sha256").hexdigest()
-        reference = validate_lyrics_document(
-            {
-                **kar_dataset_service._lyrics_payload(document),
-                "reference_audio": "original.flac",
-                "source": "kfn",
-            }
-        )
+        reference = kar_dataset_service._lyrics_payload(document, "kfn")
         audio_entry = next(
             (
                 entry
@@ -440,6 +459,12 @@ def prepare_kfn_file(
         )
         audio_ready = bool(audio_entry and _write_embedded_audio(audio_entry, target))
         warnings = [] if audio_ready else ["В KFN не найдена пригодная встроенная аудиодорожка"]
+        comparison = {
+            "status": "kfn-embedded-reference",
+            "time_scale": 1.0,
+            "offset_seconds": 0.0,
+            "pitch_shift_semitones": 0,
+        }
         stems_error: str | None = None
         stems_ready = False
         if audio_ready:
@@ -456,6 +481,13 @@ def prepare_kfn_file(
                 warnings.append(f"Не удалось разделить оригинал на голос и минус: {exc}")
                 (target / "vocals.flac").unlink(missing_ok=True)
                 (target / "instrumental.flac").unlink(missing_ok=True)
+        if stems_ready:
+            try:
+                refined = _refine_kfn_vocals(document, target)
+                if refined is not None:
+                    document, reference, comparison = refined
+            except Exception as exc:
+                warnings.append(f"Не удалось уточнить синхронизацию KFN по голосу: {exc}")
         media: dict[str, object] = {
             "cover_status": "fallback",
             "video_status": "fallback",
@@ -476,12 +508,6 @@ def prepare_kfn_file(
             kar_dataset_service._notify_dataset(
                 progress, cancelled, "karaoke_media", 97, "Визуальные файлы готовы"
             )
-        comparison = {
-            "status": "kfn-embedded-reference",
-            "time_scale": 1.0,
-            "offset_seconds": 0.0,
-            "pitch_shift_semitones": 0,
-        }
         write_json(target / "lyricsSync.json", reference)
         write_json(target / "comparison.json", comparison)
         note_count = sum(len(word.get("notes", [])) for word in reference["words"])

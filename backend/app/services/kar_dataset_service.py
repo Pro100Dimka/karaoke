@@ -20,7 +20,11 @@ import numpy as np
 
 import config
 from AI.lyrics_document import validate_lyrics_document
-from app.services import ai_bridge, metadata_enrichment_service, song_service
+from app.services import ai_bridge, kar_metadata, metadata_enrichment_service, song_service
+from app.services.kar_alignment import (
+    closest_tempo_octave as _closest_tempo_octave,
+    midi_audio_match as _midi_audio_match,
+)
 from app.utils.json_files import write_json
 
 try:
@@ -65,6 +69,7 @@ _REJECTED_AUDIO_HINTS = (
     "a cappella",
     "cover version",
     "cover by",
+    "cover",
     "tribute",
     "reaction",
     "remix",
@@ -79,25 +84,30 @@ _REJECTED_AUDIO_HINTS = (
     "кавер",
     "demo",
     "live",
+    "live performance",
+    "live session",
     "concert",
+    "unplugged",
+    "rehearsal",
     "minecraft",
     "демо",
     "концерт",
+    "живой звук",
+    "живое исполнение",
+    "выступление",
+    "фестиваль",
+    "репетиция",
+    "акустическая версия",
     "майнкрафт",
 )
 _MAX_AUDIO_DURATION_DRIFT_SECONDS = 20.0
 _MAX_AUDIO_DURATION_DRIFT_RATIO = 0.12
 _MIN_MELODY_MATCH_SCORE = 0.45
-# A MIDI melody is periodic enough that an unrestricted chroma search can
-# confidently lock to the same chord one or two bars away.  That moved the
-# lyrics several seconds ahead of the vocal in otherwise matching masters.
-# Original KAR/MID files normally need only a small lead-in correction; larger
-# differences are exposed to the user as a manual offset instead of silently
-# corrupting the reference labels.
-_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS = 1.0
+_MAX_VOCAL_AUDIO_OFFSET_SECONDS = 15.0
+_VOCAL_DISPLAY_LEAD_SECONDS = 0.1
 _AUDIO_SEARCH_INTENT_BONUS = {
-    "studio": 24.0,
-    "official": 8.0,
+    "studio": 2.0,
+    "official": 1.0,
 }
 _CYRILLIC_TRANSLITERATION = str.maketrans(
     {
@@ -173,12 +183,11 @@ def _track_events(midi: mido.MidiFile) -> list[list[tuple[int, mido.Message]]]:
         tick = 0
         events = []
         for message in track:
-            tick += int(message.time)
+            delta = int(message.time)
+            tick += delta - (0x100000000 if not events and delta > 0x7FFFFFFF else 0)
             events.append((tick, message))
         tracks.append(events)
     return tracks
-
-
 def _tempo_converter(
     tracks: list[list[tuple[int, mido.Message]]],
     ticks_per_beat: int,
@@ -223,28 +232,7 @@ def _tempo_converter(
 
 
 def _metadata(tracks: list[list[tuple[int, mido.Message]]]) -> tuple[str, str, str]:
-    titles, key = [], "Unknown"
-    for track in tracks:
-        for _tick, message in track:
-            if message.type == "key_signature" and key == "Unknown":
-                key = str(message.key)
-            if message.type not in {"text", "lyrics"}:
-                continue
-            text = str(getattr(message, "text", "")).strip()
-            if text.upper().startswith("@T"):
-                value = _clean_text(text[2:])
-                if value:
-                    titles.append(value)
-    title = titles[0] if titles else ""
-    artist = titles[1] if len(titles) > 1 else ""
-    # A widespread .kar convention stores "title - artist" in the first @T
-    # line and uses subsequent @T lines for composers, translators or the
-    # authoring program. Treating the second line as the performer produces
-    # incorrect folders such as "Golden Earring Пушкина М. Беспечный ангел".
-    composite = re.match(r"^(.+?)\s+[-–—]\s+(.+)$", title)
-    if composite:
-        title, artist = (_clean_text(composite.group(1)), _clean_text(composite.group(2)))
-    return title, artist, key
+    return kar_metadata.metadata(tracks)
 
 
 def _lyrics_by_track(
@@ -593,8 +581,7 @@ def parse_kar(
         words[-1]["end"],
         [float(word["start"]) for word in words],
     )
-    if suffix == ".mid":
-        notes = _monophonize_notes(notes)
+    notes = _monophonize_notes(notes)
     if notes:
         last = words[-1]
         sustained = [
@@ -735,7 +722,7 @@ def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> floa
         for field in ("title", "album", "description", "playlist_title")
     )
     normalized = metadata_text.casefold()
-    if any(hint in normalized for hint in _REJECTED_AUDIO_HINTS):
+    if kar_metadata.contains_hint(normalized, _REJECTED_AUDIO_HINTS):
         return None
     expected_artist, expected_song = _audio_search_identity(document)
     expected_title = set(_normalized_words(expected_song))
@@ -812,126 +799,6 @@ def _candidate_url(entry: dict[str, Any]) -> str | None:
     return (
         f"https://www.youtube.com/watch?v={value}" if re.fullmatch(r"[\w-]{11}", value) else value
     )
-
-
-def _midi_audio_match(document: KarDocument, audio_path: Path) -> dict[str, Any]:
-    import librosa
-
-    audio, rate = librosa.load(audio_path, sr=11_025, mono=True)
-    if audio.size < rate * 20:
-        raise RuntimeError("Найденная аудиозапись слишком короткая")
-    hop = 1024
-    chroma = librosa.feature.chroma_cqt(y=audio, sr=rate, hop_length=hop)
-    chroma /= np.maximum(chroma.max(axis=0, keepdims=True), 1e-6)
-    top_three_mask = np.zeros_like(chroma, dtype=bool)
-    top_three = np.argsort(chroma, axis=0)[-3:]
-    top_three_mask[top_three, np.arange(chroma.shape[1])] = True
-    notes = [
-        note
-        for word in document.words
-        for note in word.get("notes", [])
-        if float(note["end"]) - float(note["start"]) >= 0.08
-    ]
-    if len(notes) < 24:
-        raise RuntimeError("В .kar недостаточно нот для проверки найденной аудиозаписи")
-    step = max(1, len(notes) // 600)
-    sampled = notes[::step]
-    midpoints = np.asarray(
-        [(float(note["start"]) + float(note["end"])) / 2 for note in sampled],
-        dtype=np.float64,
-    )
-    pitch_classes = np.asarray([int(note["note"]) % 12 for note in sampled], dtype=np.int16)
-    audio_duration = float(audio.size / rate)
-    detected_bpm = float(np.asarray(librosa.feature.tempo(y=audio, sr=rate)).reshape(-1)[0])
-    detected_near_kar = _closest_tempo_octave(detected_bpm, document.bpm)
-
-    # ``librosa.feature.tempo`` is intentionally only a hint.  On real rock
-    # recordings it reported 143.555 for a ~148.7 BPM master; blindly applying
-    # that value accumulated seconds of drift.  Search tempo and lead-in
-    # jointly against the MIDI melody, then refine around the coarse optimum.
-    # The vectorized scorer keeps this cheaper than the previous nested
-    # per-note implementation even though it now determines the actual tempo.
-    best_score, best_rank, best_bpm, best_offset, best_count, best_shift = (
-        0.0,
-        -math.inf,
-        detected_near_kar,
-        0.0,
-        0,
-        0,
-    )
-
-    def search(bpms: np.ndarray, offsets: np.ndarray) -> None:
-        nonlocal best_score, best_rank, best_bpm, best_offset, best_count, best_shift
-        for bpm in bpms:
-            time_scale = document.bpm / max(float(bpm), 0.001)
-            scaled_midpoints = midpoints * time_scale
-            for offset in offsets:
-                frames = ((scaled_midpoints + float(offset)) * rate / hop).astype(np.int64)
-                valid = (frames >= 0) & (frames < chroma.shape[1])
-                count = int(np.count_nonzero(valid))
-                if count < 24:
-                    continue
-                valid_frames = frames[valid]
-                valid_pitches = pitch_classes[valid]
-                for pitch_shift in range(-6, 6):
-                    shifted = (valid_pitches + pitch_shift) % 12
-                    score = 0.65 * float(np.mean(chroma[shifted, valid_frames])) + 0.35 * float(
-                        np.mean(top_three_mask[shifted, valid_frames])
-                    )
-                    # Stable tie-breaking: prefer the tempo detector's octave
-                    # and the smallest lead-in correction when chroma scores
-                    # are indistinguishable (e.g. synthetic/constant spectra).
-                    rank = score - 1e-7 * abs(float(bpm) - detected_near_kar) - 1e-7 * abs(
-                        float(offset)
-                    )
-                    if rank > best_rank:
-                        best_score, best_rank = score, rank
-                        best_bpm, best_offset = float(bpm), float(offset)
-                        best_count, best_shift = count, pitch_shift
-
-    coarse_bpms = np.arange(document.bpm * 0.88, document.bpm * 1.12 + 0.001, 0.5)
-    coarse_offsets = np.arange(
-        -_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS,
-        _MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS + 0.001,
-        0.25,
-    )
-    search(coarse_bpms, coarse_offsets)
-
-    coarse_bpm, coarse_offset = best_bpm, best_offset
-    fine_bpms = np.arange(coarse_bpm - 0.5, coarse_bpm + 0.501, 0.05)
-    fine_offsets = np.arange(
-        max(-_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS, coarse_offset - 0.25),
-        min(_MAX_AUTOMATIC_AUDIO_OFFSET_SECONDS, coarse_offset + 0.25) + 0.001,
-        0.05,
-    )
-    search(fine_bpms, fine_offsets)
-    audio_bpm = best_bpm
-    time_scale = document.bpm / max(audio_bpm, 0.001)
-    return {
-        "score": round(best_score, 4),
-        "offset_seconds": round(best_offset, 3),
-        "time_scale": round(time_scale, 6),
-        "kar_bpm": round(document.bpm, 3),
-        "audio_bpm": round(audio_bpm, 3),
-        "detected_audio_bpm": round(detected_bpm, 3),
-        "pitch_shift_semitones": best_shift,
-        "audio_duration": round(audio_duration, 3),
-        "compared_notes": best_count,
-    }
-
-
-def _closest_tempo_octave(detected_bpm: float, kar_bpm: float) -> float:
-    """Resolve the common half/double-tempo ambiguity against the KAR tempo."""
-    if not math.isfinite(detected_bpm) or detected_bpm <= 0:
-        raise RuntimeError("Не удалось определить BPM оригинальной песни")
-    if not math.isfinite(kar_bpm) or kar_bpm <= 0:
-        return detected_bpm
-    candidates = [
-        detected_bpm * (2**octave)
-        for octave in range(-3, 4)
-        if 35 <= detected_bpm * (2**octave) <= 260
-    ]
-    return min(candidates, key=lambda value: abs(math.log(value / kar_bpm)))
 
 
 def _download_preview(entry: dict[str, Any], directory: Path, index: int) -> tuple[Path, dict]:
@@ -1221,6 +1088,83 @@ def _unique_dataset_dir(root: Path, document: KarDocument) -> Path:
             suffix += 1
 
 
+def _refine_vocal_alignment(
+    source: Path,
+    original_filename: str | None,
+    source_kind: str,
+    vocals_path: Path,
+    audio_source: dict[str, Any],
+) -> tuple[KarDocument, dict[str, Any], dict[str, Any], dict[str, Any]] | None:
+    raw_document = parse_kar(source, original_filename=original_filename)
+    vocal_match = _midi_audio_match(
+        raw_document,
+        vocals_path,
+        max_offset_seconds=_MAX_VOCAL_AUDIO_OFFSET_SECONDS,
+    )
+    original_bpm = float(audio_source["midi_audio_match"]["audio_bpm"])
+    vocal_bpm = float(vocal_match["audio_bpm"])
+    bpm_ratio = vocal_bpm / max(original_bpm, 0.001)
+    if vocal_match["score"] < _MIN_MELODY_MATCH_SCORE or not 0.97 <= bpm_ratio <= 1.03:
+        return None
+    vocal_match = {
+        **vocal_match,
+        "offset_seconds": round(
+            float(vocal_match["offset_seconds"]) - _VOCAL_DISPLAY_LEAD_SECONDS, 3
+        ),
+        "display_lead_seconds": _VOCAL_DISPLAY_LEAD_SECONDS,
+    }
+    document = parse_kar(
+        source,
+        original_filename=original_filename,
+        bpm_override=vocal_bpm,
+        offset_seconds=float(vocal_match["offset_seconds"]),
+    )
+    return (
+        document,
+        _lyrics_payload(document, source_kind),
+        {**vocal_match, "status": "vocal-stem-refined"},
+        {**audio_source, "midi_audio_match": vocal_match},
+    )
+
+
+def _prepare_dataset_stems(
+    target: Path,
+    warnings: list[str],
+    progress: DatasetProgress | None,
+    cancelled: CancelCallback | None,
+) -> str | None:
+    if not (target / "original.flac").is_file():
+        return None
+    try:
+        _notify_dataset(progress, cancelled, "separate", 36, "Разделяем голос и минусовку")
+        _prepare_fast_stems(target)
+        _notify_dataset(progress, cancelled, "separate", 68, "Голос и минусовка готовы")
+        return None
+    except Exception as exc:
+        warnings.append(f"Не удалось разделить оригинал на голос и минус: {exc}")
+        (target / "vocals.flac").unlink(missing_ok=True)
+        (target / "instrumental.flac").unlink(missing_ok=True)
+        return str(exc)
+
+
+def _parse_dataset_document(
+    source: Path, original_filename: str | None, source_kind: str
+) -> KarDocument:
+    try:
+        document = parse_kar(source, original_filename=original_filename)
+    except ValueError as exc:
+        if source_kind == "mid":
+            raise MidiSkipped(f"MID пропущен: {exc}") from exc
+        raise
+    if source_kind == "mid":
+        coverage = sum(bool(word.get("notes")) for word in document.words) / max(
+            1, len(document.words)
+        )
+        if document.melody_track is None or coverage < 0.45:
+            raise MidiSkipped("MID пропущен: нет надёжно синхронизированных текста и вокальных нот")
+    return document
+
+
 def prepare_kar_file(
     path: str | Path,
     *,
@@ -1234,17 +1178,7 @@ def prepare_kar_file(
     source = Path(path)
     source_kind = "mid" if source.suffix.casefold() == ".mid" else "kar"
     _notify_dataset(progress, cancelled, "karaoke_parse", 2, "Читаем слова и ноты")
-    try:
-        document = parse_kar(source, original_filename=original_filename)
-    except ValueError as exc:
-        if source_kind == "mid":
-            raise MidiSkipped(f"MID пропущен: {exc}") from exc
-        raise
-    if source_kind == "mid":
-        words_with_notes = sum(bool(word.get("notes")) for word in document.words)
-        coverage = words_with_notes / max(1, len(document.words))
-        if document.melody_track is None or coverage < 0.45:
-            raise MidiSkipped("MID пропущен: нет надёжно синхронизированных текста и вокальных нот")
+    document = _parse_dataset_document(source, original_filename, source_kind)
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
@@ -1286,17 +1220,21 @@ def prepare_kar_file(
         shutil.rmtree(target / ".download", ignore_errors=True)
         shutil.rmtree(target / ".processing", ignore_errors=True)
         (target / "kar-lyrics.txt").unlink(missing_ok=True)
-    stems_error: str | None = None
-    if (target / "original.flac").is_file():
+    stems_error = _prepare_dataset_stems(target, warnings, progress, cancelled)
+    vocals_path = target / "vocals.flac"
+    if audio_source is not None and vocals_path.is_file():
         try:
-            _notify_dataset(progress, cancelled, "separate", 36, "Разделяем голос и минусовку")
-            _prepare_fast_stems(target)
-            _notify_dataset(progress, cancelled, "separate", 68, "Голос и минусовка готовы")
+            refined = _refine_vocal_alignment(
+                source,
+                original_filename,
+                source_kind,
+                vocals_path,
+                audio_source,
+            )
+            if refined is not None:
+                document, reference, comparison, audio_source = refined
         except Exception as exc:
-            stems_error = str(exc)
-            warnings.append(f"Не удалось разделить оригинал на голос и минус: {exc}")
-            (target / "vocals.flac").unlink(missing_ok=True)
-            (target / "instrumental.flac").unlink(missing_ok=True)
+            warnings.append(f"Не удалось уточнить синхронизацию по голосу: {exc}")
     media: dict[str, object] = {
         "cover_status": "fallback",
         "video_status": "fallback",

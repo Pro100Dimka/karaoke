@@ -88,6 +88,30 @@ def test_parses_kar_words_tempo_identity_and_melody(tmp_path):
     assert [note["note"] for word in document.words for note in word["notes"]] == [60, 62]
 
 
+def test_legacy_karmaker_reads_title_and_artist_from_header_track_names(tmp_path):
+    source = build_kar(tmp_path / "Batareika.kar")
+    midi = mido.MidiFile(source, charset="cp1251")
+    lyrics = midi.tracks[0]
+    del lyrics[1:3]
+    header = mido.MidiTrack(
+        [
+            mido.MetaMessage("track_name", name="Батарейка", time=0),
+            mido.MetaMessage("track_name", name="Жуки", time=0),
+            mido.MetaMessage("track_name", name="Жуки", time=0),
+            mido.MetaMessage("track_name", name="KAR author", time=0),
+        ]
+    )
+    midi.tracks.insert(0, header)
+    midi.save(source)
+
+    document = kar_dataset_service.parse_kar(source, original_filename=source.name)
+
+    assert (document.title, document.artist) == ("Батарейка", "Жуки")
+    assert kar_dataset_service._audio_search_queries(*kar_dataset_service._audio_search_identity(document))[0][1] == (
+        '"Жуки" "Батарейка" studio version'
+    )
+
+
 def test_real_tempo_at_tick_zero_overrides_midi_default(tmp_path):
     source = build_kar(tmp_path / "song.kar")
     midi = mido.MidiFile(source, charset="cp1251")
@@ -108,6 +132,20 @@ def test_real_tempo_at_tick_zero_overrides_midi_default(tmp_path):
     assert audio_tempo_document.bpm == pytest.approx(129, abs=0.001)
     assert audio_tempo_document.words[0]["start"] == pytest.approx(0.365, abs=0.001)
     assert audio_tempo_document.words[0]["notes"][0]["start"] == pytest.approx(0.365, abs=0.001)
+
+
+def test_legacy_karmaker_signed_lyric_preroll_does_not_create_a_years_long_song():
+    messages = [
+        SimpleNamespace(time=0xFFFFF141),
+        SimpleNamespace(time=413),
+        SimpleNamespace(time=2979),
+        SimpleNamespace(time=383),
+        SimpleNamespace(time=3264),
+    ]
+
+    tracks = kar_dataset_service._track_events(SimpleNamespace(tracks=[messages]))
+
+    assert [tick for tick, _message in tracks[0]] == [-3775, -3362, -383, 0, 3264]
 
 
 def test_named_melody_track_beats_dense_accompaniment(tmp_path):
@@ -335,6 +373,21 @@ def test_mid_octave_doubles_are_reduced_to_one_vocal_line(tmp_path):
     assert all(left["end"] <= right["start"] for left, right in zip(notes, notes[1:], strict=False))
 
 
+def test_kar_overlapping_melody_notes_are_reduced_to_one_vocal_line(tmp_path):
+    source = build_kar(tmp_path / "doubled.kar")
+    midi = mido.MidiFile(source, charset="cp1251")
+    melody = midi.tracks[1]
+    melody.insert(2, mido.Message("note_on", note=48, velocity=80, time=0))
+    melody.insert(4, mido.Message("note_off", note=48, velocity=0, time=0))
+    midi.save(source)
+
+    document = kar_dataset_service.parse_kar(source)
+    notes = [note for word in document.words for note in word["notes"]]
+
+    assert [note["note"] for note in notes] == [60, 62]
+    assert all(left["end"] <= right["start"] for left, right in zip(notes, notes[1:], strict=False))
+
+
 def test_prepares_kfn_into_the_same_dataset_contract(tmp_path):
     midi = build_kar(tmp_path / "embedded.kar").read_bytes()
     source = build_kfn(tmp_path / "song.kfn", midi)
@@ -387,6 +440,21 @@ def test_kfn_embedded_original_is_split_into_training_stems(monkeypatch, tmp_pat
     monkeypatch.setattr(kfn_dataset_service, "_write_embedded_audio", write_audio)
     monkeypatch.setattr(kar_dataset_service, "_prepare_fast_stems", separate)
     monkeypatch.setattr(
+        kar_dataset_service,
+        "_midi_audio_match",
+        lambda *_args, **_kwargs: {
+            "score": 0.9,
+            "kar_bpm": 120,
+            "audio_bpm": 120,
+            "detected_audio_bpm": 120,
+            "time_scale": 1,
+            "offset_seconds": 6.25,
+            "pitch_shift_semitones": 0,
+            "audio_duration": 20,
+            "compared_notes": 50,
+        },
+    )
+    monkeypatch.setattr(
         kar_dataset_service.metadata_enrichment_service,
         "prepare_training_media",
         lambda *_args, **_kwargs: {
@@ -402,6 +470,8 @@ def test_kfn_embedded_original_is_split_into_training_stems(monkeypatch, tmp_pat
 
     assert result["status"] == "ready"
     assert result["stems_status"] == "ready"
+    assert result["alignment"]["status"] == "vocal-stem-refined"
+    assert result["alignment"]["offset_seconds"] == 6.15
     assert (output / "original.flac").read_bytes() == b"original"
     assert (output / "vocals.flac").read_bytes() == b"vocals"
     assert (output / "instrumental.flac").read_bytes() == b"instrumental"
@@ -476,6 +546,59 @@ def test_original_audio_bpm_scales_kar_before_creating_lyrics(monkeypatch, tmp_p
     assert not (output / "lyricsSync.kar.raw.json").exists()
     assert (output / "vocals.flac").read_bytes() == b"vocals"
     assert (output / "instrumental.flac").read_bytes() == b"instrumental"
+
+
+def test_vocal_stem_refines_long_intro_before_writing_lyrics(monkeypatch, tmp_path):
+    source = build_kar(tmp_path / "song.kar")
+    original_match = {
+        "score": 0.8,
+        "kar_bpm": 120,
+        "audio_bpm": 120,
+        "detected_audio_bpm": 120,
+        "time_scale": 1,
+        "offset_seconds": 1,
+        "pitch_shift_semitones": 0,
+        "audio_duration": 20,
+        "compared_notes": 50,
+    }
+    vocal_match = {**original_match, "score": 0.95, "offset_seconds": 6.25}
+
+    def download(_document, output):
+        (output / "original.flac").write_bytes(b"audio")
+        return {"midi_audio_match": original_match}
+
+    def separate(output):
+        (output / "vocals.flac").write_bytes(b"vocals")
+        (output / "instrumental.flac").write_bytes(b"instrumental")
+        return True
+
+    def match(_document, audio_path, *, max_offset_seconds=1):
+        assert audio_path.name == "vocals.flac"
+        assert max_offset_seconds >= 6.25
+        return vocal_match
+
+    monkeypatch.setattr(kar_dataset_service, "_download_audio", download)
+    monkeypatch.setattr(kar_dataset_service, "_prepare_fast_stems", separate)
+    monkeypatch.setattr(kar_dataset_service, "_midi_audio_match", match)
+    monkeypatch.setattr(
+        kar_dataset_service.metadata_enrichment_service,
+        "prepare_training_media",
+        lambda *_args, **_kwargs: {
+            "cover_status": "ready",
+            "video_status": "ready",
+            "video_id": "video-id",
+            "warnings": [],
+        },
+    )
+
+    result = kar_dataset_service.prepare_kar_file(source, output_root=tmp_path / "dataset")
+    output = Path(result["dataset_dir"])
+    reference = json.loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+
+    assert reference["words"][0]["start"] == pytest.approx(6.65)
+    assert result["alignment"]["status"] == "vocal-stem-refined"
+    assert result["alignment"]["offset_seconds"] == 6.15
+    assert result["audio_source"]["midi_audio_match"]["offset_seconds"] == 6.15
 
 
 def test_fast_stems_are_staged_before_becoming_dataset_files(monkeypatch, tmp_path):
@@ -569,6 +692,27 @@ def test_audio_search_prefers_original_and_rejects_karaoke():
     assert kar_dataset_service._audio_candidate_score(accepted, document) is not None
     assert kar_dataset_service._audio_candidate_score(rejected, document) is None
     assert kar_dataset_service._audio_candidate_score(rejected_cover, document) is None
+
+
+def test_audio_search_rejects_plain_cover_marker_from_real_failed_selection():
+    document = kar_dataset_service.KarDocument(
+        title="Батарейка",
+        artist="Жуки",
+        bpm=74.5,
+        key="C",
+        duration=234,
+        words=[],
+        lyric_track=2,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    wrong_recording = {
+        "title": 'POL8 - Batareika (Cover) - "Батарейка" в Германии!',
+        "uploader": "Andrej Plattner",
+        "duration": 253,
+    }
+
+    assert kar_dataset_service._audio_candidate_score(wrong_recording, document) is None
 
 
 def test_audio_search_matches_transliterated_official_metadata():
@@ -684,6 +828,38 @@ def test_audio_search_prefers_artist_channel_over_third_party_official_label():
     assert kar_dataset_service._audio_candidate_score(
         artist_channel, document
     ) > kar_dataset_service._audio_candidate_score(reupload, document)
+
+
+def test_audio_search_artist_channel_beats_unverified_studio_query_result():
+    document = kar_dataset_service.KarDocument(
+        title="Батарейка",
+        artist="Жуки",
+        bpm=74.5,
+        key="C",
+        duration=234,
+        words=[],
+        lyric_track=2,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    artist_channel = {
+        "title": "Жуки - Батарейка",
+        "uploader": "группа Жуки",
+        "duration": 234,
+        "_karaoke_search_intent": "official",
+        "_karaoke_search_rank": 0,
+    }
+    music_school = {
+        "title": "Жуки: Батарейка | СТУДИЯ АРТИС",
+        "uploader": "Школа музыки Артис",
+        "duration": 234,
+        "_karaoke_search_intent": "studio",
+        "_karaoke_search_rank": 0,
+    }
+
+    assert kar_dataset_service._audio_candidate_score(
+        artist_channel, document
+    ) > kar_dataset_service._audio_candidate_score(music_school, document)
 
 
 def test_audio_search_prefers_studio_query_over_hidden_live_album():
@@ -900,6 +1076,58 @@ def test_midi_audio_match_never_automatically_moves_lyrics_by_multiple_bars(
     result = kar_dataset_service._midi_audio_match(document, tmp_path / "preview.wav")
 
     assert abs(result["offset_seconds"]) <= 1
+
+
+def test_midi_audio_match_can_measure_a_long_intro_on_an_isolated_vocal(
+    monkeypatch, tmp_path
+):
+    numpy = __import__("numpy")
+    rate, hop = 11_025, 1024
+    target_offset = 6.25
+    pitches = numpy.random.default_rng(84).integers(48, 72, size=36)
+    words = []
+    chroma = numpy.zeros((12, 650))
+    for index, pitch_value in enumerate(pitches, start=1):
+        pitch = int(pitch_value)
+        start, end = float(index), float(index + 0.7)
+        words.append(
+            {
+                "text": str(index),
+                "start": start,
+                "end": end,
+                "notes": [{"note": pitch, "start": start, "end": end}],
+            }
+        )
+        midpoint = (start + end) / 2
+        frame = int((midpoint + target_offset) * rate / hop)
+        chroma[pitch % 12, frame] = 1
+    document = kar_dataset_service.KarDocument(
+        title="Song",
+        artist="Artist",
+        bpm=120,
+        key="C",
+        duration=45,
+        words=words,
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    fake_librosa = SimpleNamespace(
+        load=lambda *_args, **_kwargs: (numpy.ones(rate * 55), rate),
+        feature=SimpleNamespace(
+            chroma_cqt=lambda **_kwargs: chroma,
+            tempo=lambda **_kwargs: numpy.array([120.0]),
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+
+    result = kar_dataset_service._midi_audio_match(
+        document,
+        tmp_path / "vocals.flac",
+        max_offset_seconds=12,
+    )
+
+    assert result["offset_seconds"] == pytest.approx(target_offset, abs=0.1)
 
 
 def test_audio_bpm_resolves_half_tempo_before_scaling():

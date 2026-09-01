@@ -3,7 +3,8 @@ import useAppSettings from "../hooks/useAppSettings";
 import {
   advanceMusicLighting,
   lightingColor,
-  readLightingMusic
+  readLightingMusic,
+  sameLightingPalette
 } from "../services/keyboardLighting";
 import { configureLighting, isElectron, sendLightingFrame } from "../utils/platform";
 
@@ -19,8 +20,11 @@ export default function KeyboardLighting() {
       busy = false,
       palette = readThemePalette();
     const themeObserver = new MutationObserver(() => {
-      palette = readThemePalette();
-      animation.current = undefined;
+      const nextPalette = readThemePalette();
+      if (!sameLightingPalette(palette, nextPalette)) {
+        palette = nextPalette;
+        animation.current = undefined;
+      }
     });
     themeObserver.observe(document.documentElement, {
       attributes: true,

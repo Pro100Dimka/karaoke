@@ -7,7 +7,8 @@ import {
   musicLightingColor,
   readLightingMusic,
   registerLightingSource,
-  observeLightingMedia
+  observeLightingMedia,
+  sameLightingPalette
 } from "../src/services/keyboardLighting";
 const require = createRequire(import.meta.url);
 const { LightingController, installLightingShutdown } = require("../electron/rgb/controller.cjs");
@@ -312,6 +313,10 @@ test("playing music has a clearly visible theme-colored brightness floor", () =>
   expect(state.rgb[0]).toBeGreaterThanOrEqual(70);
   expect(state.rgb[1]).toBeLessThan(state.rgb[0]);
   expect(state.rgb[2]).toBeLessThan(state.rgb[0]);
+});
+test("radio spectrum style updates do not reset an unchanged theme palette", () => {
+  expect(sameLightingPalette(["#ff174f", "#a20b1d"], ["#ff174f", "#a20b1d"])).toBe(true);
+  expect(sameLightingPalette(["#ff174f", "#a20b1d"], ["#00ff88", "#a20b1d"])).toBe(false);
 });
 test("unsupported media analysis does not modify the playback element", () => {
   const media = { pause: vi.fn(), play: vi.fn() };

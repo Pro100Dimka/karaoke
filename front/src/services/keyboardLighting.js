@@ -44,6 +44,11 @@ export function musicLightingColor(brightness, level, phase) {
 }
 
 const clamp01 = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+export const sameLightingPalette = (left, right) =>
+  Array.isArray(left) &&
+  Array.isArray(right) &&
+  left.length === right.length &&
+  left.every((color, index) => color === right[index]);
 const parseColor = (hex) => {
   const value = /^#[a-f\d]{6}$/i.test(hex || "") ? hex : "#ffffff";
   return [1, 3, 5].map((offset) => parseInt(value.slice(offset, offset + 2), 16));
