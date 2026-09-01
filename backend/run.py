@@ -142,7 +142,9 @@ def configure_logging() -> None:
     # logging subsystem. Custom/test streams may not implement reconfigure().
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(AttributeError, OSError, ValueError):
-            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+            method = "reconfigure"
+            reconfigure = getattr(stream, method)
+            reconfigure(encoding="utf-8", errors="backslashreplace")
 
     log_path = config.APP_LOG_DIR / "application.log"
     for legacy in config.APP_LOG_DIR.iterdir():

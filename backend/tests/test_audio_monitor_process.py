@@ -163,6 +163,7 @@ def test_timeout_identifies_last_startup_stage(monkeypatch, tmp_path):
 
 def test_built_worker_reaches_native_device_validation_without_ai():
     from pathlib import Path
+
     import pytest
     executable = (Path(__file__).resolve().parents[2] /
                   "generated/diagnostics/monitor-startup/dist/KaraokeAudioMonitor/KaraokeAudioMonitor.exe")

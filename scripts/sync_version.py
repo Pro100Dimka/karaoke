@@ -47,9 +47,9 @@ def rendered_files(version: str) -> dict[Path, bytes]:
             r'^(version\s*=\s*")[^"]+("\s*)$',
             rf"\g<1>{version}\g<2>",
         ),
-        ROOT / "backend/app/services/diagnostics_service.py": _replace_version(
-            ROOT / "backend/app/services/diagnostics_service.py",
-            r'^(BACKEND_VERSION\s*=\s*")[^"]+("\s*)$',
+        ROOT / "backend/app/version.py": _replace_version(
+            ROOT / "backend/app/version.py",
+            r'^(APP_VERSION\s*=\s*")[^"]+("\s*)$',
             rf"\g<1>{version}\g<2>",
         ),
         ROOT / "cloudflare/package.json": _json_version(
@@ -90,8 +90,8 @@ def check(version: str) -> list[str]:
     for relative, pattern in (
         ("backend/pyproject.toml", r'^version\s*=\s*"([^"]+)"\s*$'),
         (
-            "backend/app/services/diagnostics_service.py",
-            r'^BACKEND_VERSION\s*=\s*"([^"]+)"\s*$',
+            "backend/app/version.py",
+            r'^APP_VERSION\s*=\s*"([^"]+)"\s*$',
         ),
     ):
         path = ROOT / relative

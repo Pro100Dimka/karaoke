@@ -103,5 +103,6 @@ def about() -> dict[str, str]:
         "name": "A&D Voice",
         "version": diagnostics_service.BACKEND_VERSION,
         "backend_version": diagnostics_service.BACKEND_VERSION,
+        "build_id": diagnostics_service.BUILD_ID,
         "generated_at": datetime.now().astimezone().isoformat(),
     }

@@ -42,8 +42,8 @@ def summary(values):
 
 
 def probe_native(config):
-    from app.services.native_wasapi import NativeWasapiStream, TIMING_FIELDS
     from app.services.monitor_worker import _audio_callback
+    from app.services.native_wasapi import TIMING_FIELDS, NativeWasapiStream
     stats = {}
     stream = NativeWasapiStream({"input_device_name": sd.query_devices(config["input"])["name"],
                                  "output_device_name": sd.query_devices(config["output"])["name"],

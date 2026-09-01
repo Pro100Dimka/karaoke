@@ -6,7 +6,6 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-
 logger = logging.getLogger(__name__)
 _lock = threading.RLock()
 _accepting = True
@@ -38,10 +37,9 @@ def start_task(
 ) -> bool:
     with _lock:
         previous = _tasks.get(name)
+        previous_thread = previous.get("thread") if previous is not None else None
         if not _accepting or (
-            previous is not None
-            and isinstance(previous.get("thread"), threading.Thread)
-            and previous["thread"].is_alive()
+            isinstance(previous_thread, threading.Thread) and previous_thread.is_alive()
         ):
             return False
         record: dict[str, object] = {
@@ -97,12 +95,12 @@ def shutdown(timeout: float = 10.0) -> dict[str, object]:
     stop_accepting()
     with _lock:
         active = [
-            record
+            (record, thread)
             for record in _tasks.values()
-            if isinstance(record.get("thread"), threading.Thread)
-            and record["thread"].is_alive()
+            if isinstance((thread := record.get("thread")), threading.Thread)
+            and thread.is_alive()
         ]
-    for record in active:
+    for record, _thread in active:
         cancel = record.get("cancel")
         if callable(cancel):
             try:
@@ -111,12 +109,11 @@ def shutdown(timeout: float = 10.0) -> dict[str, object]:
                 logger.exception("Background cancellation failed: %s", record["name"])
 
     deadline = time.monotonic() + max(0.0, timeout)
-    for record in active:
-        thread = record["thread"]
+    for _record, thread in active:
         if thread is threading.current_thread():
             continue
         thread.join(timeout=max(0.0, deadline - time.monotonic()))
-    lingering = [record["name"] for record in active if record["thread"].is_alive()]
+    lingering = [str(record["name"]) for record, thread in active if thread.is_alive()]
     if lingering:
         logger.error("Background tasks exceeded shutdown deadline: %s", ", ".join(lingering))
     return {

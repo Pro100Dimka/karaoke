@@ -1,5 +1,7 @@
 /* Stryker disable all */
 export const enMessages = {
+  "errors.audioFileCorruptedOrUnsupported":
+    "The audio file is corrupted, truncated, or uses an unsupported format.",
   "settings.appearance.keyboard_lighting_status.unsupported":
     "Keyboard found, but safe real-time lighting control is unavailable for its protocol or current mode.",
   "settings.appearance.keyboard_lighting_enabled.label": "Keyboard lighting",

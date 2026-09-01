@@ -565,9 +565,12 @@ def enrich_song(song_id: str) -> None:
                         video_changed = True
             existing_id = _youtube_id_from_url(song.video_url)
             if existing_id and song.video_url not in _validated_video_urls:
+                existing_url = song.video_url
+                if not isinstance(existing_url, str):
+                    existing_url = ""
                 quality = _youtube_video_is_acceptable(existing_id, song.title, song.artist)
                 if quality is True:
-                    _validated_video_urls.add(song.video_url)
+                    _validated_video_urls.add(existing_url)
                 elif quality is False:
                     song.video_url = None
                     video_changed = True

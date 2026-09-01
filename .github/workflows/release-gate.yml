@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: |
           python -m venv backend/venv
-          backend/venv/Scripts/python.exe -m pip install --disable-pip-version-check --prefer-binary --extra-index-url https://download.pytorch.org/whl/cu126 -r backend/requirements-lock.txt
+          backend/venv/Scripts/python.exe -m pip install --disable-pip-version-check --prefer-binary --require-hashes --index-url https://pypi.org/simple -r backend/requirements-lock.txt
       - name: Install frontend dependencies
         shell: pwsh
         working-directory: front
@@ -55,6 +55,14 @@ jobs:
         with:
           name: dependency-audits-${{ github.run_id }}
           path: generated/tests/security/*.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish current source audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-audits-${{ github.run_id }}
+          path: generated/audits/*.json
           if-no-files-found: error
           retention-days: 30
       - name: Publish release SBOM

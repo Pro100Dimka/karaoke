@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 import config
 import models
 from AI.utils.numeric import clamp01
+from app.services.audio_runtime import hardware_lock
 from app.services.db_utils import commit_refresh
 from app.services.monitor_control import MonitorCancelled, MonitorControl
-from app.services.audio_runtime import hardware_lock
 
 try:
     import numpy as np

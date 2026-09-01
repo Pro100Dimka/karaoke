@@ -22,6 +22,7 @@ def health():
     return {
         "status": "ok" if startup["ready"] else startup["status"],
         "version": diagnostics_service.BACKEND_VERSION,
+        "build_id": diagnostics_service.BUILD_ID,
         "startup": startup,
     }
 

@@ -5,7 +5,9 @@ import os
 import threading
 import time
 from collections.abc import Callable
+from typing import cast
 
+from AI.runtime import RuntimePlan
 from app.services import (
     background_task_supervisor,
     metadata_enrichment_service,
@@ -109,7 +111,10 @@ def _run_startup() -> None:
         _run_step("storage_migration", 20, storage_migration.migrate_legacy_song_storage)
         _run_step("package_recovery", 40, song_package_service.recover_import_transactions)
         _run_step("metadata_scan", 55, metadata_enrichment_service.enqueue_missing)
-        runtime_plan = _run_step("hardware_detection", 75, pipeline_service._configure_ai_runtime)
+        runtime_plan = cast(
+            RuntimePlan,
+            _run_step("hardware_detection", 75, pipeline_service._configure_ai_runtime),
+        )
         for line in pipeline_service.format_runtime_plan(runtime_plan):
             print(f"[backend] AI runtime: {line}", flush=True)
         _run_step("diagnostics_snapshot", 90, lambda: _queue_hardware_snapshot(runtime_plan))
@@ -140,12 +145,14 @@ def start() -> bool:
 
 def snapshot() -> dict[str, object]:
     with _lock:
+        progress = _state.get("progress", 0)
+        steps = _state.get("steps", {})
         result = {
             "phase": _state.get("phase", "not_started"),
-            "progress": int(_state.get("progress", 0)),
+            "progress": int(progress) if isinstance(progress, int | float | str) else 0,
             "ready": bool(_state.get("ready", False)),
             "error": _state.get("error"),
-            "steps": dict(_state.get("steps", {})),
+            "steps": dict(steps) if isinstance(steps, dict) else {},
         }
         elapsed = max(0.0, time.monotonic() - _started_at) if _started_at else 0.0
     budget = _budget_seconds()

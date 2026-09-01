@@ -59,6 +59,10 @@ def _processing_status(
 ) -> schemas.ProcessingStatusOut:
     telemetry = telemetry or {}
     progress_detail, live_percent, eta_seconds = telemetry.get('progress_detail'), telemetry.get('progress_percent'), telemetry.get('eta_seconds')
+    stage = telemetry.get("stage")
+    stage_elapsed = telemetry.get("stage_elapsed_seconds")
+    total_elapsed = telemetry.get("total_elapsed_seconds")
+    estimated_finish = telemetry.get("estimated_finish_at")
     return schemas.ProcessingStatusOut(
         song_id=song.id,
         status=song.status,
@@ -68,18 +72,15 @@ def _processing_status(
         ),
         progress_detail=progress_detail if isinstance(progress_detail, str) else None,
         eta_seconds=eta_seconds if isinstance(eta_seconds, int) else None,
-        stage=telemetry.get("stage") if isinstance(telemetry.get("stage"), str) else None,
+        stage=stage if isinstance(stage, str) else None,
         stage_elapsed_seconds=(
-            telemetry.get("stage_elapsed_seconds")
-            if isinstance(telemetry.get("stage_elapsed_seconds"), int) else None
+            stage_elapsed if isinstance(stage_elapsed, int) else None
         ),
         total_elapsed_seconds=(
-            telemetry.get("total_elapsed_seconds")
-            if isinstance(telemetry.get("total_elapsed_seconds"), int) else None
+            total_elapsed if isinstance(total_elapsed, int) else None
         ),
         estimated_finish_at=(
-            telemetry.get("estimated_finish_at")
-            if isinstance(telemetry.get("estimated_finish_at"), str) else None
+            estimated_finish if isinstance(estimated_finish, str) else None
         ),
         error_message=song.error_message,
     )
@@ -229,6 +230,8 @@ async def inspect_song_identity(file: UploadFile = File(...)):
         )
         filename = file.filename or "song"
         suffix = Path(filename).suffix.casefold()
+        artist: str | None
+        title: str
         if suffix in kar_dataset_service.SUPPORTED_KARAOKE_MIDI_SUFFIXES:
             document = kar_dataset_service.parse_kar(
                 temporary_path,

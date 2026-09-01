@@ -164,7 +164,8 @@ class RecordingSession:
     @staticmethod
     def _capture_end_clock(time_info: object, duration: float) -> float | None:
         try:
-            adc_time = float(time_info.inputBufferAdcTime)
+            field = "inputBufferAdcTime"
+            adc_time = float(getattr(time_info, field))
         except (AttributeError, TypeError, ValueError):
             return None
         return adc_time + duration
@@ -448,9 +449,9 @@ class RecordingSession:
             self._cleanup_temporary_file()
             raise RuntimeError(f"Could not stop recording stream: {stream_error}") from stream_error
         if self._writer_error is not None:
-            error = self._writer_error
+            writer_error = self._writer_error
             self._cleanup_temporary_file()
-            raise RuntimeError(f"Could not write recording: {error}") from error
+            raise RuntimeError(f"Could not write recording: {writer_error}") from writer_error
         if self._temporary_path is None: raise RuntimeError("Recording file was not initialized")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)

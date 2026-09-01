@@ -5,8 +5,9 @@ the capture buffer. Separate exclusive endpoints can use event-driven buffers.
 This adapter is only for local monitoring, never recording or network audio.
 """
 
-from collections import deque
+import contextlib
 import time
+from collections import deque
 
 import numpy as np
 
@@ -161,7 +162,5 @@ class WasapiMonitorStream:
     def _both(self, method):
         for stream in (self.output, self.input):
             if stream is not None:
-                try:
+                with contextlib.suppress(Exception):
                     getattr(stream, method)()
-                except Exception:
-                    pass

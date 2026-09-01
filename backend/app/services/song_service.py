@@ -445,6 +445,37 @@ def _check_duration_limit(source: Path) -> None:
         raise ValueError(f"Song is longer than the {limit_minutes}-minute limit")
 
 
+class InvalidAudioError(ValueError):
+    """The uploaded container cannot be decoded completely and safely."""
+
+
+def _validate_audio_source(source: Path) -> None:
+    from AI.audio import run_ffmpeg
+    from AI.errors import AICoreError
+
+    _check_duration_limit(source)
+    try:
+        # Decode the complete first audio stream before creating a Song row.
+        # Strict decoder errors reject truncated containers before persistence.
+        run_ffmpeg(
+            [
+                "-xerror",
+                "-err_detect",
+                "explode",
+                "-i",
+                str(source),
+                "-map",
+                "0:a:0",
+                "-f",
+                "null",
+                "-",
+            ],
+            timeout=20 * 60,
+        )
+    except (AICoreError, OSError, RuntimeError) as exc:
+        raise InvalidAudioError("errors.audioFileCorruptedOrUnsupported") from exc
+
+
 def create_song_from_path(
     db: Session,
     title: str,
@@ -455,7 +486,7 @@ def create_song_from_path(
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0: raise ValueError("Audio file is empty")
     if extension in config.ALLOWED_AUDIO_EXTENSIONS:
-        _check_duration_limit(temporary_source)
+        _validate_audio_source(temporary_source)
 
     detected_artist, detected_title = _read_source_identity(
         temporary_source, safe_name, clean_title)

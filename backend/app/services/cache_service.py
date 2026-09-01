@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import time
 from pathlib import Path
@@ -22,10 +23,52 @@ _cache_size_cache: dict | None = None
 _cache_size_computed_at = 0.0
 
 
-def _dir_size_bytes(path: Path) -> int:
-    return 0 if not path.exists() else sum(
-        item.stat().st_size for item in path.rglob("*") if item.is_file()
-    )
+def _is_link(path: Path) -> bool:
+    try:
+        return path.is_symlink() or bool(getattr(path, "is_junction", lambda: False)())
+    except (FileNotFoundError, OSError):
+        return True
+
+
+def _dir_size_bytes(path: Path, diagnostics: list[str] | None = None) -> int:
+    """Measure a tree without following links and tolerate concurrent mutations."""
+    issues = diagnostics if diagnostics is not None else []
+    if _is_link(path):
+        issues.append(f"skipped unsafe linked root: {path}")
+        return 0
+    total, pending = 0, [path]
+    while pending:
+        directory = pending.pop()
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_symlink():
+                            issues.append(f"skipped linked entry: {entry.path}")
+                        elif entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                        elif entry.is_dir(follow_symlinks=False):
+                            child = Path(entry.path)
+                            if _is_link(child):
+                                issues.append(f"skipped linked entry: {child}")
+                            else:
+                                pending.append(child)
+                    except (FileNotFoundError, PermissionError, OSError) as exc:
+                        issues.append(f"could not inspect {entry.path}: {type(exc).__name__}")
+        except (FileNotFoundError, PermissionError, NotADirectoryError, OSError) as exc:
+            issues.append(f"could not scan {directory}: {type(exc).__name__}")
+    return total
+
+
+def _library_roots() -> list[Path]:
+    candidates = (config.SONG_OUTPUT_DIR, *config.SONG_LIBRARY_ROOTS)
+    roots: dict[str, Path] = {}
+    for candidate in candidates:
+        # absolute() normalizes spelling but deliberately does not resolve a
+        # root symlink/junction before _is_link gets a chance to reject it.
+        path = Path(candidate).absolute()
+        roots.setdefault(os.path.normcase(str(path)), path)
+    return sorted(roots.values(), key=lambda path: str(path).casefold())
 
 
 def _human(num_bytes: int) -> str:
@@ -42,13 +85,32 @@ def cache_size() -> dict:
     now = time.monotonic()
     if _cache_size_cache is not None and now - _cache_size_computed_at < _CACHE_SIZE_TTL_SECONDS:
         return _cache_size_cache
+    diagnostics: list[str] = []
+    libraries = [
+        {"path": str(root), "bytes": _dir_size_bytes(root, diagnostics)}
+        for root in _library_roots()
+    ]
+    try:
+        database_size = Path(config.DB_PATH).stat().st_size
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        database_size = 0
+        if Path(config.DB_PATH).exists():
+            diagnostics.append(f"could not inspect {config.DB_PATH}: {type(exc).__name__}")
     breakdown = {
-        "karaoke_songs": _dir_size_bytes(config.SONG_OUTPUT_DIR),
-        "database": Path(config.DB_PATH).stat().st_size if Path(config.DB_PATH).exists() else 0,
-        "cache": _dir_size_bytes(config.CACHE_DIR),
+        "karaoke_songs": sum(
+            value for item in libraries if isinstance((value := item["bytes"]), int)
+        ),
+        "database": database_size,
+        "cache": _dir_size_bytes(config.CACHE_DIR, diagnostics),
     }
     total = sum(breakdown.values())
-    result = {"total_bytes": total, "total_human": _human(total), "breakdown": breakdown}
+    result = {
+        "total_bytes": total,
+        "total_human": _human(total),
+        "breakdown": breakdown,
+        "library_roots": libraries,
+        "diagnostics": diagnostics,
+    }
     _cache_size_cache, _cache_size_computed_at = result, now
     return result
 
@@ -87,13 +149,20 @@ def _remove_intermediates(output_dir: Path) -> tuple[int, list[str]]:
 
 
 def clear_temp_files() -> int:
-    if not config.SONG_OUTPUT_DIR.exists():
-        return 0
-    freed = sum(
-        _remove_intermediates(song_dir)[0]
-        for song_dir in config.SONG_OUTPUT_DIR.iterdir()
-        if song_dir.is_dir()
-    )
+    freed = 0
+    for root in _library_roots():
+        if _is_link(root):
+            continue
+        try:
+            song_dirs = list(root.iterdir())
+        except (FileNotFoundError, PermissionError, NotADirectoryError, OSError):
+            continue
+        for song_dir in song_dirs:
+            try:
+                if song_dir.is_dir() and not _is_link(song_dir):
+                    freed += _remove_intermediates(song_dir)[0]
+            except (FileNotFoundError, PermissionError, OSError):
+                continue
     invalidate_cache_size()
     return freed
 

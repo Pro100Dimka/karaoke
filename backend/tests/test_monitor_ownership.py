@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from app.services import audio_service, recording_service
-from tests.test_recording_session import make_session
 from tests.test_audio_settings import settings
+from tests.test_recording_session import make_session
 
 
 @pytest.fixture

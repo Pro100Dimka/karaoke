@@ -43,7 +43,7 @@ module = ["AI", "AI.*"]
 ignore_errors = true
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", ".."]
 testpaths = ["tests"]
 cache_dir = "../generated/tests/pytest"
 

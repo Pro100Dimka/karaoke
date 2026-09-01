@@ -1,8 +1,8 @@
 """Event-driven shared I/O. All COM calls stay on the monitor worker's thread."""
 import ctypes as ct
 import math
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 

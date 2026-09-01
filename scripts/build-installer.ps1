@@ -161,6 +161,19 @@ if (-not $Worker -and $Mode -eq "clean") {
 
 $AppVersion = (Get-Content -LiteralPath (Join-Path $Root "VERSION") -Raw).Trim()
 if (-not $AppVersion) { throw "VERSION does not define an application version" }
+$ReleaseBuildId = ""
+foreach ($envName in @("SONGAPP_BUILD_ID", "BUILD_ID", "GITHUB_SHA", "CI_COMMIT_SHA")) {
+    $candidate = [Environment]::GetEnvironmentVariable($envName)
+    if ($candidate) { $ReleaseBuildId = $candidate.Trim(); break }
+}
+if (-not $ReleaseBuildId) {
+    try {
+        $candidate = (& git -C $Root rev-parse HEAD 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $candidate) { $ReleaseBuildId = $candidate.Trim() }
+    }
+    catch {}
+}
+if (-not $ReleaseBuildId) { $ReleaseBuildId = "unknown" }
 $AppExe = "A&D Voice.exe"
 
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
@@ -222,6 +235,14 @@ function Write-Header([string]$Text) {
     Write-Host " $Text"
     Write-Host ("=" * 60)
     Write-Host ""
+}
+
+function Write-BackendBuildIdentity {
+    Require-Directory $BackendDist "Backend distribution"
+    $identity = [ordered]@{ version = $AppVersion; build_id = $ReleaseBuildId }
+    $identity | ConvertTo-Json | Set-Content `
+        -LiteralPath (Join-Path $BackendDist "build-identity.json") `
+        -Encoding UTF8
 }
 
 function Require-File([string]$Path, [string]$Name) {
@@ -2595,7 +2616,8 @@ function Create-ReleaseManifest {
         -FrontendDir $Frontend `
         -InstallerDirectory $InstallerDir `
         -SbomFile $SbomFile `
-        -OutputFile $ManifestFile
+        -OutputFile $ManifestFile `
+        -BuildId $ReleaseBuildId
 
     if ($LASTEXITCODE -ne 0) {
         throw "Could not create release manifest."
@@ -3299,7 +3321,8 @@ try {
 
     $electronFp = Get-CombinedFingerprint @(
         (Get-ElectronFingerprint),
-        $finalizeFp
+        $finalizeFp,
+        $ReleaseBuildId
     )
 
     # v23 considered app-runtime.zip the Electron output. Accept it during
@@ -3392,7 +3415,8 @@ try {
             # Finalized backend bytes changed, therefore Electron input changes.
             $electronFp = Get-CombinedFingerprint @(
                 (Get-ElectronFingerprint),
-                $finalizeFp
+                $finalizeFp,
+                $ReleaseBuildId
             )
             $electronSignFp = Get-ElectronSignFingerprint $electronFp
     $runtimeFp = Get-RuntimeFingerprint $electronFp $electronSignFp
@@ -3404,6 +3428,8 @@ try {
             Write-Host "  backend signing / ASIO finalize: unchanged [skip]"
         }
     }
+
+    Write-BackendBuildIdentity
 
     # Electron is rebuilt only when its real inputs changed. A valid runtime
     # archive is enough to preserve a no-op build even if an old win-unpacked

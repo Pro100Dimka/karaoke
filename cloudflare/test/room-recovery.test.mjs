@@ -49,6 +49,7 @@ test("host network loss preserves peers and persists the 45-second grace through
   await resumedObject.alarm();
   assert.equal(h.guest.messages.at(-1).reason, "host-timeout");
   assert.equal(h.guest.closed.code, 4000);
+  assert.equal(h.guest.closed.reason, "Host reconnect timeout");
   assert.equal(h.data.has("hostToken"), false);
 });
 
@@ -94,6 +95,7 @@ test("only the owner can resume; a vanished room is not recreated by reconnect",
     await authenticateHost(h.room, wrongSocket, "wrong");
     assert.equal(wrongSocket.closed.code, 1008);
     await h.room.closeRoom("host-left");
+    assert.equal(h.guest.closed.reason, "Host left the room");
     h.sockets.length = 0;
     result = await h.room.fetch(new Request(hostUrl(), { headers: { Upgrade: "websocket" } }));
     assert.equal(result.status, 101);

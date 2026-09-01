@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from app.services import native_wasapi, monitor_worker
+from app.services import monitor_worker, native_wasapi
 
 
 def options():

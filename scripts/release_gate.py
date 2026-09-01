@@ -110,12 +110,14 @@ def release_fingerprint(profile: dict[str, str] | None = None) -> str:
             BACKEND / "config.py", BACKEND / "database.py", BACKEND / "models.py",
             BACKEND / "schemas.py", BACKEND / "run.py", BACKEND / "pyproject.toml",
             BACKEND / "requirements-lock.txt", BACKEND / "requirements-api.txt",
+            BACKEND / "requirements-lock.in",
             BACKEND / "requirements-dev.txt", BACKEND / "requirements.txt",
             FRONT / "package.json", FRONT / "package-lock.json", FRONT / "vite.config.mjs",
             FRONT / "vitest.config.mjs", FRONT / "stryker.config.mjs",
             FRONT / "playwright.config.mjs", FRONT / "playwright.release.config.mjs",
             CLOUDFLARE / "package.json", CLOUDFLARE / "package-lock.json",
             ROOT / "VERSION", ROOT / "scripts" / "sync_version.py",
+            ROOT / "scripts" / "generate_python_lock.py",
             ROOT / "scripts" / "frontend_dependency_audit.py",
             ROOT / "scripts" / "security" / "frontend-audit-allowlist.json",
             ROOT / "scripts" / "backend_dependency_audit.py",
@@ -142,11 +144,11 @@ def release_fingerprint(profile: dict[str, str] | None = None) -> str:
         elif relative in {
             "front/package.json", "front/package-lock.json",
             "backend/pyproject.toml",
-            "backend/app/services/diagnostics_service.py",
+            "backend/app/version.py",
             "cloudflare/package.json", "cloudflare/package-lock.json",
         }:
             payload = re.sub(
-                rb'(?m)("version"\s*:\s*"|^version\s*=\s*"|BACKEND_VERSION\s*=\s*")\d+\.\d+\.\d+',
+                rb'(?m)("version"\s*:\s*"|^version\s*=\s*"|APP_VERSION\s*=\s*")\d+\.\d+\.\d+',
                 rb'\g<1><release-version>',
                 payload,
             )
@@ -210,6 +212,7 @@ _active_lock = threading.Lock()
 
 STEP_TIMEOUT_SECONDS = {
     "Version consistency": 60,
+    "Python hash lock consistency": 180,
     "Backend static/architecture gate": 600,
     "Backend full suite + coverage": 5400,
     "Backend dependency audit": 900,
@@ -331,7 +334,7 @@ def run_parallel(chains: list[list[tuple[str, list[str], Path]]]) -> None:
             with errors_lock:
                 errors.append(error)
             with _active_lock:
-                for process in list(_active_processes):
+                for process in _active_processes:
                     _terminate_process_tree(process)
 
     threads = [threading.Thread(target=worker, args=(chain,)) for chain in chains]
@@ -380,6 +383,11 @@ def main() -> int:
     run(
         "Version consistency",
         [sys.executable, str(ROOT / "scripts" / "sync_version.py"), "--check"],
+        cwd=ROOT,
+    )
+    run(
+        "Python hash lock consistency",
+        [sys.executable, str(ROOT / "scripts" / "generate_python_lock.py"), "--check"],
         cwd=ROOT,
     )
     _node, npm = require_release_environment()

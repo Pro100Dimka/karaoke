@@ -1006,9 +1006,10 @@ export class KaraokeRoom {
 
   async closeRoom(reason) {
     await this.broadcastOrdered("room-closed", { reason }, "room", null, true);
+    const closeReason = reason === "host-timeout" ? "Host reconnect timeout" : "Host left the room";
     for (const socket of this.ctx.getWebSockets()) {
       try {
-        socket.close(4000, "Host left the room");
+        socket.close(4000, closeReason);
       } catch {
         /* Already closed. */
       }

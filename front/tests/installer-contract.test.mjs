@@ -114,6 +114,14 @@ test("Inno is the only production installer and electron-builder is runtime-only
     /function Build-Installer/,
   ]);
 });
+test("packaged backend and release manifest share one version and build identity", () => {
+  matches(installerBuilder, [
+    /\$AppVersion = \(Get-Content[^\n]*Join-Path \$Root "VERSION"/,
+    /\$ReleaseBuildId = ""[\s\S]*GITHUB_SHA[\s\S]*git -C \$Root rev-parse HEAD/,
+    /function Write-BackendBuildIdentity[\s\S]*build-identity\.json/,
+    /-OutputFile \$ManifestFile\s+`\s+-BuildId \$ReleaseBuildId/
+  ]);
+});
 test("clean builds tolerate locked stale Electron runs", () => {
   matches(installerBuilder, [
     /\[switch\]\$AllowLockedRemainder/,

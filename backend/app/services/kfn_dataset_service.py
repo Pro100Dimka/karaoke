@@ -20,8 +20,10 @@ from AI.lyrics_document import validate_lyrics_document
 from app.services import kar_dataset_service, song_service
 from app.utils.json_files import write_json
 
+AES: Any
 try:
-    from Cryptodome.Cipher import AES
+    from Cryptodome.Cipher import AES as _AES
+    AES = _AES
 except ImportError:  # pragma: no cover - reported only by lightweight broken installations
     AES = None
 
@@ -74,6 +76,7 @@ def _parse_kfnb(data: bytes) -> KfnContainer:
         tag = data[offset : offset + 4].decode("ascii", errors="replace")
         flag = data[offset + 4]
         offset += 5
+        value: int | bytes
         if flag == 1:
             value, offset = _u32(data, offset)
         elif flag == 2:
@@ -157,9 +160,13 @@ def parse_kfn_container(path: str | Path) -> KfnContainer:
     raise ValueError("Файл не является корректным KFN")
 
 
+class _CaseSensitiveConfigParser(configparser.ConfigParser):
+    def optionxform(self, optionstr: str) -> str:
+        return optionstr
+
+
 def _parse_ini(payload: bytes) -> configparser.ConfigParser:
-    parser = configparser.ConfigParser(interpolation=None, strict=False)
-    parser.optionxform = str
+    parser = _CaseSensitiveConfigParser(interpolation=None, strict=False)
     parser.read_string(_decode(payload))
     return parser
 
@@ -193,7 +200,7 @@ def _songini_words(parser: configparser.ConfigParser) -> list[dict[str, Any]]:
         section = parser[name]
         if section.get("ID", "") not in {"1", "2"}:
             continue
-        marks = []
+        marks: list[float] = []
         for raw in _indexed_values(section, "Sync"):
             marks.extend(float(value.strip()) / 100 for value in raw.split(",") if value.strip())
         fragments = []
@@ -283,7 +290,7 @@ def _container_identity(
         general.get("Title", "") or _header_text(container, "TITL") or filename_title
     )
     artist = kar_dataset_service._clean_text(
-        general.get("Artist", "") or _header_text(container, "ARTS") or filename_artist
+        general.get("Artist", "") or _header_text(container, "ARTS") or filename_artist or ""
     )
     title, artist = kar_dataset_service.normalize_karaoke_identity(title, artist)
     return artist, title
@@ -402,11 +409,10 @@ def prepare_kfn_file(
         raw_lyrics=[],
     )
     owns_target = target_dir is None
-    target = (
-        kar_dataset_service._unique_dataset_dir(root, document)
-        if owns_target
-        else Path(target_dir)
-    )
+    if target_dir is None:
+        target = kar_dataset_service._unique_dataset_dir(root, document)
+    else:
+        target = Path(target_dir)
     target.mkdir(parents=True, exist_ok=True)
     try:
         symbolic_source = target / "source.kfn"
@@ -466,7 +472,7 @@ def prepare_kfn_file(
                 artist,
                 expected_duration=float(reference.get("duration") or 0) or None,
             )
-            warnings.extend(str(item) for item in media.get("warnings", []))
+            warnings.extend(map(str, media_warnings if isinstance((media_warnings := media.get("warnings", [])), list) else []))
             kar_dataset_service._notify_dataset(
                 progress, cancelled, "karaoke_media", 97, "Визуальные файлы готовы"
             )

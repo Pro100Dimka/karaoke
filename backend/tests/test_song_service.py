@@ -291,7 +291,7 @@ def test_create_song_from_streamed_path_moves_nonempty_source(monkeypatch, tmp_p
     temporary.write_bytes(b"")
     raises(ValueError, lambda: song_service.create_song_from_path(database, '', 'song.flac', temporary), match='empty')
     temporary.write_bytes(b"audio")
-    patch_attrs(monkeypatch, song_service, _read_source_identity=Mock(return_value=(None, 'Song')), commit_refresh=lambda _db, current: current)
+    patch_attrs(monkeypatch, song_service, _validate_audio_source=Mock(), _read_source_identity=Mock(return_value=(None, 'Song')), commit_refresh=lambda _db, current: current)
     current = song_service.create_song_from_path(database, "", "song.flac", temporary)
     assert (not temporary.exists()) and (__import__('pathlib').Path(current.source_path).read_bytes() == b'audio')
 
@@ -336,7 +336,7 @@ def test_create_song_from_streamed_path_supports_cross_device_move(monkeypatch, 
     library, temporary = tmp_path / 'library', tmp_path / 'upload.flac'
     temporary.write_bytes(b"audio")
     monkeypatch.setattr(song_service.config, "SONG_OUTPUT_DIR", library)
-    patch_attrs(monkeypatch, song_service, _slug_exists=Mock(return_value=False), _read_source_identity=Mock(return_value=(None, 'Song')), commit_refresh=lambda _db, current: current)
+    patch_attrs(monkeypatch, song_service, _validate_audio_source=Mock(), _slug_exists=Mock(return_value=False), _read_source_identity=Mock(return_value=(None, 'Song')), commit_refresh=lambda _db, current: current)
     real_replace = Path.replace
 
     def cross_device_upload(self, target):

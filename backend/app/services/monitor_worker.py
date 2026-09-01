@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import signal
 import sys
 import threading
 import time
+from typing import Any
+
 
 def _stage(name: str) -> None:
     print(json.dumps({"event": "stage", "stage": name}), flush=True)
@@ -14,7 +17,7 @@ def _stage(name: str) -> None:
 
 if __name__ == "__main__":
     _stage("import numpy")
-import numpy as np
+import numpy as np  # noqa: E402 - startup stage telemetry must precede this costly import
 
 if __name__ == "__main__":
     _stage("import sounddevice / initialize PortAudio")
@@ -26,12 +29,12 @@ except Exception:  # PortAudio may be unavailable in CI/diagnostics.
 
 if __name__ == "__main__":
     _stage("import microphone DSP")
-from app.services.microphone_quality import (
+from app.services.microphone_quality import (  # noqa: E402 - staged worker startup
     MonitorEffectsChain,
     RealtimePitchShifter,
     StudioMicrophoneProcessor,
 )
-from app.services.wasapi_monitor_stream import WasapiMonitorStream
+from app.services.wasapi_monitor_stream import WasapiMonitorStream  # noqa: E402
 
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
@@ -156,7 +159,7 @@ def main() -> int:
 
     failed = threading.Event()
     statistics = {"glitch_count": 0}
-    stream = None
+    stream: Any = None
     try:
         candidate = dict(_stream_candidates(options)[0])
         mode = candidate.pop("_mode")
@@ -205,10 +208,8 @@ def main() -> int:
     finally:
         if stream is not None:
             for method in ("abort", "close"):
-                try:
+                with contextlib.suppress(Exception):
                     getattr(stream, method)()
-                except Exception:
-                    pass
     return 0
 
 

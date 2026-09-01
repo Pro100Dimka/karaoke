@@ -530,10 +530,11 @@ def _monophonize_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if previous_pitch is None:
             chosen = max(group, key=lambda item: (item["velocity"], item["note"]))
         else:
+            anchor_pitch = previous_pitch
             chosen = min(
                 group,
                 key=lambda item: (
-                    abs(int(item["note"]) - previous_pitch),
+                    abs(int(item["note"]) - anchor_pitch),
                     -int(item["velocity"]),
                     -int(item["note"]),
                 ),
@@ -1312,7 +1313,7 @@ def prepare_kar_file(
             cover_url=str((audio_source or {}).get("thumbnail_url") or ""),
             expected_duration=float((audio_source or {}).get("duration") or 0) or None,
         )
-        warnings.extend(str(item) for item in media.get("warnings", []))
+        warnings.extend(map(str, media_warnings if isinstance((media_warnings := media.get("warnings", [])), list) else []))
         _notify_dataset(progress, cancelled, "karaoke_media", 97, "Визуальные файлы готовы")
     write_json(target / "lyricsSync.json", reference)
     write_json(target / "comparison.json", comparison)

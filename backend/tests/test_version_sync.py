@@ -4,7 +4,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "sync_version.py"
 
 
@@ -34,9 +33,9 @@ def test_version_sync_updates_all_mirrors_and_detects_drift(tmp_path, monkeypatc
     pyproject = tmp_path / "backend/pyproject.toml"
     pyproject.parent.mkdir(parents=True)
     pyproject.write_text('[project]\nversion = "0.0.1"\n', encoding="utf-8")
-    diagnostics = tmp_path / "backend/app/services/diagnostics_service.py"
-    diagnostics.parent.mkdir(parents=True)
-    diagnostics.write_text('BACKEND_VERSION = "0.0.1"\n', encoding="utf-8")
+    version_module = tmp_path / "backend/app/version.py"
+    version_module.parent.mkdir(parents=True)
+    version_module.write_text('APP_VERSION = "0.0.1"\n', encoding="utf-8")
     _write_json(
         tmp_path / "cloudflare/package.json", {"name": "online", "version": "0.0.1"}
     )

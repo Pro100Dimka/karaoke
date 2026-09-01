@@ -1,12 +1,17 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import postcss from "postcss";
 import selectorParser from "postcss-selector-parser";
 
 const ROOT = process.cwd();
+const REPOSITORY = resolve(ROOT, "..");
 const SRC = resolve(ROOT, "src");
-const REPORTS = resolve(ROOT, "reports");
+const REPORTS = resolve(REPOSITORY, "generated", "audits");
 const REPORT = resolve(REPORTS, "css-audit.json");
 const CONFIG = resolve(ROOT, "css-audit.config.json");
 
@@ -52,6 +57,35 @@ const TOKENS = [
 ];
 
 const relativePath = (file) => relative(ROOT, file).replaceAll("\\", "/");
+const git = (...arguments_) =>
+  execFileSync("git", arguments_, { cwd: REPOSITORY, encoding: "utf8" }).trim();
+
+const reportMetadata = async (files) => {
+  const hash = createHash("sha256");
+  for (const file of files.toSorted()) {
+    hash.update(relative(REPOSITORY, file).replaceAll("\\", "/"));
+    hash.update("\0");
+    hash.update(await readFile(file));
+  }
+  let commitSha = "unknown";
+  let fileCount = files.length;
+  try {
+    commitSha = git("rev-parse", "HEAD");
+    fileCount = git("ls-files", "-z")
+      .split("\0")
+      .filter((file) => file && existsSync(resolve(REPOSITORY, file))).length;
+  } catch {
+    // Source archives without Git remain identifiable by the content digest.
+  }
+  return {
+    schema: "css-audit-v2-source-attestation",
+    generatedAt: new Date().toISOString(),
+    commitSha,
+    fileCount,
+    sourceFileCount: files.length,
+    sourceFingerprint: `sha256:${hash.digest("hex")}`
+  };
+};
 const selectorDepth = (selector) => selector.split(/\s+|>|\+|~/).filter(Boolean).length;
 const normalizeValue = (value) =>
   String(value)
@@ -289,6 +323,12 @@ const main = async () => {
     walk(SRC, CSS_EXTENSIONS),
     walk(SRC, SOURCE_EXTENSIONS)
   ]);
+  const attestedFiles = [
+    ...cssFiles,
+    ...sourceFiles,
+    ...(await exists(CONFIG) ? [CONFIG] : []),
+    fileURLToPath(import.meta.url)
+  ];
 
   const sourceUsage = new Map();
   const dynamicFragments = new Set();
@@ -518,6 +558,7 @@ const main = async () => {
   const counts = countIssues(issues);
 
   const report = {
+    metadata: await reportMetadata(attestedFiles),
     root: ".",
     summary: {
       cssFiles: cssFiles.length,

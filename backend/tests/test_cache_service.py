@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -23,7 +24,7 @@ def test_cache_and_free_space_reports(monkeypatch, tmp_path):
     (songs / "song").write_bytes(b"123")
     (cache / "temp").write_bytes(b"12")
     database.write_bytes(b"1")
-    patch_attrs(monkeypatch, cache_service.config, SONG_OUTPUT_DIR=songs, CACHE_DIR=cache, DB_PATH=database)
+    patch_attrs(monkeypatch, cache_service.config, SONG_OUTPUT_DIR=songs, SONG_LIBRARY_ROOTS={songs}, CACHE_DIR=cache, DB_PATH=database)
     cache_service.invalidate_cache_size()  # a prior test's cached total must not leak in
     assert cache_service.cache_size()["total_bytes"] == 6
     monkeypatch.setattr(cache_service.shutil, "disk_usage", Mock(return_value=SimpleNamespace(free=1024, total=2048)))
@@ -35,7 +36,7 @@ def test_cache_size_is_cached_between_calls_until_invalidated(monkeypatch, tmp_p
     songs.mkdir()
     cache.mkdir()
     (songs / "song").write_bytes(b"123")
-    patch_attrs(monkeypatch, cache_service.config, SONG_OUTPUT_DIR=songs, CACHE_DIR=cache, DB_PATH=database)
+    patch_attrs(monkeypatch, cache_service.config, SONG_OUTPUT_DIR=songs, SONG_LIBRARY_ROOTS={songs}, CACHE_DIR=cache, DB_PATH=database)
     cache_service.invalidate_cache_size()
 
     walk = Mock(wraps=cache_service._dir_size_bytes)
@@ -57,7 +58,7 @@ def test_temp_cleanup_preserves_runtime_contract(monkeypatch, tmp_path):
     (song / "tmp").mkdir(parents=True)
     (song / "tmp/data").write_bytes(b"1234")
     (song / "lyricsSync.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(cache_service.config, "SONG_OUTPUT_DIR", root)
+    patch_attrs(monkeypatch, cache_service.config, SONG_OUTPUT_DIR=root, SONG_LIBRARY_ROOTS={root})
     invalidate = Mock()
     monkeypatch.setattr(cache_service, "invalidate_cache_size", invalidate)
     assert cache_service.clear_temp_files() == 4
@@ -87,6 +88,66 @@ def test_optimize_missing_song_is_noop(monkeypatch):
     database, _ = mock_song_lookup(monkeypatch, cache_service)
     assert cache_service.optimize_song_files("missing")["freed_bytes"] == 0
     database.close.assert_called_once_with()
+
+
+def test_cache_size_and_cleanup_cover_every_library_root(monkeypatch, tmp_path):
+    current, historical = tmp_path / "current", tmp_path / "historical"
+    cache, database = tmp_path / "cache", tmp_path / "app.db"
+    for root, size in ((current, 3), (historical, 5)):
+        temporary = root / "song" / "tmp"
+        temporary.mkdir(parents=True)
+        (temporary / "data").write_bytes(b"x" * size)
+    cache.mkdir()
+    patch_attrs(
+        monkeypatch,
+        cache_service.config,
+        SONG_OUTPUT_DIR=current,
+        SONG_LIBRARY_ROOTS={current, historical},
+        CACHE_DIR=cache,
+        DB_PATH=database,
+    )
+    cache_service.invalidate_cache_size()
+    result = cache_service.cache_size()
+    assert result["breakdown"]["karaoke_songs"] == 8
+    assert {Path(item["path"]) for item in result["library_roots"]} == {current, historical}
+    assert cache_service.clear_temp_files() == 8
+    assert not (current / "song/tmp").exists()
+    assert not (historical / "song/tmp").exists()
+
+
+def test_cache_scan_tolerates_races_and_never_follows_links(monkeypatch, tmp_path):
+    root, outside = tmp_path / "songs", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (root / "kept").write_bytes(b"123")
+    (outside / "private").write_bytes(b"secret")
+    link = root / "linked"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Creating directory links requires unavailable Windows privileges")
+
+    diagnostics = []
+    assert cache_service._dir_size_bytes(root, diagnostics) == 3
+    assert any("linked" in issue for issue in diagnostics)
+    root_diagnostics = []
+    assert cache_service._dir_size_bytes(link, root_diagnostics) == 0
+    assert "unsafe linked root" in root_diagnostics[0]
+
+    original_scandir = cache_service.os.scandir
+    calls = 0
+
+    def disappearing(path):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise FileNotFoundError(path)
+        return original_scandir(path)
+
+    monkeypatch.setattr(cache_service.os, "scandir", disappearing)
+    diagnostics = []
+    assert cache_service._dir_size_bytes(root, diagnostics) == 0
+    assert diagnostics and "FileNotFoundError" in diagnostics[0]
 
 
 def test_interrupted_optimization_is_retryable_and_never_commits_early(monkeypatch, tmp_path):

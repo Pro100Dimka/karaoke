@@ -67,8 +67,9 @@ if (Test-Path -LiteralPath $lockFile) {
     foreach ($line in Get-Content -LiteralPath $lockFile) {
         $trimmed = $line.Trim()
         if (-not $trimmed -or $trimmed.StartsWith("#")) { continue }
-        $parts = $trimmed -split "==", 2
-        if ($parts.Count -eq 2) { $dependencies["backend:$($parts[0])"] = $parts[1] }
+        if ($trimmed -match '^([A-Za-z0-9_.-]+)==([^\s\\]+)') {
+            $dependencies["backend:$($Matches[1])"] = $Matches[2]
+        }
     }
 }
 

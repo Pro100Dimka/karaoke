@@ -77,6 +77,7 @@ async function readErrorDetail(response) {
   try {
     const data = await response.json();
     detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? data);
+    if (detail.startsWith("errors.")) detail = translateSaved(detail);
   } catch {
     // Ответ может не содержать JSON-тело.
   }

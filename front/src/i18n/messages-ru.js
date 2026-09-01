@@ -1,5 +1,7 @@
 /* Stryker disable all */
 export const ruMessages = {
+  "errors.audioFileCorruptedOrUnsupported":
+    "Аудиофайл повреждён, обрезан или имеет неподдерживаемый формат.",
   "settings.appearance.keyboard_lighting_status.unsupported":
     "Клавиатура найдена, но безопасное управление подсветкой в реальном времени недоступно для её протокола или текущего режима.",
   "settings.appearance.keyboard_lighting_enabled.label": "Подсветка клавиатуры",

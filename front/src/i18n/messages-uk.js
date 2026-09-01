@@ -1,5 +1,7 @@
 /* Stryker disable all */
 export const ukMessages = {
+  "errors.audioFileCorruptedOrUnsupported":
+    "Аудіофайл пошкоджений, обрізаний або має непідтримуваний формат.",
   "settings.appearance.keyboard_lighting_status.unsupported":
     "Клавіатуру знайдено, але безпечне керування підсвічуванням у реальному часі недоступне для її протоколу або поточного режиму.",
   "settings.appearance.keyboard_lighting_enabled.label": "Підсвічування клавіатури",

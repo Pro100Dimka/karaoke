@@ -2,7 +2,11 @@ import math
 
 import numpy as np
 
-from app.services.microphone_quality import MonitorEffectsChain, RealtimePitchShifter, StudioMicrophoneProcessor
+from app.services.microphone_quality import (
+    MonitorEffectsChain,
+    RealtimePitchShifter,
+    StudioMicrophoneProcessor,
+)
 
 
 def _reference_hp_tone_stage(buffers, sample_rate, channels):

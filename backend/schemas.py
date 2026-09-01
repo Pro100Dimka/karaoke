@@ -285,6 +285,8 @@ class CacheSizeOut(BaseModel):
     total_bytes: int
     total_human: str
     breakdown: dict[str, int]
+    library_roots: list[dict[str, str | int]] = Field(default_factory=list)
+    diagnostics: list[str] = Field(default_factory=list)
 
 
 class FreeSpaceOut(BaseModel):
@@ -311,6 +313,7 @@ class OptimizeResultOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
     version: str
+    build_id: str
     startup: dict[str, object] | None = None
 
 
@@ -346,6 +349,7 @@ class AIModelsStatusOut(BaseModel):
 
 class VersionsOut(BaseModel):
     backend_version: str
+    build_id: str
     python_version: str
     components: dict[str, str | None]
 
