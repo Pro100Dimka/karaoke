@@ -165,6 +165,42 @@ def test_named_melody_track_beats_dense_accompaniment(tmp_path):
     assert [note["note"] for word in document.words for note in word["notes"]] == [60, 62]
 
 
+def test_equally_aligned_tracks_prefer_vocal_density_over_repeating_accompaniment():
+    lyric_onsets = [0.0, 1.0, 2.0, 3.0]
+    vocal_notes = []
+    accompaniment_notes = []
+    for onset in lyric_onsets:
+        vocal_notes.extend(
+            [
+                {"note": 60, "start": onset, "end": onset + 0.4, "velocity": 90},
+                {"note": 62, "start": onset + 0.4, "end": onset + 0.8, "velocity": 90},
+            ]
+        )
+        accompaniment_notes.extend(
+            {
+                "note": 48 + index % 4,
+                "start": onset + index * 0.1,
+                "end": onset + index * 0.1 + 0.09,
+                "velocity": 80,
+            }
+            for index in range(8)
+        )
+
+    track, notes = kar_dataset_service._select_melody_track(
+        [
+            (1, "Song title", vocal_notes),
+            (4, "Arrangement by author", accompaniment_notes),
+        ],
+        lyric_track=2,
+        lyric_start=0,
+        lyric_end=4,
+        lyric_onsets=lyric_onsets,
+    )
+
+    assert track == 1
+    assert notes == vocal_notes
+
+
 def test_kar_melody_notes_are_owned_once_without_clipping(tmp_path):
     document = kar_dataset_service.parse_kar(build_kar(tmp_path / "song.kar"))
     notes = [note for word in document.words for note in word["notes"]]
@@ -601,6 +637,51 @@ def test_vocal_stem_refines_long_intro_before_writing_lyrics(monkeypatch, tmp_pa
     assert result["audio_source"]["midi_audio_match"]["offset_seconds"] == 6.15
 
 
+def test_vocal_refinement_uses_raw_midi_tempo_when_original_mix_match_is_wrong(
+    monkeypatch, tmp_path
+):
+    source = build_kar(tmp_path / "song.kar")
+    original_match = {
+        "score": 0.8,
+        "kar_bpm": 120,
+        "audio_bpm": 105,
+        "detected_audio_bpm": 105,
+        "time_scale": 120 / 105,
+        "offset_seconds": -0.5,
+        "pitch_shift_semitones": -5,
+        "audio_duration": 20,
+        "compared_notes": 50,
+    }
+    vocal_match = {
+        **original_match,
+        "score": 0.9,
+        "audio_bpm": 118,
+        "time_scale": 120 / 118,
+        "offset_seconds": 1.5,
+        "pitch_shift_semitones": 0,
+    }
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_midi_audio_match",
+        lambda *_args, **_kwargs: vocal_match,
+    )
+
+    refined = kar_dataset_service._refine_vocal_alignment(
+        source,
+        source.name,
+        "kar",
+        tmp_path / "vocals.flac",
+        {"midi_audio_match": original_match},
+    )
+
+    assert refined is not None
+    document, _reference, comparison, audio_source = refined
+    assert document.bpm == 118
+    assert comparison["status"] == "vocal-stem-refined"
+    assert comparison["offset_seconds"] == pytest.approx(1.4)
+    assert audio_source["midi_audio_match"]["audio_bpm"] == 118
+
+
 def test_vocal_refinement_rejects_offset_that_clamps_opening_lyrics(monkeypatch, tmp_path):
     source = build_kar(tmp_path / "song.kar")
     original_match = {
@@ -857,6 +938,46 @@ def test_audio_search_uses_performer_embedded_in_midi_title_and_rejects_wrong_du
     assert kar_dataset_service._audio_candidate_score(unrelated_early_recording, document) is None
 
 
+def test_audio_search_allows_moderate_duration_drift_only_for_verified_artist_source():
+    document = kar_dataset_service.KarDocument(
+        title="Мечта",
+        artist="Люмен",
+        bpm=120,
+        key="C",
+        duration=213.713,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    artist_studio_release = {
+        "title": "Мечта",
+        "uploader": "Lumen",
+        "channel": "Lumen",
+        "duration": 265,
+    }
+    unverified_reupload = {
+        **artist_studio_release,
+        "uploader": "Random Music Archive",
+        "channel": "Random Music Archive",
+    }
+    implausibly_long_upload = {
+        **artist_studio_release,
+        "duration": 420,
+    }
+    live_release = {
+        **artist_studio_release,
+        "title": "Мечта (Live)",
+    }
+
+    # The strict MIDI-to-audio matcher downstream remains the authority.  A
+    # trusted artist release may contain a longer intro/outro than the .kar.
+    assert kar_dataset_service._audio_candidate_score(artist_studio_release, document) is not None
+    assert kar_dataset_service._audio_candidate_score(unverified_reupload, document) is None
+    assert kar_dataset_service._audio_candidate_score(implausibly_long_upload, document) is None
+    assert kar_dataset_service._audio_candidate_score(live_release, document) is None
+
+
 def test_audio_search_prefers_artist_channel_over_third_party_official_label():
     document = kar_dataset_service.KarDocument(
         title='Король и шут: "Кукла колдуна"',
@@ -1035,6 +1156,78 @@ def test_audio_search_accepts_distributor_topic_metadata_as_studio_provenance():
     assert kar_dataset_service._audio_candidate_studio_provenance_strength(
         topic_release, document
     ) == 2
+
+
+def test_audio_melody_threshold_relaxes_only_for_structured_studio_release():
+    assert kar_dataset_service._audio_candidate_melody_verified(0.42, provenance=2)
+    assert not kar_dataset_service._audio_candidate_melody_verified(0.42, provenance=1)
+    assert not kar_dataset_service._audio_candidate_melody_verified(0.39, provenance=2)
+
+
+def test_audio_consensus_accepts_two_matching_independent_copies_and_rejects_cover():
+    def candidate(video_id, uploader, score, pitch_shift, duration):
+        entry = {"id": video_id, "uploader": uploader, "duration": duration}
+        match = {
+            "score": score,
+            "pitch_shift_semitones": pitch_shift,
+            "audio_bpm": 123.9,
+            "time_scale": 1.0089,
+            "offset_seconds": 0.45,
+            "audio_duration": duration,
+        }
+        return (50.0, entry, entry, match, 0)
+
+    first = candidate("first", "Uploader A", 0.628, 0, 187.1)
+    second = candidate("second", "Uploader B", 0.577, 0, 186.5)
+    cover = candidate("cover", "Uploader C", 0.564, -6, 184.8)
+
+    accepted = kar_dataset_service._audio_consensus_matches([first, second, cover])
+
+    assert first in accepted
+    assert second in accepted
+    assert cover not in accepted
+
+
+def test_audio_consensus_requires_independent_uploaders_and_strong_midi_match():
+    base_match = {
+        "score": 0.62,
+        "pitch_shift_semitones": 0,
+        "audio_bpm": 124.0,
+        "time_scale": 1.0,
+        "offset_seconds": 0.4,
+        "audio_duration": 187.0,
+    }
+    first = (50.0, {"id": "one", "uploader": "Same"}, {}, base_match, 0)
+    same_uploader = (49.0, {"id": "two", "uploader": "Same"}, {}, base_match, 0)
+    weak = (
+        48.0,
+        {"id": "three", "uploader": "Other"},
+        {},
+        {**base_match, "score": 0.49},
+        0,
+    )
+
+    assert kar_dataset_service._audio_consensus_matches([first, same_uploader, weak]) == []
+
+
+def test_known_library_identity_overrides_composer_credits_from_midi():
+    document = kar_dataset_service.KarDocument(
+        title="Выхода нет",
+        artist="Васильев",
+        bpm=120,
+        key="C",
+        duration=228,
+        words=[],
+        lyric_track=0,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+
+    kar_dataset_service._apply_known_identity(
+        document, title="Выхода нет", artist="Сплин"
+    )
+
+    assert kar_dataset_service._audio_search_identity(document) == ("Сплин", "Выхода нет")
 
 
 def test_audio_search_ranks_distributor_release_above_artist_channel_video():

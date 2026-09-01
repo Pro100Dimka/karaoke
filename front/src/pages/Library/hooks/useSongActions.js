@@ -28,6 +28,7 @@ export async function releaseSongMedia(songId, root = globalThis.document) {
   for (const media of mediaElements) {
     try {
       media.pause?.();
+      if ("srcObject" in media) media.srcObject = null;
       media.removeAttribute?.("src");
       media.querySelectorAll?.("source").forEach((source) => source.removeAttribute("src"));
       media.load?.();
@@ -38,7 +39,7 @@ export async function releaseSongMedia(songId, root = globalThis.document) {
   }
   // Chromium's network service releases the Windows file handle
   // asynchronously after load() detaches the source.
-  await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+  await new Promise((resolve) => globalThis.setTimeout(resolve, 350));
 }
 
 export default function useLibrarySongActions({

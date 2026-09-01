@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import os
 import re
@@ -33,6 +34,7 @@ except ImportError:  # pragma: no cover - lightweight API-only installations
     YoutubeDL = None
 
 
+logger = logging.getLogger(__name__)
 DATASET_DIR = config.DATA_DIR / "kar-training-dataset"
 MAX_KAR_BYTES = 8 * 1024 * 1024
 SUPPORTED_KARAOKE_MIDI_SUFFIXES = {".kar", ".mid"}
@@ -102,7 +104,10 @@ _REJECTED_AUDIO_HINTS = (
 )
 _MAX_AUDIO_DURATION_DRIFT_SECONDS = 20.0
 _MAX_AUDIO_DURATION_DRIFT_RATIO = 0.12
+_MAX_TRUSTED_AUDIO_DURATION_DRIFT_RATIO = 0.35
 _MIN_MELODY_MATCH_SCORE = 0.45
+_MIN_STRUCTURED_RELEASE_MELODY_MATCH_SCORE = 0.40
+_MIN_CONSENSUS_MELODY_MATCH_SCORE = 0.55
 _MAX_VOCAL_AUDIO_OFFSET_SECONDS = 15.0
 _VOCAL_DISPLAY_LEAD_SECONDS = 0.1
 _AUDIO_SEARCH_INTENT_BONUS = {
@@ -414,7 +419,7 @@ def _select_melody_track(
         # An explicitly labelled vocal/melody track is authoritative.  Dense
         # accompaniment tracks can contain thousands of overlapping notes;
         # their raw note count/coverage must never outweigh the MIDI label.
-        hint = 10_000 if re.search(r"vocal|voice|melody|lead|sing|вокал|мелод", name, re.I) else 0
+        hint = 100_000 if re.search(r"vocal|voice|melody|lead|sing|вокал|мелод", name, re.I) else 0
         same_track = 45 if track_index == lyric_track else 0
         median_pitch = float(np.median([note["note"] for note in relevant]))
         range_bonus = 25 if 48 <= median_pitch <= 84 else 0
@@ -425,6 +430,12 @@ def _select_melody_track(
                 any(abs(start - onset) <= 0.06 for start in note_starts) for onset in lyric_onsets
             )
             onset_ratio = matched / len(lyric_onsets)
+        # When two tracks begin exactly with every lyric event, the denser one
+        # is commonly a quantized guitar/keyboard pattern rather than vocals.
+        # A normal vocal melody averages roughly one to three note attacks per
+        # word; penalize only the excess so genuine melismas remain possible.
+        notes_per_word = len(relevant) / max(1, len(lyric_onsets or []))
+        density_penalty = max(0.0, notes_per_word - 3.0) * 100
         ranked.append(
             (
                 hint
@@ -433,13 +444,16 @@ def _select_melody_track(
                 + min(len(relevant), 120)
                 + overlap
                 + onset_ratio * 20_000,
+                -density_penalty,
                 track_index,
                 relevant,
             )
         )
     if not ranked:
         return None, []
-    _score, track_index, notes = max(ranked, key=lambda item: item[0])
+    _score, _density, track_index, notes = max(
+        ranked, key=lambda item: (item[0] + item[1], item[0])
+    )
     return track_index, notes
 
 
@@ -744,7 +758,21 @@ def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> floa
     expected_duration = _reliable_document_duration(document)
     duration_penalty = abs(duration - expected_duration) if duration and expected_duration else 0
     if not _duration_matches(document, duration):
-        return None
+        # A MIDI/KAR arrangement can omit a long studio intro, outro or an
+        # instrumental section.  Permit that moderate drift only when the
+        # expanded metadata proves that the source belongs to the performer;
+        # the chroma matcher below remains responsible for verifying that it
+        # is the same composition.  Unverified re-uploads keep the strict
+        # duration gate so this cannot reintroduce concert recordings.
+        trusted_duration_drift = (
+            duration
+            and expected_duration
+            and duration_penalty / expected_duration
+            <= _MAX_TRUSTED_AUDIO_DURATION_DRIFT_RATIO
+            and _audio_candidate_has_studio_provenance(entry, document)
+        )
+        if not trusted_duration_drift:
+            return None
     uploader_overlap = _overlap_count(artist_words, uploader_words)
     official = 8 if any(hint in normalized for hint in ("official", "audio", "music video")) else 0
     search_intent = str(entry.get("_karaoke_search_intent") or "")
@@ -815,6 +843,87 @@ def _audio_candidate_has_studio_provenance(
     entry: dict[str, Any], document: KarDocument
 ) -> bool:
     return _audio_candidate_studio_provenance_strength(entry, document) > 0
+
+
+def _audio_candidate_melody_verified(score: float, *, provenance: int) -> bool:
+    threshold = (
+        _MIN_STRUCTURED_RELEASE_MELODY_MATCH_SCORE
+        if provenance >= 2
+        else _MIN_MELODY_MATCH_SCORE
+    )
+    return score >= threshold
+
+
+def _audio_consensus_matches(matches: list[tuple]) -> list[tuple]:
+    """Trust an unlabelled studio master only when independent copies agree."""
+
+    def uploader(item: tuple) -> str:
+        entry, expanded = item[1], item[2]
+        value = " ".join(
+            str((expanded or entry).get(field) or entry.get(field) or "")
+            for field in ("uploader", "channel", "uploader_id", "channel_id")
+        )
+        return " ".join(_normalized_words(value))
+
+    def same_recording(left: tuple, right: tuple) -> bool:
+        left_match, right_match = left[3], right[3]
+        if left_match.get("pitch_shift_semitones") != right_match.get(
+            "pitch_shift_semitones"
+        ):
+            return False
+        left_duration = float(left_match.get("audio_duration") or 0)
+        right_duration = float(right_match.get("audio_duration") or 0)
+        if not left_duration or not right_duration:
+            return False
+        if abs(left_duration - right_duration) > max(
+            3.0, min(left_duration, right_duration) * 0.02
+        ):
+            return False
+        left_bpm = float(left_match.get("audio_bpm") or 0)
+        right_bpm = float(right_match.get("audio_bpm") or 0)
+        if not left_bpm or not right_bpm or abs(left_bpm - right_bpm) > 1.5:
+            return False
+        return (
+            abs(
+                float(left_match.get("time_scale") or 0)
+                - float(right_match.get("time_scale") or 0)
+            )
+            <= 0.015
+            and abs(
+                float(left_match.get("offset_seconds") or 0)
+                - float(right_match.get("offset_seconds") or 0)
+            )
+            <= 1.0
+        )
+
+    eligible = [
+        item
+        for item in matches
+        if item[4] == 0
+        and float(item[3].get("score") or 0) >= _MIN_CONSENSUS_MELODY_MATCH_SCORE
+        and uploader(item)
+    ]
+    accepted: list[tuple] = []
+    for item in eligible:
+        item_uploader = uploader(item)
+        if any(
+            uploader(peer) != item_uploader and same_recording(item, peer)
+            for peer in eligible
+            if peer is not item
+        ):
+            accepted.append(item)
+    return accepted
+
+
+def _apply_known_identity(
+    document: KarDocument, *, title: str | None, artist: str | None
+) -> KarDocument:
+    """Prefer the library identity over composer credits embedded in MIDI."""
+    if str(title or "").strip():
+        document.title = _clean_text(str(title))
+    if str(artist or "").strip():
+        document.artist = _clean_text(str(artist))
+    return document
 
 
 def _audio_search_queries(artist: str, title: str) -> list[tuple[str, str]]:
@@ -953,19 +1062,29 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
             expanded_score = _audio_candidate_score(preview_info, document)
             if expanded_score is None:
                 continue
-            if not _audio_candidate_has_studio_provenance(preview_info, document):
-                continue
             match = _midi_audio_match(document, preview)
             provenance = _audio_candidate_studio_provenance_strength(preview_info, document)
             matches.append((expanded_score, entry, preview_info, match, provenance))
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "Audio candidate verification failed: id=%s title=%r error=%s",
+                entry.get("id"),
+                entry.get("title"),
+                exc,
+            )
             continue
         finally:
             (temporary / f"preview-{index}.wav").unlink(missing_ok=True)
     if not matches:
         shutil.rmtree(temporary, ignore_errors=True)
         raise RuntimeError("Не удалось проверить найденные аудиозаписи по мелодии .kar")
-    verified_matches = [item for item in matches if item[3]["score"] >= _MIN_MELODY_MATCH_SCORE]
+    provenance_verified = [
+        item
+        for item in matches
+        if item[4] > 0
+        if _audio_candidate_melody_verified(item[3]["score"], provenance=item[4])
+    ]
+    verified_matches = provenance_verified or _audio_consensus_matches(matches)
     if not verified_matches:
         shutil.rmtree(temporary, ignore_errors=True)
         best_match = max(matches, key=lambda item: item[3]["score"])[3]
@@ -977,10 +1096,11 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     # performer/title/source metadata. Tiny chroma-score differences between
     # copies of the same master must not make a random re-upload beat the
     # performer's own channel.
-    _metadata_score, selected, preview_info, match = max(
+    _metadata_score, selected, preview_info, match, selected_provenance = max(
         verified_matches,
         key=lambda item: (item[4], item[0], item[3]["score"]),
-    )[:4]
+    )
+    selected_by_consensus = selected_provenance <= 0
     webpage = _candidate_url(selected)
     options = {
         "format": "bestaudio/best",
@@ -1043,11 +1163,17 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
         raise RuntimeError(
             "Скачанная запись не совпадает с исполнителем, названием или длительностью .kar"
         )
-    if not _audio_candidate_has_studio_provenance(final_entry, document):
+    final_provenance = _audio_candidate_studio_provenance_strength(final_entry, document)
+    if final_provenance <= 0 and not selected_by_consensus:
         target.unlink(missing_ok=True)
         shutil.rmtree(temporary, ignore_errors=True)
         raise RuntimeError("Источник аудио не подтверждён как выпуск исполнителя")
-    if match["score"] < _MIN_MELODY_MATCH_SCORE:
+    final_match_verified = (
+        float(match["score"]) >= _MIN_CONSENSUS_MELODY_MATCH_SCORE
+        if selected_by_consensus
+        else _audio_candidate_melody_verified(match["score"], provenance=final_provenance)
+    )
+    if not final_match_verified:
         target.unlink(missing_ok=True)
         shutil.rmtree(temporary, ignore_errors=True)
         raise RuntimeError(
@@ -1160,17 +1286,23 @@ def _refine_vocal_alignment(
     source_kind: str,
     vocals_path: Path,
     audio_source: dict[str, Any],
+    *,
+    title_override: str | None = None,
+    artist_override: str | None = None,
 ) -> tuple[KarDocument, dict[str, Any], dict[str, Any], dict[str, Any]] | None:
     raw_document = parse_kar(source, original_filename=original_filename)
+    _apply_known_identity(raw_document, title=title_override, artist=artist_override)
     vocal_match = _midi_audio_match(
         raw_document,
         vocals_path,
         max_offset_seconds=_MAX_VOCAL_AUDIO_OFFSET_SECONDS,
     )
-    original_bpm = float(audio_source["midi_audio_match"]["audio_bpm"])
     vocal_bpm = float(vocal_match["audio_bpm"])
-    bpm_ratio = vocal_bpm / max(original_bpm, 0.001)
-    if vocal_match["score"] < _MIN_MELODY_MATCH_SCORE or not 0.97 <= bpm_ratio <= 1.03:
+    # The accompaniment in the original mix can create a stronger but false
+    # tempo/pitch match.  The isolated vocal must agree with the MIDI tempo,
+    # not with that earlier mix estimate.
+    bpm_ratio = vocal_bpm / max(float(raw_document.bpm), 0.001)
+    if vocal_match["score"] < _MIN_MELODY_MATCH_SCORE or not 0.94 <= bpm_ratio <= 1.06:
         return None
     display_offset = float(vocal_match["offset_seconds"]) - _VOCAL_DISPLAY_LEAD_SECONDS
     first_word_start = min(
@@ -1196,6 +1328,7 @@ def _refine_vocal_alignment(
         bpm_override=vocal_bpm,
         offset_seconds=float(vocal_match["offset_seconds"]),
     )
+    _apply_known_identity(document, title=title_override, artist=artist_override)
     return (
         document,
         _lyrics_payload(document, source_kind),
@@ -1246,6 +1379,8 @@ def prepare_kar_file(
     path: str | Path,
     *,
     original_filename: str | None = None,
+    title_override: str | None = None,
+    artist_override: str | None = None,
     output_root: str | Path = DATASET_DIR,
     download_audio: bool = True,
     target_dir: str | Path | None = None,
@@ -1256,6 +1391,7 @@ def prepare_kar_file(
     source_kind = "mid" if source.suffix.casefold() == ".mid" else "kar"
     _notify_dataset(progress, cancelled, "karaoke_parse", 2, "Читаем слова и ноты")
     document = _parse_dataset_document(source, original_filename, source_kind)
+    _apply_known_identity(document, title=title_override, artist=artist_override)
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=True)
@@ -1285,6 +1421,7 @@ def prepare_kar_file(
                 bpm_override=float(match["audio_bpm"]),
                 offset_seconds=float(match["offset_seconds"]),
             )
+            _apply_known_identity(document, title=title_override, artist=artist_override)
             reference = _lyrics_payload(document, source_kind)
             comparison = {
                 **match,
@@ -1307,6 +1444,8 @@ def prepare_kar_file(
                 source_kind,
                 vocals_path,
                 audio_source,
+                title_override=title_override,
+                artist_override=artist_override,
             )
             if refined is not None:
                 document, reference, comparison, audio_source = refined

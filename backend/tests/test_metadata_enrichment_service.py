@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -150,13 +151,19 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
         video_url=None,
     )
     database = Mock()
+    def download(_video_id, output_dir, **_kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / metadata.LOCAL_VIDEO_NAME).write_bytes(b"video")
+        (output_dir / metadata.LOCAL_VIDEO_SOURCE_NAME).write_text("{}", encoding="utf-8")
+        return True
+
     patch_attrs(
         monkeypatch,
         metadata,
         SessionLocal=Mock(return_value=database),
         _itunes_genre=Mock(return_value="Rock"),
         _youtube_video_id=Mock(return_value="DAaLa3vF8sU"),
-        _download_youtube_video=Mock(return_value=True),
+        _download_youtube_video=Mock(side_effect=download),
         commit=Mock(),
     )
     monkeypatch.setattr(metadata.song_service, "resolve_output_dir", Mock(return_value=Path("output")))
@@ -175,6 +182,54 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
     assert "song" not in metadata._active
 
 
+def test_enrichment_downloads_outside_song_lock_then_publishes_atomically(monkeypatch, tmp_path):
+    output = tmp_path / "library" / "song"
+    cache = tmp_path / "cache"
+    output.mkdir(parents=True)
+    song = SimpleNamespace(id="song", title="Title", artist="Artist", genre="Rock", video_url=None)
+    database = Mock()
+    locked = False
+
+    @contextmanager
+    def content_lock(_song_id):
+        nonlocal locked
+        locked = True
+        try:
+            yield
+        finally:
+            locked = False
+
+    def download(_video_id, staging, **_kwargs):
+        assert locked is False
+        assert output not in staging.parents and staging != output
+        (staging / metadata.LOCAL_VIDEO_NAME).write_bytes(b"video")
+        (staging / metadata.LOCAL_VIDEO_SOURCE_NAME).write_text("{}", encoding="utf-8")
+        return True
+
+    patch_attrs(
+        monkeypatch,
+        metadata,
+        SessionLocal=Mock(return_value=database),
+        _itunes_genre=Mock(return_value=None),
+        _youtube_video_id=Mock(return_value="DAaLa3vF8sU"),
+        _download_youtube_video=Mock(side_effect=download),
+        commit=Mock(),
+    )
+    monkeypatch.setattr(metadata.config, "CACHE_DIR", cache)
+    monkeypatch.setattr(metadata.repositories, "get_song", Mock(return_value=song))
+    monkeypatch.setattr(metadata.song_service, "resolve_output_dir", Mock(return_value=output))
+    monkeypatch.setattr(metadata.song_service, "song_content_lock", content_lock)
+    monkeypatch.setattr(metadata.song_service, "library_write_lock", lambda: content_lock("library"))
+    monkeypatch.setattr(metadata, "_active", {"song"})
+
+    metadata.enrich_song("song")
+
+    assert (output / metadata.LOCAL_VIDEO_NAME).read_bytes() == b"video"
+    assert (output / metadata.LOCAL_VIDEO_SOURCE_NAME).is_file()
+    assert song.video_url == metadata.LOCAL_VIDEO_URL
+    assert not cache.exists() or not any(cache.rglob("clip.mp4"))
+
+
 def test_enqueue_registers_supervised_task_and_rolls_back_when_admission_is_closed(monkeypatch):
     start = Mock(return_value=True)
     monkeypatch.setattr(metadata.background_task_supervisor, "start_task", start)
@@ -188,4 +243,3 @@ def test_enqueue_registers_supervised_task_and_rolls_back_when_admission_is_clos
     start.return_value = False
     assert metadata.enqueue("closed") is False
     assert "closed" not in metadata._active
-

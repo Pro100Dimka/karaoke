@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import urllib.parse
 import urllib.request
@@ -598,12 +599,35 @@ def enrich_song(song_id: str) -> None:
                     expected_duration = float(metadata_payload.get("duration") or 0) or None
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 expected_duration = None
-            with song_service.song_content_lock(song_id), song_service.library_write_lock():
+            # Network download and FFmpeg normalization can take minutes. Keep
+            # their open files in a sibling staging directory, never inside the
+            # song directory and never while holding its content lock. Deletion
+            # can therefore win immediately; only the final rename is serialized.
+            output_dir.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(
+                prefix=f".{output_dir.name}-metadata-", dir=output_dir.parent
+            ) as staging_name:
+                staging = Path(staging_name)
                 downloaded = _download_youtube_video(
                     video_id,
-                    output_dir,
+                    staging,
                     expected_duration=expected_duration,
                 )
+                if downloaded:
+                    with song_service.song_content_lock(song_id), song_service.library_write_lock():
+                        db.expire_all()
+                        current = repositories.get_song(db, song_id)
+                        if current is None:
+                            return
+                        else:
+                            output_dir = song_service.resolve_output_dir(current)
+                            output_dir.mkdir(parents=True, exist_ok=True)
+                            os.replace(staging / LOCAL_VIDEO_NAME, output_dir / LOCAL_VIDEO_NAME)
+                            os.replace(
+                                staging / LOCAL_VIDEO_SOURCE_NAME,
+                                output_dir / LOCAL_VIDEO_SOURCE_NAME,
+                            )
+                            song = current
             next_video_url = LOCAL_VIDEO_URL if downloaded else None
             if song.video_url != next_video_url:
                 song.video_url = next_video_url

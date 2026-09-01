@@ -380,6 +380,8 @@ def prepare_kfn_file(
     path: str | Path,
     *,
     original_filename: str | None = None,
+    title_override: str | None = None,
+    artist_override: str | None = None,
     output_root: str | Path = kar_dataset_service.DATASET_DIR,
     target_dir: str | Path | None = None,
     progress: kar_dataset_service.DatasetProgress | None = None,
@@ -432,6 +434,9 @@ def prepare_kfn_file(
         lyric_track=-1,
         melody_track=melody_track,
         raw_lyrics=[],
+    )
+    kar_dataset_service._apply_known_identity(
+        document, title=title_override, artist=artist_override
     )
     owns_target = target_dir is None
     if target_dir is None:

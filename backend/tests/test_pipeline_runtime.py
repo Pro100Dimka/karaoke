@@ -282,6 +282,7 @@ def test_symbolic_worker_publishes_ready_artifacts_as_a_normal_song(monkeypatch,
         _create_ai_progress_callback=Mock(return_value=Mock()),
         _configure_ai_runtime=Mock(),
         _load_original_filename=Mock(return_value="Artist - Song.kar"),
+        _load_song_identity=Mock(return_value=("Artist", "Song")),
         _finalize_processed_job=finalize,
     )
     monkeypatch.setattr(pipeline_service.model_install_service, "ensure_ready_sync", Mock())
@@ -291,6 +292,8 @@ def test_symbolic_worker_publishes_ready_artifacts_as_a_normal_song(monkeypatch,
 
     assert prepare.call_args.kwargs["target_dir"] == tmp_path
     assert prepare.call_args.kwargs["original_filename"] == "Artist - Song.kar"
+    assert prepare.call_args.kwargs["artist_override"] == "Artist"
+    assert prepare.call_args.kwargs["title_override"] == "Song"
     finalize.assert_called_once_with("song", tmp_path, retain_source=True)
     capture.close.assert_called_once_with()
 

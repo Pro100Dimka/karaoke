@@ -906,9 +906,12 @@ def _run_symbolic_job(song_id: str, source_path: str, out_dir: Path) -> None:
             if source.suffix.casefold() == ".kfn"
             else kar_dataset_service.prepare_kar_file
         )
+        artist_override, title_override = _load_song_identity(song_id)
         result = prepare(
             source,
             original_filename=_load_original_filename(song_id),
+            title_override=title_override,
+            artist_override=artist_override,
             output_root=out_dir.parent,
             target_dir=out_dir,
             progress=progress,
@@ -955,6 +958,15 @@ def _run_symbolic_job(song_id: str, source_path: str, out_dir: Path) -> None:
 def _load_original_filename(song_id: str) -> str:
     with _song_session(song_id) as (_db, song):
         return str(getattr(song, "original_filename", "") or Path(song.source_path).name) if song else "song"
+
+
+def _load_song_identity(song_id: str) -> tuple[str | None, str | None]:
+    with _song_session(song_id) as (_db, song):
+        if song is None:
+            return None, None
+        artist = str(getattr(song, "artist", "") or "").strip() or None
+        title = str(getattr(song, "title", "") or "").strip() or None
+        return artist, title
 
 
 def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
