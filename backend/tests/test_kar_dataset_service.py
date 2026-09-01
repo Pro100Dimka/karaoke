@@ -637,6 +637,67 @@ def test_vocal_stem_refines_long_intro_before_writing_lyrics(monkeypatch, tmp_pa
     assert result["audio_source"]["midi_audio_match"]["offset_seconds"] == 6.15
 
 
+def test_vocal_refinement_corrects_a_late_midi_match_to_the_nearby_vocal_attack(
+    monkeypatch, tmp_path
+):
+    source = build_kar(tmp_path / "song.kar")
+    vocal_match = {
+        "score": 0.95,
+        "kar_bpm": 120,
+        "audio_bpm": 120,
+        "detected_audio_bpm": 120,
+        "time_scale": 1,
+        "offset_seconds": 6.25,
+        "pitch_shift_semitones": 0,
+        "audio_duration": 20,
+        "compared_notes": 50,
+    }
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_midi_audio_match",
+        lambda *_args, **_kwargs: vocal_match,
+    )
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_nearby_vocal_attack_seconds",
+        lambda _path, _predicted: 6.0,
+    )
+
+    refined = kar_dataset_service._refine_vocal_alignment(
+        source,
+        source.name,
+        "kar",
+        tmp_path / "vocals.flac",
+        {"midi_audio_match": vocal_match},
+    )
+
+    assert refined is not None
+    document, _reference, comparison, _audio_source = refined
+    assert document.words[0]["start"] == pytest.approx(6.0)
+    assert comparison["offset_seconds"] == pytest.approx(5.5)
+    assert comparison["vocal_attack_correction_seconds"] == pytest.approx(0.65)
+
+
+def test_nearby_vocal_attack_requires_quiet_then_sustained_voice(monkeypatch, tmp_path):
+    rate = 1_000
+    samples = __import__("numpy").zeros(rate * 5, dtype="float32")
+    samples[2_000:2_500] = 0.2
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_read_mono_audio",
+        lambda _path: (samples, rate),
+    )
+
+    assert kar_dataset_service._nearby_vocal_attack_seconds(
+        tmp_path / "vocals.flac", 2.8
+    ) == pytest.approx(2.0, abs=0.04)
+
+    samples[:] = 0.2
+    assert kar_dataset_service._nearby_vocal_attack_seconds(
+        tmp_path / "vocals.flac", 2.8
+    ) is None
+
+
 def test_vocal_refinement_uses_raw_midi_tempo_when_original_mix_match_is_wrong(
     monkeypatch, tmp_path
 ):

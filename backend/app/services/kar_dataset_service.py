@@ -21,12 +21,17 @@ import numpy as np
 
 import config
 from AI.lyrics_document import validate_lyrics_document
-from app.services import ai_bridge, kar_metadata, metadata_enrichment_service, song_service
-from app.services.kar_alignment import (
-    closest_tempo_octave as _closest_tempo_octave,
-    midi_audio_match as _midi_audio_match,
+from app.services import (
+    ai_bridge,
+    kar_alignment,
+    kar_metadata,
+    metadata_enrichment_service,
+    song_service,
 )
 from app.utils.json_files import write_json
+
+_closest_tempo_octave = kar_alignment.closest_tempo_octave
+_midi_audio_match = kar_alignment.midi_audio_match
 
 try:
     from yt_dlp import YoutubeDL
@@ -110,6 +115,7 @@ _MIN_STRUCTURED_RELEASE_MELODY_MATCH_SCORE = 0.40
 _MIN_CONSENSUS_MELODY_MATCH_SCORE = 0.55
 _MAX_VOCAL_AUDIO_OFFSET_SECONDS = 15.0
 _VOCAL_DISPLAY_LEAD_SECONDS = 0.1
+_MAX_VOCAL_ATTACK_CORRECTION_SECONDS = 1.5
 _AUDIO_SEARCH_INTENT_BONUS = {
     "release": 4.0,
     "studio": 2.0,
@@ -1280,6 +1286,46 @@ def _unique_dataset_dir(root: Path, document: KarDocument) -> Path:
             suffix += 1
 
 
+def _read_mono_audio(path: Path) -> tuple[np.ndarray, int]:
+    from AI.audio import read_mono
+
+    return read_mono(path)
+
+
+def _nearby_vocal_attack_seconds(vocals_path: Path, predicted_start: float) -> float | None:
+    """Find a clean voice onset shortly before a melody-derived word start.
+
+    MIDI chroma matches the stable pitched portion of a syllable and can place
+    the displayed word almost a second after its initial consonant.  A vocal
+    stem gives us the missing acoustic edge, but only a quiet-to-sustained
+    transition close to the existing match is trusted; intro noises and
+    continuously sounding backing vocals are deliberately ignored.
+    """
+    try:
+        samples, rate = _read_mono_audio(vocals_path)
+    except (OSError, RuntimeError, ValueError):
+        return None
+    audio = np.asarray(samples, dtype=np.float32).reshape(-1)
+    if rate <= 0 or audio.size < rate // 2: return None
+    frame_size = max(1, round(rate * 0.02))
+    usable = audio[: audio.size // frame_size * frame_size]
+    if not usable.size: return None
+    rms = np.sqrt(np.mean(usable.reshape(-1, frame_size) ** 2, axis=1))
+    noise = float(np.percentile(rms, 20))
+    strong = float(np.percentile(rms, 90))
+    threshold = max(0.0025, noise * 4.0, strong * 0.1)
+    active = rms >= threshold
+    lower = max(8, math.floor((predicted_start - _MAX_VOCAL_ATTACK_CORRECTION_SECONDS) / 0.02))
+    upper = min(len(active) - 6, math.ceil((predicted_start + 0.2) / 0.02))
+    candidates = [
+        index
+        for index in range(lower, max(lower, upper))
+        if int(active[index - 8:index].sum()) <= 1
+        and int(active[index:index + 6].sum()) >= 4
+    ]
+    return candidates[-1] * 0.02 if candidates else None
+
+
 def _refine_vocal_alignment(
     source: Path,
     original_filename: str | None,
@@ -1317,6 +1363,20 @@ def _refine_vocal_alignment(
     # close to zero, but it must never move it before the audio timeline.
     if scaled_first_word_start + display_offset < 0:
         return None
+    predicted_first_word_start = scaled_first_word_start + display_offset
+    vocal_attack = _nearby_vocal_attack_seconds(vocals_path, predicted_first_word_start)
+    attack_correction = (
+        predicted_first_word_start - vocal_attack
+        if vocal_attack is not None
+        else 0.0
+    )
+    if 0.25 <= attack_correction <= _MAX_VOCAL_ATTACK_CORRECTION_SECONDS:
+        display_offset -= attack_correction
+        vocal_match = {
+            **vocal_match,
+            "vocal_attack_seconds": round(vocal_attack, 3),
+            "vocal_attack_correction_seconds": round(attack_correction, 3),
+        }
     vocal_match = {
         **vocal_match,
         "offset_seconds": round(display_offset, 3),
