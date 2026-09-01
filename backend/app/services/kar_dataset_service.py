@@ -1381,6 +1381,7 @@ def prepare_kar_file(
     original_filename: str | None = None,
     title_override: str | None = None,
     artist_override: str | None = None,
+    reuse_existing_audio: bool = False,
     output_root: str | Path = DATASET_DIR,
     download_audio: bool = True,
     target_dir: str | Path | None = None,
@@ -1397,6 +1398,10 @@ def prepare_kar_file(
     root.mkdir(parents=True, exist_ok=True)
     target = Path(target_dir) if target_dir is not None else _unique_dataset_dir(root, document)
     target.mkdir(parents=True, exist_ok=True)
+    reused_audio = reuse_existing_audio and all(
+        (target / name).is_file()
+        for name in ("original.flac", "vocals.flac", "instrumental.flac")
+    )
     warnings: list[str] = []
     symbolic_source = target / f"source.{source_kind}"
     if source.resolve() != symbolic_source.resolve():
@@ -1413,28 +1418,59 @@ def prepare_kar_file(
     try:
         if download_audio:
             _notify_dataset(progress, cancelled, "karaoke_audio", 8, "Ищем оригинальную песню")
-            audio_source = _download_audio(document, target)
-            match = audio_source["midi_audio_match"]
-            document = parse_kar(
-                source,
-                original_filename=original_filename,
-                bpm_override=float(match["audio_bpm"]),
-                offset_seconds=float(match["offset_seconds"]),
-            )
-            _apply_known_identity(document, title=title_override, artist=artist_override)
-            reference = _lyrics_payload(document, source_kind)
-            comparison = {
-                **match,
-                "status": "audio-bpm-applied",
-            }
-            _notify_dataset(progress, cancelled, "karaoke_audio", 34, "Оригинальная песня получена")
+            if reused_audio:
+                match = _midi_audio_match(
+                    document,
+                    target / "original.flac",
+                    max_offset_seconds=_MAX_VOCAL_AUDIO_OFFSET_SECONDS,
+                )
+                audio_source = {
+                    "query": "existing-library-audio",
+                    "search_queries": [],
+                    "url": "local:original.flac",
+                    "title": document.title,
+                    "uploader": document.artist,
+                    "duration": float(match.get("audio_duration") or 0),
+                    "midi_audio_match": match,
+                    "preview_title": document.title,
+                    "thumbnail_url": "",
+                }
+                comparison = {**match, "status": "existing-audio-reused"}
+                _notify_dataset(
+                    progress,
+                    cancelled,
+                    "karaoke_audio",
+                    34,
+                    "Готовые аудиодорожки переиспользованы",
+                )
+            else:
+                audio_source = _download_audio(document, target)
+                match = audio_source["midi_audio_match"]
+                document = parse_kar(
+                    source,
+                    original_filename=original_filename,
+                    bpm_override=float(match["audio_bpm"]),
+                    offset_seconds=float(match["offset_seconds"]),
+                )
+                _apply_known_identity(document, title=title_override, artist=artist_override)
+                reference = _lyrics_payload(document, source_kind)
+                comparison = {
+                    **match,
+                    "status": "audio-bpm-applied",
+                }
+                _notify_dataset(progress, cancelled, "karaoke_audio", 34, "Оригинальная песня получена")
     except Exception as exc:
         warnings.append(str(exc))
-        (target / "original.flac").unlink(missing_ok=True)
+        if not reused_audio:
+            (target / "original.flac").unlink(missing_ok=True)
         shutil.rmtree(target / ".download", ignore_errors=True)
         shutil.rmtree(target / ".processing", ignore_errors=True)
         (target / "kar-lyrics.txt").unlink(missing_ok=True)
-    stems_error = _prepare_dataset_stems(target, warnings, progress, cancelled)
+    stems_error = (
+        None
+        if reused_audio
+        else _prepare_dataset_stems(target, warnings, progress, cancelled)
+    )
     vocals_path = target / "vocals.flac"
     if audio_source is not None and vocals_path.is_file():
         try:
@@ -1457,7 +1493,14 @@ def prepare_kar_file(
         "video_id": None,
         "warnings": [],
     }
-    if (target / "original.flac").is_file():
+    if reused_audio and (target / "clip.mp4").is_file():
+        media = {
+            "cover_status": "ready" if (target / "cover.jpg").is_file() else "fallback",
+            "video_status": "ready",
+            "video_id": None,
+            "warnings": [],
+        }
+    elif (target / "original.flac").is_file():
         _notify_dataset(progress, cancelled, "karaoke_media", 70, "Подготавливаем обложку и клип")
         media_artist, media_title = _audio_search_identity(document)
         media = _prepare_visual_assets(

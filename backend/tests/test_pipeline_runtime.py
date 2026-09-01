@@ -262,6 +262,26 @@ def test_regular_processing_routes_karaoke_files_to_symbolic_worker(monkeypatch,
     symbolic.assert_called_once_with("song", str(tmp_path / "source.kar"), tmp_path)
 
 
+def test_timing_reprocessing_keeps_karaoke_in_symbolic_worker(monkeypatch, tmp_path):
+    symbolic = Mock()
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _load_job_paths=Mock(return_value=(str(tmp_path / "source.kar"), tmp_path)),
+        _reject_full_process_if_source_retired=Mock(return_value=False),
+        _run_symbolic_job=symbolic,
+    )
+
+    pipeline_service._run_job("song", "quality", reuse_vocals=True)
+
+    symbolic.assert_called_once_with(
+        "song",
+        str(tmp_path / "source.kar"),
+        tmp_path,
+        reuse_existing_audio=True,
+    )
+
+
 def test_symbolic_worker_publishes_ready_artifacts_as_a_normal_song(monkeypatch, tmp_path):
     source = tmp_path / "source.kar"
     source.write_bytes(b"midi")

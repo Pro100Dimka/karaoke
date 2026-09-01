@@ -875,7 +875,13 @@ def _log_processing_finished(song_id: str, started_at: float) -> None:
     logger.info("Song processing finished: song_id=%s elapsed_sec=%.1f", song_id, time.monotonic() - started_at)
 
 
-def _run_symbolic_job(song_id: str, source_path: str, out_dir: Path) -> None:
+def _run_symbolic_job(
+    song_id: str,
+    source_path: str,
+    out_dir: Path,
+    *,
+    reuse_existing_audio: bool = False,
+) -> None:
     capture: _ProgressCapture | None = None
     heartbeat_stop: threading.Event | None = None
     heartbeat_thread: threading.Thread | None = None
@@ -916,6 +922,7 @@ def _run_symbolic_job(song_id: str, source_path: str, out_dir: Path) -> None:
             target_dir=out_dir,
             progress=progress,
             cancelled=lambda: _is_cancelled(song_id),
+            reuse_existing_audio=reuse_existing_audio,
         )
         if result.get("status") != "ready" or result.get("stems_status") != "ready":
             details = "; ".join(str(item) for item in result.get("warnings", []) if item)
@@ -975,8 +982,16 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
     if _reject_full_process_if_source_retired(song_id, reuse_vocals=reuse_vocals): return
     source_path, out_dir = paths
     recover_orphaned_backups(out_dir)
-    if not reuse_vocals and Path(source_path).suffix.casefold() in config.ALLOWED_KARAOKE_EXTENSIONS:
-        _run_symbolic_job(song_id, source_path, out_dir)
+    if Path(source_path).suffix.casefold() in config.ALLOWED_KARAOKE_EXTENSIONS:
+        if reuse_vocals:
+            _run_symbolic_job(
+                song_id,
+                source_path,
+                out_dir,
+                reuse_existing_audio=True,
+            )
+        else:
+            _run_symbolic_job(song_id, source_path, out_dir)
         return
     searchable_title = _load_searchable_title(song_id)
     lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)

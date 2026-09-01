@@ -382,6 +382,7 @@ def prepare_kfn_file(
     original_filename: str | None = None,
     title_override: str | None = None,
     artist_override: str | None = None,
+    reuse_existing_audio: bool = False,
     output_root: str | Path = kar_dataset_service.DATASET_DIR,
     target_dir: str | Path | None = None,
     progress: kar_dataset_service.DatasetProgress | None = None,

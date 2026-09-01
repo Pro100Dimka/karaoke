@@ -682,6 +682,59 @@ def test_vocal_refinement_uses_raw_midi_tempo_when_original_mix_match_is_wrong(
     assert audio_source["midi_audio_match"]["audio_bpm"] == 118
 
 
+def test_symbolic_reprocessing_reuses_audio_and_preserves_midi_notes(monkeypatch, tmp_path):
+    source = build_kar(tmp_path / "song.kar")
+    target = tmp_path / "ready-song"
+    target.mkdir()
+    for name in ("original.flac", "vocals.flac", "instrumental.flac"):
+        (target / name).write_bytes(name.encode())
+    (target / "clip.mp4").write_bytes(b"clip")
+    (target / "cover.jpg").write_bytes(b"cover")
+
+    def match(_document, audio_path, **_kwargs):
+        return {
+            "score": 0.9,
+            "kar_bpm": 120,
+            "audio_bpm": 120,
+            "detected_audio_bpm": 120,
+            "time_scale": 1,
+            "offset_seconds": 1.5 if audio_path.name == "vocals.flac" else 0,
+            "pitch_shift_semitones": 0,
+            "audio_duration": 20,
+            "compared_notes": 50,
+        }
+
+    monkeypatch.setattr(kar_dataset_service, "_midi_audio_match", match)
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_download_audio",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("existing original must be reused")
+        ),
+    )
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_prepare_fast_stems",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("existing stems must be reused")
+        ),
+    )
+
+    result = kar_dataset_service.prepare_kar_file(
+        source,
+        target_dir=target,
+        reuse_existing_audio=True,
+    )
+    reference = json.loads((target / "lyricsSync.json").read_text(encoding="utf-8"))
+
+    assert result["status"] == "ready"
+    assert result["stems_status"] == "ready"
+    assert result["alignment"]["status"] == "vocal-stem-refined"
+    assert sum(len(word["notes"]) for word in reference["words"]) == 2
+    assert reference["words"][0]["start"] == pytest.approx(1.9)
+    assert (target / "clip.mp4").read_bytes() == b"clip"
+
+
 def test_vocal_refinement_rejects_offset_that_clamps_opening_lyrics(monkeypatch, tmp_path):
     source = build_kar(tmp_path / "song.kar")
     original_match = {
