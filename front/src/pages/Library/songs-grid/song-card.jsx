@@ -61,20 +61,6 @@ export default memo(
         variant="laser"
         tilt={false}
         interactive={isReady}
-        role={isReady ? "button" : undefined}
-        tabIndex={isReady ? 0 : undefined}
-        aria-label={isReady ? tr("library.openInKaraoke", { 0: song.title }) : undefined}
-        onClick={isReady ? activate : undefined}
-        onKeyDown={
-          isReady
-            ? (event) => {
-                if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key))
-                  return;
-                event.preventDefault();
-                activate();
-              }
-            : undefined
-        }
         sx={{ contentVisibility: "auto" }}
         style={{ "--card-sheen": "transparent", "--card-sheen-soft": "transparent" }}
         cardPanel={{
@@ -87,7 +73,15 @@ export default memo(
           }
         }}
       >
-        <Stack direction="row">
+        {isReady && (
+          <Button
+            variant="text"
+            aria-label={tr("library.openInKaraoke", { 0: song.title })}
+            onClick={activate}
+            sx={{ position: "absolute", inset: 0, zIndex: 0, padding: 0, borderRadius: "inherit" }}
+          />
+        )}
+        <Stack direction="row" sx={{ position: "relative", zIndex: 1, pointerEvents: "none" }}>
           <SongCoverArt cardIndex={cardIndex} song={song} />
           <Stack
             gap="var(--space-2)"
@@ -103,7 +97,14 @@ export default memo(
               </Stack>
               <Chip tone={tone}>{statuses[status] ? tr(text) : status}</Chip>
             </Stack>
-            <Stack direction="row" align="center" justify="space-between" wrap gap="var(--space-3)">
+            <Stack
+              direction="row"
+              align="center"
+              justify="space-between"
+              wrap
+              gap="var(--space-3)"
+              sx={{ pointerEvents: "auto" }}
+            >
               {isWorking || transfer ? (
                 <Button
                   variant="outlined"

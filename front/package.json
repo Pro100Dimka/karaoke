@@ -13,7 +13,6 @@
     "dev:electron": "npm run build:lighting && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:lighting": "node scripts/build-lighting.mjs",
     "build": "vite build",
-    "build:electron": "npm run build:lighting && npm run release:check && electron-builder",
     "preview": "vite preview",
     "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern **/*OLD/**",
     "lint:fix": "npm run lint -- --fix",
@@ -76,6 +75,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@babel/parser": "^8.0.4",
     "@babel/preset-env": "^7.29.7",
     "@babel/preset-react": "^7.29.7",
@@ -147,21 +147,8 @@
           "to": "lighting/sources"
         }
       ],
-      "target": "nsis",
+      "target": "dir",
       "icon": "assets/icons/app.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "A&D Voice"
-    },
-    "mac": {
-      "target": "dmg"
-    },
-    "linux": {
-      "target": "AppImage"
     }
   },
   "overrides": {

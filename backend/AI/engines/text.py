@@ -8,6 +8,7 @@ from math import ceil
 from ..audio import duration
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..models import Word
+from .alignment_tokens import reconcile_words
 from .base import Aligner, Transcriber
 from .device import select_torch_device
 
@@ -738,7 +739,7 @@ class Qwen3ForcedAligner(Aligner):
                                  language=resolve_alignment_language(text, language))
         item = raw[0] if isinstance(
             raw, (list, tuple)) and len(raw) == 1 else raw
-        return _words(item)
+        return reconcile_words(_words(item), tokenize(text))
 
     def _ctc_repair(self, words, tokens, samples, rate, span, resolved, runs):
         variable = {

@@ -120,7 +120,7 @@ test("large song collections render every library card", () => {
       reprocessSong: vi.fn()
     }
   };
-  const { container } = render(
+  const view = render(
     <LibrarySongsGrid
       state={state}
       fileImport={{ importFile: vi.fn(), importing: false }}
@@ -128,7 +128,7 @@ test("large song collections render every library card", () => {
       recordings={{ setSong: vi.fn() }}
     />
   );
-  expect(container.querySelectorAll('[role="button"]')).toHaveLength(songs.length);
+  expect(view.getAllByRole("button", { name: /Song \d+/ })).toHaveLength(songs.length);
 });
 test("song card progress prefers the slowest real participant over the room placeholder", () => {
   const statuses = [

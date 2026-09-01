@@ -20,6 +20,7 @@ const {
   ipcMain,
   net,
   protocol,
+  screen,
   session,
   shell
 } = require("electron");
@@ -42,6 +43,7 @@ const {
 const { findMatchingSongFolder } = require("./song-folders.cjs");
 const { readThemeBackgrounds } = require("./theme-backgrounds.cjs");
 const { createThemeIcons } = require("./theme-icons.cjs");
+const { clampWindowBounds, readWindowState, writeWindowState } = require("./window-state.cjs");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -68,6 +70,7 @@ const INSTALL_TEMP_DIR = path.join(INSTALL_DATA_ROOT, "temp");
 const INSTALL_LOG_DIR = path.join(INSTALL_DATA_ROOT, "logs");
 const INSTALL_SESSION_DIR = path.join(ELECTRON_PROFILE_DIR, "session");
 const INSTALL_CRASH_DIR = path.join(INSTALL_DATA_ROOT, "crash-dumps");
+const WINDOW_STATE_PATH = path.join(ELECTRON_PROFILE_DIR, "window-state.json");
 
 // Keep every writable runtime artefact next to the installed application.
 // This includes Chromium profile/session data, crash dumps and process temp files.
@@ -114,6 +117,8 @@ recordStartupMilestone("electron-process-start");
 
 let mainWindow = null;
 let isQuitting = false;
+let pendingVisibleBounds = null;
+let windowStateTimer = null;
 const backend = createBackendProcess({
   isDev,
   INSTALL_DATA_ROOT,
@@ -169,15 +174,76 @@ handleTrustedIpc("window:setIconTheme", (theme) => {
 
   return true;
 });
+
+const displayWorkAreas = () => {
+  const primary = screen.getPrimaryDisplay();
+  return [primary, ...screen.getAllDisplays().filter(({ id }) => id !== primary.id)].map(
+    ({ workArea }) => workArea
+  );
+};
+const visibleWindowBounds = (bounds) =>
+  clampWindowBounds(bounds, displayWorkAreas(), { width: 1100, height: 700 });
+
+function applyWindowMinimum(bounds) {
+  mainWindow?.setMinimumSize(Math.min(1100, bounds.width), Math.min(700, bounds.height));
+}
+
+function persistWindowState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = pendingVisibleBounds || visibleWindowBounds(mainWindow.getNormalBounds());
+  try {
+    writeWindowState(fs, WINDOW_STATE_PATH, {
+      bounds,
+      fullscreen: mainWindow.isFullScreen(),
+      maximized: mainWindow.isMaximized()
+    });
+  } catch (error) {
+    process.stderr.write(`Could not persist window state: ${error.message}\n`);
+  }
+}
+
+function scheduleWindowStatePersist() {
+  if (windowStateTimer) clearTimeout(windowStateTimer);
+  windowStateTimer = setTimeout(() => {
+    windowStateTimer = null;
+    persistWindowState();
+  }, 150);
+}
+
+function ensureWindowIsVisible() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = visibleWindowBounds(mainWindow.getNormalBounds());
+  applyWindowMinimum(bounds);
+  if (mainWindow.isFullScreen() || mainWindow.isMaximized()) pendingVisibleBounds = bounds;
+  else {
+    pendingVisibleBounds = null;
+    mainWindow.setBounds(bounds);
+  }
+  scheduleWindowStatePersist();
+}
+
+function applyPendingVisibleBounds() {
+  if (!pendingVisibleBounds || !mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = pendingVisibleBounds;
+  pendingVisibleBounds = null;
+  applyWindowMinimum(bounds);
+  mainWindow.setBounds(bounds);
+}
+
 function createWindow() {
   const initialTheme = getStoredIconTheme();
   const themeBackgrounds = readThemeBackgrounds();
+  const storedWindowState = readWindowState(fs, WINDOW_STATE_PATH);
+  const initialBounds = visibleWindowBounds(
+    storedWindowState.bounds || { x: 0, y: 0, width: 1440, height: 900 }
+  );
   if (!isDev) storeIconTheme(initialTheme);
   mainWindow = new BrowserWindow({
-    minWidth: 1100,
-    minHeight: 700,
+    ...initialBounds,
+    minWidth: Math.min(1100, initialBounds.width),
+    minHeight: Math.min(700, initialBounds.height),
     frame: false,
-    fullscreen: true,
+    fullscreen: storedWindowState.fullscreen,
     icon: getThemeIcon(initialTheme),
 
     // Match the native window surface to the selected theme. The renderer is
@@ -203,6 +269,7 @@ function createWindow() {
       ]
     }
   });
+  if (storedWindowState.maximized && !storedWindowState.fullscreen) mainWindow.maximize();
   recordStartupMilestone("window-create");
   mainWindow.webContents.once("did-finish-load", () => recordStartupMilestone("frontend-loaded"));
   // Apply the initial window state before loading/rendering so the first
@@ -257,14 +324,32 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
+    if (windowStateTimer) clearTimeout(windowStateTimer);
+    windowStateTimer = null;
+    pendingVisibleBounds = null;
     mainWindow = null;
+  });
+  mainWindow.on("close", persistWindowState);
+  mainWindow.on("move", scheduleWindowStatePersist);
+  mainWindow.on("resize", scheduleWindowStatePersist);
+  mainWindow.on("maximize", scheduleWindowStatePersist);
+  mainWindow.on("unmaximize", () => {
+    applyPendingVisibleBounds();
+    scheduleWindowStatePersist();
   });
   const notifyFullscreenChange = (isFullScreen) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.webContents.send("window:fullscreen-changed", isFullScreen);
   };
-  mainWindow.on("enter-full-screen", () => notifyFullscreenChange(true));
-  mainWindow.on("leave-full-screen", () => notifyFullscreenChange(false));
+  mainWindow.on("enter-full-screen", () => {
+    notifyFullscreenChange(true);
+    scheduleWindowStatePersist();
+  });
+  mainWindow.on("leave-full-screen", () => {
+    applyPendingVisibleBounds();
+    notifyFullscreenChange(false);
+    scheduleWindowStatePersist();
+  });
 }
 
 function handleTrustedIpc(channel, handler) {
@@ -426,6 +511,8 @@ app.whenReady().then(async () => {
   );
   startBackend();
   createWindow();
+  screen.on("display-removed", ensureWindowIsVisible);
+  screen.on("display-metrics-changed", ensureWindowIsVisible);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

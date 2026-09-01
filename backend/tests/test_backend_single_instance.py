@@ -58,6 +58,26 @@ def test_python_future_warning_from_stderr_is_not_labelled_as_error():
     ]
 
 
+def test_raw_stream_never_crashes_on_text_missing_from_windows_code_page():
+    class Cp1251Stream:
+        encoding = "cp1251"
+
+        def __init__(self): self.output = ""
+
+        def write(self, message):
+            message.encode(self.encoding)
+            self.output += message
+
+        def flush(self): pass
+
+    original = Cp1251Stream()
+    stream = run._StreamToLogFile(Mock(), Mock(), logging.INFO, original)
+
+    message = "CTC cannot encode かわいそう\n"
+    assert stream.write(message) == len(message)
+    assert "\\u304b\\u308f" in original.output
+
+
 def test_legacy_log_cleanup_keeps_rotated_backups_of_the_active_file(tmp_path):
     log_path = tmp_path / "application.log"
     log_path.write_text("current")

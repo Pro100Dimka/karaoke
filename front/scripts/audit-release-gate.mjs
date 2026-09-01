@@ -15,6 +15,11 @@ assert.equal(
   "playwright test -c playwright.release.config.mjs"
 );
 assert.equal(pkg.scripts["verify:release"], "python ../scripts/release_gate.py");
+assert.equal(pkg.scripts["build:electron"], undefined, "Alternative Electron installer command exists");
+assert.equal(pkg.build?.win?.target, "dir", "electron-builder must only create unpacked runtime");
+assert.equal(pkg.build?.nsis, undefined, "NSIS must not compete with the Inno production installer");
+assert.equal(pkg.build?.mac, undefined, "Unverified DMG release target must not be published");
+assert.equal(pkg.build?.linux, undefined, "Unverified AppImage release target must not be published");
 for (const required of [
   "Backend full suite + coverage",
   "Frontend verify",
@@ -29,5 +34,7 @@ assert.match(
   installer,
   /if \(-not \$Worker\)[\s\S]*verify-release\.bat[\s\S]*Release gate failed\. Installer build is blocked\./
 );
+assert.match(installer, /electron-builder[\s\S]{0,120}--dir/);
+assert.match(installer, /function Build-Installer[\s\S]*Inno Setup compilation failed/);
 assert.match(batch, /scripts\\release_gate\.py/);
 console.log("Release gate wiring audit passed.");

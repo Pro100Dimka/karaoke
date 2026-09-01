@@ -459,6 +459,27 @@ def test_forced_aligner_does_not_expect_timestamps_for_punctuation(monkeypatch):
     assert [word.text for word in words] == ["Ты", "станешь", "слаще", "А", "я"]
 
 
+def test_forced_aligner_merges_japanese_model_words_into_canonical_lyric_token(
+    monkeypatch,
+):
+    text = "かわいそうかわいそう katana"
+    items = [
+        {"text": "かわいそう", "start_time": 0.5, "end_time": 1.0},
+        {"text": "かわいそう", "start_time": 1.0, "end_time": 1.6},
+        {"text": "katana", "start_time": 2.0, "end_time": 2.8},
+    ]
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = SimpleNamespace(
+        align=lambda **_kwargs: [SimpleNamespace(items=items)]
+    )
+    monkeypatch.setattr("AI.engines.text.duration", lambda _audio: 4.0)
+
+    words = aligner.align("vocals.flac", text, "en")
+
+    assert [word.text for word in words] == ["かわいそうかわいそう", "katana"]
+    assert [(word.start, word.end) for word in words] == [(0.5, 1.6), (2.0, 2.8)]
+
+
 def test_long_asr_is_batched_by_vocal_chunks(monkeypatch):
     from AI.engines.text import Qwen3Transcriber
 
@@ -921,6 +942,46 @@ def test_msst_separator_accepts_flac_vocal_output(tmp_path, monkeypatch):
     assert vocal_audio.shape == backing_audio.shape == stereo.shape
     assert np.max(np.abs(vocal_audio)) > 0.1
     assert np.max(np.abs((vocal_audio + backing_audio) - stereo)) < 2e-4
+
+
+def test_msst_separator_stages_input_outside_glob_metacharacter_song_directory(
+    tmp_path, monkeypatch
+):
+    engine = tmp_path / "msst"
+    engine.mkdir()
+    (engine / "inference.py").write_text("# stub", encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    checkpoint = tmp_path / "model.ckpt"
+    config.write_text("stub", encoding="utf-8")
+    checkpoint.write_bytes(b"stub")
+
+    song_dir = tmp_path / "O.Torvald [ ] Radio"
+    song_dir.mkdir()
+    mix = song_dir / "mix.wav"
+    vocals = song_dir / "vocals.flac"
+    instrumental = song_dir / "instrumental.flac"
+    stereo = np.zeros((4410, 2), dtype=np.float32)
+    sf.write(mix, stereo, 44100)
+
+    separator = MSSTMelRoformerSeparator(engine_dir=engine, config=config, checkpoint=checkpoint)
+
+    def fake_run(source, output, _tuning, **_kwargs):
+        # Reproduce the exact enumeration used by the vendored MSST engine.
+        import glob
+        import os
+
+        inputs = glob.glob(os.path.join(str(source), "**/*.*"), recursive=True)
+        assert [os.path.basename(item) for item in inputs] == ["song.wav"]
+        assert "[" not in str(source)
+        stem_dir = output / "song"
+        stem_dir.mkdir(parents=True)
+        sf.write(stem_dir / "vocals.wav", stereo, 44100)
+
+    monkeypatch.setattr(separator, "_run", fake_run)
+    separator.separate(mix, vocals, instrumental)
+
+    assert vocals.is_file()
+    assert instrumental.is_file()
 
 
 def test_msst_separator_uses_the_backing_stem_directly_without_rereading_the_full_mix(

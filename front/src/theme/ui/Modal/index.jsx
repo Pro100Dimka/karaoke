@@ -1,7 +1,7 @@
-import { translateSaved as tr } from "../../../i18n/runtime";
 import { X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { translateSaved as tr } from "../../../i18n/runtime";
 import Card from "../Card";
 import IconButton from "../IconButton";
 import Primitive from "../_internal/Primitive";
@@ -70,6 +70,7 @@ export default function Modal({
     const keydown = (event) => {
       if (dialogs.at(-1) !== current) return;
       if (event.key === "Escape") {
+        if (event.target instanceof Element && event.target.closest('[role="listbox"]')) return;
         event.preventDefault();
         event.stopPropagation();
         close.current?.();

@@ -6,6 +6,7 @@ const installer = read("../scripts/karaoke-studio.iss");
 const electronMain = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 const installerBuilder = read("../scripts/build-installer.ps1");
+const packageConfig = JSON.parse(read("package.json"));
 const releaseManifest = read("../scripts/generate-release-manifest.ps1");
 const matches = (source, patterns) => patterns.forEach((pattern) => assert.match(source, pattern));
 const excludes = (source, patterns) => patterns.forEach((pattern) => assert.doesNotMatch(source, pattern));
@@ -101,6 +102,18 @@ test("every installer path generates, hashes and publishes the aggregate SBOM", 
     /sha256 = \(\[BitConverter\]::ToString\(\$sha\.ComputeHash\(\$stream\)\)\)/
   ]);
 });
+test("Inno is the only production installer and electron-builder is runtime-only", () => {
+  assert.equal(packageConfig.scripts["build:electron"], undefined);
+  assert.equal(packageConfig.build.win.target, "dir");
+  assert.equal(packageConfig.build.nsis, undefined);
+  assert.equal(packageConfig.build.mac, undefined);
+  assert.equal(packageConfig.build.linux, undefined);
+  matches(installerBuilder, [
+    /electron-builder\s+`\s+--win\s+`\s+--x64\s+`\s+--dir/,
+    /\$InnoTemplate = Join-Path \$Root "scripts\\karaoke-studio\.iss"/,
+    /function Build-Installer/,
+  ]);
+});
 test("clean builds tolerate locked stale Electron runs", () => {
   matches(installerBuilder, [
     /\[switch\]\$AllowLockedRemainder/,
@@ -153,8 +166,11 @@ test("native build toolchain is discovered across Visual Studio editions", () =>
 });
 test("incremental build cache verifies output size and SHA-256 before skipping", () => {
   matches(installerBuilder, [
+    /build-output-manifest-v2-sha256-archive-check/,
     /function Get-OutputManifestJson/,
     /function Get-FileSha256/,
+    /function Test-ArchiveIntegrity/,
+    /& \$tar -tf \$Path/,
     /\$sha\.ComputeHash\(\$stream\)/,
     /Get-OutputStatePath \$Name/,
     /output integrity state missing/,
@@ -170,4 +186,13 @@ test("installer window toggles native fullscreen through the trusted IPC boundar
     /"leave-full-screen"/
   ]);
   matches(preload, [/toggleFullscreen: \(\) => ipcRenderer\.invoke\("window:toggleFullscreen"\)/, /onFullscreenChange/]);
+});
+test("desktop window bounds survive restart and disconnected displays", () => {
+  matches(electronMain, [
+    /readWindowState\(fs, WINDOW_STATE_PATH\)/,
+    /clampWindowBounds\(bounds, displayWorkAreas\(\)/,
+    /screen\.on\("display-removed", ensureWindowIsVisible\)/,
+    /screen\.on\("display-metrics-changed", ensureWindowIsVisible\)/,
+    /mainWindow\.on\("close", persistWindowState\)/
+  ]);
 });

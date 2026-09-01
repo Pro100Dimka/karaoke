@@ -133,6 +133,7 @@ function PianoRoll({
     >
       <Box
         data-role="piano-roll-canvas"
+        role="img"
         aria-label={t("common.melodyNotes")}
         sx={{ position: "absolute", inset: 0 }}
       >

@@ -2,6 +2,7 @@
 
 import contextlib
 import hashlib
+import importlib.metadata
 import json
 import os
 import platform
@@ -11,6 +12,7 @@ import signal
 import subprocess
 import sys
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
 
@@ -19,12 +21,28 @@ BACKEND = ROOT / "backend"
 FRONT = ROOT / "front"
 CLOUDFLARE = ROOT / "cloudflare"
 GATE_STATE = ROOT / "generated" / "tests" / "release-gate.json"
-GATE_SCHEMA = "release-gate-v3-toolchain-attestation"
+GATE_SCHEMA = "release-gate-v4-runtime-attestation"
+
+
+def _file_digest(path: Path) -> str:
+    if not path.is_file():
+        return "missing"
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _python_environment_digest() -> str:
+    packages = sorted({
+        f"{(distribution.metadata.get('Name') or '').casefold()}=={distribution.version}"
+        for distribution in importlib.metadata.distributions()
+        if distribution.metadata.get("Name")
+    })
+    return hashlib.sha256("\n".join(packages).encode("utf-8")).hexdigest()
 
 
 def runtime_profile() -> dict[str, str]:
     node = shutil.which("node")
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+    nvidia_smi = shutil.which("nvidia-smi")
 
     def version(command: list[str] | None) -> str:
         if not command or not command[0]:
@@ -38,23 +56,46 @@ def runtime_profile() -> dict[str, str]:
         "CI",
         "RUNNER_OS",
         "RUNNER_ARCH",
+        "RUNNER_ENVIRONMENT",
         "ImageOS",
+        "ImageVersion",
         "KARAOKE_RELEASE_PROFILE",
         "KARAOKE_RELEASE_FULL",
+        "KARAOKE_AI_COMPUTE_MODE",
+        "CUDA_VISIBLE_DEVICES",
         "CUDA_PATH",
+        "PYTHONHASHSEED",
+        "TF_ENABLE_ONEDNN_OPTS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NODE_OPTIONS",
+        "ADVOICE_REQUIRE_SIGNING",
+        "ADVOICE_VS_PATH",
     )
     return {
         "os": platform.platform(),
         "machine": platform.machine(),
         "python": sys.version,
         "python_executable": str(Path(sys.executable).resolve()),
+        "python_packages": _python_environment_digest(),
         "node": version([node, "--version"] if node else None),
+        "node_executable": str(Path(node).resolve()) if node else "missing",
         "npm": version([npm, "--version"] if npm else None),
+        "npm_executable": str(Path(npm).resolve()) if npm else "missing",
+        "front_node_modules": _file_digest(FRONT / "node_modules" / ".package-lock.json"),
+        "cloudflare_node_modules": _file_digest(
+            CLOUDFLARE / "node_modules" / ".package-lock.json"
+        ),
+        "gpu_driver": version([
+            nvidia_smi,
+            "--query-gpu=name,driver_version",
+            "--format=csv,noheader",
+        ] if nvidia_smi else None),
         **{f"env:{key}": os.getenv(key, "") for key in environment_keys},
     }
 
 
-def release_fingerprint() -> str:
+def release_fingerprint(profile: dict[str, str] | None = None) -> str:
     roots = (
         BACKEND / "app", BACKEND / "AI", BACKEND / "tests",
         FRONT / "src", FRONT / "tests", FRONT / "scripts", FRONT / "electron",
@@ -68,6 +109,8 @@ def release_fingerprint() -> str:
         path for path in (
             BACKEND / "config.py", BACKEND / "database.py", BACKEND / "models.py",
             BACKEND / "schemas.py", BACKEND / "run.py", BACKEND / "pyproject.toml",
+            BACKEND / "requirements-lock.txt", BACKEND / "requirements-api.txt",
+            BACKEND / "requirements-dev.txt", BACKEND / "requirements.txt",
             FRONT / "package.json", FRONT / "package-lock.json", FRONT / "vite.config.mjs",
             FRONT / "vitest.config.mjs", FRONT / "stryker.config.mjs",
             FRONT / "playwright.config.mjs", FRONT / "playwright.release.config.mjs",
@@ -84,10 +127,11 @@ def release_fingerprint() -> str:
             ROOT / "scripts" / "build-installer.ps1",
             ROOT / "build-installer.bat", ROOT / "start-web.bat",
             ROOT / "verify-release.bat",
+            ROOT / ".github" / "workflows" / "release-gate.yml",
         ) if path.is_file()
     )
     digest = hashlib.sha256(GATE_SCHEMA.encode())
-    digest.update(json.dumps(runtime_profile(), sort_keys=True).encode("utf-8"))
+    digest.update(json.dumps(profile or runtime_profile(), sort_keys=True).encode("utf-8"))
     for path in sorted(set(files)):
         relative = path.relative_to(ROOT).as_posix()
         if any(part in {"node_modules", "venv", ".runtime", ".stryker-tmp"} for part in path.parts):
@@ -116,14 +160,24 @@ def cached_release_pass(fingerprint: str) -> bool:
     if os.getenv("KARAOKE_RELEASE_FULL") == "1": return False
     try: state = json.loads(GATE_STATE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError): return False
-    return state == {"schema": GATE_SCHEMA, "fingerprint": fingerprint}
+    return (
+        state.get("schema") == GATE_SCHEMA
+        and state.get("fingerprint") == fingerprint
+        and state.get("runtime_profile") == runtime_profile()
+    )
 
 
 def save_release_pass() -> None:
     GATE_STATE.parent.mkdir(parents=True, exist_ok=True)
     temporary = GATE_STATE.with_suffix(".tmp")
+    profile = runtime_profile()
     temporary.write_text(
-        json.dumps({"schema": GATE_SCHEMA, "fingerprint": release_fingerprint()}),
+        json.dumps({
+            "schema": GATE_SCHEMA,
+            "fingerprint": release_fingerprint(profile),
+            "runtime_profile": profile,
+            "attested_at": datetime.now(UTC).isoformat(),
+        }, sort_keys=True),
         encoding="utf-8",
     )
     temporary.replace(GATE_STATE)

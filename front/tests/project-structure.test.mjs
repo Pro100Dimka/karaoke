@@ -24,7 +24,11 @@ test("release gate executes unit verification and pins a supported Node runtime"
   const releaseCheck = fs.readFileSync(path.join(root, "scripts/check-release.mjs"), "utf8");
   verify(
     [releaseCheck, "toContain", '["run", "verify"]'],
-    [pkg.scripts["build:electron"], "toContain", "release:check"],
+    [pkg.scripts["build:electron"], "toBe", undefined],
+    [pkg.build?.win?.target, "toBe", "dir"],
+    [pkg.build?.nsis, "toBe", undefined],
+    [pkg.build?.mac, "toBe", undefined],
+    [pkg.build?.linux, "toBe", undefined],
     [pkg.engines?.node, "toContain", "22.18.0"]
   );
   same(

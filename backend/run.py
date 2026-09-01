@@ -9,6 +9,7 @@
 SONGAPP_HOST / SONGAPP_PORT — см. config.py).
 """
 
+import contextlib
 import importlib
 import json
 import logging
@@ -89,7 +90,18 @@ class _StreamToLogFile:
         self._original = original
 
     def write(self, message: str) -> int:
-        self._original.write(message)
+        try:
+            self._original.write(message)
+        except UnicodeEncodeError:
+            # A bundled Python started from a legacy Windows console can still
+            # expose stdout/stderr as CP1251. Diagnostics may contain Japanese,
+            # Korean, emoji, or any other text that code page cannot represent.
+            # Console output must never turn a recoverable AI fallback into a
+            # fatal processing error; preserve unsupported characters as \uXXXX
+            # escapes when the original stream cannot be reconfigured.
+            encoding = getattr(self._original, "encoding", None) or "ascii"
+            safe_message = message.encode(encoding, errors="backslashreplace").decode(encoding)
+            self._original.write(safe_message)
         for line in message.splitlines():
             if line.strip():
                 # Python libraries emit deprecation notices through stderr.
@@ -123,6 +135,14 @@ def _is_unrelated_legacy_log(candidate: Path, log_path: Path) -> bool:
 def configure_logging() -> None:
     import config
     from app.services.remote_log_service import RemoteErrorLogHandler
+
+    # Electron reads the backend pipe as UTF-8. Override the Windows ANSI code
+    # page before constructing StreamHandlers so non-Cyrillic song text and
+    # tracebacks are both printable and readable instead of raising inside the
+    # logging subsystem. Custom/test streams may not implement reconfigure().
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(AttributeError, OSError, ValueError):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
 
     log_path = config.APP_LOG_DIR / "application.log"
     for legacy in config.APP_LOG_DIR.iterdir():

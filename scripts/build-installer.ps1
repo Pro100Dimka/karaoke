@@ -84,11 +84,13 @@ function Find-VisualStudioInstallation {
     if (-not (Test-Path -LiteralPath $VsWhere -PathType Leaf)) {
         throw "Visual Studio locator was not found. Install Visual Studio 2022 Build Tools or Community with 'Desktop development with C++' and CMake, or set ADVOICE_VS_PATH."
     }
-    $Installation = (& $VsWhere -latest -products * `
+    $Candidates = @(& $VsWhere -latest -products * `
         -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
         -requires Microsoft.VisualStudio.Component.VC.CMake.Project `
-        -property installationPath | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or -not $Installation) {
+        -property installationPath)
+    $VsWhereExitCode = $LASTEXITCODE
+    $Installation = $Candidates | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1
+    if ($VsWhereExitCode -ne 0 -or -not $Installation) {
         throw "No compatible Visual Studio installation was found. Required components: Microsoft.VisualStudio.Component.VC.Tools.x86.x64 and Microsoft.VisualStudio.Component.VC.CMake.Project."
     }
     return [IO.Path]::GetFullPath($Installation.Trim())
@@ -212,6 +214,7 @@ $IsoSchemaVersion       = "iso-optional-models-v8-runtime-msst"
 $IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
+$OutputManifestSchema = "build-output-manifest-v2-sha256-archive-check"
 
 function Write-Header([string]$Text) {
     Write-Host ""
@@ -552,6 +555,18 @@ function Get-FileSha256([string]$Path) {
     }
 }
 
+function Test-ArchiveIntegrity([string]$Path) {
+    if ([IO.Path]::GetExtension($Path).ToLowerInvariant() -ne ".zip") { return $true }
+    $tar = $script:TarExe
+    if (-not $tar) {
+        $tar = Get-Command tar.exe -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Source -First 1
+    }
+    if (-not $tar) { return $false }
+    & $tar -tf $Path *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 function Get-OutputManifestJson([string[]]$Paths) {
     $records = @()
     foreach ($path in @($Paths | Sort-Object -Unique)) {
@@ -577,7 +592,10 @@ function Get-OutputManifestJson([string[]]$Paths) {
         }
         $records += [ordered]@{ path = [IO.Path]::GetFullPath($path); missing = $true }
     }
-    return ConvertTo-Json -InputObject @($records) -Depth 4 -Compress
+    return ConvertTo-Json -InputObject ([ordered]@{
+        schema = $OutputManifestSchema
+        outputs = @($records)
+    }) -Depth 5 -Compress
 }
 
 function Get-State([string]$Name) {
@@ -593,6 +611,12 @@ function Set-State([string]$Name, [string]$Fingerprint) {
         [string[]]$script:StepRequiredOutputs[$Name]
     }
     else { @() }
+    foreach ($output in $outputs) {
+        if ((Test-Path -LiteralPath $output -PathType Leaf) -and
+            -not (Test-ArchiveIntegrity $output)) {
+            throw "Cannot save build state for '$Name': archive integrity check failed: $output"
+        }
+    }
     Get-OutputManifestJson $outputs |
         Set-Content -LiteralPath (Get-OutputStatePath $Name) -Encoding UTF8
 }
@@ -612,6 +636,11 @@ function Test-StepNeeded(
     foreach ($output in $RequiredOutputs) {
         if (-not (Test-Path -LiteralPath $output)) {
             Write-Host "  $Name`: output missing"
+            return $true
+        }
+        if ((Test-Path -LiteralPath $output -PathType Leaf) -and
+            -not (Test-ArchiveIntegrity $output)) {
+            Write-Host "  $Name`: cached archive failed integrity check"
             return $true
         }
     }
@@ -2240,6 +2269,11 @@ function Build-RuntimeArchive([string]$SourceDirectory) {
     }
 
     Move-Item -LiteralPath $tmpArchive -Destination $RuntimeArchive -Force
+
+    if (-not (Test-ArchiveIntegrity $RuntimeArchive)) {
+        Remove-Item -LiteralPath $RuntimeArchive -Force -ErrorAction SilentlyContinue
+        throw "Created app-runtime.zip failed its archive integrity check."
+    }
 
     $sw.Stop()
     Set-PreviousDuration "runtime-archive" $sw.Elapsed.TotalSeconds

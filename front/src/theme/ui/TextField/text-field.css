@@ -1,5 +1,4 @@
 @layer ui.components {
-
   .ui-text-field,
   .ui-text-field-input {
     min-inline-size: 0vw;
@@ -22,11 +21,15 @@
   @keyframes ui-text-field-glow-cycle {
     0% {
       border-color: var(--color-highlight);
-      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-highlight) 55%, transparent));
+      filter: drop-shadow(
+        0vw 0vw 0.15vw color-mix(in srgb, var(--color-highlight) 55%, transparent)
+      );
     }
     25% {
       border-color: var(--color-primary-hover);
-      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-primary-hover) 55%, transparent));
+      filter: drop-shadow(
+        0vw 0vw 0.15vw color-mix(in srgb, var(--color-primary-hover) 55%, transparent)
+      );
     }
     50% {
       border-color: var(--color-primary);
@@ -34,11 +37,15 @@
     }
     75% {
       border-color: var(--color-secondary);
-      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-secondary) 55%, transparent));
+      filter: drop-shadow(
+        0vw 0vw 0.15vw color-mix(in srgb, var(--color-secondary) 55%, transparent)
+      );
     }
     100% {
       border-color: var(--color-highlight);
-      filter: drop-shadow(0vw 0vw 0.15vw color-mix(in srgb, var(--color-highlight) 55%, transparent));
+      filter: drop-shadow(
+        0vw 0vw 0.15vw color-mix(in srgb, var(--color-highlight) 55%, transparent)
+      );
     }
   }
 
@@ -69,7 +76,7 @@
     transition: max-inline-size var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
-  .ui-text-field-outline legend>span {
+  .ui-text-field-outline legend > span {
     display: inline-block;
     padding-inline: 0.25vw;
   }
@@ -86,8 +93,10 @@
   .ui-text-field:focus-within .ui-text-field-outline {
     animation: none;
     border-color: var(--color-primary);
-    filter:
-      drop-shadow(0vw 0vw 0.291667vw color-mix(in srgb, var(--color-primary-hover) 42%, transparent)) drop-shadow(0vw 0vw 0.833333vw color-mix(in srgb, var(--color-accent) 28%, transparent));
+    filter: drop-shadow(
+        0vw 0vw 0.291667vw color-mix(in srgb, var(--color-primary-hover) 42%, transparent)
+      )
+      drop-shadow(0vw 0vw 0.833333vw color-mix(in srgb, var(--color-accent) 28%, transparent));
   }
 
   .ui-text-field[data-error] .ui-text-field-outline {
@@ -117,8 +126,7 @@
     min-inline-size: 0vw;
     overflow: hidden;
     color: inherit;
-    font:
-      750 var(--control-font, var(--control-font-md)) / 1.2 var(--font-display);
+    font: 750 var(--control-font, var(--control-font-md)) / 1.2 var(--font-display);
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -134,7 +142,7 @@
   .ui-text-field[data-filled] .ui-text-field-label-row,
   .ui-text-field:has(.ui-text-field-input:not(:placeholder-shown)) .ui-text-field-label-row {
     inset-block-start: 0vw;
-    color: var(--gradient-primary);
+    color: var(--ui-text);
     transform: translateY(-50%) translateX(0.260417vw) scale(0.86);
   }
 
@@ -192,7 +200,7 @@
     color: var(--field-placeholder);
   }
 
-  .ui-text-field-slot>svg {
+  .ui-text-field-slot > svg {
     inline-size: var(--control-icon, var(--control-icon-md));
     block-size: var(--control-icon, var(--control-icon-md));
   }

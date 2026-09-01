@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import glob
 import multiprocessing
 import os
 import shutil
@@ -16,8 +17,8 @@ import numpy as np
 import soundfile as sf
 
 from ..errors import (
-    AICoreError,
     AcceleratorUnavailableError,
+    AICoreError,
     EngineUnavailableError,
     ProcessingCancelledError,
 )
@@ -154,7 +155,19 @@ class MSSTMelRoformerSeparator(Separator):
     def separate(self, mix, vocals, instrumental, *, profile=None, cancelled=None):
         if missing := self.missing_resources():
             raise EngineUnavailableError("Missing MSST resources: " + ", ".join(missing))
-        with tempfile.TemporaryDirectory(prefix="karaoke-msst-", dir=Path(mix).parent) as temporary:
+        # MSST enumerates inputs with glob.glob().  A song directory containing
+        # characters such as "[" is therefore interpreted as a glob pattern and
+        # MSST silently finds zero files.  Put its isolated staging directory in
+        # the closest ancestor whose full path is not a glob pattern.  Keeping it
+        # on the same volume also preserves the zero-copy hard-link fast path.
+        temporary_parent = Path(mix).resolve().parent
+        while glob.has_magic(str(temporary_parent)):
+            parent = temporary_parent.parent
+            if parent == temporary_parent:
+                temporary_parent = None
+                break
+            temporary_parent = parent
+        with tempfile.TemporaryDirectory(prefix="karaoke-msst-", dir=temporary_parent) as temporary:
             source, output = Path(temporary) / "input", Path(temporary) / "output"
             source.mkdir()
             output.mkdir()

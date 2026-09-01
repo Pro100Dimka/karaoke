@@ -14,11 +14,7 @@ export default function Tabs({
 }) {
   const id = useId().replace(/:/g, "");
 
-  const [current, setCurrent] = useControllable(
-    value,
-    defaultValue ?? items[0]?.value,
-    onChange
-  );
+  const [current, setCurrent] = useControllable(value, defaultValue ?? items[0]?.value, onChange);
 
   const activeItem = items.find((item) => item.value === current);
 
@@ -32,30 +28,46 @@ export default function Tabs({
 
     if (item && !item.disabled) {
       setCurrent(item.value, event);
+      event.currentTarget.querySelectorAll('[role="tab"]')[index]?.focus();
     }
+  };
+
+  const edge = (from, direction) => {
+    for (let step = 1; step <= items.length; step += 1) {
+      const index = (from + direction * step + items.length) % items.length;
+      if (!items[index]?.disabled) return index;
+    }
+    return from;
   };
 
   return (
     <div className={`ui-tabs ${className}`.trim()} style={mergeSx(sx, style)}>
+      {/* The tabs, not their tablist container, own the roving keyboard focus. */}
+      {/* eslint-disable-next-line jsx-a11y/interactive-supports-focus */}
       <div
         className="ui-tabs-list"
         role="tablist"
-        tabIndex={0}
         onKeyDown={(event) => {
           if (!items.length) return;
 
           if (event.key === "ArrowRight") {
             event.preventDefault();
-            move((currentIndex + 1) % items.length, event);
+            move(edge(currentIndex, 1), event);
           } else if (event.key === "ArrowLeft") {
             event.preventDefault();
-            move((currentIndex - 1 + items.length) % items.length, event);
+            move(edge(currentIndex, -1), event);
           } else if (event.key === "Home") {
             event.preventDefault();
-            move(0, event);
+            move(
+              items.findIndex((item) => !item.disabled),
+              event
+            );
           } else if (event.key === "End") {
             event.preventDefault();
-            move(items.length - 1, event);
+            move(
+              items.findLastIndex((item) => !item.disabled),
+              event
+            );
           }
         }}
       >

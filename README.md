@@ -584,6 +584,7 @@ scripts/build-installer.ps1
 ```
 
 Builder проверяет Node/npm, FFmpeg и Windows build tooling, собирает backend PyInstaller, native audio/ASIO, frontend, Electron и Windows installer/ISO-артефакты.
+Это единственный production installer path: `electron-builder` используется внутри него только с `--dir` для создания `win-unpacked`, а установщик выпускается через Inno Setup.
 
 ---
 
@@ -599,7 +600,7 @@ Builder проверяет Node/npm, FFmpeg и Windows build tooling, собир
 - installer прямо требует Windows `tar.exe` и сообщает, что нужен Windows 10/11;
 - присутствует native ASIO bridge.
 
-`electron-builder` содержит также декларации `mac: dmg` и `linux: AppImage`, но текущий полный bootstrap/release/ASIO/installer pipeline ориентирован на Windows и не подтверждает эквивалентный production flow для macOS/Linux.
+Конфигурация `electron-builder` ограничена target `dir` и не выпускает отдельные NSIS/DMG/AppImage-установщики.
 
 ### 4.2. Версия приложения
 

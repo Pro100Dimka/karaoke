@@ -2,10 +2,11 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { stubFrameQueue, stubImmediateAnimationFrame, suppressWindowErrors } from "./helpers/browser.mjs";
-import { Modal } from "../src/theme/ui";
 import { AppDialogProvider, resolveDialog, useAppDialog } from "../src/contexts/AppDialog";
+import { Modal } from "../src/theme/ui";
 import { same, verify } from "./helpers/assertions.mjs";
+import { stubFrameQueue, stubImmediateAnimationFrame, suppressWindowErrors } from "./helpers/browser.mjs";
+
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
   useI18n: () => ({ t: (key) => key })
@@ -121,6 +122,22 @@ describe("modal", () => {
     fireEvent.keyDown(document, { key: "Tab" });
     expect(document.activeElement).toBe(dialog);
   });
+  test("lets an open listbox consume Escape before closing the dialog", () => {
+    const close = vi.fn();
+    const closeListbox = vi.fn();
+    render(
+      <Modal isOpen onClose={close} ariaLabel="Select dialog">
+        <div role="listbox" tabIndex={-1} onKeyDown={closeListbox}>
+          <button role="option" aria-selected="true">
+            Current option
+          </button>
+        </div>
+      </Modal>
+    );
+    fireEvent.keyDown(screen.getByRole("option"), { key: "Escape" });
+    expect(closeListbox).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+  });
 });
 function DialogDriver({ run, onValue }) {
   const dialog = useAppDialog();
@@ -156,7 +173,7 @@ describe("application dialog provider", () => {
     expect(onValue).toHaveBeenCalledWith(true);
   });
   test("requires the application dialog provider", () => {
-    const { log, restore } = suppressWindowErrors();
+    const { restore } = suppressWindowErrors();
     verify([() => renderHook(() => useAppDialog()), "toThrow", "useAppDialog должен использоваться внутри AppDialogProvider"]);
     restore();
   });

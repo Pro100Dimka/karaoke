@@ -1,13 +1,15 @@
 /* @vitest-environment jsdom */
 import { fireEvent, render } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
+import LibrarySongCard from "../src/pages/Library/songs-grid/song-card.jsx";
 import { verify } from "./helpers/assertions.mjs";
 import { mockUseI18nWithFallback } from "./helpers/mocks.mjs";
+
 vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, useI18n: mockUseI18nWithFallback };
 });
-import LibrarySongCard from "../src/pages/Library/songs-grid/song-card.jsx";
+
 const handlers = () => ({
   onDelete: vi.fn(),
   onOpenFolder: vi.fn(),
@@ -31,12 +33,9 @@ test("ready song opens from card click and keyboard but not nested actions", () 
   };
   const view = render(<LibrarySongCard cardIndex={1} song={song} canManageLibrary {...actions} />);
   const card = view.getByRole("button", { name: /Открыть Title|Відкрити Title/ });
-  expect(card.getAttribute("role")).toBe("button");
+  expect(card.tagName).toBe("BUTTON");
   fireEvent.click(card);
-  fireEvent.keyDown(card, { key: "Enter" });
-  fireEvent.keyDown(card, { key: " " });
-  fireEvent.keyDown(card, { key: "Escape" });
-  expect(actions.onOpenKaraoke).toHaveBeenCalledTimes(3);
+  expect(actions.onOpenKaraoke).toHaveBeenCalledOnce();
   const nested = view.getByRole("button", { name: /Прослушать записи|Прослухати записи/ });
   fireEvent.click(nested);
   expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
@@ -52,7 +51,7 @@ test("ready song opens from card click and keyboard but not nested actions", () 
   fireEvent.click(settings);
   expect(actions.onOpenSettings).toHaveBeenCalledWith("song");
   expect(document.querySelector(".ui-popover").hasAttribute("data-open")).toBe(false);
-  verify([actions.onOpenKaraoke, "toHaveBeenCalledTimes", 3], [view.container.textContent, "toContain", "120 BPM"]);
+  verify([actions.onOpenKaraoke, "toHaveBeenCalledOnce"], [view.container.textContent, "toContain", "120 BPM"]);
 });
 test("working song shows progress and opens its processing modal", () => {
   const actions = handlers();
@@ -91,20 +90,12 @@ test("an in-progress room transfer still shows the normal progress bar", () => {
 test("room transfer explains waiting to owners and downloading to participants without the song", () => {
   const status = { stage: "waiting", percent: 25 };
   const owner = render(
-    <LibrarySongCard
-      song={{ id: "owned", title: "Owned", status: "done", __roomLocal: true }}
-      transferStatus={status}
-      {...handlers()}
-    />
+    <LibrarySongCard song={{ id: "owned", title: "Owned", status: "done", __roomLocal: true }} transferStatus={status} {...handlers()} />
   );
   expect(owner.getByText(/Ожидаем, пока другие участники получат песню/)).toBeTruthy();
   owner.unmount();
   const receiver = render(
-    <LibrarySongCard
-      song={{ id: "remote", title: "Remote", status: "done" }}
-      transferStatus={status}
-      {...handlers()}
-    />
+    <LibrarySongCard song={{ id: "remote", title: "Remote", status: "done" }} transferStatus={status} {...handlers()} />
   );
   expect(receiver.getByText(/Песня скачивается/)).toBeTruthy();
 });
