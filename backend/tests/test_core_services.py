@@ -80,6 +80,131 @@ def test_transactional_resource_deletion_preserves_restore_error_note(monkeypatc
     assert error.value.__notes__ == ["Could not restore quarantined files: restore failed"]
 
 
+def test_song_file_deletion_is_deferred_when_windows_temporarily_locks_the_folder(monkeypatch, tmp_path):
+    path = tmp_path / "song"
+    path.mkdir()
+    database, instance = Mock(), object()
+    locked = PermissionError("folder is in use")
+    locked.winerror = 5
+    schedule = Mock()
+    patch_attrs(
+        monkeypatch,
+        resource_deletion,
+        quarantine_paths=Mock(side_effect=locked),
+        schedule_deferred_cleanup=schedule,
+    )
+
+    resource_deletion.delete_with_files(
+        database,
+        instance,
+        [path],
+        defer_windows_locks=True,
+    )
+
+    database.delete.assert_called_once_with(instance)
+    database.commit.assert_called_once_with()
+    schedule.assert_called_once_with((path,))
+
+
+def test_deferred_song_file_deletion_does_not_hide_non_sharing_errors(monkeypatch, tmp_path):
+    path = tmp_path / "song"
+    failure = OSError("disk failure")
+    database = Mock()
+    patch_attrs(monkeypatch, resource_deletion, quarantine_paths=Mock(side_effect=failure))
+
+    raises(
+        OSError,
+        lambda: resource_deletion.delete_with_files(
+            database,
+            object(),
+            [path],
+            defer_windows_locks=True,
+        ),
+        match="disk failure",
+    )
+
+    database.delete.assert_not_called()
+    database.commit.assert_not_called()
+
+
+def test_locked_song_files_are_not_queued_when_database_commit_fails(monkeypatch, tmp_path):
+    path = tmp_path / "song"
+    path.mkdir()
+    locked = PermissionError("folder is in use")
+    locked.winerror = 32
+    database, schedule = Mock(), Mock()
+    database.commit.side_effect = RuntimeError("database unavailable")
+    patch_attrs(
+        monkeypatch,
+        resource_deletion,
+        quarantine_paths=Mock(side_effect=locked),
+        schedule_deferred_cleanup=schedule,
+    )
+
+    raises(
+        RuntimeError,
+        lambda: resource_deletion.delete_with_files(
+            database,
+            object(),
+            [path],
+            defer_windows_locks=True,
+        ),
+        match="database unavailable",
+    )
+
+    database.rollback.assert_called_once_with()
+    schedule.assert_not_called()
+
+
+def test_deferred_cleanup_queue_is_persisted_and_started_as_daemon(monkeypatch, tmp_path):
+    library, data = tmp_path / "songs", tmp_path / "data"
+    path = library / "locked-song"
+    path.mkdir(parents=True)
+    thread = Mock()
+    thread.is_alive.return_value = False
+    thread_factory = Mock(return_value=thread)
+    patch_attrs(
+        monkeypatch,
+        resource_deletion.config,
+        DATA_DIR=data,
+        CACHE_DIR=tmp_path / "cache",
+        SONG_OUTPUT_DIR=library,
+        SONG_LIBRARY_ROOTS={library},
+    )
+    monkeypatch.setattr(resource_deletion.threading, "Thread", thread_factory)
+    monkeypatch.setattr(resource_deletion, "_cleanup_worker", None)
+
+    resource_deletion.schedule_deferred_cleanup((path,))
+
+    assert resource_deletion._read_pending_cleanup() == {path.resolve()}
+    assert thread_factory.call_args.kwargs["daemon"] is True
+    thread.start.assert_called_once_with()
+
+
+def test_locked_song_deletion_still_succeeds_if_cleanup_queue_cannot_be_written(monkeypatch, tmp_path, caplog):
+    path = tmp_path / "song"
+    path.mkdir()
+    locked = PermissionError("folder is in use")
+    locked.winerror = 5
+    database = Mock()
+    patch_attrs(
+        monkeypatch,
+        resource_deletion,
+        quarantine_paths=Mock(side_effect=locked),
+        schedule_deferred_cleanup=Mock(side_effect=OSError("queue disk is unavailable")),
+    )
+
+    resource_deletion.delete_with_files(
+        database,
+        object(),
+        [path],
+        defer_windows_locks=True,
+    )
+
+    database.commit.assert_called_once_with()
+    assert "could not queue locked files" in caplog.text.lower()
+
+
 def test_repositories_query_complete_library(database):
     first_song, second_song, old, recent, other, analysis, state = song('first'), song('second'), models.Recording(id='old', song_id='first', filename='old.wav', path='C:/old.wav', created_at=datetime(2026, 1, 1, tzinfo=UTC)), models.Recording(id='recent', song_id='first', filename='recent.wav', path='C:/recent.wav', created_at=datetime(2026, 1, 2, tzinfo=UTC)), models.Recording(id='other', song_id='second', filename='other.wav', path='C:/other.wav', created_at=datetime(2026, 1, 3, tzinfo=UTC)), models.AnalysisResult(id='analysis', recording_id='recent'), models.PlaybackState(song_id='first')
     database.add_all([first_song, second_song, old, recent, other, analysis, state])

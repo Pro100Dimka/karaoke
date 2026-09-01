@@ -324,12 +324,22 @@ def test_list_get_update_and_delete_song(monkeypatch, tmp_path):
     domain, delete = SimpleNamespace(id='song-id', output_dir=str(output), source_path=str(source), slug='song'), Mock()
     monkeypatch.setattr(song_service, "delete_with_files", delete)
     song_service.delete_song(database, domain)
-    delete.assert_called_with(database, domain, (output.resolve(),))
+    delete.assert_called_with(
+        database,
+        domain,
+        (output.resolve(),),
+        defer_windows_locks=True,
+    )
 
     outside = library / "external.wav"
     domain.source_path = str(outside)
     song_service.delete_song(database, domain)
-    delete.assert_called_with(database, domain, (output.resolve(), outside.resolve()))
+    delete.assert_called_with(
+        database,
+        domain,
+        (output.resolve(), outside.resolve()),
+        defer_windows_locks=True,
+    )
 
 
 def test_create_song_from_streamed_path_supports_cross_device_move(monkeypatch, tmp_path):

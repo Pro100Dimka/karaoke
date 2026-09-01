@@ -589,5 +589,5 @@ def delete_song(db: Session, song: models.Song) -> None:
             )
         )
         song_id = song.id
-        delete_with_files(db, song, paths)
+        delete_with_files(db, song, paths, defer_windows_locks=True)
         revision_cache.invalidate(song_id)

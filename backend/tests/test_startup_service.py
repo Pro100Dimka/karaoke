@@ -20,6 +20,7 @@ def test_startup_runs_ordered_steps_and_only_then_opens_processing(monkeypatch):
         selected={},
     )
     monkeypatch.setattr(startup_service.storage_migration, "migrate_legacy_song_storage", lambda: calls.append("migration"))
+    monkeypatch.setattr(startup_service.resource_deletion, "recover_deferred_cleanup", lambda: calls.append("cleanup"))
     monkeypatch.setattr(startup_service.song_package_service, "recover_import_transactions", lambda: calls.append("package"))
     monkeypatch.setattr(startup_service.metadata_enrichment_service, "enqueue_missing", lambda: calls.append("metadata"))
     monkeypatch.setattr(startup_service.pipeline_service, "_configure_ai_runtime", lambda: calls.append("hardware") or runtime)
@@ -37,13 +38,13 @@ def test_startup_runs_ordered_steps_and_only_then_opens_processing(monkeypatch):
     monkeypatch.setattr(startup_service.background_task_supervisor, "start_task", run_task)
 
     assert startup_service.start() is True
-    assert calls == ["stop", "migration", "package", "metadata", "hardware", "snapshot", "accept"]
+    assert calls == ["stop", "cleanup", "migration", "package", "metadata", "hardware", "snapshot", "accept"]
     status = startup_service.snapshot()
     assert status["ready"] is True
     assert status["status"] == "ready"
     assert status["progress"] == 100
     assert list(status["steps"]) == [
-        "storage_migration", "package_recovery", "metadata_scan",
+        "file_cleanup_recovery", "storage_migration", "package_recovery", "metadata_scan",
         "hardware_detection", "diagnostics_snapshot",
     ]
 

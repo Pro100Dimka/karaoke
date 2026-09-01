@@ -12,6 +12,7 @@ from app.services import (
     background_task_supervisor,
     metadata_enrichment_service,
     pipeline_service,
+    resource_deletion,
     song_package_service,
     storage_migration,
 )
@@ -108,6 +109,7 @@ def _queue_hardware_snapshot(runtime_plan) -> None:
 
 def _run_startup() -> None:
     try:
+        _run_step("file_cleanup_recovery", 15, resource_deletion.recover_deferred_cleanup)
         _run_step("storage_migration", 20, storage_migration.migrate_legacy_song_storage)
         _run_step("package_recovery", 40, song_package_service.recover_import_transactions)
         _run_step("metadata_scan", 55, metadata_enrichment_service.enqueue_missing)
