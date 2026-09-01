@@ -158,6 +158,11 @@ class IsolatedAlignerMixin:
             raise ProcessingCancelledError("Song processing cancelled")
         heavy = self._heavy_alignment_enabled()
         variable = {"Russian": "KARAOKE_AI_CTC_RU_MODEL", "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL"}.get(resolved)
+        print(
+            f"[AI] alignment route language={resolved} heavy_allowed={heavy} "
+            f"ctc_available={bool(variable and os.getenv(variable))}",
+            flush=True,
+        )
         if not heavy and not (variable and os.getenv(variable)):
             raise EngineUnavailableError(
                 "Heavy Qwen forced alignment is disabled for system safety"

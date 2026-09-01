@@ -204,6 +204,9 @@ class KaraokePipeline:
         timed_lines: tuple[TimedLine, ...] = (),
         cancelled=None,
     ) -> list[Word]:
+        self._last_alignment_engine = getattr(
+            self.engines.aligner, "name", type(self.engines.aligner).__name__
+        )
         if direct:
             return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(direct)]
         set_cancelled = getattr(self.engines.aligner, "set_cancelled", None)
@@ -223,6 +226,7 @@ class KaraokePipeline:
                 raise
             logger.warning("Acoustic alignment unavailable; using uniform timing: %s", error)
             words = UniformTextFallback().align(vocals, text, language)
+            self._last_alignment_engine = UniformTextFallback.name
         finally:
             if callable(set_cancelled): set_cancelled(None)
         return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(words)]
@@ -322,7 +326,7 @@ class KaraokePipeline:
                 words = anchor_words_to_voice(
                     words, voice_activity_intervals(vocals), duration(vocals)
                 )
-            self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
+            self._stage(reports, "lyrics", self._last_alignment_engine, started, role="aligner")
 
             self._notify(request, "notes", 94, "Построение мелодии голоса")
             started = time.perf_counter()
@@ -398,7 +402,7 @@ class KaraokePipeline:
                 words = anchor_words_to_voice(
                     words, voice_activity_intervals(vocals), duration(vocals)
                 )
-            self._stage(reports, "lyrics", self.engines.aligner.name, started, role="aligner")
+            self._stage(reports, "lyrics", self._last_alignment_engine, started, role="aligner")
 
         self._notify(request, "notes", 94, "Построение мелодии голоса")
         started = time.perf_counter()

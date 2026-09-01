@@ -559,6 +559,7 @@ def test_alignment_deadline_uses_uniform_fallback_even_in_strict_mode(monkeypatc
     words = pipeline._align("vocals.flac", "hello", "en", [])
 
     assert [word.text for word in words] == ["hello"]
+    assert pipeline._last_alignment_engine == "uniform-fallback"
     pipeline_module.UniformTextFallback.align.assert_called_once()
 
 
@@ -600,7 +601,7 @@ def test_production_alignment_does_not_start_heavy_qwen_without_explicit_opt_in(
     model.align.assert_not_called()
 
 
-def test_failed_ctc_does_not_fall_through_to_heavy_qwen(monkeypatch, tmp_path):
+def test_failed_ctc_does_not_fall_through_to_heavy_qwen(monkeypatch, tmp_path, capsys):
     audio = tmp_path / "vocals.wav"
     sf.write(audio, np.zeros(44100, dtype=np.float32), 44100)
     model = SimpleNamespace(align=Mock(side_effect=AssertionError("must not start")))
@@ -614,6 +615,7 @@ def test_failed_ctc_does_not_fall_through_to_heavy_qwen(monkeypatch, tmp_path):
         aligner.align_long_text(audio, "неподдерживаемый текст", "ru")
 
     model.align.assert_not_called()
+    assert "alignment route language=Russian" in capsys.readouterr().out
 
 
 def test_unsupported_language_is_rejected_before_spawning_alignment_worker(monkeypatch):

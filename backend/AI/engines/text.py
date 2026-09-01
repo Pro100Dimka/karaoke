@@ -878,11 +878,7 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
             ):
                 return ctc_words
             self.needs_voice_anchoring = True
-            print(
-                "[AI] alignment=ctc-full rejected by timed-line anchors; "
-                "falling back to Qwen",
-                flush=True,
-            )
+            print("[AI] alignment=ctc-full rejected by timed-line anchors; Qwen fallback considered", flush=True)
         self._ensure_heavy_alignment()
         words: list[Word | None] = [None] * len(tokens)
 
