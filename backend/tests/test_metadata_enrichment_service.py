@@ -188,3 +188,4 @@ def test_enqueue_registers_supervised_task_and_rolls_back_when_admission_is_clos
     start.return_value = False
     assert metadata.enqueue("closed") is False
     assert "closed" not in metadata._active
+

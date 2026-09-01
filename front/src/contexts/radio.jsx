@@ -17,10 +17,14 @@ import { persistUiPreferences } from "../utils/ui-preferences";
 import useRadioLifecycle from "./hooks/useRadioLifecycle";
 import useRadioValue from "./hooks/useRadioValue";
 import { DEFAULT_RADIO_SETTINGS, RADIO_STATIONS } from "./radio-config";
-import { calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
+import {
+  calculateRadioLightingPulse,
+  calculateRadioSpectrum,
+  isAutoplayBlocked
+} from "./radio-utils";
 
 export { RADIO_STATIONS } from "./radio-config";
-export { calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
+export { calculateRadioLightingPulse, calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
 
 const STORAGE_KEY = "karaoke-radio";
 const STARTUP_FADE_MS = 2000;
@@ -53,13 +57,23 @@ export function RadioProvider({ children }) {
   const analyserRef = useRef(null);
   const frequencyDataRef = useRef(null);
   const bassRef = useRef(0);
+  const lightingBandsRef = useRef(Array(18).fill(0));
+  const lightingPulseRef = useRef(0);
   const spectrumRef = useRef(Array(18).fill(0));
   useEffect(
     () =>
-      registerLightingSource("radio", () => ({
-        active: !!audioRef.current && !audioRef.current.paused && !audioRef.current.ended,
-        level: bassRef.current
-      })),
+      registerLightingSource("radio", () => {
+        const active = !!audioRef.current && !audioRef.current.paused && !audioRef.current.ended;
+        if (active) {
+          lightingPulseRef.current = calculateRadioLightingPulse(
+            spectrumRef.current,
+            lightingBandsRef.current,
+            lightingPulseRef.current
+          );
+          lightingBandsRef.current = [...spectrumRef.current];
+        }
+        return { active, level: lightingPulseRef.current, transient: true };
+      }),
     []
   );
   const animationRef = useRef(0);
@@ -123,6 +137,8 @@ export function RadioProvider({ children }) {
     analysisVersionRef.current = createVersion();
     cancelAnimationFrame(animationRef.current);
     bassRef.current = 0;
+    lightingBandsRef.current.fill(0);
+    lightingPulseRef.current = 0;
     spectrumRef.current.fill(0);
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty("--radio-bass", "0");

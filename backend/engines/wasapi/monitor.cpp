@@ -109,9 +109,17 @@ struct Endpoint {
                               reinterpret_cast<void**>(client.GetAddressOf())), "Activate IAudioClient3");
         AudioClientProperties properties{};
         properties.cbSize = sizeof(properties);
-        properties.eCategory = AudioCategory_Other;
-        // Shared streams keep other applications audible; no exclusive mode.
-        check(client->SetClientProperties(&properties), "SetClientProperties");
+        properties.eCategory = AudioCategory_Media;
+        properties.Options = AUDCLNT_STREAMOPTIONS_RAW;
+        // Category/options are independent from share mode. This remains a
+        // shared stream while requesting the endpoint's low-latency period.
+        HRESULT configured = client->SetClientProperties(&properties);
+        if (FAILED(configured)) {
+            // Some older endpoint drivers reject RAW but still support the
+            // Media category. Retain low-latency shared mode without APO bypass.
+            properties.Options = static_cast<AUDCLNT_STREAMOPTIONS>(0);
+            check(client->SetClientProperties(&properties), "SetClientProperties(Media)");
+        }
         check(client->GetMixFormat(&format), "GetMixFormat");
         WORD tag = format->wFormatTag;
         if (tag == WAVE_FORMAT_EXTENSIBLE && format->cbSize >= 22) {

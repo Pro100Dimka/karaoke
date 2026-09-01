@@ -88,6 +88,16 @@ const appearanceRows = ({ settings: { radio, lighting }, tr = translateSaved }) 
     formatValue: (value) => `${Math.round(value * 100)}%`
   },
   {
+    type: "Slider",
+    tag: "keyboard_lighting_sensitivity",
+    label: tr("settings.appearance.keyboard_lighting_sensitivity.label"),
+    tooltip: tr("settings.appearance.keyboard_lighting_sensitivity.tooltip"),
+    min: 0.25,
+    max: 2,
+    step: 0.05,
+    formatValue: (value) => `${Math.round(value * 100)}%`
+  },
+  {
     type: "Label",
     md: 12,
     variant: "caption",

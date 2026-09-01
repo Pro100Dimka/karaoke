@@ -26,6 +26,7 @@ class AppSettingsPatch(BaseModel):
     keyboard_lighting_enabled: bool | None = None
     keyboard_lighting_mode: Literal["music", "theme"] | None = None
     keyboard_lighting_brightness: float | None = Field(default=None, ge=0, le=1)
+    keyboard_lighting_sensitivity: float | None = Field(default=None, ge=0.25, le=2)
     remote_diagnostics_enabled: bool | None = None
     remote_diagnostics_errors_enabled: bool | None = None
     remote_diagnostics_hardware_enabled: bool | None = None

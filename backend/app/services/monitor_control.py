@@ -96,7 +96,7 @@ class MonitorControl:
                 # Normalize the existing ASIO bridge protocol without changing
                 # its command, callback, buffer selection or effects.
                 message = {**message, "blocksize": message["buffer_size"], "mode": "ASIO",
-                           "latency_source": "asio-driver-report"}
+                           "latency_source": message.get("latency_source", "asio-driver-report")}
                 rate = float(message.get("sample_rate") or 0)
                 if math.isfinite(rate) and rate > 0:
                     for kind in ("input", "output"):

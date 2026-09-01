@@ -2093,7 +2093,9 @@ function Sign-File([string]$Path) {
     Require-File $SignScript "Signing script"
 
     $arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $SignScript, "-Path", $Path)
-    if ($Mode -eq "clean") { $arguments += "-Required" }
+    # A verified clean release must be signed. The explicit no-checks developer
+    # entry point intentionally permits a clean unsigned build for local testing.
+    if ($Mode -eq "clean" -and -not $SkipReleaseGate) { $arguments += "-Required" }
     & powershell.exe @arguments
 
     if ($LASTEXITCODE -ne 0) {

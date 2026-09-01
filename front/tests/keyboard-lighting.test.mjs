@@ -1,19 +1,23 @@
-import { createRequire } from "node:module";
+/* eslint-disable max-len */
 import { EventEmitter } from "node:events";
+import { createRequire } from "node:module";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   lightingColor,
   advanceMusicLighting,
+  musicLightingZones,
   musicLightingColor,
   readLightingMusic,
   registerLightingSource,
   observeLightingMedia,
   sameLightingPalette
 } from "../src/services/keyboardLighting";
+
 const require = createRequire(import.meta.url);
 const { LightingController, installLightingShutdown } = require("../electron/rgb/controller.cjs");
-const { parseController, uint32, packet } = require("../electron/rgb/protocol.cjs");
 const { OpenRgb, supportsRealtime } = require("../electron/rgb/openrgb.cjs");
+const { parseController, uint32, packet } = require("../electron/rgb/protocol.cjs");
+
 const controllers = [];
 test("application exit waits for hardware restoration, repeated quit does not duplicate it", async () => {
   const app = new EventEmitter();
@@ -131,6 +135,21 @@ test("prefers available Windows keyboards and does not open OpenRGB too", async 
   expect(fallback).not.toHaveBeenCalled();
   await c.configure(false);
   expect(windows.request).toHaveBeenCalledWith(2);
+});
+test("Windows LampArray receives five music zones while solid providers keep one color", async () => {
+  const clock = 10000;
+  const windows = { request: vi.fn(async () => ({ state: "ready", count: 1 })) };
+  const c = controller({ windows, now: () => clock });
+  await c.configure(true);
+  const zones = [
+    [10, 20, 30],
+    [20, 30, 40],
+    [30, 40, 50],
+    [20, 30, 40],
+    [10, 20, 30]
+  ];
+  await c.frame({ active: true, rgb: [30, 40, 50], zones });
+  expect(windows.request).toHaveBeenLastCalledWith(1, ...zones.flat());
 });
 test("missing OpenRGB does not hide native no-devices diagnostics", async () => {
   const c = controller({
@@ -260,14 +279,21 @@ test("music lighting reacts smoothly and stays inside the selected theme palette
   }
 
   for (let index = 1; index < frames.length; index += 1) {
-    const delta = Math.max(...frames[index].map((channel, channelIndex) =>
-      Math.abs(channel - frames[index - 1][channelIndex])
-    ));
+    const delta = Math.max(...frames[index].map((channel, channelIndex) => Math.abs(channel - frames[index - 1][channelIndex])));
     expect(delta).toBeLessThanOrEqual(18);
   }
   expect(frames.every((rgb) => rgb[1] === 0 && rgb[2] <= rgb[0])).toBe(true);
   expect(frames[3][0]).toBeGreaterThan(frames[1][0]);
   expect(frames[5][0]).toBeGreaterThan(0);
+});
+test("five-zone keyboards bloom from the centre without leaving the theme color", () => {
+  const zones = musicLightingZones([180, 30, 60], 0.8);
+  expect(zones).toHaveLength(5);
+  expect(zones[0]).toEqual(zones[4]);
+  expect(zones[1]).toEqual(zones[3]);
+  expect(zones[2][0]).toBeGreaterThan(zones[1][0]);
+  expect(zones[1][0]).toBeGreaterThan(zones[0][0]);
+  expect(zones.every((color) => color[1] <= color[0] && color[2] <= color[0])).toBe(true);
 });
 
 test("inactive music settles on a dim theme color and never releases to firmware RGB", () => {
@@ -299,16 +325,63 @@ test("bass produces a visible bloom without a one-frame brightness flash", () =>
   expect(bloom - quiet).toBeGreaterThan(55);
   expect(Math.max(...frames[0].map((value, index) => Math.abs(value - (frames[1]?.[index] ?? value))))).toBeLessThanOrEqual(18);
 });
+test("compressed radio bass still produces a clearly visible smooth pulse", () => {
+  let state;
+  for (let index = 0; index < 16; index += 1) {
+    state = advanceMusicLighting(state, { active: true, level: 0.08 }, ["#ff174f", "#a20b1d"], 1, 80).state;
+  }
+  const quiet = state.rgb[0];
+  const attack = [];
+  for (let index = 0; index < 6; index += 1) {
+    state = advanceMusicLighting(state, { active: true, level: 0.22 }, ["#ff174f", "#a20b1d"], 1, 80).state;
+    attack.push(state.rgb[0]);
+  }
+  const peak = attack.at(-1);
+  for (let index = 0; index < 8; index += 1) {
+    state = advanceMusicLighting(state, { active: true, level: 0.08 }, ["#ff174f", "#a20b1d"], 1, 80).state;
+  }
+
+  expect(peak - quiet).toBeGreaterThanOrEqual(45);
+  expect(state.rgb[0]).toBeLessThan(peak - 12);
+  expect(attack.every((value, index) => index === 0 || value >= attack[index - 1])).toBe(true);
+  expect(attack.every((value, index) => index === 0 || value - attack[index - 1] <= 20)).toBe(true);
+  expect(state.rgb[1]).toBeLessThan(state.rgb[0]);
+  expect(state.rgb[2]).toBeLessThan(state.rgb[0]);
+});
+test("radio transient envelope does not saturate changing kick and clap levels", () => {
+  let state;
+  const frames = [];
+  for (let index = 0; index < 12; index += 1) {
+    state = advanceMusicLighting(state, { active: true, level: 0.25, transient: true }, ["#ff174f", "#a20b1d"], 1, 80).state;
+  }
+  for (const level of [0.25, 0.88, 0.64, 0.42, 0.28, 0.82, 0.5, 0.3]) {
+    const next = advanceMusicLighting(state, { active: true, level, transient: true }, ["#ff174f", "#a20b1d"], 1, 80);
+    state = next.state;
+    frames.push(next.rgb[0]);
+  }
+  expect(Math.max(...frames) - Math.min(...frames)).toBeGreaterThanOrEqual(35);
+  expect(frames[2]).toBeGreaterThan(frames[0]);
+  expect(frames[4]).toBeLessThan(frames[3]);
+  expect(frames.every((value, index) => index === 0 || Math.abs(value - frames[index - 1]) <= 18)).toBe(true);
+});
+test("lighting sensitivity changes music response without changing the brightness setting", () => {
+  const peak = (sensitivity) => {
+    let state;
+    for (let index = 0; index < 16; index += 1) {
+      state = advanceMusicLighting(state, { active: true, level: 0.12, transient: true }, ["#ff174f", "#a20b1d"], 1, 80, sensitivity).state;
+    }
+    for (let index = 0; index < 5; index += 1) {
+      state = advanceMusicLighting(state, { active: true, level: 0.5, transient: true }, ["#ff174f", "#a20b1d"], 1, 80, sensitivity).state;
+    }
+    return state.rgb[0];
+  };
+  expect(peak(0.5)).toBeLessThan(peak(1));
+  expect(peak(1)).toBeLessThan(peak(2));
+});
 test("playing music has a clearly visible theme-colored brightness floor", () => {
   let state;
   for (let index = 0; index < 24; index += 1) {
-    state = advanceMusicLighting(
-      state,
-      { active: true, level: 0.08 },
-      ["#ff174f", "#a20b1d"],
-      0.5,
-      80
-    ).state;
+    state = advanceMusicLighting(state, { active: true, level: 0.08 }, ["#ff174f", "#a20b1d"], 0.5, 80).state;
   }
   expect(state.rgb[0]).toBeGreaterThanOrEqual(70);
   expect(state.rgb[1]).toBeLessThan(state.rgb[0]);
@@ -349,20 +422,31 @@ function fixture(type = 5, name = "Keyboard") {
   return Buffer.concat([uint32(body.length + 4), body]);
 }
 test("protocol parses v1, rejects truncated / oversized color data", () => {
-  expect(parseController(fixture(), 7)).toMatchObject({ id: 7, type: 5, colorCount: 1, activeMode: 0 });
+  expect(parseController(fixture(), 7)).toMatchObject({
+    id: 7,
+    type: 5,
+    colorCount: 1,
+    activeMode: 0
+  });
   expect(() => parseController(fixture().subarray(0, 12), 0)).toThrow();
 });
 test("SDK fragmented replies, keyboard-only writes, original colors/mode restored", async () => {
   const writes = [];
   class Socket extends EventEmitter {
     destroyed = false;
+
     writableLength = 0;
+
     setNoDelay() {}
+
     write(data) {
       writes.push(data);
       const id = data.readUInt32LE(8),
         device = data.readUInt32LE(4);
-      const reply = id === 40 ? uint32(1) : id === 0 ? uint32(2) : id === 1 ? fixture(device === 0 ? 2 : 5) : null;
+      let reply = null;
+      if (id === 40) reply = uint32(1);
+      else if (id === 0) reply = uint32(2);
+      else if (id === 1) reply = fixture(device === 0 ? 2 : 5);
       if (reply)
         queueMicrotask(() => {
           const p = packet(id, device, reply);
@@ -371,9 +455,11 @@ test("SDK fragmented replies, keyboard-only writes, original colors/mode restore
         });
       return true;
     }
+
     end() {
       this.destroy();
     }
+
     destroy() {
       if (!this.destroyed) {
         this.destroyed = true;

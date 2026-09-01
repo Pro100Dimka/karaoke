@@ -106,6 +106,7 @@ _MIN_MELODY_MATCH_SCORE = 0.45
 _MAX_VOCAL_AUDIO_OFFSET_SECONDS = 15.0
 _VOCAL_DISPLAY_LEAD_SECONDS = 0.1
 _AUDIO_SEARCH_INTENT_BONUS = {
+    "release": 4.0,
     "studio": 2.0,
     "official": 1.0,
 }
@@ -662,8 +663,9 @@ def _looks_like_person_credits(value: str) -> bool:
 
 def normalize_karaoke_identity(title: str, artist: str | None) -> tuple[str, str]:
     """Return canonical ``(title, performer)`` from inconsistent karaoke tags."""
-    clean_title = _clean_text(title)
-    clean_artist = _clean_text(artist or "")
+    wrapping = "\"'«»“”„ _"
+    clean_title = _clean_text(title).strip(wrapping)
+    clean_artist = _clean_text(artist or "").strip(wrapping)
     match = re.match(r"^(.+?)\s*[:：]\s*(.+)$", clean_title)
     if not match:
         return clean_title, clean_artist
@@ -759,11 +761,68 @@ def _audio_candidate_score(entry: dict[str, Any], document: KarDocument) -> floa
     )
 
 
+def _audio_candidate_studio_provenance_strength(
+    entry: dict[str, Any], document: KarDocument
+) -> int:
+    """Require positive ownership/release evidence after metadata expansion.
+
+    Title, duration and MIDI melody can identify the composition, but cannot
+    distinguish the studio master from an unlabeled concert re-upload.  Only
+    trust an upload when its channel matches the performer or YouTube exposes
+    matching structured track/artist metadata from a music distributor.
+    """
+    expected_artist, expected_song = _audio_search_identity(document)
+    artist_words = {word for word in _normalized_words(expected_artist) if len(word) > 1}
+    title_words = set(_normalized_words(expected_song))
+    if not artist_words or not title_words:
+        return 0
+
+    displayed_title = set(_normalized_words(entry.get("title") or ""))
+    track_title = set(_normalized_words(entry.get("track") or ""))
+    candidate_title = track_title or displayed_title
+    required_title_overlap = max(1, math.ceil(len(title_words) / 2))
+    if _overlap_count(title_words, candidate_title) < required_title_overlap:
+        return 0
+
+    channel_words = set(
+        _normalized_words(
+            " ".join(
+                str(entry.get(field) or "")
+                for field in ("uploader", "channel", "uploader_id", "channel_id")
+            )
+        )
+    )
+    required_artist_overlap = max(1, math.ceil(len(artist_words) / 2))
+    release_artist_words = set(
+        _normalized_words(
+            " ".join(
+                str(entry.get(field) or "")
+                for field in ("artist", "artists", "creator", "release_artist")
+            )
+        )
+    )
+    if (
+        track_title
+        and _overlap_count(artist_words, release_artist_words) >= required_artist_overlap
+    ):
+        return 2
+    if _overlap_count(artist_words, channel_words) >= required_artist_overlap:
+        return 1
+    return 0
+
+
+def _audio_candidate_has_studio_provenance(
+    entry: dict[str, Any], document: KarDocument
+) -> bool:
+    return _audio_candidate_studio_provenance_strength(entry, document) > 0
+
+
 def _audio_search_queries(artist: str, title: str) -> list[tuple[str, str]]:
-    quoted_identity = " ".join(f'"{part}"' for part in (artist, title) if part)
+    identity = " ".join(part for part in (artist, title) if part)
     return [
-        ("studio", f"{quoted_identity} studio version"),
-        ("official", f"{quoted_identity} official audio"),
+        ("release", f"{identity} Topic"),
+        ("official", f"{identity} official audio"),
+        ("studio", f"{identity} studio version"),
     ]
 
 
@@ -894,8 +953,11 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
             expanded_score = _audio_candidate_score(preview_info, document)
             if expanded_score is None:
                 continue
+            if not _audio_candidate_has_studio_provenance(preview_info, document):
+                continue
             match = _midi_audio_match(document, preview)
-            matches.append((expanded_score, entry, preview_info, match))
+            provenance = _audio_candidate_studio_provenance_strength(preview_info, document)
+            matches.append((expanded_score, entry, preview_info, match, provenance))
         except Exception:
             continue
         finally:
@@ -917,8 +979,8 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
     # performer's own channel.
     _metadata_score, selected, preview_info, match = max(
         verified_matches,
-        key=lambda item: (item[0], item[3]["score"]),
-    )
+        key=lambda item: (item[4], item[0], item[3]["score"]),
+    )[:4]
     webpage = _candidate_url(selected)
     options = {
         "format": "bestaudio/best",
@@ -981,6 +1043,10 @@ def _download_audio(document: KarDocument, output_dir: Path) -> dict[str, Any]:
         raise RuntimeError(
             "Скачанная запись не совпадает с исполнителем, названием или длительностью .kar"
         )
+    if not _audio_candidate_has_studio_provenance(final_entry, document):
+        target.unlink(missing_ok=True)
+        shutil.rmtree(temporary, ignore_errors=True)
+        raise RuntimeError("Источник аудио не подтверждён как выпуск исполнителя")
     if match["score"] < _MIN_MELODY_MATCH_SCORE:
         target.unlink(missing_ok=True)
         shutil.rmtree(temporary, ignore_errors=True)
@@ -1106,11 +1172,22 @@ def _refine_vocal_alignment(
     bpm_ratio = vocal_bpm / max(original_bpm, 0.001)
     if vocal_match["score"] < _MIN_MELODY_MATCH_SCORE or not 0.97 <= bpm_ratio <= 1.03:
         return None
+    display_offset = float(vocal_match["offset_seconds"]) - _VOCAL_DISPLAY_LEAD_SECONDS
+    first_word_start = min(
+        (float(word.get("start") or 0) for word in raw_document.words),
+        default=0.0,
+    )
+    scaled_first_word_start = first_word_start * raw_document.bpm / max(vocal_bpm, 0.001)
+    # A repeated chorus can produce a deceptively strong chroma match several
+    # seconds before the actual opening verse. Applying such an offset clamps
+    # many different words to 0.0, so the UI starts on a later line and piles
+    # all opening notes on top of each other. A refinement may move the opening
+    # close to zero, but it must never move it before the audio timeline.
+    if scaled_first_word_start + display_offset < 0:
+        return None
     vocal_match = {
         **vocal_match,
-        "offset_seconds": round(
-            float(vocal_match["offset_seconds"]) - _VOCAL_DISPLAY_LEAD_SECONDS, 3
-        ),
+        "offset_seconds": round(display_offset, 3),
         "display_lead_seconds": _VOCAL_DISPLAY_LEAD_SECONDS,
     }
     document = parse_kar(

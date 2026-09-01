@@ -21,7 +21,7 @@ add_library(KeyboardLighting SHARED
 # dependencies explicit. Otherwise a protocol-only edit can leave a stale
 # KeyboardLighting.node while rebuilding only the test executable.
 set_property(SOURCE lighting.cpp APPEND PROPERTY OBJECT_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/usb_lighting.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/usb_lighting.h;${CMAKE_CURRENT_SOURCE_DIR}/lamp_zones.h"
 )
 set_property(SOURCE usb_lighting.cpp APPEND PROPERTY OBJECT_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/usb_lighting.h;${CMAKE_CURRENT_SOURCE_DIR}/vial_protocol.h;${CMAKE_CURRENT_SOURCE_DIR}/winbond_protocol.h"
@@ -43,3 +43,6 @@ set_property(SOURCE winbond_protocol_test.cpp APPEND PROPERTY OBJECT_DEPENDS
 )
 target_compile_features(WinbondProtocolTests PRIVATE cxx_std_17)
 add_test(NAME winbond-protocol COMMAND WinbondProtocolTests)
+add_executable(LampZoneTests lamp_zones_test.cpp)
+target_compile_features(LampZoneTests PRIVATE cxx_std_17)
+add_test(NAME lamp-zones COMMAND LampZoneTests)

@@ -8,10 +8,12 @@
 #include <winrt/Windows.Devices.Lights.h>
 #include <winrt/Windows.UI.h>
 #include <chrono>
+#include <array>
 #include <mutex>
 #include <vector>
 #include <string>
 #include "usb_lighting.h"
+#include "lamp_zones.h"
 
 // Resolve stable Node-API exports from the host; no Node/Electron ABI-specific
 // import library or delay-load hook is needed.
@@ -28,12 +30,18 @@ struct Api {
 using namespace winrt;
 using namespace Windows::Devices::Lights;
 using namespace Windows::Devices::Enumeration;
-struct Device { LampArray lamps; std::chrono::steady_clock::time_point last{}; };
+struct Device {
+    LampArray lamps;
+    std::vector<int32_t> indices;
+    std::vector<unsigned> zones;
+    std::chrono::steady_clock::time_point last{};
+};
 std::mutex devices_mutex;
 std::vector<Device> devices;
 struct Job {
     napi_async_work work{}; napi_deferred deferred{};
     int action = 0, r = 0, g = 0, b = 0;
+    std::array<int, 15> colors{};
     uint32_t count = 0; std::string state = "no_devices";
     bool valid = true;
 };
@@ -57,8 +65,15 @@ void execute(napi_env, void* data) {
             devices.clear();
             for (auto const& info : bounded_get(DeviceInformation::FindAllAsync(LampArray::GetDeviceSelector()))) {
                 auto lamps = bounded_get(LampArray::FromIdAsync(info.Id()));
-                if (lamps && lamps.LampArrayKind() == LampArrayKind::Keyboard)
-                    devices.push_back({lamps});
+                if (lamps && lamps.LampArrayKind() == LampArrayKind::Keyboard) {
+                    std::vector<int32_t> indices;
+                    std::vector<float> positions;
+                    for (int32_t index = 0; index < lamps.LampCount(); ++index) {
+                        indices.push_back(index);
+                        positions.push_back(lamps.GetLampInfo(index).Position().x);
+                    }
+                    devices.push_back({lamps, indices, lamp_zones::assign(positions, lamps.BoundingBox().x)});
+                }
             }
         } else if (job.action == 2) {
             // Destroying our LampArray handles releases our ownership; don't
@@ -71,7 +86,13 @@ void execute(napi_env, void* data) {
             ++available;
             const auto now = std::chrono::steady_clock::now();
             if (job.action == 1 && now - device.last >= device.lamps.MinUpdateInterval()) {
-                device.lamps.SetColor({255, uint8_t(job.r), uint8_t(job.g), uint8_t(job.b)});
+                std::vector<Windows::UI::Color> colors;
+                colors.reserve(device.indices.size());
+                for (const auto zone : device.zones) {
+                    const auto offset = std::min(4U, zone) * 3;
+                    colors.push_back({255, uint8_t(job.colors[offset]), uint8_t(job.colors[offset + 1]), uint8_t(job.colors[offset + 2])});
+                }
+                device.lamps.SetColorsForIndices(colors, device.indices);
                 device.last = now;
             }
         }
@@ -95,16 +116,21 @@ void complete(napi_env env, napi_status, void* data) {
     api.napi_delete_async_work(env, job->work); delete job;
 }
 napi_value request(napi_env env, napi_callback_info info) {
-    size_t argc = 4; napi_value args[4]{};
+    size_t argc = 16; napi_value args[16]{};
     void* base = nullptr;
     api.napi_get_cb_info(env, info, &argc, args, nullptr, &base);
     auto* job = new Job;
-    int* values[] = {&job->action, &job->r, &job->g, &job->b};
-    for (size_t i = 0; i < argc && i < 4; ++i)
-        if (api.napi_get_value_int32(env, args[i], values[i]) != napi_ok) job->valid = false;
-    job->valid = job->valid && argc >= 1 && argc <= 4 && job->action >= 0 && job->action <= 2 &&
-        (job->action != 1 || argc == 4) && job->r >= 0 && job->r <= 255 &&
-        job->g >= 0 && job->g <= 255 && job->b >= 0 && job->b <= 255;
+    if (argc && api.napi_get_value_int32(env, args[0], &job->action) != napi_ok) job->valid = false;
+    for (size_t i = 1; i < argc && i <= 15; ++i)
+        if (api.napi_get_value_int32(env, args[i], &job->colors[i - 1]) != napi_ok) job->valid = false;
+    job->valid = job->valid && (argc == 1 || argc == 4 || argc == 16) &&
+        job->action >= 0 && job->action <= 2 && (job->action != 1 || argc == 4 || argc == 16);
+    const size_t channel_count = argc > 1 ? argc - 1 : 0;
+    for (size_t i = 0; i < channel_count; ++i)
+        if (job->colors[i] < 0 || job->colors[i] > 255) job->valid = false;
+    if (argc == 4) for (size_t zone = 1; zone < 5; ++zone)
+        std::copy_n(job->colors.begin(), 3, job->colors.begin() + zone * 3);
+    job->r = job->colors[0]; job->g = job->colors[1]; job->b = job->colors[2];
     job->action += static_cast<int>(reinterpret_cast<intptr_t>(base));
     napi_value promise;
     api.napi_create_promise(env, &job->deferred, &promise);

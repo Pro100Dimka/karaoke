@@ -108,7 +108,7 @@ def test_legacy_karmaker_reads_title_and_artist_from_header_track_names(tmp_path
 
     assert (document.title, document.artist) == ("Батарейка", "Жуки")
     assert kar_dataset_service._audio_search_queries(*kar_dataset_service._audio_search_identity(document))[0][1] == (
-        '"Жуки" "Батарейка" studio version'
+        "Жуки Батарейка Topic"
     )
 
 
@@ -601,6 +601,61 @@ def test_vocal_stem_refines_long_intro_before_writing_lyrics(monkeypatch, tmp_pa
     assert result["audio_source"]["midi_audio_match"]["offset_seconds"] == 6.15
 
 
+def test_vocal_refinement_rejects_offset_that_clamps_opening_lyrics(monkeypatch, tmp_path):
+    source = build_kar(tmp_path / "song.kar")
+    original_match = {
+        "score": 0.8,
+        "kar_bpm": 120,
+        "audio_bpm": 120,
+        "detected_audio_bpm": 120,
+        "time_scale": 1,
+        "offset_seconds": 0.2,
+        "pitch_shift_semitones": 0,
+        "audio_duration": 20,
+        "compared_notes": 50,
+    }
+    false_repeated_phrase_match = {
+        **original_match,
+        "score": 0.95,
+        "offset_seconds": -7.5,
+    }
+
+    def download(_document, output):
+        (output / "original.flac").write_bytes(b"audio")
+        return {"midi_audio_match": original_match}
+
+    def separate(output):
+        (output / "vocals.flac").write_bytes(b"vocals")
+        (output / "instrumental.flac").write_bytes(b"instrumental")
+        return True
+
+    monkeypatch.setattr(kar_dataset_service, "_download_audio", download)
+    monkeypatch.setattr(kar_dataset_service, "_prepare_fast_stems", separate)
+    monkeypatch.setattr(
+        kar_dataset_service,
+        "_midi_audio_match",
+        lambda *_args, **_kwargs: false_repeated_phrase_match,
+    )
+    monkeypatch.setattr(
+        kar_dataset_service.metadata_enrichment_service,
+        "prepare_training_media",
+        lambda *_args, **_kwargs: {
+            "cover_status": "ready",
+            "video_status": "ready",
+            "video_id": "video-id",
+            "warnings": [],
+        },
+    )
+
+    result = kar_dataset_service.prepare_kar_file(source, output_root=tmp_path / "dataset")
+    output = Path(result["dataset_dir"])
+    reference = json.loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
+
+    assert reference["words"][0]["start"] > 0
+    assert result["alignment"]["status"] == "audio-bpm-applied"
+    assert result["alignment"]["offset_seconds"] == 0.2
+
+
 def test_fast_stems_are_staged_before_becoming_dataset_files(monkeypatch, tmp_path):
     target = tmp_path / "song"
     target.mkdir()
@@ -919,6 +974,101 @@ def test_audio_search_rejects_live_markers_hidden_in_expanded_metadata():
     assert kar_dataset_service._audio_candidate_score(candidate, document) is None
 
 
+def test_audio_search_rejects_unverified_reupload_from_real_failed_selection():
+    document = kar_dataset_service.KarDocument(
+        title="Самба белого мотылька",
+        artist="Меладзе Валерий",
+        bpm=250,
+        key="C",
+        duration=260,
+        words=[],
+        lyric_track=2,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    concert_reupload_without_live_markers = {
+        "title": "В. Меладзе - Самбо белого мотылька.",
+        "uploader": "Reporter Kazan",
+        "channel": "Reporter Kazan",
+        "duration": 261,
+        "webpage_url": "https://www.youtube.com/watch?v=xIjS5A3s73w",
+    }
+
+    # Matching title, duration and melody are insufficient: a random channel
+    # can upload a concert recording without writing "live" in its metadata.
+    assert kar_dataset_service._audio_candidate_score(
+        concert_reupload_without_live_markers, document
+    ) is not None
+    assert not kar_dataset_service._audio_candidate_has_studio_provenance(
+        concert_reupload_without_live_markers, document
+    )
+    assert kar_dataset_service._audio_candidate_studio_provenance_strength(
+        concert_reupload_without_live_markers, document
+    ) == 0
+
+
+def test_audio_search_accepts_distributor_topic_metadata_as_studio_provenance():
+    document = kar_dataset_service.KarDocument(
+        title="Самба белого мотылька",
+        artist="Валерий Меладзе",
+        bpm=250,
+        key="C",
+        duration=260,
+        words=[],
+        lyric_track=2,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    topic_release = {
+        "title": "Самба белого мотылька",
+        "uploader": "Valeriy Meladze - Topic",
+        "channel": "Valeriy Meladze - Topic",
+        "track": "Самба белого мотылька",
+        "artist": "Валерий Меладзе",
+        "album": "Всё так и было",
+        "duration": 260,
+    }
+
+    assert kar_dataset_service._audio_candidate_has_studio_provenance(
+        topic_release, document
+    )
+    assert kar_dataset_service._audio_candidate_studio_provenance_strength(
+        topic_release, document
+    ) == 2
+
+
+def test_audio_search_ranks_distributor_release_above_artist_channel_video():
+    document = kar_dataset_service.KarDocument(
+        title="Самба белого мотылька",
+        artist="Меладзе Валерий",
+        bpm=250,
+        key="C",
+        duration=260,
+        words=[],
+        lyric_track=2,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+    artist_channel_video = {
+        "title": "Валерий Меладзе - Самба белого мотылька",
+        "uploader": "meladzeofficial",
+        "duration": 239,
+    }
+    distributor_release = {
+        "title": "Самба белого мотылька",
+        "uploader": "meladzeofficial",
+        "artist": "Валерий Меладзе",
+        "track": "Самба белого мотылька",
+        "duration": 240,
+    }
+
+    assert kar_dataset_service._audio_candidate_studio_provenance_strength(
+        distributor_release, document
+    ) > kar_dataset_service._audio_candidate_studio_provenance_strength(
+        artist_channel_video, document
+    )
+
+
 def test_audio_search_merges_queries_and_keeps_studio_intent():
     shared = {"id": "abcdefghijk", "title": "Artist - Song", "duration": 180}
 
@@ -934,11 +1084,34 @@ def test_audio_search_merges_queries_and_keeps_studio_intent():
     assert by_id["abcdefghijk"]["_karaoke_search_rank"] == 0
 
 
-def test_audio_search_quotes_artist_and_title_separately():
+def test_audio_search_keeps_artist_and_title_in_one_natural_query():
     assert kar_dataset_service._audio_search_queries("Танцы Минус", "Половинка") == [
-        ("studio", '"Танцы Минус" "Половинка" studio version'),
-        ("official", '"Танцы Минус" "Половинка" official audio'),
+        ("release", "Танцы Минус Половинка Topic"),
+        ("official", "Танцы Минус Половинка official audio"),
+        ("studio", "Танцы Минус Половинка studio version"),
     ]
+
+
+def test_audio_search_identity_removes_wrapping_karaoke_punctuation():
+    document = kar_dataset_service.KarDocument(
+        title='"Самба белого мотылька"',
+        artist="Меладзе Валерий",
+        bpm=250,
+        key="C",
+        duration=260,
+        words=[],
+        lyric_track=2,
+        melody_track=1,
+        raw_lyrics=[],
+    )
+
+    assert kar_dataset_service._audio_search_identity(document) == (
+        "Меладзе Валерий",
+        "Самба белого мотылька",
+    )
+    assert kar_dataset_service._audio_search_queries(
+        *kar_dataset_service._audio_search_identity(document)
+    )[1][1] == "Меладзе Валерий Самба белого мотылька official audio"
 
 
 def test_midi_audio_match_compares_note_classes_and_timing(monkeypatch, tmp_path):

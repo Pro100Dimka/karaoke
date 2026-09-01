@@ -190,6 +190,13 @@ def test_native_shared_candidate_does_not_switch_mode_or_buffer():
         monitor_worker._stream_candidates({**config, "wasapi_mode": "exclusive"})
 
 
+def test_native_shared_requests_windows_low_latency_media_category_with_raw_fallback():
+    source = (native_wasapi.library_path().parents[3] / "backend/engines/wasapi/monitor.cpp").read_text(encoding="utf-8")
+    assert "AudioCategory_Media" in source
+    assert "AUDCLNT_STREAMOPTIONS_RAW" in source
+    assert "properties.Options = static_cast<AUDCLNT_STREAMOPTIONS>(0)" in source
+
+
 def test_worker_uses_native_event_pump_and_native_rate(monkeypatch, dll, capsys):
     import json
     import sys

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({ updateUiPreferences: vi.fn() }));
 vi.mock("../src/api/client", () => ({ api: mocks }));
 let RADIO_STATIONS;
 let RadioProvider;
+let calculateRadioLightingPulse;
 let calculateRadioSpectrum;
 let isAutoplayBlocked;
 let normalizeRadioSettings;
@@ -46,7 +47,7 @@ const installAudio = ({
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({ RADIO_STATIONS, RadioProvider, calculateRadioSpectrum, isAutoplayBlocked, normalizeRadioSettings, useRadio } =
+  ({ RADIO_STATIONS, RadioProvider, calculateRadioLightingPulse, calculateRadioSpectrum, isAutoplayBlocked, normalizeRadioSettings, useRadio } =
     await import("../src/contexts/radio.jsx"));
   localStorage.clear();
   store({ stationId: "poptron", volume: 0.45, enabled: false });
@@ -140,6 +141,21 @@ describe("radio context", () => {
       "toEqual",
       [0.293912156862745, 0.37304235294117644, 0.4747811764705881, 0.58, 0.5319487058823529, 0.20343215686274507, 0.5320533333333333, 0.58]
     ]);
+  });
+  test("detects kick, clap and hi-hat attacks instead of saturated radio loudness", () => {
+    const bed = Array(18).fill(0.82);
+    const hit = (from, to, amount) =>
+      bed.map((value, index) => (index >= from && index < to ? value + amount : value));
+    const kick = calculateRadioLightingPulse(hit(0, 6, 0.1), bed, 0.08);
+    const clap = calculateRadioLightingPulse(hit(6, 13, 0.08), bed, 0.08);
+    const tick = calculateRadioLightingPulse(hit(13, 18, 0.06), bed, 0.08);
+    const steady = calculateRadioLightingPulse(bed, bed, 0.8);
+
+    expect(kick).toBeGreaterThan(0.45);
+    expect(clap).toBeGreaterThan(0.45);
+    expect(tick).toBeGreaterThan(0.4);
+    expect(steady).toBeLessThan(0.8);
+    expect(steady).toBeGreaterThan(0);
   });
   test("requires the provider", () => {
     const { log, restore } = suppressWindowErrors();

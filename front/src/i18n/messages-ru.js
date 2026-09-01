@@ -11,6 +11,9 @@ export const ruMessages = {
   "settings.appearance.keyboard_lighting_mode.music": "В такт музыке",
   "settings.appearance.keyboard_lighting_mode.theme": "Цвет темы",
   "settings.appearance.keyboard_lighting_brightness.label": "Яркость клавиатуры",
+  "settings.appearance.keyboard_lighting_sensitivity.label": "Чувствительность к музыке",
+  "settings.appearance.keyboard_lighting_sensitivity.tooltip":
+    "Регулирует силу реакции подсветки на кик, бас, клэп и короткие высокочастотные удары, не изменяя общую яркость.",
   "settings.appearance.keyboard_lighting_status.disabled": "Подсветка клавиатуры выключена",
   "settings.appearance.keyboard_lighting_status.connecting": "Поиск совместимых клавиатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавиатур: {count}",

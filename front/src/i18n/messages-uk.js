@@ -11,6 +11,9 @@ export const ukMessages = {
   "settings.appearance.keyboard_lighting_mode.music": "У такт музиці",
   "settings.appearance.keyboard_lighting_mode.theme": "Колір теми",
   "settings.appearance.keyboard_lighting_brightness.label": "Яскравість клавіатури",
+  "settings.appearance.keyboard_lighting_sensitivity.label": "Чутливість до музики",
+  "settings.appearance.keyboard_lighting_sensitivity.tooltip":
+    "Регулює силу реакції підсвічування на кік, бас, клеп і короткі високочастотні удари, не змінюючи загальну яскравість.",
   "settings.appearance.keyboard_lighting_status.disabled": "Підсвічування клавіатури вимкнено",
   "settings.appearance.keyboard_lighting_status.connecting": "Пошук сумісних клавіатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавіатур: {count}",

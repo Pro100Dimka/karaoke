@@ -59,20 +59,50 @@ const parseColor = (hex) => {
  * The channel slew limit prevents a single analyzer spike from becoming a
  * full-brightness hardware flash, including on keyboards with coarse firmware.
  */
-export function advanceMusicLighting(previous, sample, palette, brightness, elapsedMs = 80) {
+export function advanceMusicLighting(
+  previous,
+  sample,
+  palette,
+  brightness,
+  elapsedMs = 80,
+  sensitivity = 1
+) {
   const state = previous || { envelope: 0, rgb: [0, 0, 0] };
   const active = !!sample?.active;
-  const targetLevel = active ? clamp01(sample?.level) : 0;
+  // Broadcast radio is heavily compressed: its useful bass envelope normally
+  // occupies only about 0.05..0.25 of an FFT byte spectrum. Mapping that tiny
+  // range directly to LED brightness made a playing keyboard look static.
+  const measuredLevel = clamp01(sample?.level);
+  const transient = !!sample?.transient;
+  const responseSensitivity = Math.min(2, Math.max(0.25, Number(sensitivity) || 1));
+  const targetLevel = active
+    ? transient
+      ? clamp01(measuredLevel * responseSensitivity)
+      : clamp01((measuredLevel - 0.025) / 0.24)
+    : 0;
   const milliseconds = Math.min(250, Math.max(16, Number(elapsedMs) || 80));
-  const response = 1 - Math.exp(-milliseconds / (targetLevel > state.envelope ? 360 : 900));
+  const response =
+    1 -
+    Math.exp(
+      -milliseconds /
+        (transient
+          ? targetLevel > state.envelope
+            ? 70
+            : 210
+          : targetLevel > state.envelope
+            ? 140
+            : 520)
+    );
   const envelope = state.envelope + (targetLevel - state.envelope) * response;
   const colors = (Array.isArray(palette) ? palette : [palette]).filter(Boolean);
   const primary = parseColor(colors[0]);
   const secondary = parseColor(colors[1] || colors[0]);
-  const blend = Math.min(0.32, envelope * 0.32);
+  const blend = Math.min(0.22, envelope * 0.22);
   // Keep a dim theme-colored floor even between tracks/analyser dropouts.
   // Releasing control here would restart the keyboard firmware's rainbow mode.
-  const gain = clamp01(brightness) * (active ? 0.62 + envelope * 0.38 : 0.45);
+  const gain =
+    clamp01(brightness) *
+    (active ? (transient ? 0.28 + envelope * 0.72 : 0.44 + envelope * 0.56) : 0.32);
   const target = primary.map((channel, index) =>
     Math.round((channel * (1 - blend) + secondary[index] * blend) * gain)
   );
@@ -82,6 +112,18 @@ export function advanceMusicLighting(previous, sample, palette, brightness, elap
     return Math.round(before + Math.max(-limit, Math.min(limit, channel - before)));
   });
   return { rgb, state: { envelope, rgb } };
+}
+
+export function musicLightingZones(rgb, envelope = 0) {
+  const pulse = clamp01(envelope);
+  const gains = [
+    0.56 + pulse * 0.2,
+    0.74 + pulse * 0.16,
+    1,
+    0.74 + pulse * 0.16,
+    0.56 + pulse * 0.2
+  ];
+  return gains.map((gain) => rgb.map((channel) => Math.round(clamp01(channel / 255) * gain * 255)));
 }
 
 // Read a copy of already playing media. Never re-route the original element,

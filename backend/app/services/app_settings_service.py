@@ -39,6 +39,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "keyboard_lighting_enabled": False,
     "keyboard_lighting_mode": "music",
     "keyboard_lighting_brightness": 0.5,
+    "keyboard_lighting_sensitivity": 1.0,
     "remote_diagnostics_enabled": False,
     "remote_diagnostics_errors_enabled": False,
     "remote_diagnostics_hardware_enabled": False,

@@ -160,6 +160,15 @@ test("clean releases force a fresh gate and restore the caller environment", () 
     /\$env:KARAOKE_RELEASE_FULL = \$PreviousReleaseFull/,
   ]);
 });
+test("developer no-checks clean builds do not require a signing certificate", () => {
+  matches(installerBuilder, [
+    /if \(\$Mode -eq "clean" -and -not \$SkipReleaseGate\) \{ \$arguments \+= "-Required" \}/,
+  ]);
+  assert.doesNotMatch(
+    installerBuilder,
+    /if \(\$Mode -eq "clean"\) \{ \$arguments \+= "-Required" \}/,
+  );
+});
 test("native build toolchain is discovered across Visual Studio editions", () => {
   matches(installerBuilder, [
     /function Find-VisualStudioInstallation/,

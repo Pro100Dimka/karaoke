@@ -25,7 +25,9 @@ extern bool loadAsioDriver(char* name);
 
 namespace {
 
-constexpr long kMaxChannels = 2;
+constexpr long kMaxInputChannels = 8;
+constexpr long kMaxOutputChannels = 2;
+constexpr long kMaxBuffers = kMaxInputChannels + kMaxOutputChannels;
 std::atomic_bool g_running{true};
 std::atomic<float> g_rms{-120.0F};
 std::atomic_bool g_clipping{false};
@@ -33,7 +35,7 @@ AsioDrivers* g_drivers = nullptr;
 
 struct Options {
   std::string driver_name;
-  long input_channel = 0;
+  long input_channel = -1;
   long output_channels = 2;
   long buffer_size = 0;
   double sample_rate = 0.0;
@@ -49,8 +51,8 @@ struct Options {
 struct Engine {
   ASIODriverInfo info{};
   ASIOCallbacks callbacks{};
-  ASIOBufferInfo buffers[kMaxChannels * 2]{};
-  ASIOChannelInfo channels[kMaxChannels * 2]{};
+  ASIOBufferInfo buffers[kMaxBuffers]{};
+  ASIOChannelInfo channels[kMaxBuffers]{};
   long input_count = 0;
   long output_count = 0;
   long buffer_size = 0;
@@ -309,12 +311,23 @@ void copy_with_effects(void* target, const void* source, ASIOSampleType type, lo
 
 void process_buffer(long buffer_index) {
   if (g_engine.input_count < 1 || g_engine.output_count < 1) return;
-  const void* input = g_engine.buffers[0].buffers[buffer_index];
-  const ASIOSampleType input_type = g_engine.channels[0].type;
+  const void* input = nullptr;
+  ASIOSampleType input_type = ASIOSTLastEntry;
+  float peak = -1.0F;
+  // ASIO driver channel numbering is independent from Windows endpoint IDs.
+  // In automatic mode retain all practical input channels and use the one
+  // carrying the strongest block, so a Realtek microphone is not assumed to
+  // be channel zero (which is often Stereo Mix or an inactive jack).
+  for (long channel = 0; channel < g_engine.input_count; ++channel) {
+    const void* candidate = g_engine.buffers[channel].buffers[buffer_index];
+    const auto type = g_engine.channels[channel].type;
+    if (!candidate || bytes_per_sample(type) == 0) continue;
+    const float candidate_peak = sample_peak(candidate, type, g_engine.buffer_size);
+    if (candidate_peak > peak) { input = candidate; input_type = type; peak = candidate_peak; }
+  }
   const int input_bytes = bytes_per_sample(input_type);
   if (input == nullptr || input_bytes == 0) return;
 
-  const float peak = sample_peak(input, input_type, g_engine.buffer_size);
   const float prior = std::pow(10.0F, g_rms.load() / 20.0F);
   const float smoothed = std::max(peak, prior * 0.88F);
   g_rms = smoothed > 0.0F ? 20.0F * std::log10(smoothed) : -120.0F;
@@ -331,11 +344,15 @@ void process_buffer(long buffer_index) {
     void* target = g_engine.buffers[output_index].buffers[buffer_index];
     const ASIOSampleType output_type = g_engine.channels[output_index].type;
     if (target == nullptr) continue;
-    if (output_type == input_type && use_dsp) {
+    if (use_dsp && supports_dsp(output_type)) {
       for (long index = 0; index < g_engine.buffer_size; ++index)
         encode_sample(target, output_type, index, g_engine.monitor_scratch[static_cast<size_t>(index)]);
     } else if (output_type == input_type) {
       copy_with_gain(target, input, input_type, g_engine.buffer_size, g_engine.gain);
+    } else if (supports_dsp(input_type) && supports_dsp(output_type)) {
+      for (long index = 0; index < g_engine.buffer_size; ++index)
+        encode_sample(target, output_type, index,
+                      decode_sample(input, input_type, index) * g_engine.gain);
     } else {
       std::memset(target, 0, static_cast<size_t>(g_engine.buffer_size * bytes_per_sample(output_type)));
     }
@@ -368,9 +385,12 @@ long resolve_buffer_size(const Options& options, long minimum, long maximum, lon
 
 bool create_buffers(const Options& options) {
   long minimum = 0, maximum = 0, preferred = 0, granularity = 0;
-  if (ASIOGetChannels(&g_engine.input_count, &g_engine.output_count) != ASE_OK || g_engine.input_count < 1 || g_engine.output_count < 1) return false;
-  g_engine.input_count = 1;
-  g_engine.output_count = std::min({options.output_channels, g_engine.output_count, kMaxChannels});
+  long available_inputs = 0, available_outputs = 0;
+  if (ASIOGetChannels(&available_inputs, &available_outputs) != ASE_OK || available_inputs < 1 || available_outputs < 1) return false;
+  if (options.input_channel >= available_inputs) return false;
+  g_engine.input_count = options.input_channel < 0
+    ? std::min(available_inputs, kMaxInputChannels) : 1;
+  g_engine.output_count = std::min({options.output_channels, available_outputs, kMaxOutputChannels});
   if (ASIOGetBufferSize(&minimum, &maximum, &preferred, &granularity) != ASE_OK) return false;
   g_engine.buffer_size = resolve_buffer_size(options, minimum, maximum, preferred, granularity);
   g_engine.gain = static_cast<float>(std::clamp(options.gain, 0.0, 4.0));
@@ -396,7 +416,7 @@ bool create_buffers(const Options& options) {
   g_engine.pitch_phase = 0.0;
   for (long index = 0; index < g_engine.input_count; ++index) {
     g_engine.buffers[index].isInput = ASIOTrue;
-    g_engine.buffers[index].channelNum = options.input_channel + index;
+    g_engine.buffers[index].channelNum = options.input_channel < 0 ? index : options.input_channel + index;
   }
   for (long index = 0; index < g_engine.output_count; ++index) {
     const long buffer_index = g_engine.input_count + index;
@@ -475,13 +495,15 @@ int main(int argc, char** argv) {
   ASIOGetSampleRate(&rate);
   // Query the running driver after OutputReady negotiation, not the requested
   // callback size. A failed query must never be presented as zero latency.
-  if (ASIOGetLatencies(&g_engine.input_latency, &g_engine.output_latency) != ASE_OK) {
-    g_engine.input_latency = g_engine.output_latency = -1;
-  }
+  const bool driver_latency = ASIOGetLatencies(&g_engine.input_latency, &g_engine.output_latency) == ASE_OK &&
+                              g_engine.input_latency >= 0 && g_engine.output_latency >= 0;
+  if (!driver_latency) g_engine.input_latency = g_engine.output_latency = g_engine.buffer_size;
   std::ostringstream started;
   started << "{\"event\":\"started\",\"driver\":\"" << escape_json(options->driver_name)
           << "\",\"sample_rate\":" << rate << ",\"buffer_size\":" << g_engine.buffer_size
-          << ",\"input_latency\":" << g_engine.input_latency << ",\"output_latency\":" << g_engine.output_latency << "}";
+          << ",\"input_latency\":" << g_engine.input_latency << ",\"output_latency\":" << g_engine.output_latency
+          << ",\"input_channels\":" << g_engine.input_count
+          << ",\"latency_source\":\"" << (driver_latency ? "asio-driver-report" : "asio-buffer-estimate") << "\"}";
   emit(started.str());
   while (g_running) {
     std::ostringstream level;

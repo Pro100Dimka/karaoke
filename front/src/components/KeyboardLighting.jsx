@@ -3,6 +3,7 @@ import useAppSettings from "../hooks/useAppSettings";
 import {
   advanceMusicLighting,
   lightingColor,
+  musicLightingZones,
   readLightingMusic,
   sameLightingPalette
 } from "../services/keyboardLighting";
@@ -16,6 +17,7 @@ export default function KeyboardLighting() {
   const enabled = !!settings?.keyboard_lighting_enabled;
   useEffect(() => {
     if (!isElectron()) return undefined;
+    document.title = "A&D Voice";
     let cancelled = false,
       busy = false,
       palette = readThemePalette();
@@ -47,17 +49,22 @@ export default function KeyboardLighting() {
           music,
           palette,
           current.keyboard_lighting_brightness,
-          80
+          80,
+          current.keyboard_lighting_sensitivity
         );
         animation.current = frame.state;
+        const rgb = theme
+          ? lightingColor(palette[0], current.keyboard_lighting_brightness, 1, "theme")
+          : frame.rgb;
         await sendLightingFrame({
           // While the feature is enabled we retain hardware control. Sending
           // inactive during a quiet passage restores the keyboard's onboard
           // rainbow animation, which looks like an unrelated RGB flash.
           active: true,
-          rgb: theme
-            ? lightingColor(palette[0], current.keyboard_lighting_brightness, 1, "theme")
-            : frame.rgb
+          rgb,
+          zones: theme
+            ? Array.from({ length: 5 }, () => rgb)
+            : musicLightingZones(rgb, frame.state.envelope)
         });
       } catch {
         /* Optional peripheral failures never affect audio. */

@@ -101,16 +101,20 @@ class LightingController {
     return this.status;
   }
 
-  async frame({ rgb, active } = {}) {
+  async frame({ rgb, zones, active } = {}) {
+    const validColor = (color) =>
+      Array.isArray(color) &&
+      color.length === 3 &&
+      color.every((v) => Number.isInteger(v) && v >= 0 && v <= 255);
     if (
-      !Array.isArray(rgb) ||
-      rgb.length !== 3 ||
-      !rgb.every((v) => Number.isInteger(v) && v >= 0 && v <= 255) ||
+      !validColor(rgb) ||
+      (zones !== undefined &&
+        (!Array.isArray(zones) || zones.length !== 5 || !zones.every(validColor))) ||
       typeof active !== "boolean"
     )
       return this.status;
     this.lastInput = this.now();
-    const output = active ? rgb.join(",") : null;
+    const output = active ? (zones || [rgb]).flat().join(",") : null;
     if (active && this.provider && output === this.lastOutput) return this.status;
     if (!this.enabled || this.busy || this.now() - this.lastFrame < 45) return this.status;
     this.lastFrame = this.now();
@@ -136,7 +140,10 @@ class LightingController {
         if (!this.enabled) return this.status;
         if (typeof this.provider === "string") {
           const { provider } = this;
-          const status = await this[provider].request(1, ...rgb);
+          const status = await this[provider].request(
+            1,
+            ...(provider === "windows" && zones ? zones.flat() : rgb)
+          );
           if (token === this.generation) {
             this.status = { ...status, provider };
             if (status.count) this.lastOutput = output;

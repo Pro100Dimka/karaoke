@@ -321,6 +321,17 @@ def test_invalid_asio_latency_is_not_reported_as_zero(control, rate, samples):
     assert "output_latency_ms" not in status
 
 
+def test_asio_buffer_estimate_is_preserved_when_driver_rejects_latency_query(control):
+    control.event(control.token, {"event": "started", "driver": "Realtek ASIO",
+                                 "sample_rate": 48000, "buffer_size": 64,
+                                 "input_latency": 64, "output_latency": 64,
+                                 "latency_source": "asio-buffer-estimate"})
+    status = control.snapshot()
+    assert status["latency_source"] == "asio-buffer-estimate"
+    assert status["input_latency_ms"] == pytest.approx(64 * 1000 / 48000)
+    assert status["output_latency_ms"] == pytest.approx(64 * 1000 / 48000)
+
+
 def test_split_queue_statistics_are_separate_and_reset_after_fallback(control):
     control.run_sync(lambda: None)
     control.event(control.token, {"event": "started", "engine": "wasapi-split", "input_latency_ms": 5.8, "output_latency_ms": 5.8})

@@ -49,7 +49,8 @@ def test_keyboard_lighting_defaults_and_zero_values_persist(monkeypatch, tmp_pat
     configure_files(monkeypatch, tmp_path)
     initial = app_settings_service.read_settings()
     assert initial["keyboard_lighting_enabled"] is False
-    patch = {"keyboard_lighting_enabled": True, "keyboard_lighting_mode": "theme", "keyboard_lighting_brightness": 0.7}
+    assert initial["keyboard_lighting_sensitivity"] == 1.0
+    patch = {"keyboard_lighting_enabled": True, "keyboard_lighting_mode": "theme", "keyboard_lighting_brightness": 0.7, "keyboard_lighting_sensitivity": 1.6}
     app_settings_service.update_settings(patch)
     saved = app_settings_service.read_settings()
     assert all(saved[key] == value for key, value in patch.items())

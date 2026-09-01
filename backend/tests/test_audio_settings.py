@@ -1,5 +1,6 @@
 import builtins
 import importlib
+from pathlib import Path
 from unittest.mock import Mock
 
 import numpy as np
@@ -274,6 +275,15 @@ def test_asio_monitor_validates_bridge_driver_and_clamps_command(monkeypatch, tm
     )
     command = launch.call_args.args[0]
     assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0') and (launch.call_args.kwargs == {'cwd': tmp_path})
+
+
+def test_asio_bridge_converts_supported_mismatched_input_and_output_formats():
+    source = (Path(__file__).parents[1] / "engines/asio/bridge_main.cpp").read_text(encoding="utf-8")
+    assert "use_dsp && supports_dsp(output_type)" in source
+    assert "decode_sample(input, input_type, index) * g_engine.gain" in source
+    assert "output_type == input_type && use_dsp" not in source
+    assert "options.input_channel < 0" in source
+    assert "sample_peak(candidate" in source
 
 
 def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):

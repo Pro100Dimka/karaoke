@@ -11,6 +11,9 @@ export const enMessages = {
   "settings.appearance.keyboard_lighting_mode.music": "React to music",
   "settings.appearance.keyboard_lighting_mode.theme": "Theme color",
   "settings.appearance.keyboard_lighting_brightness.label": "Keyboard brightness",
+  "settings.appearance.keyboard_lighting_sensitivity.label": "Music sensitivity",
+  "settings.appearance.keyboard_lighting_sensitivity.tooltip":
+    "Controls the lighting response to kicks, bass, claps and short high-frequency hits without changing overall brightness.",
   "settings.appearance.keyboard_lighting_status.disabled": "Keyboard lighting is off",
   "settings.appearance.keyboard_lighting_status.connecting": "Looking for compatible keyboards…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · keyboards: {count}",
