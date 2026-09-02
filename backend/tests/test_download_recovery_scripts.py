@@ -147,6 +147,17 @@ def test_msst_installer_recovery_contract():
     )
 
 
+def test_msst_installer_tolerates_a_preexisting_downloads_engines_directory():
+    # Native `mkdir` fails (errorlevel 1) if the target already exists, unlike
+    # `mkdir -p`. downloads\engines is shared with the ASIO engine and other
+    # downloads, so it's almost always already there by the time MSST
+    # installs -- an unguarded `mkdir "%DL%\engines" ... || goto :fail` jumps
+    # straight to the generic failure message on every single run, before
+    # ever attempting a download, with the real reason hidden by `>nul 2>&1`.
+    script = project_text("scripts/install-msst-engine.bat", encoding="utf-8-sig")
+    assert_contains(script, 'if not exist "%DL%\\engines" mkdir "%DL%\\engines"')
+
+
 def test_msst_patch_applies_regardless_of_the_patch_scripts_own_line_endings(tmp_path):
     # patch-msst-engine.ps1's here-string literals (the old/new code blocks)
     # preserve whatever line endings the .ps1 file itself was checked out
