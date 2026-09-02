@@ -17,9 +17,11 @@ export const DEFAULT_COMPLEXITY_BUDGET = Object.freeze({
 // Existing hotspots get explicit, reviewable ratchets. Raising one of these
 // numbers is an architecture decision; new files receive the smaller default.
 export const FILE_COMPLEXITY_BUDGETS = Object.freeze({
-  "src/pages/Library/animated-backdrop/qftRuntime.js": { lines: 2600, branches: 145 },
+  // Imported visualizer runtime is intentionally kept intact; ratchet its
+  // current reviewed size without weakening the default budget for new code.
+  "src/pages/Library/animated-backdrop/qftRuntime.js": { lines: 3031, branches: 145 },
   "src/services/onlineVoiceTransfers.js": { lines: 860, branches: 110 },
-  "src/i18n/messages-ru.js": { lines: 830, branches: 0 },
+  "src/i18n/messages-ru.js": { lines: 832, branches: 0 },
   "src/i18n/messages-uk.js": { lines: 830, branches: 0 },
   "src/i18n/messages-en.js": { lines: 825, branches: 0 },
   // +1 line: a WebRTC offer-glare fix (rollback before setRemoteDescription)

@@ -51,11 +51,45 @@ test("library backdrop keeps black WebGL pixels transparent over the theme artwo
   expect(runtime).not.toContain("gl_FragColor = vec4(detailLift, 1.0);");
   expect(runtime).toContain("themeBackdrop.style.backgroundImage = backgroundImage;");
   expect(runtime).toContain("element.style.backgroundColor = backgroundColor;");
-  expect(runtime).toContain("event.data?.type === 'QFT_POINTER'");
   expect(runtime).toContain("backdropTargetX");
   expect(component).toContain("dark.webp?inline");
   expect(component).toContain('backgroundImage: `url("${THEME_BACKDROPS[theme]');
   expect(component).not.toContain("getComputedStyle(themeBackground).backgroundImage");
+});
+
+test("library backdrop forwards pointer movement to the visualizer runtime", () => {
+  const scheduledFrames = [];
+  const requestFrame = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((callback) => {
+      scheduledFrames.push(callback);
+      return scheduledFrames.length;
+    });
+  const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+  try {
+    const { container, unmount } = render(<LibraryBackdrop />);
+    const frame = container.querySelector("iframe");
+    const postMessage = vi.spyOn(frame.contentWindow, "postMessage");
+
+    act(() => {
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 256, clientY: 192 }));
+      scheduledFrames.at(-1)?.(16);
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: "QFT_POINTER",
+        x: (256 / window.innerWidth) * 2 - 1,
+        y: (192 / window.innerHeight) * 2 - 1
+      },
+      "*"
+    );
+    unmount();
+  } finally {
+    requestFrame.mockRestore();
+    cancelFrame.mockRestore();
+  }
 });
 
 test("library backdrop watches the theme attribute instead of polling it every frame", () => {
