@@ -20,6 +20,7 @@ import { getErrorMessage } from "../utils/errors";
 import useApplicationAudioMute from "./hooks/useApplicationAudioMute";
 import useOnlineRoomAudio from "./hooks/useOnlineRoomAudio";
 import useOnlineRoomCommands from "./hooks/useOnlineRoomCommands";
+import useOnlineRoomHardwareSuspension from "./hooks/useOnlineRoomHardwareSuspension";
 import useOnlineRoomParticipantControls from "./hooks/useOnlineRoomParticipantControls";
 import useOnlineRoomValue from "./hooks/useOnlineRoomValue";
 import useSpeakingLevels from "./hooks/useSpeakingLevels";
@@ -230,6 +231,7 @@ export function OnlineRoomProvider({ children }) {
     // Stryker disable next-line ArrayDeclaration: startSpeakingMeter is stable.
     [prepareSpeakingMeter, setTransferStatus, startSpeakingMeter]
   );
+  useOnlineRoomHardwareSuspension({ requestMicrophoneAccess, stopSpeakingMeter, voiceRef });
   const requestSongSync = useCallback(
     (songId, ownerId, options) =>
       requestLibrarySong({

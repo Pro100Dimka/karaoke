@@ -251,8 +251,14 @@ export default function useLibrary() {
           if (match?.song_id) {
             localSongId = match.song_id;
           } else {
-            if (!(await room.requestSongSync(song.id, song.__roomOwnerId, { roomWide: true })))
+            const transferredSongId = await room.requestSongSync(
+              song.id,
+              song.__roomOwnerId,
+              { roomWide: true }
+            );
+            if (!transferredSongId)
               throw new Error(tr("library.couldNotReceiveSongFromParticipant"));
+            if (typeof transferredSongId === "string") localSongId = transferredSongId;
             await songsQuery.refresh();
             if (!room.room.host) {
               transition.current = false;

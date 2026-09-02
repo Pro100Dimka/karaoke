@@ -46,3 +46,17 @@ test("desktop audio uses one render quantum for realtime room playback", () => {
   const main = fs.readFileSync("electron/main.cjs", "utf8");
   expect(main).toContain('app.commandLine.appendSwitch("audio-buffer-size", "128")');
 });
+
+test("minimize releases optional hardware and restore reacquires persisted monitoring", () => {
+  const main = fs.readFileSync("electron/main.cjs", "utf8");
+  const preload = fs.readFileSync("electron/preload.cjs", "utf8");
+  const backendProcess = fs.readFileSync("electron/backend-process.cjs", "utf8");
+
+  expect(main).toMatch(/mainWindow\.on\("minimize"[\s\S]*?backend\.suspendHardware\(\)/);
+  expect(main).toMatch(/mainWindow\.on\("restore"[\s\S]*?backend\.resumeHardware\(\)/);
+  expect(main).toContain('webContents.send("app:hardware-suspension-changed", true)');
+  expect(main).toContain('webContents.send("app:hardware-suspension-changed", false)');
+  expect(preload).toContain('ipcRenderer.on("app:hardware-suspension-changed"');
+  expect(backendProcess).toContain("/audio/direct-monitor/suspend");
+  expect(backendProcess).toContain("/audio/direct-monitor/resume");
+});

@@ -161,6 +161,22 @@ class RecordingSession:
                 latency=latency,
                 callback=self._callback,
             )
+        # Some Windows/ASIO drivers negotiate a different hardware rate than
+        # the stale value PortAudio advertised during device enumeration. The
+        # stream knows the rate it actually opened with; stamp the WAV and all
+        # timeline/DSP state with that value or the voice plays too fast/slow.
+        try:
+            negotiated_rate = float(self._stream.samplerate)
+        except (AttributeError, TypeError, ValueError):
+            negotiated_rate = float(sample_rate)
+        if 8_000 <= negotiated_rate <= 384_000:
+            self.sample_rate = int(round(negotiated_rate))
+            self._max_frames = int(
+                round(self.sample_rate * config.MAX_RECORDING_DURATION_SECONDS)
+            )
+            self._quality = StudioMicrophoneProcessor(self.sample_rate, channels)
+            self._pitch = RealtimePitchShifter(self.sample_rate)
+            self._effects_chain = MonitorEffectsChain(self.sample_rate)
 
     @staticmethod
     def _capture_end_clock(time_info: object, duration: float) -> float | None:
@@ -220,10 +236,11 @@ class RecordingSession:
         try:
             self._update_signal(indata)
             if not self._paused:
-                self._enqueue(
-                    self._quality.process(indata, self.gain, self.noise_suppression).copy(),
-                    time_info,
-                )
+                # Persist exactly the frames delivered by the capture driver.
+                # Monitoring/voice DSP is intentionally not part of the source
+                # take: a processor that buffers or changes its output length
+                # would otherwise make the voice play faster or get truncated.
+                self._enqueue(indata.copy(), time_info)
         except BaseException as exc:
             self._capture_error = exc
 
@@ -231,9 +248,12 @@ class RecordingSession:
         outdata.fill(0)
         try:
             self._update_signal(indata)
-            processed = self._quality.process(indata, self.gain, self.noise_suppression)
-            if not self._paused: self._enqueue(processed.copy(), time_info)
+            # Save the unmodified microphone timeline before any realtime DSP.
+            # Effects below are only for what the singer hears; the performance
+            # mix applies the chosen settings offline to this lossless source.
+            if not self._paused: self._enqueue(indata.copy(), time_info)
             if self._monitoring_enabled:
+                processed = self._quality.process(indata, self.gain, self.noise_suppression)
                 effects = {} if self._monitor_effects_disabled else self.effects
                 monitored = self._pitch.process(processed[:, 0], effects.get("octave", 0))
                 monitored = self._effects_chain.process(
@@ -625,8 +645,9 @@ def start_recording(
             )
             session.start()
             logger.info(
-                "Recording audio started: input=%s output=%s rate=%s buffer=%s monitor=%s requested_latency=%s",
-                input_id, output_id, rate, frames, monitor, latency,
+                "Recording audio started: input=%s output=%s requested_rate=%s actual_rate=%s "
+                "buffer=%s monitor=%s requested_latency=%s",
+                input_id, output_id, rate, session.sample_rate, frames, monitor, latency,
             )
             break
         except Exception as exc:  # Audio drivers raise implementation-specific errors.
@@ -784,6 +805,7 @@ def stop_recording(session_id: str) -> models.Recording:
             session.music_gain,
             session.effects,
             playback_segments,
+            session.gain,
         )
         if recording.id:
             with _sessions_lock:
@@ -865,6 +887,7 @@ def _performance_mix_command(
     music_gain: float,
     effects: dict[str, float] | None,
     playback_segments: list[dict[str, float]] | None = None,
+    voice_gain: float = 1.0,
 ) -> list[str]:
     valid_segments = []
     for segment in playback_segments or []:
@@ -906,8 +929,10 @@ def _performance_mix_command(
         if effect is None: continue
         filters.append(effect)
         performer_label = next_label
+    final_voice_gain = max(0.0, min(4.0, float(voice_gain))) * 1.65
     filters.append(
-        f"[{performer_label}]volume=1.650000,alimiter=limit=0.95[performer-final]"
+        f"[{performer_label}]volume={final_voice_gain:.6f},"
+        "alimiter=limit=0.95[performer-final]"
     )
     filters.append(
         f"[{music_label}][performer-final]amix=inputs=2:duration=first:normalize=0,"
@@ -938,9 +963,12 @@ def _create_performance_mix_safely(
     music_gain: float,
     effects: dict[str, float] | None = None,
     playback_segments: list[dict[str, float]] | None = None,
+    voice_gain: float = 1.0,
 ) -> None:
     try:
-        _create_performance_mix(recording, song, offset_sec, music_gain, effects, playback_segments)
+        _create_performance_mix(
+            recording, song, offset_sec, music_gain, effects, playback_segments, voice_gain
+        )
     except Exception:  # noqa: BLE001 - the raw take is already committed and must remain usable
         logger.exception("Could not create performance mix for recording %s", recording.id)
 
@@ -952,6 +980,7 @@ def _create_performance_mix(
     music_gain: float,
     effects: dict[str, float] | None = None,
     playback_segments: list[dict[str, float]] | None = None,
+    voice_gain: float = 1.0,
 ) -> None:
     ffmpeg = str(config.FFMPEG_EXE)
     if not song.output_dir: return
@@ -972,6 +1001,7 @@ def _create_performance_mix(
             music_gain,
             effects,
             playback_segments,
+            voice_gain,
         )
         try:
             subprocess.run(command, capture_output=True, check=True, timeout=90)

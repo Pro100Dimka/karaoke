@@ -24,6 +24,7 @@ import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePlaybackMachine from "./hooks/usePlaybackMachine";
+import useRoutedSong from "./hooks/useRoutedSong";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
 import { transposeKey } from "./utils/data";
@@ -54,9 +55,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     { queryKey: queryKeys.songs }
   );
   const songId = location.state?.songId || null;
-  const song = songId
-    ? (songs || []).find((s) => s.id === songId)
-    : (songs || []).find((s) => s.status === "done");
+  const song = useRoutedSong(songs, songId);
   const { result, loading: resultLoading, error: resultError } = useKaraokeResult(song);
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);

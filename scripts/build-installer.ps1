@@ -1359,7 +1359,7 @@ function Stop-BuildProcesses {
 
     $stoppedAny = $false
 
-    foreach ($name in @("A&D Voice","KaraokeBackend","KaraokeAudioMonitor","KaraokeAsioBridge")) {
+    foreach ($name in @("A&D Voice","KaraokeBackend","KaraokeAsioBridge")) {
         $targets = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
         foreach ($target in $targets) {
             Stop-Process -Id $target.Id -Force -ErrorAction SilentlyContinue
@@ -1981,6 +1981,7 @@ function Build-Backend {
             "--add-data","$(Join-Path $Backend 'AI');AI",
             "--add-binary","$script:Ffmpeg;.",
             "--hidden-import","run_all",
+            "--hidden-import","app.services.monitor_worker",
             "--collect-submodules","omegaconf",
             "--collect-submodules","ml_collections",
             "--collect-submodules","beartype",
@@ -2010,54 +2011,6 @@ function Build-Backend {
             throw "KaraokeBackend PyInstaller build failed."
         }
 
-        Write-Host ""
-        Write-Host "Building KaraokeAudioMonitor.exe..."
-        Write-Host ""
-
-        $monitorArgs = @(
-            "-m","PyInstaller",
-            "--log-level","ERROR",
-            "--noconfirm"
-        )
-
-        if ($Mode -eq "clean") {
-            $monitorArgs += "--clean"
-        }
-
-        $monitorArgs += @(
-            # Keep runtime beside the worker: onefile unpacked a large archive
-            # on every monitoring start, consuming the audio startup deadline.
-            "--onedir",
-            "--contents-directory","audio-monitor-runtime",
-            "--name","KaraokeAudioMonitor",
-            "--distpath",(Join-Path $Build "backend\monitor-dist"),
-            "--workpath",(Join-Path $Build "backend\audio-monitor"),
-            "--specpath",(Join-Path $Build "backend\spec"),
-            "--paths",$Backend,
-            # scipy.signal exposes optional Array API adapters for these AI
-            # frameworks. The live monitor never imports them, but PyInstaller
-            # otherwise follows the optional adapters and embeds CUDA/Torch.
-            "--exclude-module","tensorflow",
-            "--exclude-module","torch",
-            "--exclude-module","torchaudio",
-            "--exclude-module","torchvision",
-            "--exclude-module","jax",
-            "--exclude-module","jaxlib",
-            "--exclude-module","tkinter",
-            "--exclude-module","_tkinter",
-            "--exclude-module","idlelib",
-            "--exclude-module","turtledemo",
-            "app\services\monitor_worker.py"
-        )
-
-        & $Python @monitorArgs
-
-        if ($LASTEXITCODE -ne 0) {
-            throw "KaraokeAudioMonitor build failed."
-        }
-        $monitorDist = Join-Path $Build "backend\monitor-dist\KaraokeAudioMonitor"
-        Copy-Item -LiteralPath (Join-Path $monitorDist "KaraokeAudioMonitor.exe") -Destination $BackendDist -Force
-        Copy-Item -LiteralPath (Join-Path $monitorDist "audio-monitor-runtime") -Destination $BackendDist -Recurse -Force
     }
     finally {
         Pop-Location
@@ -2065,8 +2018,6 @@ function Build-Backend {
 
     Remove-LegacyEmbeddedAI
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
-    Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
-    Require-File (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip") "Audio monitor runtime"
 }
 
 function Build-Asio {
@@ -2119,7 +2070,6 @@ function Finalize-Asio {
     Sign-File (Join-Path $BackendDist "KaraokeWasapi.dll")
 
     Sign-File (Join-Path $BackendDist "KaraokeBackend.exe")
-    Sign-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe")
     Sign-File (Join-Path $BackendDist "KaraokeAsioBridge.exe")
 }
 
@@ -2144,8 +2094,6 @@ function Get-TreeSignature([string]$Path) {
 
 function Verify-BackendBase {
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
-    Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
-    Require-File (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip") "Audio monitor runtime"
     Require-File (Join-Path $BackendDist "_internal\ffmpeg.exe") "Bundled FFmpeg"
     Require-File (Join-Path $BackendDist "KaraokeAsioBridge.exe") "KaraokeAsioBridge.exe"
     Require-File (Join-Path $BackendDist "KaraokeWasapi.dll") "KaraokeWasapi.dll"
@@ -2189,8 +2137,6 @@ function Verify-Unpacked {
         Require-File $PackagedSceneVideo "Karaoke scene video"
     }
     Require-File (Join-Path $PackagedBackend "KaraokeBackend.exe") "Electron backend"
-    Require-File (Join-Path $PackagedBackend "KaraokeAudioMonitor.exe") "Electron audio monitor"
-    Require-File (Join-Path $PackagedBackend "audio-monitor-runtime\base_library.zip") "Electron audio monitor runtime"
     Require-File (Join-Path $PackagedBackend "KaraokeAsioBridge.exe") "Electron ASIO bridge"
     Require-File (Join-Path $PackagedBackend "KaraokeWasapi.dll") "Electron shared WASAPI library"
 
@@ -3061,9 +3007,7 @@ function Parallel-FullBuild {
         "backend" `
         $script:BackendFingerprint `
         @(
-            (Join-Path $BackendDist "KaraokeBackend.exe"),
-            (Join-Path $BackendDist "KaraokeAudioMonitor.exe"),
-            (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip")
+            (Join-Path $BackendDist "KaraokeBackend.exe")
         ) `
         -Force:$force
 
@@ -3280,9 +3224,7 @@ try {
         $script:BackendFingerprint `
         @($legacyBackendFp) `
         @(
-            (Join-Path $BackendDist "KaraokeBackend.exe"),
-            (Join-Path $BackendDist "KaraokeAudioMonitor.exe"),
-            (Join-Path $BackendDist "audio-monitor-runtime\base_library.zip")
+            (Join-Path $BackendDist "KaraokeBackend.exe")
         ))
 
     [void](Migrate-StateIfCompatible `

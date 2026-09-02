@@ -238,7 +238,21 @@ def _existing_backend_is_healthy(host: str, port: int) -> bool:
     except Exception:
         return False
 
+def _run_audio_monitor_mode() -> None:
+    if "--audio-monitor" in sys.argv:
+        # The installed backend executable doubles as the latency-sensitive
+        # monitor worker. It still runs as a separate process, so a driver
+        # failure cannot take down the HTTP/AI backend, but no second bundled
+        # Python executable or runtime is needed.
+        from app.services import monitor_worker
+
+        sys.argv = [sys.argv[0], *[arg for arg in sys.argv[1:] if arg != "--audio-monitor"]]
+        raise SystemExit(monitor_worker.main())
+
+
 def main() -> None:
+    _run_audio_monitor_mode()
+
     if "--install-ai-models" in sys.argv:
         from AI.install_models import main as install_models
 

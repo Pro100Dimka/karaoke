@@ -350,6 +350,15 @@ function createWindow() {
   mainWindow.on("close", persistWindowState);
   mainWindow.on("move", scheduleWindowStatePersist);
   mainWindow.on("resize", scheduleWindowStatePersist);
+  mainWindow.on("minimize", () => {
+    mainWindow?.webContents.send("app:hardware-suspension-changed", true);
+    lighting.configure(false).catch(() => {});
+    backend.suspendHardware().catch(() => {});
+  });
+  mainWindow.on("restore", () => {
+    mainWindow?.webContents.send("app:hardware-suspension-changed", false);
+    backend.resumeHardware().catch(() => {});
+  });
   mainWindow.on("maximize", scheduleWindowStatePersist);
   mainWindow.on("unmaximize", () => {
     applyPendingVisibleBounds();

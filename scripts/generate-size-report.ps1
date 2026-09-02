@@ -16,6 +16,18 @@ if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
     throw "Directory not found: $Directory"
 }
 
+function Get-Sha256Hex([string]$Path) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace("-", "")
+    }
+    finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
+
 $buckets = [ordered]@{
     "models"             = '(^|/)(models|AI[/\\](models|checkpoints))(/|$)'
     "Python packages"    = '(^|/)resources/backend(/|$)'
@@ -44,7 +56,7 @@ foreach ($file in $files) {
     # Only worth hashing files large enough for a duplicate to matter --
     # skip tiny files to keep this fast on a full packaged tree.
     if ($file.Length -gt 4096) {
-        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        $hash = Get-Sha256Hex $file.FullName
         if (-not $hashGroups.ContainsKey($hash)) { $hashGroups[$hash] = New-Object System.Collections.Generic.List[object] }
         $hashGroups[$hash].Add([PSCustomObject]@{ Path = $relative; Bytes = $file.Length })
     }

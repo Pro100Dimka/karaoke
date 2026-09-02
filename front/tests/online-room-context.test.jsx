@@ -1101,6 +1101,11 @@ describe("online room provider", () => {
       songId: "song-1",
       revision: "sha256:" + "a".repeat(64)
     };
+    mocks.importSongPackage.mockResolvedValueOnce({ id: "host-local-song" });
+    mocks.getSongRevision.mockImplementationOnce(async (songId) => {
+      if (songId !== "host-local-song") throw new Error("remote id is not local");
+      return { revision: expectedFile.revision };
+    });
     expect(voice.canAcceptFile("peer", expectedFile)).toBe(true);
     expect(voice.canAcceptFile("attacker", expectedFile)).toBe(false);
 
@@ -1113,7 +1118,7 @@ describe("online room provider", () => {
         filename: "song-1.karaoke.zip"
       });
     });
-    expect(await syncResult).toBe(true);
+    expect(await syncResult).toBe("host-local-song");
     expect(mocks.importSongPackage).toHaveBeenCalledWith(expect.any(Blob), "song-1.karaoke.zip", {
       expectedRevision: expectedFile.revision
     });

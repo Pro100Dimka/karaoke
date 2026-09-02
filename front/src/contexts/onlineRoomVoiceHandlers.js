@@ -148,11 +148,12 @@ export function createVoiceMeshHandlers({
         stage: "importing",
         percent: 100
       });
-      await api.importSongPackage(blob, metadata.filename, {
+      const importedSong = await api.importSongPackage(blob, metadata.filename, {
         ...(signal ? { signal } : {}),
         expectedRevision: metadata.revision
       });
-      const imported = await api.getSongRevision(metadata.songId);
+      const localSongId = importedSong?.id || metadata.songId;
+      const imported = await api.getSongRevision(localSongId);
       if (imported?.revision !== metadata.revision)
         throw new Error(translateSaved("room.importedSongVersionDoesNotMatchTheRoomVersion"));
       if (!isCurrentConnection() || librarySyncRef.current !== pending) return false;
@@ -163,7 +164,7 @@ export function createVoiceMeshHandlers({
         stage: "complete",
         percent: 100
       });
-      pending.resolve?.();
+      pending.resolve?.(localSongId);
       return true;
     } catch (error) {
       if (signal?.aborted) return false;

@@ -193,6 +193,25 @@ test("Windows LampArray receives five music zones while solid providers keep one
   await c.frame({ active: true, rgb: [30, 40, 50], zones });
   expect(windows.request).toHaveBeenLastCalledWith(1, ...zones.flat());
 });
+test("embedded zoned keyboards receive all five music zones", async () => {
+  const windows = {
+    request: vi.fn(async () => ({ state: "no_devices", count: 0 })),
+    usbRequest: vi.fn(async () => ({ state: "ready", count: 1 }))
+  };
+  const c = controller({ windows, now: () => 10000 });
+  const zones = [
+    [10, 20, 30],
+    [20, 30, 40],
+    [30, 40, 50],
+    [20, 30, 40],
+    [10, 20, 30]
+  ];
+
+  await c.configure(true);
+  await c.frame({ active: true, rgb: [30, 40, 50], zones });
+
+  expect(windows.usbRequest).toHaveBeenLastCalledWith(1, ...zones.flat());
+});
 test("missing OpenRGB does not hide native no-devices diagnostics", async () => {
   const c = controller({
     windows: { request: async () => ({ state: "no_devices", count: 0 }) },
@@ -328,6 +347,47 @@ test("music lighting reacts smoothly and stays inside the selected theme palette
   expect(frames[3][0]).toBeGreaterThan(frames[1][0]);
   expect(frames[5][0]).toBeGreaterThan(0);
 });
+test("music mode changes only theme brightness, never mixes in a different hue", () => {
+  let state;
+  const frames = [];
+  for (const level of [0.05, 0.95, 0.2, 0.8, 0.1]) {
+    const next = advanceMusicLighting(
+      state,
+      { active: true, level, transient: true },
+      ["#ff0000", "#00ffcc"],
+      1,
+      80
+    );
+    state = next.state;
+    frames.push(next.rgb);
+  }
+
+  expect(frames.every(([, green, blue]) => green === 0 && blue === 0)).toBe(true);
+});
+test("alternating percussion cannot flash LED channels by more than eight steps per frame", () => {
+  let state;
+  const frames = [];
+  for (const level of [0.08, 0.95, 0.1, 0.9, 0.12, 0.85, 0.08]) {
+    const next = advanceMusicLighting(
+      state,
+      { active: true, level, transient: true },
+      ["#ff174f", "#a20b1d"],
+      1,
+      80
+    );
+    state = next.state;
+    frames.push(next.rgb);
+  }
+  for (let index = 1; index < frames.length; index += 1) {
+    expect(
+      Math.max(
+        ...frames[index].map((channel, channelIndex) =>
+          Math.abs(channel - frames[index - 1][channelIndex])
+        )
+      )
+    ).toBeLessThanOrEqual(8);
+  }
+});
 test("five-zone keyboards bloom from the centre without leaving the theme color", () => {
   const zones = musicLightingZones([180, 30, 60], 0.8);
   expect(zones).toHaveLength(5);
@@ -401,7 +461,9 @@ test("radio transient envelope does not saturate changing kick and clap levels",
     state = next.state;
     frames.push(next.rgb[0]);
   }
-  expect(Math.max(...frames) - Math.min(...frames)).toBeGreaterThanOrEqual(35);
+  // The pulse stays clearly visible without restoring the former 18-step
+  // per-frame flash that was uncomfortable on full-keyboard RGB firmware.
+  expect(Math.max(...frames) - Math.min(...frames)).toBeGreaterThanOrEqual(28);
   expect(frames[2]).toBeGreaterThan(frames[0]);
   expect(frames[4]).toBeLessThan(frames[3]);
   expect(frames.every((value, index) => index === 0 || Math.abs(value - frames[index - 1]) <= 18)).toBe(true);

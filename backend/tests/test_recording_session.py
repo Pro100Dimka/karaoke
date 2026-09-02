@@ -52,12 +52,36 @@ def test_session_initialization_clamps_levels_and_selects_stream(monkeypatch):
     raises(RuntimeError, lambda: make_session(monkeypatch, monitoring_enabled=True), match='No output')
 
 
-def test_audio_callbacks_queue_clipped_copies(monkeypatch):
+def test_session_stamps_wav_with_the_sample_rate_reported_by_the_open_driver(monkeypatch):
+    """A driver-negotiated rate must win or the saved voice plays at the wrong speed."""
+    stream = Mock()
+    stream.samplerate = 44_100.0
+    monkeypatch.setattr(recording_service.sd, "InputStream", Mock(return_value=stream))
+
+    session = recording_service.RecordingSession(
+        session_id="session",
+        song_id="song",
+        device_id=1,
+        output_device_id=2,
+        sample_rate=48_000,
+        channels=1,
+        gain=1.0,
+        monitoring_enabled=False,
+    )
+
+    assert session.sample_rate == 44_100
+    assert session._quality.sample_rate == 44_100
+    assert session._effects_chain.sample_rate == 44_100
+    assert session._max_frames == 44_100 * recording_service.config.MAX_RECORDING_DURATION_SECONDS
+
+
+def test_audio_callbacks_save_raw_copies_and_process_only_monitor_output(monkeypatch):
     session, _stream = make_session(monkeypatch, gain=2)
     input_data = np.array([[0.75], [-0.75]], dtype=np.float32)
     session._callback(input_data, 2, None, None)
     recorded = session._queue.get_nowait()
-    assert (recorded.shape == input_data.shape) and (np.max(np.abs(recorded)) <= 0.985) and (not np.allclose(recorded, input_data * 2))
+    assert np.array_equal(recorded, input_data)
+    assert recorded is not input_data
 
     output = np.empty((2, 2), dtype=np.float32)
     session._monitoring_enabled = True
@@ -67,6 +91,28 @@ def test_audio_callbacks_queue_clipped_copies(monkeypatch):
     output.fill(9)
     session._monitoring_callback(input_data, output, 2, None, None)
     assert not output.any()
+
+
+def test_recording_keeps_raw_microphone_frames_when_monitor_dsp_changes_length(monkeypatch):
+    """Monitor DSP must never shorten, resample, or otherwise rewrite the saved take."""
+    patch_attrs(
+        monkeypatch,
+        recording_service.sd,
+        query_devices=Mock(return_value={"max_output_channels": 2}),
+        Stream=Mock(return_value=Mock()),
+    )
+    session, _stream = make_session(monkeypatch, monitoring_enabled=True)
+    input_data = np.arange(8, dtype=np.float32).reshape(8, 1) / 16
+    # Reproduce a processor/driver path that returns fewer frames than arrived.
+    session._quality.process = Mock(return_value=np.full((3, 1), 0.25, dtype=np.float32))
+    output = np.empty((8, 2), dtype=np.float32)
+
+    session._monitoring_callback(input_data, output, 8, None, None)
+
+    recorded = session._queue.get_nowait()
+    assert recorded.shape == input_data.shape
+    assert np.array_equal(recorded, input_data)
+    assert session._timeline_frames == len(input_data)
 
 
 def test_callback_stops_enqueueing_once_writer_has_died(monkeypatch):
@@ -95,10 +141,11 @@ def test_audio_callbacks_expose_dsp_failures_and_silence_monitor_output(monkeypa
     session._quality.process = Mock(side_effect=failure)
     input_data = np.zeros((4, 1), dtype=np.float32)
 
+    # An input-only recording no longer invokes monitor DSP at all.
     session._callback(input_data, 4, None, None)
-    assert session._capture_error is failure
+    assert session._capture_error is None
+    assert np.array_equal(session._queue.get_nowait(), input_data)
 
-    session._capture_error = None
     output = np.full((4, 2), 1.0, dtype=np.float32)
     session._monitoring_callback(input_data, output, 4, None, None)
     assert session._capture_error is failure
@@ -436,6 +483,7 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
         song_id="song",
         playback_offset_sec=1.5,
         music_gain=0.8,
+        gain=1.4,
         effects={"reverb": 0.2},
         playback_segments=segments,
     )
@@ -454,7 +502,9 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
         '[{"start_recording_sec":0.25,"start_playback_sec":1.5,"end_recording_sec":3.0}]'
     )
     database.add.assert_called_once_with(result)
-    mix.assert_called_once_with(result, current_song, 1.25, 0.8, {"reverb": 0.2}, segments)
+    mix.assert_called_once_with(
+        result, current_song, 1.25, 0.8, {"reverb": 0.2}, segments, 1.4
+    )
     session.close.assert_called_once_with()
     database.close.assert_called_once_with()
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import useHardwareSuspended from "../../../hooks/useHardwareSuspended";
 import { acquireMicrophone } from "../../../services/microphoneCapture";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 import { detectMidiFromAnalyser } from "../utils/pitch";
@@ -8,12 +9,13 @@ export default function usePitchDetection({
   monitorInputDeviceId,
   getLocalVoiceStream
 }) {
+  const hardwareSuspended = useHardwareSuspended();
   const [sungMidi, setSungMidi] = useState(null);
   const [isPitchDetected, setIsPitchDetected] = useState(false);
   const [isPitchAttacking, setIsPitchAttacking] = useState(false);
   const [pitchRestProgress, setPitchRestProgress] = useState(1);
   useEffect(() => {
-    if (!isPlaying || !navigator.mediaDevices?.getUserMedia) {
+    if (!isPlaying || hardwareSuspended || !navigator.mediaDevices?.getUserMedia) {
       setSungMidi(null);
       setIsPitchDetected(false);
       setIsPitchAttacking(false);
@@ -162,6 +164,6 @@ export default function usePitchDetection({
       microphoneLease?.release();
       if (ownsContext) closeAudioContextQuietly(context);
     };
-  }, [isPlaying, monitorInputDeviceId, getLocalVoiceStream]);
+  }, [isPlaying, hardwareSuspended, monitorInputDeviceId, getLocalVoiceStream]);
   return { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress };
 }

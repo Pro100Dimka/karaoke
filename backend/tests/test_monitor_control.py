@@ -90,6 +90,43 @@ def test_legacy_http_auto_buffer_cannot_override_saved_buffer(monkeypatch):
                                   wasapi_mode="shared")
 
 
+def test_hardware_suspend_releases_monitor_without_changing_saved_preference(monkeypatch):
+    current = settings(monitoring_enabled=True, noise_suppression=0.35, octave=0)
+    db = Mock()
+    stop = Mock()
+    resume = Mock()
+    monkeypatch.setattr(audio_service, "get_settings", lambda _db: current)
+    monkeypatch.setattr(audio_service, "suspend_monitoring", stop)
+    monkeypatch.setattr(audio_service, "resume_monitoring", resume)
+    app = FastAPI()
+    app.include_router(audio.router)
+    app.dependency_overrides[get_db] = lambda: db
+
+    with TestClient(app) as client:
+        suspended = client.post("/audio/direct-monitor/suspend")
+        restored = client.post("/audio/direct-monitor/resume")
+
+    assert suspended.status_code == 200
+    assert restored.status_code == 202
+    assert suspended.json()["monitoring_enabled"] is True
+    assert restored.json()["monitoring_enabled"] is True
+    stop.assert_called_once_with()
+    resume.assert_called_once_with(current)
+
+
+def test_monitor_requests_stay_dormant_while_window_hardware_is_suspended(control, monkeypatch):
+    monkeypatch.setattr(audio_service, "_hardware_suspended", True)
+    configure = Mock()
+    monkeypatch.setattr(audio_service, "configure_monitoring", configure)
+
+    audio_service.request_monitoring(settings(monitoring_enabled=True))
+    with control.execution:
+        pass
+
+    configure.assert_not_called()
+    assert control.snapshot()["state"] == "idle"
+
+
 def test_stop_during_device_enumeration_never_launches_worker(control, monkeypatch):
     entered, release, finished = threading.Event(), threading.Event(), threading.Event()
 
@@ -330,6 +367,30 @@ def test_asio_buffer_estimate_is_preserved_when_driver_rejects_latency_query(con
     assert status["latency_source"] == "asio-buffer-estimate"
     assert status["input_latency_ms"] == pytest.approx(64 * 1000 / 48000)
     assert status["output_latency_ms"] == pytest.approx(64 * 1000 / 48000)
+
+
+def test_unusable_asio_driver_falls_back_to_shared_monitor(control, monkeypatch):
+    from app.services import recording_service
+
+    current = settings(
+        audio_driver="asio", asio_driver_name="Realtek ASIO", monitoring_enabled=True
+    )
+    shared = Mock()
+    monkeypatch.setattr(recording_service, "apply_monitor_settings", lambda *_: False)
+    monkeypatch.setattr(
+        audio_service,
+        "_start_asio_monitor",
+        Mock(side_effect=RuntimeError("Could not start ASIO full-duplex stream")),
+    )
+    monkeypatch.setattr(audio_service, "_start_shared_monitor", shared, raising=False)
+
+    audio_service.configure_monitoring(current)
+
+    shared.assert_called_once_with(current, driver="auto")
+    status = control.snapshot()
+    assert status["fallback_count"] == 1
+    assert status["fallback_driver"] == "Realtek ASIO"
+    assert "full-duplex" in status["fallback_reason"]
 
 
 def test_split_queue_statistics_are_separate_and_reset_after_fallback(control):

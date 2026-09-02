@@ -11,6 +11,7 @@ import greenBackdropUrl from "../../../assets/karaoke/green.webp?inline";
 import lightBackdropUrl from "../../../assets/karaoke/light.webp?inline";
 // eslint-disable-next-line import/no-unresolved -- resolved by Vite's asset loaders
 import violetBackdropUrl from "../../../assets/karaoke/violet.webp?inline";
+import useHardwareSuspended from "../../../hooks/useHardwareSuspended";
 // eslint-disable-next-line import/no-unresolved -- resolved by Vite's asset loaders
 import qftRuntimeUrl from "./qftRuntime.js?worker&url";
 // eslint-disable-next-line import/no-unresolved -- resolved by Vite's asset loaders
@@ -37,6 +38,7 @@ function makeEmbeddedSource(source) {
 }
 
 export default function QuantumFieldBackdrop() {
+  const suspended = useHardwareSuspended();
   const source = useMemo(() => makeEmbeddedSource(qftSource), []);
   const frameRef = useRef(null);
   // A freshly created iframe document paints the browser's own opaque white
@@ -47,6 +49,7 @@ export default function QuantumFieldBackdrop() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (suspended) return undefined;
     const frame = frameRef.current;
 
     const sendThemePalette = () => {
@@ -161,7 +164,9 @@ export default function QuantumFieldBackdrop() {
       cancelAnimationFrame(pointerFrame);
       cancelAnimationFrame(radioFrame);
     };
-  }, []);
+  }, [suspended]);
+
+  if (suspended) return null;
 
   return (
     <div

@@ -5,6 +5,7 @@ import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-cont
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
 import { resolveMicrophoneDevice } from "./microphoneDevice";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
+import { suspendVoiceMicrophone } from "./onlineVoiceHardwareLifecycle";
 import { updatePeerIceServers } from "./onlineVoicePeerConfiguration";
 import OnlineVoicePeerRecovery from "./onlineVoicePeerRecovery";
 // Audio is peer-to-peer; the signaling Worker never stores microphone data.
@@ -200,9 +201,7 @@ export default class OnlineVoiceMesh {
     return startPromise;
   }
 
-  getMeterStream() {
-    return this.microphoneGraph?.rawStream || this.stream;
-  }
+  getMeterStream() { return this.microphoneGraph?.rawStream || this.stream; }
 
   getOutgoingStream(participantId) {
     return this.peerEffectsEnabled.get(participantId) && this.effectsStream
@@ -590,9 +589,9 @@ export default class OnlineVoiceMesh {
     });
   }
 
-  setupDataChannel(...args) {
-    return this.transfers.setupDataChannel(...args);
-  }
+  suspendMicrophone() { return suspendVoiceMicrophone(this); }
+
+  setupDataChannel(...args) { return this.transfers.setupDataChannel(...args); }
 
   waitForDataChannel(...args) {
     return this.transfers.waitForDataChannel(...args);

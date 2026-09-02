@@ -26,6 +26,8 @@ set "URL=https://api.nuget.org/v3-flatcontainer/python/%VER%/python.%VER%.nupkg"
 set "AI=%ROOT%scripts\install-ai-models.bat"
 set "ASIO=%ROOT%scripts\install-asio-sdk.bat"
 set "JOBS=%TEMP%\advoice-dev-%RANDOM%-%RANDOM%"
+set "NODE_ENV_FILE=%TEMP%\advoice-node-%RANDOM%-%RANDOM%.path"
+set "FFMPEG_ENV_FILE=%TEMP%\advoice-ffmpeg-%RANDOM%-%RANDOM%.path"
 
 set "PYTHONHOME="
 set "PYTHONPATH="
@@ -52,6 +54,23 @@ for %%F in ("%AI%" "%ASIO%") do if not exist "%%~F" (
     echo   %%~F
     goto :err
 )
+
+echo Checking the project Node.js runtime...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\ensure-node.ps1" -Root "%ROOT%." -OutputEnvironmentFile "%NODE_ENV_FILE%"
+if errorlevel 1 goto :err
+if not exist "%NODE_ENV_FILE%" goto :err
+for /f "usebackq delims=" %%P in ("%NODE_ENV_FILE%") do set "PATH=%%P;%PATH%"
+del /q "%NODE_ENV_FILE%" >nul 2>&1
+where node.exe >nul 2>&1 || goto :err
+where npm.cmd >nul 2>&1 || goto :err
+
+echo Checking native build tools and FFmpeg...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\ensure-dev-tools.ps1" -Root "%ROOT%." -OutputEnvironmentFile "%FFMPEG_ENV_FILE%"
+if errorlevel 1 goto :err
+if not exist "%FFMPEG_ENV_FILE%" goto :err
+for /f "usebackq delims=" %%P in ("%FFMPEG_ENV_FILE%") do set "PATH=%%P;%PATH%"
+del /q "%FFMPEG_ENV_FILE%" >nul 2>&1
+where ffmpeg.exe >nul 2>&1 || goto :err
 
 if "%PREPARE_ONLY%"=="0" (
     call :stop_dev_processes
@@ -165,9 +184,6 @@ echo ============================================================
 echo.
 
 cd /d "%FRONT%" || goto :err
-where node >nul 2>nul || (echo [ERROR] Node.js is required. & goto :err)
-for /f %%V in ('node -p "process.versions.node"') do set "NODE_VER=%%V"
-node -e "const [a,b,c]=process.versions.node.split('.').map(Number);const ok=(a===22&&(b>18||b===18&&c>=0))||(a===24&&(b>11||b===11&&c>=0))||a>24;process.exit(ok?0:1)" || (echo [ERROR] Node.js 22.18+ ^(or 24.11+^) is required. Found !NODE_VER! & goto :err)
 call npm run dev:electron
 exit /b %errorlevel%
 
@@ -409,6 +425,8 @@ rem ERROR
 rem ============================================================================
 
 :err
+if defined NODE_ENV_FILE del /q "%NODE_ENV_FILE%" >nul 2>&1
+if defined FFMPEG_ENV_FILE del /q "%FFMPEG_ENV_FILE%" >nul 2>&1
 echo.
 echo ============================================================
 echo [ERROR] Development environment could not be started.

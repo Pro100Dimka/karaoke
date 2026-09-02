@@ -152,3 +152,25 @@ test("library backdrop explicitly disposes iframe audio, RAF and WebGL resources
   expect(runtime).toContain("cancelAnimationFrame(id)");
   expect(runtime).toContain("target.removeEventListener?.(type, handler, options)");
 });
+
+test("library backdrop releases its microphone and WebGL iframe while the app is minimized", () => {
+  let notify;
+  globalThis.electronAPI = {
+    isElectron: true,
+    onHardwareSuspensionChange: (callback) => {
+      notify = callback;
+      return () => {};
+    }
+  };
+  const { container } = render(<LibraryBackdrop />);
+  const frame = container.querySelector("iframe");
+  const postMessage = vi.spyOn(frame.contentWindow, "postMessage");
+
+  act(() => notify(true));
+  expect(postMessage).toHaveBeenCalledWith({ type: "QFT_DISPOSE" }, "*");
+  expect(container.querySelector("iframe")).toBeNull();
+
+  act(() => notify(false));
+  expect(container.querySelector("iframe")).not.toBeNull();
+  delete globalThis.electronAPI;
+});

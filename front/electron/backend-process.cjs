@@ -395,11 +395,37 @@ function createBackendProcess({
     return backendStopPromise;
   }
 
+  function setHardwareSuspended(suspended) {
+    return new Promise((resolve) => {
+      const pathname = suspended
+        ? "/audio/direct-monitor/suspend"
+        : "/audio/direct-monitor/resume";
+      const request = http.request(`${runtimeBackendUrl}${pathname}`, {
+        method: "POST",
+        timeout: 1200,
+        headers: { "X-ADVoice-Token": BACKEND_API_TOKEN }
+      });
+      const finish = () => resolve(false);
+      request.on("response", (response) => {
+        response.resume();
+        response.once("end", () => resolve(response.statusCode < 400));
+      });
+      request.on("error", finish);
+      request.on("timeout", () => {
+        request.destroy();
+        finish();
+      });
+      request.end();
+    });
+  }
+
   return {
     configureRuntimeBackendEndpoint,
     resolveSongOutputDir,
     startBackend,
     stopBackend,
+    suspendHardware: () => setHardwareSuspended(true),
+    resumeHardware: () => setHardwareSuspended(false),
     reportBackendError,
     get url() {
       return runtimeBackendUrl;

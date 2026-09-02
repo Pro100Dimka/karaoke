@@ -1,4 +1,5 @@
 #include "usb_lighting.h"
+#include "logitech_g213_protocol.h"
 #include "vial_protocol.h"
 #include "winbond_protocol.h"
 #include <hidapi.h>
@@ -41,12 +42,33 @@ struct VialDevice {
     }) {}
     ~VialDevice() { keyboard.release(); hid_close(handle); }
 };
+struct LogitechG213Device {
+    hid_device* handle;
+    explicit LogitechG213Device(hid_device* h) : handle(h) {}
+    ~LogitechG213Device() { hid_close(handle); }
+    bool frame(const std::array<int, 15>& colors) {
+        std::array<unsigned char, 20> response{};
+        for (unsigned zone = 1; zone <= 5; ++zone) {
+            const auto offset = (zone - 1) * 3;
+            const auto packet = logitech_g213_lighting::direct(
+                zone, uint8_t(colors[offset]), uint8_t(colors[offset + 1]),
+                uint8_t(colors[offset + 2]));
+            if (hid_write(handle, packet.data(), packet.size()) != int(packet.size())) return false;
+            // The firmware acknowledges every direct-zone command. Draining
+            // it prevents later updates from stalling behind old replies.
+            if (hid_read_timeout(handle, response.data(), response.size(), 100) < 0) return false;
+        }
+        return true;
+    }
+};
 std::vector<std::unique_ptr<VialDevice>> vials;
 std::vector<std::unique_ptr<WinbondDevice>> winbonds;
+std::vector<std::unique_ptr<LogitechG213Device>> logitech_g213;
 std::vector<uint8_t> wooting;
 bool wooting_owned = false;
 bool wooting_failed = false;
 void release() {
+    logitech_g213.clear();
     winbonds.clear();
     vials.clear();
     if (wooting_owned) {
@@ -62,7 +84,7 @@ void release() {
 }
 
 // Called only by the serialized native worker, never by the renderer/audio thread.
-UsbLightingStatus usb_lighting_request(int action, int r, int g, int b) {
+UsbLightingStatus usb_lighting_request(int action, const std::array<int, 15>& colors) {
     if (action == 2) { release(); return {}; }
     bool unsupported = false;
     if (action == 0) {
@@ -76,6 +98,16 @@ UsbLightingStatus usb_lighting_request(int action, int r, int g, int b) {
         auto* list = hid_enumerate(0, 0);
         unsigned inspected = 0;
         for (auto* item = list; item && inspected < 8; item = item->next) {
+            if (logitech_g213_lighting::endpoint(item->vendor_id, item->product_id,
+                                                  item->usage_page, item->usage,
+                                                  item->interface_number)) {
+                ++inspected;
+                if (auto* handle = hid_open_path(item->path))
+                    logitech_g213.push_back(std::make_unique<LogitechG213Device>(handle));
+                else
+                    unsupported = true;
+                continue;
+            }
             if (winbond_lighting::endpoint(item->vendor_id, item->product_id, item->usage_page, item->usage, item->interface_number)) {
                 ++inspected;
                 if (auto* handle = hid_open_path(item->path)) {
@@ -95,6 +127,11 @@ UsbLightingStatus usb_lighting_request(int action, int r, int g, int b) {
         }
         hid_free_enumeration(list);
     } else if (action == 1) {
+        for (auto it = logitech_g213.begin(); it != logitech_g213.end();) {
+            if ((*it)->frame(colors)) ++it;
+            else it = logitech_g213.erase(it);
+        }
+        const int r = colors[0], g = colors[1], b = colors[2];
         for (auto it = winbonds.begin(); it != winbonds.end();) {
             if ((*it)->keyboard.frame(uint8_t(r), uint8_t(g), uint8_t(b))) ++it;
             else it = winbonds.erase(it);
@@ -113,6 +150,7 @@ UsbLightingStatus usb_lighting_request(int action, int r, int g, int b) {
             if (!wooting_rgb_array_set_full(colors) || !wooting_rgb_array_update_keyboard()) { wooting_failed = true; break; }
         }
     }
-    const auto count = uint32_t(winbonds.size() + vials.size() + (wooting_failed ? 0 : wooting.size()));
+    const auto count = uint32_t(logitech_g213.size() + winbonds.size() + vials.size() +
+                                (wooting_failed ? 0 : wooting.size()));
     return {count, count ? "ready" : unsupported ? "unsupported" : "no_devices"};
 }

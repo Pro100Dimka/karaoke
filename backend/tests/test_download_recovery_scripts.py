@@ -55,6 +55,59 @@ def test_prepare_only_does_not_stop_running_development_instance():
     assert "\\.vscode\\extensions\\" in script
 
 
+def test_fresh_clone_bootstraps_the_pinned_node_before_frontend_jobs():
+    script = project_text("start-dev.bat", encoding="utf-8-sig")
+    bootstrap = project_text("scripts/ensure-node.ps1", encoding="utf-8-sig")
+    package = json.loads(project_text("front/package.json", encoding="utf-8-sig"))
+    pinned = project_text("front/.nvmrc", encoding="utf-8-sig").strip()
+
+    assert pinned == "22.18.0"
+    assert package["engines"]["node"] == ">=22.18.0 <23 || >=24.11.0"
+    assert_contains(
+        script,
+        'set "NODE_ENV_FILE=%TEMP%\\advoice-node-',
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\\ensure-node.ps1" -Root "%ROOT%."',
+        'for /f "usebackq delims=" %%P in ("%NODE_ENV_FILE%") do set "PATH=%%P;%PATH%"',
+    )
+    assert script.index("ensure-node.ps1") < script.index("call :start_job front")
+    assert_contains(
+        bootstrap,
+        "nvm.exe",
+        "nvm install",
+        "nvm use",
+        "nvm root",
+        "Split-Path -Parent $nvm.Source",
+        '"v$RequiredVersion\\node.exe"',
+        "nodejs.org/dist/v$RequiredVersion",
+        "SHASUMS256.txt",
+        "Get-FileHash",
+        "Expand-Archive",
+        "npm.cmd",
+    )
+
+
+def test_fresh_clone_bootstraps_native_build_tools_and_ffmpeg():
+    script = project_text("start-dev.bat", encoding="utf-8-sig")
+    tools = project_text("scripts/ensure-dev-tools.ps1", encoding="utf-8-sig")
+    assert_contains(
+        script,
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\\ensure-dev-tools.ps1" -Root "%ROOT%."',
+        'set "FFMPEG_ENV_FILE=%TEMP%\\advoice-ffmpeg-',
+        'for /f "usebackq delims=" %%P in ("%FFMPEG_ENV_FILE%") do set "PATH=%%P;%PATH%"',
+    )
+    assert script.index("ensure-dev-tools.ps1") < script.index("call :start_job front")
+    assert_contains(
+        tools,
+        "vswhere.exe",
+        "Microsoft.VisualStudio.Workload.VCTools",
+        "Microsoft.VisualStudio.Component.VC.CMake.Project",
+        "https://aka.ms/vs/17/release/vs_BuildTools.exe",
+        "ffmpeg-master-latest-win64-gpl.zip",
+        "Get-FileHash",
+        "ffmpeg.exe",
+    )
+
+
 def test_build_installer_prepares_gitignored_downloads_before_build():
     script = project_text("build-installer.bat", encoding="utf-8-sig")
     assert_contains(script, 'set "KARAOKE_PREPARE_DIRECTML=1"', 'call "%~dp0start-dev.bat" --prepare-only')
@@ -139,18 +192,12 @@ def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen():
     assert_excludes(runner, 'importlib.import_module("prepro")')
 
 
-def test_audio_monitor_packaging_excludes_unused_ai_frameworks():
+def test_audio_monitor_is_an_internal_backend_mode_not_a_second_python_executable():
     builder = project_text("scripts/build-installer.ps1", encoding="utf-8-sig")
-    assert '"--contents-directory","audio-monitor-runtime"' in builder
-    assert '"--onefile"' not in builder
-    assert "audio-monitor-runtime\\base_library.zip" in builder
-    monitor = builder.split('$monitorArgs += @(', 1)[1].split('"app\\services\\monitor_worker.py"', 1)[0]
-    assert_contains(
-        monitor,
-        '"--exclude-module","tensorflow"',
-        '"--exclude-module","torch"',
-        '"--exclude-module","jax"',
-    )
+    runner = project_text("backend/run.py", encoding="utf-8-sig")
+    assert_excludes(builder, '"--name","KaraokeAudioMonitor"', "audio-monitor-runtime")
+    assert_contains(builder, '"--hidden-import","app.services.monitor_worker"')
+    assert_contains(runner, '"--audio-monitor"', "monitor_worker.main()")
 
 
 def test_backend_packaging_bundles_and_smokes_parselmouth():

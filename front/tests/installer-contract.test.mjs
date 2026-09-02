@@ -8,6 +8,7 @@ const preload = read("electron/preload.cjs");
 const installerBuilder = read("../scripts/build-installer.ps1");
 const packageConfig = JSON.parse(read("package.json"));
 const releaseManifest = read("../scripts/generate-release-manifest.ps1");
+const sizeReport = read("../scripts/generate-size-report.ps1");
 const matches = (source, patterns) => patterns.forEach((pattern) => assert.match(source, pattern));
 const excludes = (source, patterns) => patterns.forEach((pattern) => assert.doesNotMatch(source, pattern));
 test("installer theme and optional-model handoff remain wired", () => {
@@ -100,6 +101,20 @@ test("every installer path generates, hashes and publishes the aggregate SBOM", 
     /\[Parameter\(Mandatory = \$true\)\]\s+\[string\] \$SbomFile/,
     /Mandatory release SBOM does not exist/,
     /sha256 = \(\[BitConverter\]::ToString\(\$sha\.ComputeHash\(\$stream\)\)\)/
+  ]);
+});
+test("release manifest hashing works without the optional Get-FileHash cmdlet", () => {
+  excludes(releaseManifest, [/Get-FileHash/]);
+  excludes(sizeReport, [/Get-FileHash/]);
+  matches(releaseManifest, [
+    /function Get-Sha256Hex/,
+    /\[Security\.Cryptography\.SHA256\]::Create\(\)/,
+    /Get-Sha256Hex \$_\.FullName/
+  ]);
+  matches(sizeReport, [
+    /function Get-Sha256Hex/,
+    /\[Security\.Cryptography\.SHA256\]::Create\(\)/,
+    /Get-Sha256Hex \$file\.FullName/
   ]);
 });
 test("Inno is the only production installer and electron-builder is runtime-only", () => {

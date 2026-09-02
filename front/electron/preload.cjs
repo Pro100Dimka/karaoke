@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("window:fullscreen-changed", listener);
     return () => ipcRenderer.removeListener("window:fullscreen-changed", listener);
   },
+  onHardwareSuspensionChange: (callback) => {
+    const listener = (_event, suspended) => callback(Boolean(suspended));
+    ipcRenderer.on("app:hardware-suspension-changed", listener);
+    return () => ipcRenderer.removeListener("app:hardware-suspension-changed", listener);
+  },
 
   openSongFolder: (song) => ipcRenderer.invoke("shell:openSongFolder", song),
   openApplicationLog: () => ipcRenderer.invoke("shell:openApplicationLog"),

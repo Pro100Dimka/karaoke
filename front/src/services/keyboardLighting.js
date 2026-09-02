@@ -67,6 +67,7 @@ export function advanceMusicLighting(
   elapsedMs = 80,
   sensitivity = 1
 ) {
+  const initializing = !previous;
   const state = previous || { envelope: 0, rgb: [0, 0, 0] };
   const active = !!sample?.active;
   // Broadcast radio is heavily compressed: its useful bass envelope normally
@@ -78,7 +79,7 @@ export function advanceMusicLighting(
   const targetLevel = active
     ? transient
       ? clamp01(measuredLevel * responseSensitivity)
-      : clamp01((measuredLevel - 0.025) / 0.24)
+      : clamp01((measuredLevel - 0.025) / 0.24) ** 1.5
     : 0;
   const milliseconds = Math.min(250, Math.max(16, Number(elapsedMs) || 80));
   const response =
@@ -87,8 +88,8 @@ export function advanceMusicLighting(
       -milliseconds /
         (transient
           ? targetLevel > state.envelope
-            ? 70
-            : 210
+            ? 20
+            : 40
           : targetLevel > state.envelope
             ? 140
             : 520)
@@ -96,18 +97,18 @@ export function advanceMusicLighting(
   const envelope = state.envelope + (targetLevel - state.envelope) * response;
   const colors = (Array.isArray(palette) ? palette : [palette]).filter(Boolean);
   const primary = parseColor(colors[0]);
-  const secondary = parseColor(colors[1] || colors[0]);
-  const blend = Math.min(0.22, envelope * 0.22);
   // Keep a dim theme-colored floor even between tracks/analyser dropouts.
   // Releasing control here would restart the keyboard firmware's rainbow mode.
   const gain =
     clamp01(brightness) *
-    (active ? (transient ? 0.28 + envelope * 0.72 : 0.44 + envelope * 0.56) : 0.32);
-  const target = primary.map((channel, index) =>
-    Math.round((channel * (1 - blend) + secondary[index] * blend) * gain)
-  );
-  const limit = 18 * (milliseconds / 80);
+    (active ? (transient ? 0.42 + envelope * 0.52 : 0.52 + envelope * 0.32) : 0.32);
+  // Music changes only the brightness of the selected theme color. Mixing a
+  // secondary palette hue on each hit looked like random RGB switching on
+  // keyboards whose firmware updates all keys as one coarse frame.
+  const target = primary.map((channel) => Math.round(channel * gain));
+  const limit = 8 * (milliseconds / 80);
   const rgb = target.map((channel, index) => {
+    if (initializing) return channel;
     const before = Number(state.rgb?.[index]) || 0;
     return Math.round(before + Math.max(-limit, Math.min(limit, channel - before)));
   });

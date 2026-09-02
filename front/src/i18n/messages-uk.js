@@ -6,7 +6,7 @@ export const ukMessages = {
     "Клавіатуру знайдено, але безпечне керування підсвічуванням у реальному часі недоступне для її протоколу або поточного режиму.",
   "settings.appearance.keyboard_lighting_enabled.label": "Підсвічування клавіатури",
   "settings.appearance.keyboard_lighting_enabled.tooltip":
-    "Вбудована підтримка Windows Dynamic Lighting, сумісних HATOR/Winbond, Wooting і VialRGB v1. Окрема програма не потрібна для сумісних пристроїв. OpenRGB — додатковий варіант. Windows може обмежувати керування у фоні.",
+    "Вбудована підтримка Windows Dynamic Lighting, Logitech G213, сумісних HATOR/Winbond, Wooting і VialRGB v1. Окрема програма не потрібна для сумісних пристроїв. OpenRGB — додатковий варіант. Windows може обмежувати керування у фоні.",
   "settings.appearance.keyboard_lighting_mode.label": "Ефект підсвічування",
   "settings.appearance.keyboard_lighting_mode.music": "У такт музиці",
   "settings.appearance.keyboard_lighting_mode.theme": "Колір теми",
@@ -18,7 +18,7 @@ export const ukMessages = {
   "settings.appearance.keyboard_lighting_status.connecting": "Пошук сумісних клавіатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавіатур: {count}",
   "settings.appearance.keyboard_lighting_status.no_devices":
-    "Сумісних клавіатур не знайдено. Підтримуються Windows Dynamic Lighting, сумісні HATOR/Winbond, Wooting і прошивки з VialRGB v1; додатково — OpenRGB з режимом Direct.",
+    "Сумісних клавіатур не знайдено. Підтримуються Windows Dynamic Lighting, Logitech G213, сумісні HATOR/Winbond, Wooting і прошивки з VialRGB v1; додатково — OpenRGB з режимом Direct.",
   "settings.appearance.keyboard_lighting_status.unavailable":
     "Вбудоване керування підсвічуванням недоступне. Перевірте підключення та сумісність клавіатури. OpenRGB не обов’язковий.",
   "settings.appearance.keyboard_lighting_status.blocked":

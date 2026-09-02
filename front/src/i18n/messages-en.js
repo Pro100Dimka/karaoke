@@ -6,7 +6,7 @@ export const enMessages = {
     "Keyboard found, but safe real-time lighting control is unavailable for its protocol or current mode.",
   "settings.appearance.keyboard_lighting_enabled.label": "Keyboard lighting",
   "settings.appearance.keyboard_lighting_enabled.tooltip":
-    "Built-in Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and VialRGB v1 support. Compatible devices need no separate app. OpenRGB is optional. Windows may restrict background control.",
+    "Built-in Windows Dynamic Lighting, Logitech G213, compatible HATOR/Winbond, Wooting and VialRGB v1 support. Compatible devices need no separate app. OpenRGB is optional. Windows may restrict background control.",
   "settings.appearance.keyboard_lighting_mode.label": "Lighting effect",
   "settings.appearance.keyboard_lighting_mode.music": "React to music",
   "settings.appearance.keyboard_lighting_mode.theme": "Theme color",
@@ -18,7 +18,7 @@ export const enMessages = {
   "settings.appearance.keyboard_lighting_status.connecting": "Looking for compatible keyboards…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · keyboards: {count}",
   "settings.appearance.keyboard_lighting_status.no_devices":
-    "No compatible keyboards found. Supports Windows Dynamic Lighting, compatible HATOR/Winbond, Wooting and firmware with VialRGB v1; optionally OpenRGB with Direct mode.",
+    "No compatible keyboards found. Supports Windows Dynamic Lighting, Logitech G213, compatible HATOR/Winbond, Wooting and firmware with VialRGB v1; optionally OpenRGB with Direct mode.",
   "settings.appearance.keyboard_lighting_status.unavailable":
     "Built-in lighting control is unavailable. Check keyboard connection and compatibility. OpenRGB is optional.",
   "settings.appearance.keyboard_lighting_status.blocked":

@@ -67,6 +67,7 @@ logger = logging.getLogger(__name__)
 _monitor_control = MonitorControl(execution_lock=hardware_lock)
 _monitor_wasapi_mode = "shared"
 _requested_effects_disabled = False
+_hardware_suspended = False
 _known_device_names: dict[int, str] = {}
 
 
@@ -548,6 +549,9 @@ def set_monitoring_enabled(
 
 def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None) -> None:
     global _monitor_wasapi_mode, _requested_effects_disabled
+    if _hardware_suspended:
+        _monitor_control.cancel()
+        return
     if wasapi_mode is not None:
         if wasapi_mode != "shared":
             raise RuntimeError("Unsupported WASAPI mode")
@@ -595,6 +599,25 @@ def stop_monitoring() -> None:
     with hardware_lock:
         recording_service.update_capture_controls({"monitoring_enabled": False})
         _stop_monitoring_process()
+
+
+def suspend_monitoring() -> None:
+    """Release the microphone while preserving the user's saved preference."""
+    global _hardware_suspended
+    _hardware_suspended = True
+    _monitor_control.cancel()
+    from app.services import recording_service
+    with hardware_lock:
+        recording_service.update_capture_controls({"monitoring_enabled": False})
+        _stop_monitoring_process()
+
+
+def resume_monitoring(settings) -> None:
+    """Reapply persisted monitoring after the desktop window is restored."""
+    global _hardware_suspended
+    _hardware_suspended = False
+    if settings.monitoring_enabled:
+        request_monitoring(settings)
 
 
 def _stop_monitoring_process(expected_process=None) -> None:
@@ -669,20 +692,43 @@ def _configure_monitoring(settings) -> None:
         _monitor_control.publish(state="idle")
         return
     if settings.audio_driver == "asio":
-        _start_asio_monitor(settings)
+        try:
+            _start_asio_monitor(settings)
+        except MonitorCancelled:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "ASIO monitor failed; continuing with Windows shared audio: driver=%s error=%s",
+                settings.asio_driver_name,
+                exc,
+            )
+            _monitor_control.event(
+                None,
+                {
+                    "event": "fallback",
+                    "cause": "asio-start",
+                    "message": str(exc),
+                    "fallback_driver": settings.asio_driver_name,
+                },
+            )
+            _start_shared_monitor(settings, driver="auto")
         return
+    _start_shared_monitor(settings, driver=settings.audio_driver)
+
+
+def _start_shared_monitor(settings, *, driver: str) -> None:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Audio backend is unavailable")
 
     devices = sd.query_devices()
     _monitor_control.check()
     input_device_id = preferred_input_device(
-        settings.input_device_id, settings.audio_driver, settings.asio_driver_name, devices=devices
+        settings.input_device_id, driver, settings.asio_driver_name, devices=devices
     )
     output_device_id, resolved_input_id = (
         preferred_output_device(
             input_device_id,
-            settings.audio_driver,
+            driver,
             settings.output_device_id,
             settings.asio_driver_name,
             devices=devices,
@@ -780,10 +826,7 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
 
 def _start_monitor_worker(worker_options: dict) -> None:
     if config.IS_FROZEN:
-        worker = Path(sys.executable).with_name("KaraokeAudioMonitor.exe")
-        if not worker.is_file():
-            raise RuntimeError("The packaged audio-monitor worker is missing")
-        command = [str(worker), "--config", json.dumps(worker_options)]
+        command = [sys.executable, "--audio-monitor", "--config", json.dumps(worker_options)]
     else:
         command = [
             sys.executable,

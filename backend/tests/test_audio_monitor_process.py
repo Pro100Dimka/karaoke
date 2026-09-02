@@ -67,17 +67,16 @@ def test_stop_monitoring_joins_reader_before_closing_stdout(monkeypatch):
     assert call_order == ["join", "close"]
 
 
-def test_frozen_monitor_worker_requires_packaged_binary(monkeypatch, tmp_path):
-    worker = tmp_path / "KaraokeAudioMonitor.exe"
-    patch_many(monkeypatch, (audio_service.config, "IS_FROZEN", True), (audio_service.sys, "executable", str(tmp_path / "Backend.exe")))
-    raises(RuntimeError, lambda: audio_service._start_monitor_worker({'gain': 1}), match='missing')
-
-    worker.write_bytes(b"worker")
+def test_frozen_backend_spawns_its_internal_audio_monitor_mode(monkeypatch, tmp_path):
+    backend = tmp_path / "KaraokeBackend.exe"
+    backend.write_bytes(b"backend")
+    patch_many(monkeypatch, (audio_service.config, "IS_FROZEN", True), (audio_service.sys, "executable", str(backend)))
     launch = Mock()
     monkeypatch.setattr(audio_service, "_launch_monitor_process", launch)
     audio_service._start_monitor_worker({"gain": 1})
     command = launch.call_args.args[0]
-    assert (command[:2] == [str(worker), '--config']) and (json.loads(command[-1]) == {'gain': 1})
+    assert command[:3] == [str(backend), "--audio-monitor", "--config"]
+    assert json.loads(command[-1]) == {"gain": 1}
 
 
 def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch, tmp_path):
@@ -179,9 +178,14 @@ def test_built_worker_reaches_native_device_validation_without_ai():
     from pathlib import Path
 
     import pytest
-    executable = (Path(__file__).resolve().parents[2] /
-                  "generated/diagnostics/monitor-startup/dist/KaraokeAudioMonitor/KaraokeAudioMonitor.exe")
-    if not executable.is_file() or not executable.with_name("KaraokeWasapi.dll").is_file():
+    repository = Path(__file__).resolve().parents[2]
+    executable = (repository /
+                  "generated/build/backend/dist/KaraokeBackend/KaraokeBackend.exe")
+    if (
+        not executable.is_file()
+        or not executable.with_name("KaraokeWasapi.dll").is_file()
+        or executable.stat().st_mtime < (repository / "backend/run.py").stat().st_mtime
+    ):
         pytest.skip("Packaged monitor smoke artifact not built")
     # Deliberately nonexistent endpoints: exercise packaged imports + native
     # startup without recording audio or playing anything on the user's device.
@@ -189,7 +193,7 @@ def test_built_worker_reaches_native_device_validation_without_ai():
               "output_device_id": 0, "blocksize": 64, "gain": 0, "wasapi_mode": "shared",
               "native_shared": True, "input_device_name": "__missing_test_microphone_76c22__",
               "output_device_name": "__missing_test_speakers_76c22__"}
-    result = subprocess.run([str(executable), "--config", json.dumps(config)],
+    result = subprocess.run([str(executable), "--audio-monitor", "--config", json.dumps(config)],
                             capture_output=True, text=True, encoding="utf-8", timeout=12)
     events = [json.loads(line) for line in result.stdout.splitlines()]
     assert result.returncode == 1

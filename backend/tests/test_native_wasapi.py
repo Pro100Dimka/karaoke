@@ -27,8 +27,8 @@ def test_native_module_does_not_import_song_pipeline():
 def test_packaged_library_stays_beside_worker(monkeypatch, tmp_path):
     import sys
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeAudioMonitor.exe"))
-    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "audio-monitor-runtime"), raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "KaraokeBackend.exe"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "_internal"), raising=False)
     assert native_wasapi.library_path() == tmp_path / "KaraokeWasapi.dll"
 
 

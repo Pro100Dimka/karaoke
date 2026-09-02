@@ -56,6 +56,20 @@ def stop_direct_monitoring(db: Session = Depends(get_db)):
     return audio_service.set_monitoring_enabled(db, False)
 
 
+@router.post("/direct-monitor/suspend", response_model=schemas.AudioSettingsOut)
+def suspend_direct_monitoring(db: Session = Depends(get_db)):
+    settings = audio_service.get_settings(db)
+    audio_service.suspend_monitoring()
+    return settings
+
+
+@router.post("/direct-monitor/resume", response_model=schemas.AudioSettingsOut, status_code=202)
+def resume_direct_monitoring(db: Session = Depends(get_db)):
+    settings = audio_service.get_settings(db)
+    audio_service.resume_monitoring(settings)
+    return settings
+
+
 @router.get("/direct-monitor/status")
 def direct_monitor_status():
     return audio_service.monitoring_status()

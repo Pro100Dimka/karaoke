@@ -6,7 +6,7 @@ export const ruMessages = {
     "Клавиатура найдена, но безопасное управление подсветкой в реальном времени недоступно для её протокола или текущего режима.",
   "settings.appearance.keyboard_lighting_enabled.label": "Подсветка клавиатуры",
   "settings.appearance.keyboard_lighting_enabled.tooltip":
-    "Встроенная поддержка Windows Dynamic Lighting, совместимых HATOR/Winbond, Wooting и VialRGB v1. Отдельная программа не нужна для совместимых устройств. OpenRGB — дополнительный вариант. Windows может ограничивать управление в фоне.",
+    "Встроенная поддержка Windows Dynamic Lighting, Logitech G213, совместимых HATOR/Winbond, Wooting и VialRGB v1. Отдельная программа не нужна для совместимых устройств. OpenRGB — дополнительный вариант. Windows может ограничивать управление в фоне.",
   "settings.appearance.keyboard_lighting_mode.label": "Эффект подсветки",
   "settings.appearance.keyboard_lighting_mode.music": "В такт музыке",
   "settings.appearance.keyboard_lighting_mode.theme": "Цвет темы",
@@ -18,7 +18,7 @@ export const ruMessages = {
   "settings.appearance.keyboard_lighting_status.connecting": "Поиск совместимых клавиатур…",
   "settings.appearance.keyboard_lighting_status.ready": "{provider} · клавиатур: {count}",
   "settings.appearance.keyboard_lighting_status.no_devices":
-    "Совместимые клавиатуры не найдены. Поддерживаются Windows Dynamic Lighting, совместимые HATOR/Winbond, Wooting и прошивки с VialRGB v1; дополнительно — OpenRGB с режимом Direct.",
+    "Совместимые клавиатуры не найдены. Поддерживаются Windows Dynamic Lighting, Logitech G213, совместимые HATOR/Winbond, Wooting и прошивки с VialRGB v1; дополнительно — OpenRGB с режимом Direct.",
   "settings.appearance.keyboard_lighting_status.unavailable":
     "Встроенное управление подсветкой недоступно. Проверьте подключение и совместимость клавиатуры. OpenRGB не обязателен.",
   "settings.appearance.keyboard_lighting_status.blocked":

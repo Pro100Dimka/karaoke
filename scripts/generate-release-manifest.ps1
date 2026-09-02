@@ -50,6 +50,18 @@ function Get-CommandVersion([string]$Command, [string[]]$Arguments) {
     }
 }
 
+function Get-Sha256Hex([string]$Path) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
+
 $packageJsonPath = Join-Path $FrontendDir "package.json"
 if (-not (Test-Path -LiteralPath $packageJsonPath)) {
     throw "front package.json not found: $packageJsonPath"
@@ -107,7 +119,7 @@ if (Test-Path -LiteralPath $InstallerDirectory) {
         ForEach-Object {
             [ordered]@{
                 path   = $_.Name
-                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                sha256 = Get-Sha256Hex $_.FullName
             }
         }
     )

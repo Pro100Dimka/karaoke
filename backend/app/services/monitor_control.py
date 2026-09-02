@@ -104,7 +104,7 @@ class MonitorControl:
                         if isinstance(samples, (int, float)) and math.isfinite(samples) and samples >= 0:
                             message[f"{kind}_latency_ms"] = samples * 1000 / rate
             if event in {"started", "fallback"}:
-                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms",
+                for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "fallback_driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms",
                             "output_sample_rate", "input_period_frames", "output_period_frames"):
                     if key in message:
                         self.status[key] = message[key]

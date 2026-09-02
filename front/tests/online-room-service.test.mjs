@@ -3,6 +3,7 @@ import { translateSaved } from "../src/i18n/runtime.js";
 import {
   DEFAULT_SIGNALING_URL,
   OnlineRoomClient,
+  OnlineVoiceMesh,
   createRoomId,
   getOrCreateGuestSessionId,
   normalizeRoomId,
@@ -40,6 +41,21 @@ afterEach(() => {
   delete globalThis.WebSocket;
 });
 describe("online room service", () => {
+  test("temporary microphone suspension keeps room peers and file channels alive", async () => {
+    const track = { stop: vi.fn(), readyState: "live" };
+    const voice = new OnlineVoiceMesh({ send: vi.fn() });
+    voice.stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+    voice.effectsStream = voice.stream;
+    voice.peers.set("guest", { close: vi.fn() });
+    voice.transfers.channels.set("guest", { close: vi.fn() });
+
+    await voice.suspendMicrophone();
+
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(voice.stream).toBeNull();
+    expect(voice.peers.has("guest")).toBe(true);
+    expect(voice.transfers.hasChannel("guest")).toBe(true);
+  });
   test("applies only the newest authoritative room epoch and sequence", () => {
     const ordering = { roomEpoch: "", lastAppliedSequence: 0, snapshotVersion: 0 };
     expect(

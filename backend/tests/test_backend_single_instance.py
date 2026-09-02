@@ -1,9 +1,29 @@
 import logging
+import sys
 from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock
 
 import run
+
+
+def test_audio_monitor_mode_dispatches_before_backend_startup(monkeypatch):
+    from app.services import monitor_worker
+
+    worker = Mock(return_value=7)
+    monkeypatch.setattr(monitor_worker, "main", worker)
+    monkeypatch.setattr(sys, "argv", ["KaraokeBackend.exe", "--audio-monitor", "--config", "{}"])
+    monkeypatch.setattr(run, "configure_logging", Mock(side_effect=AssertionError("HTTP startup ran")))
+
+    try:
+        run.main()
+    except SystemExit as exit_status:
+        assert exit_status.code == 7
+    else:
+        raise AssertionError("monitor mode must return the worker exit code")
+
+    worker.assert_called_once_with()
+    assert sys.argv == ["KaraokeBackend.exe", "--config", "{}"]
 
 
 def test_single_instance_lock_rejects_second_holder(tmp_path: Path):

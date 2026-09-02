@@ -58,7 +58,7 @@ void execute(napi_env, void* data) {
     try {
         std::lock_guard<std::mutex> guard(devices_mutex);
         if (job.action >= 3) {
-            const auto status = usb_lighting_request(job.action - 3, job.r, job.g, job.b);
+            const auto status = usb_lighting_request(job.action - 3, job.colors);
             job.count = status.count; job.state = status.state;
         } else {
         if (job.action == 0) {

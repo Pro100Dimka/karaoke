@@ -52,6 +52,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete window.AudioContext;
   delete window.webkitAudioContext;
+  delete globalThis.electronAPI;
 });
 const createAudio = ({ state = "running" } = {}) => {
   const analyser = { fftSize: 0, smoothingTimeConstant: 0.2 };
@@ -96,6 +97,26 @@ const setupAudio = ({ audio = createAudio(), getUserMedia = vi.fn().mockResolved
 };
 const runFrame = (timestamp) => act(() => frames.shift()(timestamp));
 describe("pitch detection", () => {
+  test("releases pitch-capture hardware while minimized and reacquires it after restore", async () => {
+    let notify;
+    globalThis.electronAPI = {
+      isElectron: true,
+      onHardwareSuspensionChange: (callback) => {
+        notify = callback;
+        return () => {};
+      }
+    };
+    const { audio, getUserMedia } = setupAudio();
+    renderHook(() => usePitchDetection(props()));
+    await waitFor(() => expect(audio.source.connect).toHaveBeenCalled());
+
+    act(() => notify(true));
+    await waitFor(() => expect(audio.track.stop).toHaveBeenCalled());
+    expect(audio.context.close).toHaveBeenCalled();
+
+    act(() => notify(false));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+  });
   test("borrows the room microphone without recapturing or stopping it", async () => {
     const { audio, getUserMedia } = setupAudio();
     const getLocalVoiceStream = vi.fn().mockResolvedValue(audio.stream);

@@ -20,6 +20,16 @@ export const sendLightingFrame = (frame) =>
 export const getLightingStatus = () =>
   electronAPI()?.getLightingStatus?.() ?? Promise.resolve({ state: "desktop_only", count: 0 });
 
+export function onHardwareSuspensionChange(callback) {
+  const bridge = electronAPI();
+  if (typeof bridge?.onHardwareSuspensionChange === "function") {
+    return bridge.onHardwareSuspensionChange(callback);
+  }
+  const handleVisibility = () => callback(Boolean(globalThis.document?.hidden));
+  globalThis.document?.addEventListener?.("visibilitychange", handleVisibility);
+  return () => globalThis.document?.removeEventListener?.("visibilitychange", handleVisibility);
+}
+
 export const apiToken = () => electronAPI()?.apiToken || import.meta.env.VITE_API_TOKEN;
 
 export const backendUrl = () =>

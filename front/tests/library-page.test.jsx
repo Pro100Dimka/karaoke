@@ -12,7 +12,14 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   reloadSettings: vi.fn(),
   settings: { online_name: "Singer" },
-  sharedRoom: { room: null, roomUi: {}, participants: [], syncUi: vi.fn(), openKaraoke: vi.fn() },
+  sharedRoom: {
+    room: null,
+    roomUi: {},
+    participants: [],
+    syncUi: vi.fn(),
+    openKaraoke: vi.fn(),
+    requestSongSync: vi.fn()
+  },
   polls: [],
   pollIndex: 0,
   refreshes: [],
@@ -22,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   pollOptions: [],
   deleteRecording: vi.fn(),
   cancelProcessing: vi.fn(),
+  resolveSongRevision: vi.fn(),
   setProcessingLoadActive: vi.fn(),
   review: null
 }));
@@ -54,6 +62,7 @@ vi.mock("../src/api/client", () => ({
     listSongs: vi.fn(),
     listRecordingsForSong: vi.fn(),
     getStatus: vi.fn(),
+    resolveSongRevision: mocks.resolveSongRevision,
     deleteRecording: mocks.deleteRecording,
     cancelProcessing: mocks.cancelProcessing
   }
@@ -172,6 +181,8 @@ beforeEach(() => {
   mocks.sharedRoom.roomUi = {};
   mocks.sharedRoom.participants = [];
   mocks.sharedRoom.openKaraoke.mockReset().mockResolvedValue(true);
+  mocks.sharedRoom.requestSongSync.mockReset().mockResolvedValue(true);
+  mocks.resolveSongRevision.mockReset().mockResolvedValue(null);
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.cancelProcessing.mockReset().mockResolvedValue(undefined);
   mocks.setProcessingLoadActive.mockReset();
@@ -243,6 +254,33 @@ describe("library page", () => {
     expect(mocks.sharedRoom.openKaraoke).toHaveBeenLastCalledWith("one", {
       ownerId: undefined,
       revision: undefined
+    });
+  });
+  test("host opens the local id returned after downloading a participant song", async () => {
+    vi.useFakeTimers();
+    mocks.sharedRoom.room = { host: true, selfId: "host" };
+    mocks.sharedRoom.roomUi = {
+      songsByParticipant: {
+        guest: [
+          {
+            id: "guest-song",
+            title: "Shared",
+            status: "done",
+            __roomOwnerId: "guest",
+            __roomRevision: "sha256:shared"
+          }
+        ]
+      }
+    };
+    mocks.sharedRoom.requestSongSync.mockResolvedValueOnce("host-local-song");
+    const result = render(<Library />);
+
+    fireEvent.click(result.getAllByTestId("karaoke")[2]);
+    await act(async () => Promise.resolve());
+    expect(mocks.sharedRoom.openKaraoke).toHaveBeenCalledWith("host-local-song");
+    await vi.advanceTimersByTimeAsync(920);
+    expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", {
+      state: { songId: "host-local-song", autoPlay: true }
     });
   });
   test("tracks processing, cancels work and opens completed song", async () => {

@@ -158,7 +158,7 @@ export function requestSongSync({
       }
       resolve(result);
     };
-    pending.resolve = () => finish(true);
+    pending.resolve = (localSongId) => finish(localSongId || true);
     pending.reject = (error) => finish(false, error);
     librarySyncRef.current = pending;
     pending.timer = globalThis.setTimeout(

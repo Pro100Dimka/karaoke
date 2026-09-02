@@ -149,7 +149,7 @@ class LightingController {
           const { provider } = this;
           const status = await this[provider].request(
             1,
-            ...(provider === "windows" && zones ? zones.flat() : rgb)
+            ...((provider === "windows" || provider === "usb") && zones ? zones.flat() : rgb)
           );
           if (token === this.generation) {
             this.status = { ...status, provider };

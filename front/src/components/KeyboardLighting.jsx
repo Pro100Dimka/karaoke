@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import useAppSettings from "../hooks/useAppSettings";
+import useHardwareSuspended from "../hooks/useHardwareSuspended";
 import {
   advanceMusicLighting,
   lightingColor,
@@ -11,6 +12,7 @@ import { configureLighting, isElectron, sendLightingFrame } from "../utils/platf
 
 export default function KeyboardLighting() {
   const { settings } = useAppSettings();
+  const suspended = useHardwareSuspended();
   const latest = useRef(settings);
   const animation = useRef();
   latest.current = settings;
@@ -32,8 +34,8 @@ export default function KeyboardLighting() {
       attributes: true,
       attributeFilter: ["class", "data-theme", "style"]
     });
-    configureLighting(enabled).catch(() => {});
-    if (!enabled) {
+    configureLighting(enabled && !suspended).catch(() => {});
+    if (!enabled || suspended) {
       themeObserver.disconnect();
       return undefined;
     }
@@ -84,7 +86,7 @@ export default function KeyboardLighting() {
       window.removeEventListener("pagehide", stop);
       stop();
     };
-  }, [enabled]);
+  }, [enabled, suspended]);
   return null;
 }
 

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   songsPoll: { data: [] },
   listSongs: vi.fn(),
+  getSong: vi.fn(),
   result: { result: null, loading: false, error: null },
   room: {
     room: null,
@@ -51,6 +52,7 @@ vi.mock("../src/hooks/usePolling", () => ({
 vi.mock("../src/api/client", () => ({
   api: {
     listSongs: mocks.listSongs,
+    getSong: mocks.getSong,
     listAudioOutputDevices: vi.fn(),
     getAudioSettings: vi.fn(),
     getSignalQuality: vi.fn(),
@@ -172,6 +174,7 @@ beforeEach(() => {
   mocks.location = { state: { songId: "song" } };
   mocks.navigate.mockReset();
   mocks.songsPoll = { data: [song], error: null };
+  mocks.getSong.mockReset().mockResolvedValue(song);
   mocks.result = { result, loading: false, error: null };
   mocks.renderMedia = true;
   mocks.room.room = null;
@@ -305,6 +308,18 @@ describe("karaoke page", () => {
     };
     render(<Karaoke />);
     expect(mocks.stageProps.songId).toBe("song");
+  });
+  test("loads an explicitly routed transferred song when the shared list cache is stale", async () => {
+    const transferred = { ...song, id: "host-local-song", title: "Transferred" };
+    mocks.location = { state: { songId: transferred.id, autoPlay: true } };
+    mocks.songsPoll = { data: [song], error: null };
+    mocks.getSong.mockResolvedValueOnce(transferred);
+
+    const page = render(<Karaoke />);
+
+    await waitFor(() => expect(mocks.getSong).toHaveBeenCalledWith(transferred.id));
+    await waitFor(() => expect(mocks.stageProps.songId).toBe(transferred.id));
+    expect(page.container.querySelector('[data-role="karaoke"]')).not.toBeNull();
   });
   test("renders the no-ready-song message without route state", () => {
     mocks.location = { state: null };
