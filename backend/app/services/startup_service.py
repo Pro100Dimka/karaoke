@@ -37,6 +37,7 @@ def _reset() -> None:
     _state = {
         "phase": "database",
         "progress": 5,
+        "interactive": False,
         "ready": False,
         "error": None,
         "steps": {},
@@ -112,6 +113,11 @@ def _run_startup() -> None:
         _run_step("file_cleanup_recovery", 15, resource_deletion.recover_deferred_cleanup)
         _run_step("storage_migration", 20, storage_migration.migrate_legacy_song_storage)
         _run_step("package_recovery", 40, song_package_service.recover_import_transactions)
+        # The database and interrupted package transactions are now safe to
+        # expose to the renderer. Metadata scanning and importing the heavy AI
+        # runtime can continue in the background; song processing admission
+        # remains closed until every startup step finishes below.
+        _set_state(interactive=True)
         _run_step("metadata_scan", 55, metadata_enrichment_service.enqueue_missing)
         runtime_plan = cast(
             RuntimePlan,
@@ -152,6 +158,7 @@ def snapshot() -> dict[str, object]:
         result = {
             "phase": _state.get("phase", "not_started"),
             "progress": int(progress) if isinstance(progress, int | float | str) else 0,
+            "interactive": bool(_state.get("interactive", False)),
             "ready": bool(_state.get("ready", False)),
             "error": _state.get("error"),
             "steps": dict(steps) if isinstance(steps, dict) else {},

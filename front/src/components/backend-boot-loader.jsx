@@ -52,7 +52,7 @@ export default function BackendBootLoader({ children }) {
       for (let attempt = 0; active && attempt < MAX_STARTUP_ATTEMPTS; attempt += 1) {
         try {
           const health = await api.getHealth();
-          if (health.startup && !health.startup.ready) {
+          if (health.startup && !health.startup.ready && !health.startup.interactive) {
             if (health.startup.error) {
               if (active)
                 setState((value) => ({ ...value, failed: true, startup: health.startup }));

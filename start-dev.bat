@@ -24,7 +24,7 @@ set "PKG=%TEMP%\advoice-python-%VER%.zip"
 set "URL=https://api.nuget.org/v3-flatcontainer/python/%VER%/python.%VER%.nupkg"
 
 set "AI=%ROOT%scripts\install-ai-models.bat"
-set "ASIO=%ROOT%scripts\install-asio-sdk.bat"
+set "ASIO=%ROOT%scripts\prepare-native-audio.bat"
 set "JOBS=%TEMP%\advoice-dev-%RANDOM%-%RANDOM%"
 set "NODE_ENV_FILE=%TEMP%\advoice-node-%RANDOM%-%RANDOM%.path"
 set "FFMPEG_ENV_FILE=%TEMP%\advoice-ffmpeg-%RANDOM%-%RANDOM%.path"

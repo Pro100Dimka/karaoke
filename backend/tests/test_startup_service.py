@@ -49,6 +49,34 @@ def test_startup_runs_ordered_steps_and_only_then_opens_processing(monkeypatch):
     ]
 
 
+def test_startup_marks_ui_interactive_before_slow_ai_hardware_detection(monkeypatch):
+    calls = []
+    runtime = object()
+    monkeypatch.setattr(startup_service.resource_deletion, "recover_deferred_cleanup", lambda: None)
+    monkeypatch.setattr(startup_service.storage_migration, "migrate_legacy_song_storage", lambda: None)
+    monkeypatch.setattr(startup_service.song_package_service, "recover_import_transactions", lambda: None)
+    monkeypatch.setattr(startup_service.metadata_enrichment_service, "enqueue_missing", lambda: None)
+
+    def detect_hardware():
+        calls.append(startup_service.snapshot())
+        return runtime
+
+    monkeypatch.setattr(startup_service.pipeline_service, "_configure_ai_runtime", detect_hardware)
+    monkeypatch.setattr(startup_service.pipeline_service, "format_runtime_plan", lambda _runtime: [])
+    monkeypatch.setattr(startup_service.pipeline_service, "stop_accepting_jobs", lambda: None)
+    monkeypatch.setattr(startup_service.pipeline_service, "start_accepting_jobs", lambda: None)
+    monkeypatch.setattr(startup_service, "_queue_hardware_snapshot", lambda _runtime: None)
+    monkeypatch.setattr(
+        startup_service.background_task_supervisor,
+        "start_task",
+        lambda _name, target: target() or True,
+    )
+
+    assert startup_service.start() is True
+    assert calls[0]["interactive"] is True
+    assert calls[0]["ready"] is False
+
+
 def test_startup_failure_stays_closed_and_is_reported(monkeypatch):
     stop = Mock()
     monkeypatch.setattr(startup_service.pipeline_service, "stop_accepting_jobs", stop)

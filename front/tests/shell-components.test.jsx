@@ -172,6 +172,25 @@ describe("application shell", () => {
     await vi.advanceTimersByTimeAsync(5);
     expect(view.getByText("ready-after-recovery")).not.toBeNull();
   });
+  test("backend loader opens the interface while AI hardware detection continues", async () => {
+    mocks.getHealth.mockResolvedValue({
+      status: "starting",
+      startup: {
+        ready: false,
+        interactive: true,
+        phase: "hardware_detection",
+        progress: 75
+      }
+    });
+    const view = render(
+      <BackendBootLoader>
+        <div>interactive-before-ai</div>
+      </BackendBootLoader>
+    );
+
+    await waitFor(() => expect(view.getByText("interactive-before-ai")).not.toBeNull());
+    expect(mocks.hydrate).toHaveBeenCalledTimes(1);
+  });
   test("backend loader exposes a terminal error and can retry", async () => {
     vi.useFakeTimers();
     mocks.getHealth.mockRejectedValue(new Error("offline"));

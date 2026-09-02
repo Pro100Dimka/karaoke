@@ -112,6 +112,32 @@ def test_fresh_clone_bootstraps_native_build_tools_and_ffmpeg():
     )
 
 
+def test_fresh_clone_compiles_native_audio_before_development_launch():
+    script = project_text("start-dev.bat", encoding="utf-8-sig")
+    wrapper = project_text("scripts/prepare-native-audio.bat", encoding="utf-8-sig")
+    builder = project_text("scripts/prepare-native-audio.ps1", encoding="utf-8-sig")
+
+    assert_contains(
+        script,
+        'set "ASIO=%ROOT%scripts\\prepare-native-audio.bat"',
+        'call :start_job asio "%ASIO%" "%ROOT%"',
+    )
+    assert_contains(
+        wrapper,
+        'call "%ROOT%\\scripts\\install-asio-sdk.bat" "%ROOT%"',
+        'prepare-native-audio.ps1',
+    )
+    assert_contains(
+        builder,
+        'backend\\engines\\asio',
+        'generated\\build\\asio',
+        'KaraokeAsioBridge.exe',
+        'KaraokeWasapi.dll',
+        'cmake.exe',
+        'ninja.exe',
+    )
+
+
 def test_build_installer_prepares_gitignored_downloads_before_build():
     script = project_text("build-installer.bat", encoding="utf-8-sig")
     assert_contains(script, 'set "KARAOKE_PREPARE_DIRECTML=1"', 'call "%~dp0start-dev.bat" --prepare-only')
