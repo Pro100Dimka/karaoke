@@ -8,6 +8,7 @@ import { playbackGain } from "../utils/data";
 import { finalizeRecording, formatError } from "../utils/recordingSession";
 import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transport";
 import useKaraokeRecording from "./useKaraokeRecording";
+import useOperationGate from "./useOperationGate";
 
 export { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
 const ROOM_PLAY_LEAD_MS = 450;
@@ -74,7 +75,7 @@ export default function useKaraokeTransport({
     stopped: () => setIsPlaying(false),
     fail: () => setIsPlaying(false)
   };
-  const operationRef = useRef(Symbol("karaoke-operation"));
+  const { operationRef, beginOperation, waitForOperation } = useOperationGate();
   const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);
   const { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording,
@@ -91,9 +92,9 @@ export default function useKaraokeTransport({
     setRecordingError,
     setAnalysisRecordingId,
     operationRef,
+    beginOperation,
     roomCaptureRef
   });
-  const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
 
   const broadcast = (action, position, executeAt = null) => {
     if (onlineRoom?.room)
@@ -171,7 +172,6 @@ export default function useKaraokeTransport({
     }
 
     lifecycle.start();
-
     const scheduledAt =
       shouldBroadcast && onlineRoom?.room && typeof onlineRoom.roomClockNow === "function"
         ? onlineRoom.roomClockNow() + ROOM_PLAY_LEAD_MS
@@ -188,7 +188,8 @@ export default function useKaraokeTransport({
 
     const recordingStart = runRecording(operation);
     try {
-      await Promise.race([recordingStart, wait(ROOM_PLAY_LEAD_MS)]);
+      await waitForOperation(recordingStart, operation);
+      if (operation !== operationRef.current) return false;
       if (scheduledAt != null) await wait(scheduledAt - onlineRoom.roomClockNow());
       await startOrResumeRoomCapture(instrumental.currentTime);
       const master = startMasterMedia(instrumental);
@@ -204,9 +205,8 @@ export default function useKaraokeTransport({
       const [masterResult] = await Promise.allSettled([master]);
       if (masterResult.status === "rejected") throw masterResult.reason;
       syncSecondaryMedia(instrumental.currentTime, true);
-      // Recording startup may wait for an audio driver. Playback must remain
-      // instant; anchor it as soon as the session is ready, using the media
-      // position and microphone frame observed at that exact later moment.
+      // The microphone is already open before the master clock starts. Anchor
+      // both sources to the exact media position observed at that moment.
       recordingStart.then((recordingId) => {
         if (!recordingId || operation !== operationRef.current) return;
         Promise.resolve(api.syncRecording(recordingId, instrumental.currentTime, speed)).catch(

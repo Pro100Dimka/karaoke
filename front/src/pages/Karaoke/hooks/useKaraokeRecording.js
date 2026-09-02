@@ -24,6 +24,7 @@ export default function useKaraokeRecording({
   setRecordingError,
   setAnalysisRecordingId,
   operationRef,
+  beginOperation,
   roomCaptureRef
 }) {
   const sessionRef = useRef(recordingSessionId);
@@ -60,10 +61,6 @@ export default function useKaraokeRecording({
         ? flushRecordingControls().then(() => finalizeRecording(id))
         : finalizeRecording(id),
     [flushRecordingControls]
-  );
-  const beginOperation = useCallback(
-    () => (operationRef.current = Symbol("karaoke-operation")),
-    [operationRef]
   );
   useEffect(() => {
     sessionRef.current = recordingSessionId;

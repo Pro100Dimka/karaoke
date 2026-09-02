@@ -682,7 +682,9 @@ def test_create_performance_mix_resolves_path_ffmpeg_and_falls_back_to_wav(monke
     first, second = (call.args[0] for call in run.call_args_list)
     assert first[0] == str(executable) and first[-1].endswith("-performance.mp3")
     assert second[0] == str(executable) and second[-1].endswith("-performance.wav")
-    assert "aecho" in second[second.index("-filter_complex") + 1]
+    filters = second[second.index("-filter_complex") + 1]
+    assert "volume=1.650000[performer-final]" in filters
+    assert "aecho" not in filters and "alimiter" not in filters and "acompressor" not in filters
 
 
 def test_create_performance_mix_skips_missing_instrumental(monkeypatch, tmp_path):

@@ -988,25 +988,13 @@ def _performance_mix_command(
         ]
         music_label = "music"
     final_voice_gain = max(0.0, min(4.0, float(voice_gain))) * 1.65
+    # Keep the captured microphone timeline sample-for-sample. Filters with
+    # lookahead (especially the limiter/compressor chain) delayed only the
+    # voice by about 10 ms while the instrumental stayed at zero. A scalar
+    # gain changes level only and therefore preserves the raw timing.
+    filters.append(f"[performer0]volume={final_voice_gain:.6f}[performer-final]")
     filters.append(
-        f"[performer0]volume={final_voice_gain:.6f},"
-        "highpass=f=70,"
-        "equalizer=f=2200:t=q:w=0.9:g=1.3,"
-        "agate=threshold=0.0025:ratio=2:attack=8:release=160:range=0.08,"
-        "acompressor=threshold=0.16:ratio=3:attack=5:release=80:makeup=1.08"
-        "[performer-studio]"
-    )
-    performer_label = 'performer-studio'
-    for index, (name, amount) in enumerate((effects or {}).items(), start=1):
-        next_label = f"performer{index}"
-        effect = _effect_filter(name, amount, performer_label, next_label)
-        if effect is None: continue
-        filters.append(effect)
-        performer_label = next_label
-    filters.append(f"[{performer_label}]alimiter=limit=0.95[performer-final]")
-    filters.append(
-        f"[{music_label}][performer-final]amix=inputs=2:duration=first:normalize=0,"
-        "alimiter=limit=0.95[mix]"
+        f"[{music_label}][performer-final]amix=inputs=2:duration=first:normalize=0[mix]"
     )
     codec = ["-c:a", "pcm_s24le"] if destination.suffix.casefold() == ".wav" else [
         "-c:a", "libmp3lame", "-b:a", "320k"

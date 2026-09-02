@@ -21,10 +21,9 @@ export const FILE_COMPLEXITY_BUDGETS = Object.freeze({
   // current reviewed size without weakening the default budget for new code.
   "src/pages/Library/animated-backdrop/qftRuntime.js": { lines: 3031, branches: 145 },
   "src/services/onlineVoiceTransfers.js": { lines: 860, branches: 110 },
-  // +1 line each: the new "Windows Driver Low Latency" audio-driver option.
-  "src/i18n/messages-ru.js": { lines: 833, branches: 0 },
-  "src/i18n/messages-uk.js": { lines: 831, branches: 0 },
-  "src/i18n/messages-en.js": { lines: 826, branches: 0 },
+  "src/i18n/messages-ru.js": { lines: 832, branches: 0 },
+  "src/i18n/messages-uk.js": { lines: 830, branches: 0 },
+  "src/i18n/messages-en.js": { lines: 825, branches: 0 },
   // +1 line: a WebRTC offer-glare fix (rollback before setRemoteDescription)
   // that couldn't fit its condition and the awaited call on one line.
   "src/services/onlineVoiceMesh.js": { lines: 661, branches: 100 },

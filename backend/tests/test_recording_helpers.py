@@ -186,7 +186,7 @@ def test_octave_filter_preserves_duration_for_both_directions():
     assert "asetrate=24000.000" in octave_down and "atempo=2.000000" in octave_down
 
 
-def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_path):
+def test_performance_mix_command_contains_raw_timing_and_lossy_output(tmp_path):
     current = recording(tmp_path / "take.wav")
     command = recording_service._performance_mix_command(
         "ffmpeg",
@@ -199,7 +199,9 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
     )
     assert (command[command.index('-ss') + 1] == '1.250') and (command[command.index('-t') + 1] == '12.500')
     filters = command[command.index("-filter_complex") + 1]
-    assert ('volume=0.800000' in filters) and ('volume=1.650000' in filters) and ('aecho' in filters) and (command[-4:] == ['libmp3lame', '-b:a', '320k', str(tmp_path / 'mix.mp3')])
+    assert ('volume=0.800000' in filters) and ('volume=1.650000' in filters)
+    assert 'aecho' not in filters
+    assert command[-4:] == ['libmp3lame', '-b:a', '320k', str(tmp_path / 'mix.mp3')]
 
     wav_command = recording_service._performance_mix_command(
         "ffmpeg", current, tmp_path / "instrumental.mp3", tmp_path / "mix.wav",
@@ -233,7 +235,7 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
     assert "adelay=50:all=1" in compensated_filters
 
 
-def test_performance_mix_processes_voice_like_live_monitor_before_applying_slider_gain(tmp_path):
+def test_performance_mix_keeps_raw_voice_timing_and_only_applies_slider_gain(tmp_path):
     current = recording(tmp_path / "take.wav")
 
     command = recording_service._performance_mix_command(
@@ -248,13 +250,10 @@ def test_performance_mix_processes_voice_like_live_monitor_before_applying_slide
     )
 
     filters = command[command.index("-filter_complex") + 1]
-    voice_chain = next(part for part in filters.split(";") if "[performer-studio]" in part)
-    assert "highpass=f=70" in voice_chain
-    assert "equalizer=f=2200" in voice_chain
-    assert "agate=" in voice_chain
-    assert "acompressor=" in voice_chain
+    voice_chain = next(part for part in filters.split(";") if "[performer-final]" in part)
     assert "volume=2.970000" in voice_chain
-    assert voice_chain.index("volume=2.970000") < voice_chain.index("acompressor=")
+    for latency_filter in ("highpass=", "equalizer=", "agate=", "acompressor=", "alimiter=", "aecho=", "asetrate="):
+        assert latency_filter not in voice_chain
 
 
 def test_performance_mix_uses_the_karaoke_playback_rate_for_each_timeline_segment(tmp_path):

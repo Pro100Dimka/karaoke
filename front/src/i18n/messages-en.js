@@ -713,7 +713,6 @@ export const enMessages = {
   "settings.audio.monitor.fallback": "Driver switched to fallback mode. Latency may increase.",
   "settings.audio.wasapiMode.label": "WASAPI mode on next start",
   "settings.audio.wasapiMode.options.shared": "Shared — other applications can play audio",
-  "settings.audio.wasapiMode.options.lowLatency": "Windows Driver Low Latency",
   "settings.audio.wasapiMode.options.inputExclusive": "Exclusive microphone, shared output",
   "settings.audio.wasapiMode.options.exclusive": "Fully exclusive — monitoring only",
   "settings.audio.buffer_size.description":
