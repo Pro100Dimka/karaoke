@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+$rootPath = [IO.Path]::GetFullPath($Root.Trim().Trim('"')).TrimEnd('\')
 $source = Join-Path $rootPath "backend\engines\asio"
 $build = Join-Path $rootPath "generated\build\asio"
 $sdk = Join-Path $rootPath "downloads\engines\asio-sdk"
