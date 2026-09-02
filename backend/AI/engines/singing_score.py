@@ -371,7 +371,11 @@ def project_song_scores(
                                 * (len(model_owned) - 1)
                                 / max(1, len(owned) - 1)
                             )
-                            midi_note = model_owned[model_index].midi_note
+                            symbolic_pitch = model_owned[model_index].midi_note
+                            pitch_distance = abs(symbolic_pitch - note.midi_note) % 12
+                            pitch_distance = min(pitch_distance, 12 - pitch_distance)
+                            if pitch_distance <= 2:
+                                midi_note = symbolic_pitch
                         line_notes.append(VocalNote(
                             start,
                             end,

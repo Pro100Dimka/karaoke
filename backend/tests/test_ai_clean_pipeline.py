@@ -37,6 +37,7 @@ from AI.lyrics_sources import (
     LyricsDiscovery,
     TimedLine,
     _expand_notation,
+    _select_complete_lyrics,
     discover_lyrics,
 )
 from AI.models import PitchFrame, Word
@@ -371,6 +372,72 @@ def test_lrclib_synced_text_is_kept_with_its_line_timestamps(monkeypatch):
     assert result is not None
     assert result.text == "right line\nnext line"
     assert result.lines == (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+
+
+def test_lyrics_selection_prefers_a_longer_compatible_song_structure():
+    short = LyricsDiscovery(
+        "первый куплет\nприпев\nвторой куплет\nприпев",
+        "timed",
+        "Artist - Song",
+        lines=(TimedLine(1.0, "первый куплет"),),
+    )
+    complete = LyricsDiscovery(
+        "первый куплет\nприпев\nвторой куплет\nприпев\nпервый куплет\nприпев",
+        "catalog",
+        "Artist - Song",
+    )
+
+    selected = _select_complete_lyrics((short, complete))
+
+    assert selected is complete
+
+
+def test_lyrics_selection_rejects_a_longer_unrelated_version():
+    exact = LyricsDiscovery(
+        "точный первый куплет и точный припев",
+        "timed",
+        "Artist - Song",
+    )
+    unrelated = LyricsDiscovery(
+        "совсем другие слова другой концертной версии и длинный комментарий",
+        "catalog",
+        "Artist - Song",
+    )
+
+    assert _select_complete_lyrics((exact, unrelated)) is exact
+
+
+def test_complete_lyrics_lookup_compares_lrclib_with_the_plain_catalog(monkeypatch):
+    lrclib = json.dumps([{
+        "trackName": "Song",
+        "artistName": "Artist",
+        "syncedLyrics": (
+            "[00:01.00]first verse has several exact words\n"
+            "[00:05.00]the chorus stays here"
+        ),
+    }])
+    complete_body = (
+        "first verse has several exact words\n"
+        "the chorus stays here\n"
+        "second verse adds the missing ending\n"
+        "the chorus stays here"
+    )
+
+    def response(url, _encoding="utf-8"):
+        if "lrclib.net" in url:
+            return lrclib
+        if "musixmatch.com" in url:
+            return json.dumps({"lyrics": {"body": complete_body}})
+        raise AssertionError(url)
+
+    monkeypatch.setattr("AI.lyrics_sources._request", response)
+
+    result = discover_lyrics("Song", "Artist", complete=True)
+
+    assert result is not None
+    assert result.text == complete_body
+    assert result.source == "Musixmatch"
+    assert result.lines == ()
 
 
 def test_lrclib_drops_an_incomplete_final_repetition_block(monkeypatch):

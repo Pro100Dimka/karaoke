@@ -89,6 +89,41 @@ def _identity(value: str) -> str:
     return " ".join(re.findall(r"[\w']+", value, flags=re.UNICODE))
 
 
+def _lyrics_tokens(value: str) -> list[str]:
+    return _identity(value).split()
+
+
+def _select_complete_lyrics(
+    candidates: tuple[LyricsDiscovery, ...] | list[LyricsDiscovery],
+    *,
+    minimum_coverage: float = 0.82,
+) -> LyricsDiscovery | None:
+    """Prefer a complete edition without accepting a different song version."""
+    available = [candidate for candidate in candidates if candidate.text.strip()]
+    if not available:
+        return None
+    anchor = available[0]
+    anchor_tokens = _lyrics_tokens(anchor.text)
+    selected = anchor
+    selected_size = len(anchor_tokens)
+    for candidate in available[1:]:
+        candidate_tokens = _lyrics_tokens(candidate.text)
+        if len(candidate_tokens) <= selected_size:
+            continue
+        matcher = SequenceMatcher(
+            None,
+            anchor_tokens,
+            candidate_tokens,
+            autojunk=False,
+        )
+        matched = sum(block.size for block in matcher.get_matching_blocks())
+        coverage = matched / max(1, len(anchor_tokens))
+        if coverage >= minimum_coverage:
+            selected = candidate
+            selected_size = len(candidate_tokens)
+    return selected
+
+
 _CYRILLIC_LATIN = str.maketrans({
     "а": "a", "б": "b", "в": "v", "г": "g", "ґ": "g", "д": "d",
     "е": "e", "ё": "e", "є": "ye", "ж": "zh", "з": "z", "и": "i",
@@ -226,8 +261,43 @@ def _pisni(artist: str, track: str, query: str, deadline: float) -> LyricsDiscov
     return None
 
 
+def _musixmatch(
+    artist: str,
+    track: str,
+    query: str,
+    deadline: float,
+) -> LyricsDiscovery | None:
+    if not artist or time.monotonic() >= deadline:
+        return None
+    url = "https://www.musixmatch.com/lyrics/{}/{}".format(
+        urllib.parse.quote(artist, safe=""),
+        urllib.parse.quote(track, safe=""),
+    )
+    try:
+        page = _request_before(url, "utf-8", deadline)
+        try:
+            payload = json.loads(page)
+            body = str(payload.get("lyrics", {}).get("body") or "")
+        except (TypeError, ValueError):
+            match = re.search(
+                r'"lyrics"\s*:\s*\{\s*"body"\s*:\s*("(?:\\.|[^"\\])*")',
+                page,
+            )
+            body = str(json.loads(match.group(1))) if match else ""
+        body = body.strip()
+        if len(_lyrics_tokens(body)) >= 10:
+            return LyricsDiscovery(body, "Musixmatch", query)
+    except (OSError, TimeoutError, TypeError, ValueError):
+        pass
+    return None
+
+
 def discover_lyrics(
-    title: str | None, artist: str | None = None, *_args, **_kwargs
+    title: str | None,
+    artist: str | None = None,
+    *_args,
+    complete: bool = False,
+    **_kwargs,
 ) -> LyricsDiscovery | None:
     track = " ".join(str(title or "").replace("_", " ").split())
     performer = " ".join(str(artist or "").replace("_", " ").split())
@@ -244,6 +314,9 @@ def discover_lyrics(
     if result := _lrclib_result(
         rows, title=track, artist=performer, query=query
     ):
+        if complete:
+            alternate = _musixmatch(performer, track, query, deadline)
+            return _select_complete_lyrics((result, alternate)) if alternate else result
         return result
     # Providers sometimes romanize the artist (for example a Cyrillic name
     # stored in Latin script). Search by the exact title only, then still

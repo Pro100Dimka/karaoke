@@ -317,7 +317,10 @@ class AudioPipelineV2:
                     cover_url=request.cover_url,
                 )
                 lyrics_future = None if request.lyrics_path else pool.submit(
-                    discover_lyrics, request.title, request.artist
+                    discover_lyrics,
+                    request.title,
+                    request.artist,
+                    complete=True,
                 )
 
                 self._notify(request, "decode", 3, "Готовим оригинальную запись")

@@ -228,7 +228,7 @@ def test_song_projection_uses_symbolic_pitch_with_physical_note_timing():
         120,
         (SymbolicEvent(0, 1, 65, "слово"),),
     )]
-    physical = [VocalNote(1.1, 1.8, 60, word_index=0)]
+    physical = [VocalNote(1.1, 1.8, 64, word_index=0)]
 
     _fitted, notes = project_song_scores(
         words,
@@ -241,6 +241,26 @@ def test_song_projection_uses_symbolic_pitch_with_physical_note_timing():
     assert len(notes) == 1
     assert notes[0].midi_note % 12 == 65 % 12
     assert notes[0].start == 1.0
+
+
+def test_song_projection_rejects_symbolic_pitch_far_from_the_sung_note():
+    words = [Word(1.0, 2.0, "слово", 1.0, 0)]
+    lines = [ScoreLine("слово", 1.0, 2.0, 0, 0)]
+    scores = [SymbolicScore(
+        120,
+        (SymbolicEvent(0, 1, 65, "слово"),),
+    )]
+    physical = [VocalNote(1.1, 1.8, 60, word_index=0)]
+
+    _fitted, notes = project_song_scores(
+        words,
+        lines,
+        scores,
+        pitch=[PitchFrame(1.2, 261.63, 0.9, True)],
+        physical_notes=physical,
+    )
+
+    assert notes[0].midi_note == 60
 
 
 def test_score_engine_honours_cancellation_before_loading_the_large_model(tmp_path):
