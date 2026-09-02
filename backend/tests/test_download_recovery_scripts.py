@@ -145,6 +145,22 @@ def test_fresh_clone_compiles_native_audio_before_development_launch():
     )
 
 
+def test_parallel_job_status_does_not_override_windows_resource_compiler():
+    script = project_text("start-dev.bat", encoding="utf-8-sig")
+
+    # RC is a standard compiler environment variable consumed by CMake/MSVC.
+    # Reusing it for the worker's .rc result file makes CMake try to execute
+    # that text file as rc.exe on a clean machine.
+    assert 'set "RC=%~6"' not in script
+    assert_contains(
+        script,
+        'set "JOB_RESULT=%~6"',
+        '>"%JOB_RESULT%" echo 0',
+        '>"%JOB_RESULT%" echo !E!',
+        '>"%JOB_RESULT%" echo 1',
+    )
+
+
 def test_build_installer_prepares_gitignored_downloads_before_build():
     script = project_text("build-installer.bat", encoding="utf-8-sig")
     assert_contains(script, 'set "KARAOKE_PREPARE_DIRECTML=1"', 'call "%~dp0start-dev.bat" --prepare-only')

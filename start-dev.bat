@@ -389,7 +389,7 @@ set "NAME=%~2"
 set "TARGET=%~3"
 set "ARG=%~4"
 set "LOG=%~5"
-set "RC=%~6"
+set "JOB_RESULT=%~6"
 
 >"%LOG%" echo %NAME% worker started.
 
@@ -398,7 +398,7 @@ if /i "%NAME%"=="front" (
 
     if exist "%TARGET%\node_modules\" (
         >>"%LOG%" echo Frontend dependencies already exist.
-        >"%RC%" echo 0
+        >"%JOB_RESULT%" echo 0
         exit /b 0
     )
 
@@ -413,11 +413,11 @@ if /i "%NAME%"=="front" (
 )
 
 set "E=!errorlevel!"
->"%RC%" echo !E!
+>"%JOB_RESULT%" echo !E!
 exit /b !E!
 
 :job_fail
->"%RC%" echo 1
+>"%JOB_RESULT%" echo 1
 exit /b 1
 
 rem ============================================================================
