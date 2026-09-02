@@ -11,10 +11,33 @@ from tests._shared import make_song, patch_attrs, patch_many, raises
 def recording(path, *, duration=12.5): return models.Recording(id='recording', song_id='song', filename='take.wav', path=str(path), duration_sec=duration, sample_rate=48000)
 
 
-def test_capture_rejects_auto_buffer_without_probing_other_devices(monkeypatch):
+def test_shared_capture_uses_the_host_native_packet_instead_of_the_asio_monitor_buffer(monkeypatch):
+    devices = [{"hostapi": 2, "max_input_channels": 2}]
+    patch_attrs(
+        monkeypatch,
+        recording_service.sd,
+        query_devices=Mock(return_value=devices[0]),
+        query_hostapis=Mock(return_value={"name": "Windows WASAPI"}),
+    )
+
+    assert recording_service._capture_blocksize(0, 64) == 0
+
+
+def test_portaudio_asio_capture_keeps_the_buffer_selected_in_settings(monkeypatch):
+    patch_attrs(
+        monkeypatch,
+        recording_service.sd,
+        query_devices=Mock(return_value={"hostapi": 4, "max_input_channels": 2}),
+        query_hostapis=Mock(return_value={"name": "ASIO"}),
+    )
+
+    assert recording_service._capture_blocksize(7, 64) == 64
+
+
+def test_capture_rejects_negative_buffer_without_probing_other_devices(monkeypatch):
     patch_attrs(monkeypatch, recording_service.sd, query_devices=Mock(side_effect=RuntimeError('device unavailable')))
-    with pytest.raises(RuntimeError, match="fixed positive"):
-        recording_service._capture_attempts(None, None, 44_100, 0, False)
+    with pytest.raises(RuntimeError, match="non-negative"):
+        recording_service._capture_attempts(None, None, 44_100, -1, False)
     recording_service.sd.query_devices.assert_not_called()
 
 
@@ -22,6 +45,12 @@ def test_plain_recording_keeps_selected_buffer_without_opening_output():
     attempts = recording_service._capture_attempts(1, 2, 44_100, 64, False)
     assert attempts == [(1, None, 44_100, 64, False, 64 / 44100)]
     assert all(not monitor and output is None for _, output, _, _, monitor, _ in attempts)
+
+
+def test_native_capture_buffer_uses_low_latency_without_forcing_a_tiny_callback():
+    assert recording_service._capture_attempts(1, 2, 44_100, 0, False) == [
+        (1, None, 44_100, 0, False, "low")
+    ]
 
 
 def test_monitoring_never_raises_selected_block_or_retries_without_monitoring():
@@ -47,6 +76,22 @@ def test_backend_status_and_session_controls(monkeypatch):
     recording_service.close_all_sessions()
     session.close.assert_called_once_with()
     assert recording_service._sessions == {}
+
+
+def test_active_recording_controls_replace_all_values_used_by_the_final_mix(monkeypatch):
+    session = SimpleNamespace(music_gain=1.0, gain=1.0, effects={})
+    monkeypatch.setattr(recording_service, "_sessions", {"active": session})
+
+    recording_service.update_recording_controls(
+        "active",
+        music_gain=0.25,
+        gain=1.75,
+        effects={"reverb": 0.4, "echo": 0.3, "delay": 0.2, "octave": -0.5},
+    )
+
+    assert session.music_gain == 0.25
+    assert session.gain == 1.75
+    assert session.effects == {"reverb": 0.4, "echo": 0.3, "delay": 0.2, "octave": -0.5}
 
 
 def test_close_sessions_for_song_keeps_unrelated_recordings(monkeypatch):
@@ -186,6 +231,30 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
     compensated_filters = compensated[compensated.index("-filter_complex") + 1]
     assert "atrim=start=0.000000" in compensated_filters
     assert "adelay=50:all=1" in compensated_filters
+
+
+def test_performance_mix_processes_voice_like_live_monitor_before_applying_slider_gain(tmp_path):
+    current = recording(tmp_path / "take.wav")
+
+    command = recording_service._performance_mix_command(
+        "ffmpeg",
+        current,
+        tmp_path / "instrumental.flac",
+        tmp_path / "mix.wav",
+        0,
+        0.7,
+        {},
+        voice_gain=1.8,
+    )
+
+    filters = command[command.index("-filter_complex") + 1]
+    voice_chain = next(part for part in filters.split(";") if "[performer-studio]" in part)
+    assert "highpass=f=70" in voice_chain
+    assert "equalizer=f=2200" in voice_chain
+    assert "agate=" in voice_chain
+    assert "acompressor=" in voice_chain
+    assert "volume=2.970000" in voice_chain
+    assert voice_chain.index("volume=2.970000") < voice_chain.index("acompressor=")
 
 
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):

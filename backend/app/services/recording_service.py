@@ -537,6 +537,29 @@ def update_capture_controls(patch):
             session.effects = {**session.effects, **{key: patch[key] for key in ("reverb", "echo", "delay", "octave") if patch.get(key) is not None}}
 
 
+def update_recording_controls(
+    session_id: str,
+    *,
+    music_gain: float,
+    gain: float,
+    effects: dict[str, float],
+) -> None:
+    with _sessions_lock:
+        session = _sessions.get(session_id)
+        if session is None or getattr(session, "_closed", False):
+            raise KeyError(f"Recording session {session_id} was not found")
+        session.music_gain = clamp01(music_gain)
+        session.gain = max(0.0, min(4.0, float(gain)))
+        session.effects = {
+            name: (
+                max(-1.0, min(1.0, float(effects.get(name, 0.0))))
+                if name == "octave"
+                else clamp01(float(effects.get(name, 0.0)))
+            )
+            for name in ("reverb", "echo", "delay", "octave")
+        }
+
+
 def apply_monitor_settings(settings, mode, disabled_effects):
     with _sessions_lock:
         sessions = [session for session in _sessions.values() if not session._closed]
@@ -565,19 +588,42 @@ def has_live_capture():
         return any(not session._closed for session in _sessions.values())
 
 
+def _capture_blocksize(device_id: int | None, requested: int) -> int:
+    """Keep a fixed buffer only when PortAudio itself owns an ASIO stream.
+
+    The application's native ASIO monitor can use a 32/64-frame buffer while
+    the parallel recording stream is actually WASAPI. Forcing that tiny ASIO
+    buffer onto a shared Windows capture requires hundreds of Python callbacks
+    per second; under normal UI load PortAudio then delivers only one tiny
+    block per Windows engine period and a 23-second take becomes ~3 seconds.
+    A zero PortAudio blocksize asks the real capture host for its native packet
+    (441 frames on the affected 44.1-kHz device) without changing monitoring.
+    """
+    if requested <= 0:
+        raise RuntimeError("Recording requires a positive requested buffer")
+    try:
+        device = sd.query_devices(device_id, kind="input")
+        host = sd.query_hostapis(int(device["hostapi"]))
+        host_name = str(host.get("name", ""))
+    except Exception:  # PortAudio exposes backend-specific query error classes.
+        return requested
+    return requested if "asio" in host_name.casefold() else 0
+
+
 def _capture_attempts(
     device_id: int | None,
     output_device_id: int | None,
     sample_rate: int,
     blocksize: int,
     monitoring_enabled: bool,
-) -> list[tuple[int | None, int | None, int, int, bool, float]]:
+) -> list[tuple[int | None, int | None, int, int, bool, str | float]]:
     # Do not silently change device, rate, buffer or disable self-monitoring.
     # Driver rejection is reported to the user, not retried with hidden latency.
-    if blocksize <= 0 or sample_rate <= 0:
-        raise RuntimeError("Recording requires a fixed positive buffer and sample rate")
+    if blocksize < 0 or sample_rate <= 0:
+        raise RuntimeError("Recording requires a non-negative buffer and positive sample rate")
     return [(device_id, output_device_id if monitoring_enabled else None,
-             sample_rate, blocksize, monitoring_enabled, blocksize / sample_rate)]
+             sample_rate, blocksize, monitoring_enabled,
+             "low" if blocksize == 0 else blocksize / sample_rate)]
 
 
 def backend_available() -> tuple[bool, str | None]: return (_AUDIO_BACKEND_AVAILABLE, _AUDIO_BACKEND_ERROR)
@@ -604,7 +650,6 @@ def start_recording(
     if not _AUDIO_BACKEND_AVAILABLE: raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
     if has_live_capture():
         raise RuntimeError("A microphone recording is already active")
-
     session_id = uuid.uuid4().hex
     session: RecordingSession | None = None
     errors: list[str] = []
@@ -619,7 +664,7 @@ def start_recording(
         ]
     )
     for input_id, output_id, rate, frames, monitor, latency in _capture_attempts(
-        device_id, output_device_id, sample_rate, blocksize,
+        device_id, output_device_id, sample_rate, _capture_blocksize(device_id, blocksize),
         monitoring_enabled or (monitor_owner == "recording" and monitor_mode is not None)
     ):
         try:
@@ -646,8 +691,8 @@ def start_recording(
             session.start()
             logger.info(
                 "Recording audio started: input=%s output=%s requested_rate=%s actual_rate=%s "
-                "buffer=%s monitor=%s requested_latency=%s",
-                input_id, output_id, rate, session.sample_rate, frames, monitor, latency,
+                "requested_buffer=%s capture_buffer=%s monitor=%s requested_latency=%s",
+                input_id, output_id, rate, session.sample_rate, blocksize, frames, monitor, latency,
             )
             break
         except Exception as exc:  # Audio drivers raise implementation-specific errors.
@@ -922,18 +967,23 @@ def _performance_mix_command(
         inputs = ['-ss', f'{offset_sec:.3f}', '-i', str(instrumental), '-i', recording.path]
         filters = [f'[0:a]volume={music_gain:.6f}[music]', '[1:a]volume=1.000000[performer0]']
         music_label = "music"
-    performer_label = 'performer0'
+    final_voice_gain = max(0.0, min(4.0, float(voice_gain))) * 1.65
+    filters.append(
+        f"[performer0]volume={final_voice_gain:.6f},"
+        "highpass=f=70,"
+        "equalizer=f=2200:t=q:w=0.9:g=1.3,"
+        "agate=threshold=0.0025:ratio=2:attack=8:release=160:range=0.08,"
+        "acompressor=threshold=0.16:ratio=3:attack=5:release=80:makeup=1.08"
+        "[performer-studio]"
+    )
+    performer_label = 'performer-studio'
     for index, (name, amount) in enumerate((effects or {}).items(), start=1):
         next_label = f"performer{index}"
         effect = _effect_filter(name, amount, performer_label, next_label)
         if effect is None: continue
         filters.append(effect)
         performer_label = next_label
-    final_voice_gain = max(0.0, min(4.0, float(voice_gain))) * 1.65
-    filters.append(
-        f"[{performer_label}]volume={final_voice_gain:.6f},"
-        "alimiter=limit=0.95[performer-final]"
-    )
+    filters.append(f"[{performer_label}]alimiter=limit=0.95[performer-final]")
     filters.append(
         f"[{music_label}][performer-final]amix=inputs=2:duration=first:normalize=0,"
         "alimiter=limit=0.95[mix]"

@@ -33,11 +33,32 @@ export default function useKaraokeRecording({
   // resume apply first, leaving the backend paused while the UI reports
   // "recording" for the rest of the take.
   const recordingRequestQueueRef = useRef(Promise.resolve());
+  const recordingControlsQueueRef = useRef(Promise.resolve());
+  const recordingControlsPendingRef = useRef(0);
   const queueRecordingRequest = useCallback((task) => {
     const next = recordingRequestQueueRef.current.then(task, task);
     recordingRequestQueueRef.current = next.catch(() => {});
     return next;
   }, []);
+  const queueRecordingControls = useCallback((task) => {
+    recordingControlsPendingRef.current += 1;
+    const next = recordingControlsQueueRef.current.then(task, task).finally(() => {
+      recordingControlsPendingRef.current -= 1;
+    });
+    recordingControlsQueueRef.current = next.catch(() => {});
+    return next;
+  }, []);
+  const flushRecordingControls = useCallback(
+    () => recordingControlsQueueRef.current.catch(() => {}),
+    []
+  );
+  const finalizeAfterControls = useCallback(
+    (id) =>
+      recordingControlsPendingRef.current
+        ? flushRecordingControls().then(() => finalizeRecording(id))
+        : finalizeRecording(id),
+    [flushRecordingControls]
+  );
   const beginOperation = useCallback(
     () => (operationRef.current = Symbol("karaoke-operation")),
     [operationRef]
@@ -45,6 +66,38 @@ export default function useKaraokeRecording({
   useEffect(() => {
     sessionRef.current = recordingSessionId;
   }, [recordingSessionId]);
+
+  useEffect(() => {
+    if (!recordingSessionId) return undefined;
+    let current = true;
+    queueRecordingControls(() =>
+      api.updateRecordingControls(recordingSessionId, {
+        musicVolume: playbackGain(musicVolume),
+        microphoneVolume,
+        reverb: microphoneEffects.reverb,
+        echo: microphoneEffects.echo,
+        delay: microphoneEffects.delay,
+        octave: microphoneEffects.octave ?? 0
+      })
+    ).catch((error) => {
+      if (current && sessionRef.current === recordingSessionId) {
+        setRecordingError(formatError("settings.couldNotSaveAudioSettings", error));
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [
+    microphoneEffects.delay,
+    microphoneEffects.echo,
+    microphoneEffects.octave,
+    microphoneEffects.reverb,
+    microphoneVolume,
+    musicVolume,
+    queueRecordingControls,
+    recordingSessionId,
+    setRecordingError
+  ]);
 
   useEffect(() => {
     beginOperation();
@@ -64,10 +117,17 @@ export default function useKaraokeRecording({
       sessionRef.current = null;
       if (id) {
         setRecordingSessionId(null);
-        finalizeRecording(id);
+        finalizeAfterControls(id);
       }
     };
-  }, [beginOperation, roomCaptureRef, setAnalysisRecordingId, setRecordingSessionId, song?.id]);
+  }, [
+    beginOperation,
+    finalizeAfterControls,
+    roomCaptureRef,
+    setAnalysisRecordingId,
+    setRecordingSessionId,
+    song?.id
+  ]);
 
   const clearSession = (id, forget = true) => {
     if (sessionRef.current !== id) return;
@@ -168,6 +228,7 @@ export default function useKaraokeRecording({
     clearSession,
     discardSession,
     runRecording,
-    pauseRecording
+    pauseRecording,
+    flushRecordingControls
   };
 }

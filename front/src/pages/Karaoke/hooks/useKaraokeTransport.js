@@ -80,7 +80,7 @@ export default function useKaraokeTransport({
   const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);
   const { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording,
-    pauseRecording } = useKaraokeRecording({
+    pauseRecording, flushRecordingControls } = useKaraokeRecording({
     song,
     onlineRoom,
     instrumentalRef,
@@ -261,9 +261,9 @@ export default function useKaraokeTransport({
     lifecycle.stopped();
     setCurrentTime(0);
     if (shouldBroadcast) broadcast("stop", 0);
-
     const id = sessionRef.current;
     if (id) {
+      await flushRecordingControls();
       const { recording, error } = await finalizeRecording(id);
       if (error) {
         setRecordingError(formatError("karaoke.failedToSaveEntry", error));

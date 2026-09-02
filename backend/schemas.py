@@ -252,6 +252,15 @@ class RecordingStartRequest(BaseModel):
     room_mode: bool = False
 
 
+class RecordingControlsRequest(BaseModel):
+    music_volume: float = Field(ge=0, le=1)
+    microphone_volume: float = Field(ge=0, le=4)
+    reverb: float = Field(ge=0, le=1)
+    echo: float = Field(ge=0, le=1)
+    delay: float = Field(ge=0, le=1)
+    octave: float = Field(ge=-1, le=1)
+
+
 class RecordingStartOut(BaseModel):
     recording_session_id: str
     message: str

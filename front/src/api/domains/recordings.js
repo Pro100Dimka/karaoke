@@ -41,6 +41,18 @@ export const recordingsApi = {
       `/recording/sync?session_id=${encodeURIComponent(String(sessionId ?? ""))}&position_sec=${encodeURIComponent(String(positionSec ?? 0))}`,
       { method: "POST" }
     ),
+  updateRecordingControls: (sessionId, controls) =>
+    request(`/recording/controls?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        music_volume: controls.musicVolume,
+        microphone_volume: controls.microphoneVolume,
+        reverb: controls.reverb,
+        echo: controls.echo,
+        delay: controls.delay,
+        octave: controls.octave
+      })
+    }),
   stopRecording: (sessionId) =>
     request(`/recording/stop?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
       method: "POST"

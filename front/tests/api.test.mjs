@@ -346,6 +346,29 @@ describe("API domains", () => {
       [() => recordingsApi.stopRecording(null), "/recording/stop?session_id="]
     ])
       await assertRequest(invoke, { path, method: "POST" });
+    await assertRequest(
+      () =>
+        recordingsApi.updateRecordingControls("a/b ?", {
+          musicVolume: 0.25,
+          microphoneVolume: 1.75,
+          reverb: 0.4,
+          echo: 0.3,
+          delay: 0.2,
+          octave: -0.5
+        }),
+      {
+        path: "/recording/controls?session_id=a%2Fb%20%3F",
+        method: "PATCH",
+        body: {
+          music_volume: 0.25,
+          microphone_volume: 1.75,
+          reverb: 0.4,
+          echo: 0.3,
+          delay: 0.2,
+          octave: -0.5
+        }
+      }
+    );
     fetch.mockResolvedValueOnce(response({ body: '[{"id":1,"duration_sec":"2"}]' }));
     equal([(await recordingsApi.listRecordingsForSong("song"))[0].duration_sec, 2], [pathOf(lastCall()[0]), "/recording/by-song/song"]);
     fetch.mockResolvedValueOnce(response({ body: "null" }));

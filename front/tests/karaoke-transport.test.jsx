@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   pauseRecording: vi.fn(),
   resumeRecording: vi.fn(),
   syncRecording: vi.fn(),
+  updateRecordingControls: vi.fn(),
   stopRecording: vi.fn(),
   attachRoomAudio: vi.fn()
 }));
@@ -62,6 +63,7 @@ beforeEach(async () => {
   api.pauseRecording.mockResolvedValue({});
   api.resumeRecording.mockResolvedValue({});
   api.syncRecording.mockResolvedValue({ status: "synchronized" });
+  api.updateRecordingControls.mockResolvedValue({ status: "updated" });
   api.stopRecording.mockResolvedValue({ id: "recording" });
   api.attachRoomAudio.mockResolvedValue({ id: "recording" });
 });
@@ -185,6 +187,35 @@ describe("karaoke transport", () => {
       })
     );
     verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", expect.objectContaining({ action: "play", songId: "song" })]);
+  });
+  test("updates every final-mix control when sliders change during an active take", async () => {
+    const props = createProps({
+      recordingSessionId: "session",
+      microphoneEffects: { reverb: 0.1, echo: 0.2, delay: 0.3, octave: 0 }
+    });
+    const hook = renderHook((current) => useKaraokeTransport(current), {
+      initialProps: props
+    });
+    await waitFor(() => expect(api.updateRecordingControls).toHaveBeenCalled());
+    api.updateRecordingControls.mockClear();
+
+    hook.rerender({
+      ...props,
+      musicVolume: 0.5,
+      microphoneVolume: 1.6,
+      microphoneEffects: { reverb: 0.6, echo: 0.5, delay: 0.4, octave: -0.5 }
+    });
+
+    await waitFor(() =>
+      expect(api.updateRecordingControls).toHaveBeenCalledWith("session", {
+        musicVolume: 0.25,
+        microphoneVolume: 1.6,
+        reverb: 0.6,
+        echo: 0.5,
+        delay: 0.4,
+        octave: -0.5
+      })
+    );
   });
   test("schedules room playback against the shared server clock", async () => {
     vi.useFakeTimers();

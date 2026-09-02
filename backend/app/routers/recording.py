@@ -147,6 +147,23 @@ def sync_recording(session_id: str, position_sec: float):
     return {"status": "synchronized"}
 
 
+@router.patch("/controls")
+def update_recording_controls(session_id: str, body: schemas.RecordingControlsRequest):
+    with http_error(KeyError, 404):
+        recording_service.update_recording_controls(
+            session_id,
+            music_gain=body.music_volume,
+            gain=body.microphone_volume,
+            effects={
+                "reverb": body.reverb,
+                "echo": body.echo,
+                "delay": body.delay,
+                "octave": body.octave,
+            },
+        )
+    return {"status": "updated"}
+
+
 @router.post("/stop", response_model=schemas.RecordingOut)
 def stop_recording(session_id: str, db: Session = Depends(get_db)):
     # Monitoring must be restored no matter how this ends — success, a mapped

@@ -168,6 +168,27 @@ def test_recording_actions_and_stop_error_mapping(monkeypatch):
         restore.assert_called_once_with(database)
 
 
+def test_recording_controls_are_applied_to_the_named_active_session(monkeypatch):
+    update = Mock()
+    monkeypatch.setattr(recording.recording_service, "update_recording_controls", update)
+    body = schemas.RecordingControlsRequest(
+        music_volume=0.25,
+        microphone_volume=1.75,
+        reverb=0.4,
+        echo=0.3,
+        delay=0.2,
+        octave=-0.5,
+    )
+
+    assert recording.update_recording_controls("session", body) == {"status": "updated"}
+    update.assert_called_once_with(
+        "session",
+        music_gain=0.25,
+        gain=1.75,
+        effects={"reverb": 0.4, "echo": 0.3, "delay": 0.2, "octave": -0.5},
+    )
+
+
 def persisted_recording(path): return models.Recording(id='recording', song_id='song', filename='take.wav', path=str(path), duration_sec=2, sample_rate=48000, created_at=datetime(2026, 1, 1, tzinfo=UTC))
 
 
