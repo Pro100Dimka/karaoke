@@ -105,36 +105,70 @@ struct Endpoint {
     }
     void open(IMMDeviceEnumerator* enumerator, EDataFlow flow, const wchar_t* name, uint32_t requested, bool initialize) {
         auto device = find_device(enumerator, flow, name);
-        check(device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
-                              reinterpret_cast<void**>(client.GetAddressOf())), "Activate IAudioClient3");
-        AudioClientProperties properties{};
-        properties.cbSize = sizeof(properties);
-        properties.eCategory = AudioCategory_Media;
-        properties.Options = AUDCLNT_STREAMOPTIONS_RAW;
-        // Category/options are independent from share mode. This remains a
-        // shared stream while requesting the endpoint's low-latency period.
-        HRESULT configured = client->SetClientProperties(&properties);
-        if (FAILED(configured)) {
-            // Some older endpoint drivers reject RAW but still support the
-            // Media category. Retain low-latency shared mode without APO bypass.
-            properties.Options = static_cast<AUDCLNT_STREAMOPTIONS>(0);
-            check(client->SetClientProperties(&properties), "SetClientProperties(Media)");
-        }
-        check(client->GetMixFormat(&format), "GetMixFormat");
-        WORD tag = format->wFormatTag;
-        if (tag == WAVE_FORMAT_EXTENSIBLE && format->cbSize >= 22) {
-            auto* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(format);
-            if (ext->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) tag = WAVE_FORMAT_IEEE_FLOAT;
-            else if (ext->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) tag = WAVE_FORMAT_PCM;
-        }
-        floating = tag == WAVE_FORMAT_IEEE_FLOAT && format->wBitsPerSample == 32;
-        if (!floating && !(tag == WAVE_FORMAT_PCM && (format->wBitsPerSample == 16 || format->wBitsPerSample == 24 || format->wBitsPerSample == 32)))
-            throw std::runtime_error("Unsupported WASAPI mix format");
-        if (!format->nChannels || !format->nSamplesPerSec || format->nBlockAlign != format->nChannels * (format->wBitsPerSample / 8))
-            throw std::runtime_error("Invalid WASAPI mix format");
-        UINT32 normal = 0, fundamental = 0, minimum = 0, maximum = 0;
-        check(client->GetSharedModeEnginePeriod(format, &normal, &fundamental, &minimum, &maximum), "GetSharedModeEnginePeriod");
-        period = shared_audio::engine_period(requested, minimum, maximum, fundamental);
+        auto valid_format = [](WAVEFORMATEX* value, bool& is_float) {
+            WORD tag = value->wFormatTag;
+            if (tag == WAVE_FORMAT_EXTENSIBLE && value->cbSize >= 22) {
+                auto* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(value);
+                if (ext->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) tag = WAVE_FORMAT_IEEE_FLOAT;
+                else if (ext->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) tag = WAVE_FORMAT_PCM;
+            }
+            is_float = tag == WAVE_FORMAT_IEEE_FLOAT && value->wBitsPerSample == 32;
+            const bool pcm = tag == WAVE_FORMAT_PCM &&
+                (value->wBitsPerSample == 16 || value->wBitsPerSample == 24 || value->wBitsPerSample == 32);
+            return (is_float || pcm) && value->nChannels && value->nSamplesPerSec &&
+                value->nBlockAlign == value->nChannels * (value->wBitsPerSample / 8);
+        };
+        auto try_candidate = [&](AUDIO_STREAM_CATEGORY category, AUDCLNT_STREAMOPTIONS options) {
+            ComPtr<IAudioClient3> candidate;
+            if (FAILED(device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
+                                        reinterpret_cast<void**>(candidate.GetAddressOf())))) return false;
+            AudioClientProperties properties{};
+            properties.cbSize = sizeof(properties);
+            properties.eCategory = category;
+            properties.Options = options;
+            if (FAILED(candidate->SetClientProperties(&properties))) return false;
+            WAVEFORMATEX* candidate_format = nullptr;
+            if (FAILED(candidate->GetMixFormat(&candidate_format))) return false;
+            bool candidate_floating = false;
+            if (!valid_format(candidate_format, candidate_floating)) {
+                CoTaskMemFree(candidate_format);
+                return false;
+            }
+            UINT32 normal = 0, fundamental = 0, minimum = 0, maximum = 0;
+            if (FAILED(candidate->GetSharedModeEnginePeriod(
+                    candidate_format, &normal, &fundamental, &minimum, &maximum))) {
+                CoTaskMemFree(candidate_format);
+                return false;
+            }
+            UINT32 candidate_period = 0;
+            try {
+                candidate_period = shared_audio::engine_period(requested, minimum, maximum, fundamental);
+            } catch (const std::exception&) {
+                CoTaskMemFree(candidate_format);
+                return false;
+            }
+            if (client && candidate_period >= period) {
+                CoTaskMemFree(candidate_format);
+                return true;
+            }
+            if (format) CoTaskMemFree(format);
+            client = candidate;
+            format = candidate_format;
+            floating = candidate_floating;
+            period = candidate_period;
+            return true;
+        };
+        // These are real Windows AUDIO_STREAM_CATEGORY values. Probe their
+        // driver-reported shared periods instead of assuming one policy is
+        // fastest on every Realtek/USB device. RAW bypasses endpoint APOs that
+        // can add monitoring latency. This never requests exclusive access.
+        try_candidate(AudioCategory_Media, AUDCLNT_STREAMOPTIONS_RAW);
+        try_candidate(AudioCategory_GameEffects, AUDCLNT_STREAMOPTIONS_RAW);
+        try_candidate(AudioCategory_GameMedia, AUDCLNT_STREAMOPTIONS_RAW);
+        // Some drivers reject RAW. Keep the official Media shared fallback.
+        if (!client)
+            try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0));
+        if (!client) throw std::runtime_error("No supported low-latency shared WASAPI configuration");
         if (!initialize) return;
         check(client->InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, period, format, nullptr), "InitializeSharedAudioStream");
         event.value = CreateEventW(nullptr, FALSE, FALSE, nullptr);

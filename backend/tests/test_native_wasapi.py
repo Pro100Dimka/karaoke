@@ -190,11 +190,20 @@ def test_native_shared_candidate_does_not_switch_mode_or_buffer():
         monitor_worker._stream_candidates({**config, "wasapi_mode": "exclusive"})
 
 
-def test_native_shared_requests_windows_low_latency_media_category_with_raw_fallback():
+def test_native_shared_probes_valid_realtime_categories_and_keeps_compatibility_fallback():
     source = (native_wasapi.library_path().parents[3] / "backend/engines/wasapi/monitor.cpp").read_text(encoding="utf-8")
-    assert "AudioCategory_Media" in source
+
+    probe = source.index("try_candidate")
+    period_query = source.index("GetSharedModeEnginePeriod")
+    shared_initialize = source.index("InitializeSharedAudioStream")
+    assert probe < period_query < shared_initialize
+    assert "AudioCategory_ProAudio" not in source
+    assert "try_candidate(AudioCategory_Media, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_GameEffects, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_GameMedia, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0))" in source
     assert "AUDCLNT_STREAMOPTIONS_RAW" in source
-    assert "properties.Options = static_cast<AUDCLNT_STREAMOPTIONS>(0)" in source
+    assert "AUDCLNT_SHAREMODE_EXCLUSIVE" not in source
 
 
 def test_worker_uses_native_event_pump_and_native_rate(monkeypatch, dll, capsys):
