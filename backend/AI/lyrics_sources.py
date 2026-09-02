@@ -50,20 +50,57 @@ def _timed(value: str) -> tuple[TimedLine, ...]:
 
 
 def _identity(value: str) -> str:
+    value = re.sub(r"\s*[\[(].*?[\])]\s*", " ", value)
     value = value.translate(str.maketrans({"i": "і", "I": "і"})).casefold()
     return " ".join(re.findall(r"[\w']+", value, flags=re.UNICODE))
 
 
-def _parts(value: str) -> tuple[str, str]:
-    parts = re.split(r"\s+(?:-|–|—)\s+", value, maxsplit=1)
-    return (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else ("", value.strip())
+_CYRILLIC_LATIN = str.maketrans({
+    "а": "a", "б": "b", "в": "v", "г": "g", "ґ": "g", "д": "d",
+    "е": "e", "ё": "e", "є": "ye", "ж": "zh", "з": "z", "и": "i",
+    "і": "i", "ї": "yi", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t",
+    "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh",
+    "щ": "shch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu",
+    "я": "ya",
+})
+
+
+def _latin_identity(value: str) -> str:
+    return _identity(value).translate(_CYRILLIC_LATIN)
 
 
 def _matches(expected: str, actual: str, threshold: float = .84) -> bool:
     left, right = _identity(expected), _identity(actual)
-    return bool(left and right) and (
-        left == right or SequenceMatcher(None, left, right).ratio() >= threshold
-    )
+    if not (left and right):
+        return False
+    if left == right or SequenceMatcher(None, left, right).ratio() >= threshold:
+        return True
+    latin_left, latin_right = _latin_identity(left), _latin_identity(right)
+    return SequenceMatcher(None, latin_left, latin_right).ratio() >= threshold
+
+
+def _matches_recording(title: str, artist: str, row_artist: str, row_track: str) -> bool:
+    return _matches(title, row_track) and (not artist or _matches(artist, row_artist))
+
+
+def _lrclib_result(
+    rows: object, *, title: str, artist: str, query: str
+) -> LyricsDiscovery | None:
+    for row in rows if isinstance(rows, list) else []:
+        row_track = str(row.get("trackName") or "")
+        row_artist = str(row.get("artistName") or "")
+        if not _matches_recording(title, artist, row_artist, row_track):
+            continue
+        synced = row.get("syncedLyrics") or ""
+        # When synchronized lyrics exist they are the canonical text for
+        # alignment too. A provider's plainLyrics can differ by repeated
+        # choruses or punctuation, making its line timestamps impossible to
+        # map onto the otherwise similar plain transcript.
+        text = _plain(synced) or row.get("plainLyrics") or ""
+        if str(text).strip():
+            return LyricsDiscovery(str(text).strip(), "LRCLIB", query, lines=_timed(synced))
+    return None
 
 
 def _request(url: str, encoding: str = "utf-8") -> str:
@@ -149,31 +186,42 @@ def _pisni(artist: str, track: str, query: str, deadline: float) -> LyricsDiscov
     return None
 
 
-def discover_lyrics(title: str | None, *_args, **_kwargs) -> LyricsDiscovery | None:
-    query = " ".join(str(title or "").replace("_", " ").split())
-    if not query:
+def discover_lyrics(
+    title: str | None, artist: str | None = None, *_args, **_kwargs
+) -> LyricsDiscovery | None:
+    track = " ".join(str(title or "").replace("_", " ").split())
+    performer = " ".join(str(artist or "").replace("_", " ").split())
+    if not track:
         return None
-    artist, track = _parts(query)
+    query = f"{performer} - {track}" if performer else track
     deadline = time.monotonic() + LOOKUP_BUDGET_SECONDS
-    params = {"track_name": track, "artist_name": artist} if artist else {"q": query}
+    params = {"track_name": track, "artist_name": performer} if performer else {"track_name": track}
     url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(params)
     try:
         rows = json.loads(_request_before(url, "utf-8", deadline))
     except (OSError, ValueError):
         rows = []
-    for row in rows if isinstance(rows, list) else []:
-        if not _matches(track, str(row.get("trackName") or "")):
-            continue
-        if artist and not _matches(artist, str(row.get("artistName") or "")):
-            continue
-        synced = row.get("syncedLyrics") or ""
-        # When synchronized lyrics exist they are the canonical text for
-        # alignment too. A provider's plainLyrics can differ by repeated
-        # choruses or punctuation, making its line timestamps impossible to
-        # map onto the otherwise similar plain transcript.
-        text = _plain(synced) or row.get("plainLyrics") or ""
-        if str(text).strip():
-            return LyricsDiscovery(str(text).strip(), "LRCLIB", query, lines=_timed(synced))
+    if result := _lrclib_result(
+        rows, title=track, artist=performer, query=query
+    ):
+        return result
+    # Providers sometimes romanize the artist (for example a Cyrillic name
+    # stored in Latin script). Search by the exact title only, then still
+    # verify both returned fields against the caller's exact metadata.
+    if performer:
+        if time.monotonic() >= deadline:
+            return None
+        title_url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(
+            {"track_name": track}
+        )
+        try:
+            title_rows = json.loads(_request_before(title_url, "utf-8", deadline))
+        except (OSError, ValueError):
+            title_rows = []
+        if result := _lrclib_result(
+            title_rows, title=track, artist=performer, query=query
+        ):
+            return result
     if time.monotonic() >= deadline:
         return None
-    return _pisni(artist, track, query, deadline)
+    return _pisni(performer, track, query, deadline)

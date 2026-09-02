@@ -4,6 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 import models
 from app.services import pipeline_service
 from app.utils.json_files import write_json
@@ -306,14 +308,87 @@ def test_finalize_success_commits_metadata_and_best_effort_optimization(monkeypa
     pipeline_service._finalize_success("missing", tmp_path)
 
 
+def test_audio_pipeline_receives_exact_artist_and_title_as_separate_fields(monkeypatch, tmp_path):
+    process = Mock(return_value="result")
+    monkeypatch.setattr(pipeline_service.ai_bridge, "process_song", process)
+    monkeypatch.setattr(pipeline_service, "_is_cancelled", Mock(return_value=False))
+    monkeypatch.setattr(
+        pipeline_service, "_create_ai_progress_callback", Mock(return_value=Mock())
+    )
+
+    result = pipeline_service._invoke_ai_pipeline(
+        "song",
+        "source.flac",
+        tmp_path,
+        None,
+        "Exact Artist",
+        "Exact Title",
+        None,
+        None,
+        None,
+        "fast",
+        Mock(),
+        reuse_vocals=False,
+    )
+
+    assert result == "result"
+    assert process.call_args.kwargs["artist"] == "Exact Artist"
+    assert process.call_args.kwargs["title"] == "Exact Title"
+
+
+def test_audio_media_must_finish_before_song_finalization(monkeypatch, tmp_path):
+    prepare = Mock(return_value={
+        "cover_status": "ready",
+        "video_status": "fallback",
+        "video_id": None,
+        "warnings": ["clip missing"],
+    })
+    monkeypatch.setattr(
+        pipeline_service.metadata_enrichment_service,
+        "prepare_training_media",
+        prepare,
+    )
+    monkeypatch.setattr(
+        pipeline_service.metadata_enrichment_service,
+        "video_file_is_ready",
+        Mock(return_value=False),
+    )
+
+    with pytest.raises(ValueError):
+        pipeline_service._complete_audio_media(
+            "song", tmp_path, artist="Artist", title="Title"
+        )
+
+    assert not (tmp_path / "clip.mp4").is_file()
+
+
 def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch, tmp_path, caplog):
     events = []
-    patch_attrs(monkeypatch, pipeline_service, _load_job_paths=Mock(return_value=('source', tmp_path)), _load_searchable_title=Mock(return_value='Title'), _load_ai_inputs=Mock(return_value=(None, None, None)), _is_cancelled=Mock(return_value=False), _update_progress=Mock(), _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())), _acquire_processing_slot=Mock(return_value=True), _release_processing_slot=Mock(side_effect=lambda _song_id: events.append("release")))
+    patch_attrs(monkeypatch, pipeline_service, _load_job_paths=Mock(return_value=('source', tmp_path)), _load_song_identity=Mock(return_value=('Artist', 'Title')), _load_song_genre=Mock(return_value=None), _load_ai_inputs=Mock(return_value=(None, None, None)), _is_cancelled=Mock(return_value=False), _update_progress=Mock(), _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())), _acquire_processing_slot=Mock(return_value=True), _release_processing_slot=Mock(side_effect=lambda _song_id: events.append("release")), _complete_audio_media=Mock())
     capture = Mock()
     patch_many(monkeypatch, (pipeline_service, "_create_progress_capture", Mock(return_value=capture)), (pipeline_service.model_install_service, "ensure_ready_sync", Mock()))
     patch_attrs(monkeypatch, pipeline_service, _configure_ai_runtime=Mock(return_value='cpu'), format_runtime_plan=Mock(return_value=('CPU',)), _create_ai_progress_callback=Mock(return_value=Mock()))
     process = Mock()
     monkeypatch.setattr(pipeline_service.ai_bridge, "process_song", process)
+    media_process = SimpleNamespace(
+        result=Mock(return_value={"cover_status": "ready", "video_status": "ready"}),
+        close=Mock(),
+    )
+    start_media = Mock(
+        side_effect=lambda *_args, **_kwargs: (
+            events.append("start-media"),
+            media_process,
+        )[1]
+    )
+    monkeypatch.setattr(
+        pipeline_service.metadata_enrichment_service,
+        "start_training_media_process",
+        start_media,
+    )
+    pipeline_service.model_install_service.ensure_ready_sync.side_effect = (
+        lambda **_kwargs: events.append("models-ready")
+    )
+    process.side_effect = lambda *_args, **_kwargs: events.append("ai") or "result"
     patch_attrs(monkeypatch, pipeline_service, _stop_progress_heartbeat=Mock(), _end_runtime_progress=Mock())
     finalize = Mock(side_effect=lambda *_args, **_kwargs: events.append("finalize"))
     monkeypatch.setattr(pipeline_service, "_finalize_success", finalize)
@@ -323,8 +398,10 @@ def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch,
     messages = [record.getMessage() for record in caplog.records]
     assert any("Song processing started: song_id=song" in message for message in messages)
     assert any("Song processing finished: song_id=song" in message for message in messages)
-    finalize.assert_called_once_with("song", tmp_path, retain_source=False)
-    assert events[:2] == ["finalize", "release"]
+    finalize.assert_called_once_with("song", tmp_path, retain_source=True)
+    assert events.index("start-media") < events.index("models-ready") < events.index("ai")
+    assert start_media.call_args.kwargs["expected_duration"] is None
+    assert events[-2:] == ["finalize", "release"]
     capture.close.assert_called_once()
 
     pipeline_service._load_job_paths.return_value = None

@@ -19,6 +19,7 @@ from AI.engines.text import (
     _fill_unresolved_timed_lines,
     _invalid_runs,
     _repair_collapsed_timed_lines,
+    _timed_line_offset,
     _timed_line_plan,
     _timed_line_retry_stages,
     resolve_alignment_language,
@@ -30,7 +31,12 @@ from AI.errors import (
     InvalidArtifactError,
     ProcessingCancelledError,
 )
-from AI.lyrics_sources import LyricsDiscovery, TimedLine, _expand_notation, discover_lyrics
+from AI.lyrics_sources import (
+    LyricsDiscovery,
+    TimedLine,
+    _expand_notation,
+    discover_lyrics,
+)
 from AI.models import PitchFrame, Word
 from AI.pipeline import KaraokePipeline, PipelineRequest
 
@@ -145,6 +151,28 @@ def test_pipeline_releases_separator_before_loading_later_gpu_models(tmp_path, m
     assert events == ["separated", "released"]
 
 
+def test_audio_pipeline_auto_mode_uses_the_fast_profile(tmp_path, monkeypatch):
+    source, lyrics, output = tmp_path / "source.wav", tmp_path / "lyrics.txt", tmp_path / "out"
+    sf.write(source, np.zeros((44100 * 2, 2), dtype=np.float32), 44100)
+    lyrics.write_text("hello", encoding="utf-8")
+    monkeypatch.setattr("AI.pipeline.analyze_music", lambda _path: {"bpm": 120, "key": "A minor"})
+    profiles = []
+
+    class ProfileSeparator(Separator):
+        @staticmethod
+        def separate(*args, profile=None, **kwargs):
+            profiles.append(profile)
+            Separator.separate(*args, profile=profile, **kwargs)
+
+    engines = SimpleNamespace(
+        separator=ProfileSeparator(), pitch=Pitch(), transcriber=None, aligner=Aligner()
+    )
+
+    KaraokePipeline(engines=engines).run(PipelineRequest(source, output, lyrics_path=lyrics))
+
+    assert profiles[0].mode == "fast"
+
+
 def test_pipeline_keeps_full_ctc_word_boundaries_without_global_vad_reanchoring(
     tmp_path, monkeypatch
 ):
@@ -246,7 +274,7 @@ def test_reprocess_reuses_matching_online_timed_lines(tmp_path, monkeypatch):
     timed_lines = (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
     monkeypatch.setattr(
         "AI.pipeline.discover_lyrics",
-        lambda _title: LyricsDiscovery(
+        lambda _title, _artist=None: LyricsDiscovery(
             "right line\nnext line", "LRCLIB", "Artist Song", lines=timed_lines
         ),
     )
@@ -323,7 +351,7 @@ def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
 
     monkeypatch.setattr("AI.lyrics_sources._request", response)
 
-    result = discover_lyrics("Антитiла - Лови момент")
+    result = discover_lyrics("Лови момент", "Антитiла")
 
     assert result is not None
     assert result.source == "pisni.org.ua"
@@ -336,11 +364,131 @@ def test_lrclib_synced_text_is_kept_with_its_line_timestamps(monkeypatch):
         lambda _url, _encoding="utf-8": """[{"trackName":"Song","artistName":"Artist","plainLyrics":"wrong text","syncedLyrics":"[00:01.00]right line\\n[00:03.00]next line"}]""",
     )
 
-    result = discover_lyrics("Artist - Song")
+    result = discover_lyrics("Song", "Artist")
 
     assert result is not None
     assert result.text == "right line\nnext line"
     assert result.lines == (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+
+
+def test_lrclib_uses_exact_artist_and_title_fields(monkeypatch):
+    requested = []
+
+    def response(url, _encoding="utf-8"):
+        requested.append(url)
+        return """[{"trackName":"Романс","artistName":"Сплин",\
+"plainLyrics":"Это достаточно длинный правильный текст песни для обработки",\
+"syncedLyrics":"[00:01.00]Это достаточно длинный\\n[00:04.00]правильный текст песни для обработки"}]"""
+
+    monkeypatch.setattr("AI.lyrics_sources._request", response)
+
+    result = discover_lyrics("Романс", "Сплин")
+
+    assert result is not None
+    assert result.source == "LRCLIB"
+    assert result.query == "Сплин - Романс"
+    assert result.lines[0] == TimedLine(1.0, "Это достаточно длинный")
+    assert len(requested) == 1
+
+
+def test_lrclib_does_not_accept_unrelated_exact_artist(monkeypatch):
+    monkeypatch.setattr(
+        "AI.lyrics_sources._request",
+        lambda _url, _encoding="utf-8": """[{"trackName":"Романс",\
+"artistName":"Другая группа","plainLyrics":"Совершенно посторонний текст"}]""",
+    )
+    monkeypatch.setattr("AI.lyrics_sources._pisni", lambda *_args: None)
+
+    assert discover_lyrics("Романс", "Сплин") is None
+
+
+def test_lrclib_ignores_provider_version_suffix_when_title_itself_matches(monkeypatch):
+    monkeypatch.setattr(
+        "AI.lyrics_sources._request",
+        lambda _url, _encoding="utf-8": """[{"trackName":"Лесник (Из сериала Король и Шут)",\
+"artistName":"Король и Шут","plainLyrics":"Достаточно длинный текст оригинальной песни"}]""",
+    )
+
+    result = discover_lyrics("Лесник", "Король и Шут")
+
+    assert result is not None
+
+
+def test_lrclib_retries_exact_title_when_provider_spells_artist_in_another_script(monkeypatch):
+    requested = []
+
+    def response(url, _encoding="utf-8"):
+        requested.append(url)
+        if "artist_name=" in url:
+            return "[]"
+        return """[{"trackName":"Сид и Нэнси","artistName":"Lumen",\
+"plainLyrics":"Достаточно длинный точный текст песни для дальнейшей обработки"}]"""
+
+    monkeypatch.setattr("AI.lyrics_sources._request", response)
+
+    result = discover_lyrics("Сид и Нэнси", "Люмен")
+
+    assert result is not None
+    assert len(requested) == 2
+    assert "track_name=" in requested[1] and "artist_name=" not in requested[1]
+
+
+def test_pipeline_uses_online_lyrics_before_acoustic_transcription(tmp_path, monkeypatch):
+    source, output = tmp_path / "source.wav", tmp_path / "out"
+    sf.write(source, np.zeros((44100 * 4, 2), dtype=np.float32), 44100)
+    monkeypatch.setattr("AI.pipeline.analyze_music", lambda _path: {"bpm": 120, "key": "A minor"})
+    timed_lines = (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+    monkeypatch.setattr(
+        "AI.pipeline.discover_lyrics",
+        lambda _title, _artist=None: LyricsDiscovery(
+            "right line\nnext line", "LRCLIB", "Artist Song", lines=timed_lines
+        ),
+    )
+    transcriber = SimpleNamespace(
+        transcribe=Mock(side_effect=AssertionError("ASR must remain a last-resort fallback")),
+        close=Mock(),
+    )
+
+    class TimedAligner(Aligner):
+        @staticmethod
+        def align_timed_lines(_audio, _text, _lines, _language):
+            return [
+                Word(1.0, 1.4, "right", index=0),
+                Word(1.4, 1.8, "line", index=1),
+                Word(3.0, 3.4, "next", index=2),
+                Word(3.4, 3.8, "line", index=3),
+            ]
+
+    engines = SimpleNamespace(
+        separator=Separator(), pitch=Pitch(), transcriber=transcriber, aligner=TimedAligner()
+    )
+
+    KaraokePipeline(engines=engines).run(PipelineRequest(source, output, title="Artist Song"))
+
+    transcriber.transcribe.assert_not_called()
+
+
+def test_lyrics_lookup_retries_exact_metadata_once_before_asr(monkeypatch):
+    found = LyricsDiscovery(
+        "right line", "LRCLIB", "Artist - Song", lines=(TimedLine(1.0, "right line"),)
+    )
+    monkeypatch.setattr("AI.pipeline.discover_lyrics", Mock(return_value=found))
+    transcriber = SimpleNamespace(
+        transcribe=Mock(side_effect=AssertionError("ASR must not run after a successful retry"))
+    )
+    pipeline = KaraokePipeline(engines=SimpleNamespace(transcriber=transcriber))
+    first_lookup = SimpleNamespace(result=lambda: None)
+
+    text, direct, lines = pipeline._lyrics(
+        PipelineRequest("source.flac", "out", artist="Artist", title="Song"),
+        "vocals.flac",
+        first_lookup,
+    )
+
+    assert text == "right line"
+    assert direct == []
+    assert lines == found.lines
+    pipeline_module.discover_lyrics.assert_called_once_with("Song", "Artist")
 
 
 def test_pipeline_uses_discovered_timed_lines_instead_of_full_song_alignment(
@@ -352,7 +500,7 @@ def test_pipeline_uses_discovered_timed_lines_instead_of_full_song_alignment(
     timed_lines = (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
     monkeypatch.setattr(
         "AI.pipeline.discover_lyrics",
-        lambda _title: LyricsDiscovery(
+        lambda _title, _artist=None: LyricsDiscovery(
             "right line\nnext line", "LRCLIB", "Artist Song", lines=timed_lines
         ),
     )
@@ -404,7 +552,7 @@ def test_lyrics_discovery_skips_pisni_once_the_lookup_budget_is_spent(monkeypatc
         lyrics_sources, "_pisni", lambda *args: pisni_called.append(args) or None
     )
 
-    assert discover_lyrics("Антитiла - Лови момент") is None
+    assert discover_lyrics("Лови момент", "Антитiла") is None
     assert pisni_called == []
 
 
@@ -536,7 +684,7 @@ def test_forced_alignment_deadline_terminates_the_running_worker(monkeypatch):
     process.terminate.assert_called_once_with()
 
 
-def test_alignment_deadline_uses_uniform_fallback_even_in_strict_mode(monkeypatch):
+def test_alignment_deadline_does_not_publish_uniform_timing_in_strict_mode(monkeypatch):
     aligner = SimpleNamespace(
         align_long_text=Mock(
             side_effect=AlignmentTimeoutError(
@@ -549,21 +697,17 @@ def test_alignment_deadline_uses_uniform_fallback_even_in_strict_mode(monkeypatc
         config=SimpleNamespace(allow_fallback=False),
         engines=SimpleNamespace(aligner=aligner),
     )
-    fallback = [Word(0.0, 1.0, "hello", 0.1)]
     monkeypatch.setattr(
         pipeline_module.UniformTextFallback,
         "align",
-        Mock(return_value=fallback),
+        Mock(side_effect=AssertionError("strict mode must not publish fake timing")),
     )
 
-    words = pipeline._align("vocals.flac", "hello", "en", [])
-
-    assert [word.text for word in words] == ["hello"]
-    assert pipeline._last_alignment_engine == "uniform-fallback"
-    pipeline_module.UniformTextFallback.align.assert_called_once()
+    with pytest.raises(AlignmentTimeoutError):
+        pipeline._align("vocals.flac", "hello", "en", [])
 
 
-def test_cuda_alignment_failure_uses_safe_fallback_even_in_strict_mode(monkeypatch):
+def test_cuda_alignment_failure_does_not_publish_uniform_timing_in_strict_mode(monkeypatch):
     aligner = SimpleNamespace(
         align_long_text=Mock(
             side_effect=EngineUnavailableError("CUDA error: unknown error")
@@ -577,12 +721,36 @@ def test_cuda_alignment_failure_uses_safe_fallback_even_in_strict_mode(monkeypat
     monkeypatch.setattr(
         pipeline_module.UniformTextFallback,
         "align",
-        Mock(return_value=[Word(0.0, 1.0, "hello", 0.0)]),
+        Mock(side_effect=AssertionError("strict mode must not publish fake timing")),
     )
 
-    words = pipeline._align("vocals.flac", "hello", "en", [])
+    with pytest.raises(EngineUnavailableError, match="CUDA error"):
+        pipeline._align("vocals.flac", "hello", "en", [])
 
-    assert [word.text for word in words] == ["hello"]
+
+def test_timed_alignment_failure_is_not_published_as_fake_uniform_timing(monkeypatch):
+    aligner = SimpleNamespace(
+        name="ctc",
+        align_timed_lines=Mock(side_effect=EngineUnavailableError("ctc failed")),
+    )
+    pipeline = KaraokePipeline(
+        config=SimpleNamespace(allow_fallback=False),
+        engines=SimpleNamespace(aligner=aligner),
+    )
+    monkeypatch.setattr(
+        pipeline_module.UniformTextFallback,
+        "align",
+        Mock(side_effect=AssertionError("uniform timing must not be published")),
+    )
+
+    with pytest.raises(EngineUnavailableError, match="ctc failed"):
+        pipeline._align(
+            "vocals.flac",
+            "hello",
+            "en",
+            [],
+            (TimedLine(1.0, "hello"),),
+        )
 
 
 def test_production_alignment_does_not_start_heavy_qwen_without_explicit_opt_in(
@@ -1002,6 +1170,23 @@ def test_timed_line_plan_normalization_preserves_equivalent_lyrics(canonical, ti
     assert groups == [(0, len(tokens), 0, 10.0)]
 
 
+def test_timed_line_offset_finds_a_different_recording_intro_without_song_rules():
+    rate, span, offset = 100, 90.0, 47.5
+    samples = np.zeros(round(rate * span), dtype=np.float32)
+    lines = (
+        TimedLine(3.0, "first line"),
+        TimedLine(7.0, "second longer line"),
+        TimedLine(12.0, "third line"),
+    )
+    for line in lines:
+        start = round((line.start + offset) * rate)
+        samples[start:start + round(1.2 * rate)] = 0.8
+
+    detected = _timed_line_offset(samples, rate, lines, span)
+
+    assert detected == pytest.approx(offset, abs=0.2)
+
+
 def test_timed_line_retry_policy_covers_every_unresolved_position():
     for count in range(1, 9):
         entries = [(0.0, 0, count)]
@@ -1012,7 +1197,7 @@ def test_timed_line_retry_policy_covers_every_unresolved_position():
             assert any(lower <= missing < upper for stage in stages for lower, upper, *_ in stage)
 
 
-def test_timed_russian_lines_use_one_full_ctc_pass_before_qwen(tmp_path, monkeypatch):
+def test_timed_russian_lines_use_bounded_ctc_windows_before_qwen(tmp_path, monkeypatch):
     audio = tmp_path / "vocals.flac"
     sf.write(audio, np.zeros(44100 * 4, dtype=np.float32), 44100)
     tokens = ["Этот", "парень", "пел"]
@@ -1025,11 +1210,12 @@ def test_timed_russian_lines_use_one_full_ctc_pass_before_qwen(tmp_path, monkeyp
             assert model_path == "ru-model"
 
         def align(self, _samples, _rate, canonical, offset):
-            assert canonical == [token.casefold() for token in tokens]
-            assert offset == 0
+            assert len(_samples) <= _rate * 3
+            assert canonical in (["этот", "парень"], ["пел"])
+            local_starts = [0.2, 2.2] if len(canonical) == 2 else [0.2]
             return [
-                Word(index + 0.2, index + 0.8, token, 0.9, index)
-                for index, token in enumerate(canonical)
+                Word(offset + start, offset + start + 0.25, token, 0.9, index)
+                for index, (token, start) in enumerate(zip(canonical, local_starts, strict=True))
             ]
 
     monkeypatch.setenv("KARAOKE_AI_CTC_RU_MODEL", "ru-model")
@@ -1043,8 +1229,39 @@ def test_timed_russian_lines_use_one_full_ctc_pass_before_qwen(tmp_path, monkeyp
     )
 
     assert [word.text for word in words] == tokens
+    assert [word.start for word in words] == sorted(word.start for word in words)
     assert qwen_calls == []
     assert aligner.needs_voice_anchoring is False
+
+
+def test_timed_russian_ctc_interpolates_only_the_foreign_token(tmp_path, monkeypatch):
+    audio = tmp_path / "vocals.flac"
+    sf.write(audio, np.zeros(44100 * 4, dtype=np.float32), 44100)
+    aligner = Qwen3ForcedAligner("test-model")
+    aligner._model = SimpleNamespace(
+        align=Mock(side_effect=AssertionError("Qwen must not load"))
+    )
+
+    class AcousticCTC:
+        def __init__(self, _model_path):
+            pass
+
+        def align(self, _samples, _rate, canonical, offset):
+            assert canonical == ["это"]
+            return [Word(offset + 0.2, offset + 0.6, "это", 0.9, 0)]
+
+    monkeypatch.setenv("KARAOKE_AI_CTC_RU_MODEL", "ru-model")
+    monkeypatch.setattr("AI.engines.ctc.CTCWordAligner", AcousticCTC)
+
+    words = aligner.align_timed_lines(
+        audio,
+        "Это\npropellerheads",
+        (TimedLine(0, "Это"), TimedLine(2, "propellerheads")),
+        "ru",
+    )
+
+    assert [word.text for word in words] == ["Это", "propellerheads"]
+    assert 2.0 <= words[1].start < words[1].end <= 4.0
 
 
 def test_timed_lines_only_define_acoustic_windows(tmp_path):
@@ -1086,7 +1303,7 @@ def test_isolated_collapsed_word_uses_remaining_interval_between_acoustic_anchor
     assert (words[1].start, words[1].end) == (0.8, 1.4)
 
 
-def test_collapsed_consonant_preposition_uses_one_model_time_quantum(tmp_path):
+def test_collapsed_consonant_preposition_uses_one_model_time_quantum(tmp_path, monkeypatch):
     audio = tmp_path / "vocals.flac"
     sf.write(audio, np.zeros(44100 * 3, dtype=np.float32), 44100)
     items = [
@@ -1095,6 +1312,7 @@ def test_collapsed_consonant_preposition_uses_one_model_time_quantum(tmp_path):
         {"text": "городе", "start_time": 1, "end_time": 2},
     ]
     aligner = Qwen3ForcedAligner("test-model")
+    monkeypatch.delenv("KARAOKE_AI_CTC_RU_MODEL", raising=False)
     aligner._model = SimpleNamespace(
         timestamp_segment_time=80,
         align=lambda audio, **_kwargs: [SimpleNamespace(items=items) for _ in audio],

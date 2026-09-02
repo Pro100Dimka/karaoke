@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session
 import config
 import models
 from AI.artifacts import recover_orphaned_backups
+from AI.audio_pipeline_v2 import AudioPipelineV2
 from AI.cache import StageCache
 from AI.notes import NOTE_DECODER_VERSION
-from AI.pipeline import KaraokePipeline
 from AI.pitch_post import PITCH_STABILIZER_VERSION
 from AI.runtime import RuntimePlan, configure_runtime, format_runtime_plan
 from AI.version import AI_BUILD_ID
@@ -807,7 +807,9 @@ def _invoke_ai_pipeline(
     source_path: str,
     out_dir: Path,
     lyrics_path: Path | None,
-    searchable_title: str | None,
+    artist: str | None,
+    title: str | None,
+    genre: str | None,
     bpm_override: float | None,
     key_override: str | None,
     processing_mode: str,
@@ -820,15 +822,67 @@ def _invoke_ai_pipeline(
     cancelled = lambda: _is_cancelled(song_id)  # noqa: E731
     if reuse_vocals:
         return ai_bridge.reprocess_song(
-            out_dir, title=searchable_title, language=language,
+            out_dir, artist=artist, title=title, language=language,
             progress=progress, cancelled=cancelled,
         )
     return ai_bridge.process_song(
         source_path, out_dir, lyrics_path=lyrics_path,
-        title=searchable_title, bpm_override=bpm_override,
+        artist=artist, title=title, genre=genre, bpm_override=bpm_override,
         key_override=key_override, processing_mode=processing_mode,
         language=language, progress=progress, cancelled=cancelled,
     )
+
+
+def _complete_audio_media(
+    song_id: str,
+    out_dir: Path,
+    *,
+    artist: str | None,
+    title: str | None,
+    prepared: dict[str, object] | None = None,
+) -> None:
+    if not artist or not title:
+        raise ValueError("Для загрузки клипа нужны точные исполнитель и название")
+    if _is_cancelled(song_id):
+        raise ProcessingCancelled("Processing cancelled by user")
+    metadata_path = out_dir / "metadata.json"
+    metadata = _read_optional_generated_json(metadata_path, {})
+    expected_duration = None
+    if isinstance(metadata, dict):
+        try:
+            expected_duration = float(metadata.get("duration") or 0) or None
+        except (TypeError, ValueError):
+            expected_duration = None
+    _update_progress(
+        song_id,
+        step_label="Загружаем и проверяем клип",
+        percent=98.5,
+    )
+    media = prepared or metadata_enrichment_service.prepare_training_media(
+        title, artist, out_dir, expected_duration=expected_duration
+    )
+    if media.get("cover_status") != "ready" or not (out_dir / "cover.jpg").is_file():
+        raise ValueError("Не удалось загрузить и проверить обложку песни")
+    if media.get("video_status") != "ready" or not (
+        metadata_enrichment_service.video_file_is_ready(
+            out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME,
+            expected_duration=expected_duration,
+        )
+    ):
+        raise ValueError("Не удалось загрузить и полностью проверить клип песни")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata["media"] = {
+        "cover_status": "ready",
+        "video_status": "ready",
+        "video_id": media.get("video_id"),
+    }
+    warnings = media.get("warnings")
+    metadata["warnings"] = list(warnings) if isinstance(warnings, list) else []
+    files = set(metadata.get("files", [])) if isinstance(metadata.get("files"), list) else set()
+    files.update({"cover.jpg", "clip.mp4", "clip.source.json"})
+    metadata["files"] = sorted(files)
+    write_json(metadata_path, metadata)
 
 
 def _finalize_processed_job(
@@ -976,6 +1030,14 @@ def _load_song_identity(song_id: str) -> tuple[str | None, str | None]:
         return artist, title
 
 
+def _load_song_genre(song_id: str) -> str | None:
+    with _song_session(song_id) as (_db, song):
+        return (
+            str(getattr(song, "genre", "") or "").strip() or None
+            if song is not None else None
+        )
+
+
 def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
@@ -993,7 +1055,8 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         else:
             _run_symbolic_job(song_id, source_path, out_dir)
         return
-    searchable_title = _load_searchable_title(song_id)
+    artist, title = _load_song_identity(song_id)
+    genre = _load_song_genre(song_id)
     lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
 
     capture: _ProgressCapture | None = None
@@ -1001,6 +1064,7 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
     heartbeat_thread: threading.Thread | None = None
     slot_acquired = False
     pipeline_succeeded = False
+    media_process: metadata_enrichment_service.TrainingMediaProcess | None = None
     started_at = time.monotonic()
     try:
         slot_acquired = _acquire_processing_slot(song_id)
@@ -1010,13 +1074,26 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
         _begin_runtime_progress(song_id)
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
+        if not reuse_vocals and artist and title:
+            # Network media work is independent of GPU separation, lyric
+            # lookup and metadata lookup. Start it immediately so downloading
+            # a full clip does not extend the critical path at the end.
+            source_duration = None
+            with contextlib.suppress(RuntimeError, OSError, ValueError):
+                source_duration = float(sf.info(source_path).duration) or None
+            media_process = metadata_enrichment_service.start_training_media_process(
+                title,
+                artist,
+                out_dir,
+                expected_duration=source_duration,
+            )
         _ensure_cover_extracted(source_path, out_dir)
         _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
         model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
 
         runtime_plan = _configure_ai_runtime()
         capture.write(
-            f"[backend] AI build={AI_BUILD_ID} pipeline={KaraokePipeline.VERSION} "
+            f"[backend] AI build={AI_BUILD_ID} pipeline={AudioPipelineV2.VERSION} "
             f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
         )
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
@@ -1024,9 +1101,20 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
 
         with _limit_background_native_threads():
             result = _invoke_ai_pipeline(
-                song_id, source_path, out_dir, lyrics_path, searchable_title,
+                song_id, source_path, out_dir, lyrics_path, artist, title, genre,
                 bpm_override, key_override, processing_mode, capture,
                 reuse_vocals=reuse_vocals,
+            )
+        if not reuse_vocals:
+            _complete_audio_media(
+                song_id,
+                out_dir,
+                artist=artist,
+                title=title,
+                prepared=(
+                    media_process.result(cancelled=lambda: _is_cancelled(song_id))
+                    if media_process else None
+                ),
             )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
@@ -1057,13 +1145,15 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
                 lyrics_path.unlink(missing_ok=True)
             _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
             _end_runtime_progress(song_id)
+            if media_process is not None:
+                media_process.close()
             cleanup_succeeded = True
         finally:
             if slot_acquired and (not pipeline_succeeded or not cleanup_succeeded):
                 _release_processing_slot(song_id)
 
     try:
-        _finalize_processed_job(song_id, out_dir)
+        _finalize_processed_job(song_id, out_dir, retain_source=True)
     finally:
         if slot_acquired: _release_processing_slot(song_id)
     _log_processing_finished(song_id, started_at)
@@ -1110,6 +1200,13 @@ def _read_optional_generated_json(path: Path, default):
 
 def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     music = _read_optional_generated_json(out_dir / "lyricsSync.json", {})
+    generated = _read_optional_generated_json(out_dir / "metadata.json", {})
+    if (
+        not getattr(song, "genre", None)
+        and isinstance(generated, dict)
+        and str(generated.get("genre") or "").strip()
+    ):
+        song.genre = str(generated["genre"]).strip()
     if isinstance(music, dict):
         key_user_edited = getattr(
             song, "key_user_edited", getattr(

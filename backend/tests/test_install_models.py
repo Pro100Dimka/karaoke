@@ -2,7 +2,16 @@ import hashlib
 import os
 
 from AI import install_models
-from AI.model_registry import ModelSpec
+from AI.model_registry import ModelSpec, get_model
+
+
+def test_vocalparse_checkpoint_is_pinned_and_hash_verified():
+    model = get_model("vocalparse")
+
+    assert model.repo_id == "pymaster/VocalParse"
+    assert len(model.revision) == 40
+    assert model.filename == "model.safetensors"
+    assert model.sha256 == "08a69f96082ed962950b7a6e90cd1482e87b132cecab1d805a7a024fcee7b08d"
 
 
 def _make_model(tmp_path, content=b"hello world"):

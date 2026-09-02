@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import html
 import io
 import json
 import logging
+import multiprocessing
 import os
+import queue
 import re
 import subprocess
 import tempfile
@@ -83,6 +86,95 @@ LOCAL_VIDEO_SOURCE_NAME = "clip.source.json"
 _active: set[str] = set()
 _validated_video_urls: set[str] = set()
 _lock = threading.Lock()
+
+
+def _training_media_process_entry(
+    results,
+    title: str,
+    artist: str | None,
+    output_dir: str,
+    expected_duration: float | None,
+) -> None:
+    try:
+        results.put((
+            "ok",
+            prepare_training_media(
+                title,
+                artist,
+                Path(output_dir),
+                expected_duration=expected_duration,
+            ),
+        ))
+    except BaseException as exc:  # child-process boundary
+        results.put(("error", f"{type(exc).__name__}: {exc}"))
+
+
+class TrainingMediaProcess:
+    def __init__(
+        self,
+        title: str,
+        artist: str | None,
+        output_dir: Path,
+        *,
+        expected_duration: float | None = None,
+    ) -> None:
+        context = multiprocessing.get_context("spawn")
+        self._results = context.Queue(1)
+        self._process = context.Process(
+            target=_training_media_process_entry,
+            args=(self._results, title, artist, str(output_dir), expected_duration),
+            daemon=True,
+            name="audio-v2-media",
+        )
+        self._process.start()
+
+    @property
+    def pid(self) -> int | None:
+        return self._process.pid
+
+    def result(self, *, cancelled=None) -> dict[str, object]:
+        while True:
+            if callable(cancelled) and cancelled():
+                self.close()
+                raise RuntimeError("Media preparation cancelled")
+            try:
+                status, payload = self._results.get(timeout=0.25)
+            except queue.Empty:
+                if self._process.is_alive():
+                    continue
+                raise RuntimeError(
+                    f"Media preparation process exited with {self._process.exitcode}"
+                ) from None
+            self._process.join(timeout=1)
+            if status != "ok":
+                raise RuntimeError(str(payload))
+            return dict(payload)
+
+    def close(self) -> None:
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=2)
+        if self._process.is_alive() and hasattr(self._process, "kill"):
+            self._process.kill()
+            self._process.join(timeout=2)
+        with contextlib.suppress(OSError, ValueError):
+            self._results.close()
+            self._results.cancel_join_thread()
+
+
+def start_training_media_process(
+    title: str,
+    artist: str | None,
+    output_dir: Path,
+    *,
+    expected_duration: float | None = None,
+) -> TrainingMediaProcess:
+    return TrainingMediaProcess(
+        title,
+        artist,
+        output_dir,
+        expected_duration=expected_duration,
+    )
 
 
 def _request(url: str, timeout: float = 3.0) -> bytes:
@@ -325,6 +417,30 @@ def _video_has_motion(path: Path, duration: float) -> bool:
     return sum(change >= 3.5 for change in changes) >= 3
 
 
+def video_file_is_ready(
+    path: Path,
+    *,
+    expected_duration: float | None = None,
+) -> bool:
+    """Return true only for a complete, playable and song-length local clip."""
+    try:
+        if not path.is_file() or path.stat().st_size < 1_000_000:
+            return False
+    except OSError:
+        return False
+    info = _video_info(path)
+    if not info:
+        return False
+    width, height, duration = info
+    if width < 640 or height < 360 or duration < 20:
+        return False
+    if expected_duration and expected_duration > 0:
+        maximum_drift = max(45.0, expected_duration * 0.25)
+        if abs(duration - expected_duration) > maximum_drift:
+            return False
+    return _video_has_motion(path, duration)
+
+
 def _detected_crop(path: Path, width: int, height: int, duration: float) -> str:
     seek = max(0.0, min(duration * 0.35, max(0.0, duration - 8)))
     try:
@@ -524,7 +640,10 @@ def prepare_training_media(
         if not cover_ready:
             warnings.append("Не удалось получить обложку песни")
 
-    video_ready = (output_dir / LOCAL_VIDEO_NAME).is_file()
+    video_ready = video_file_is_ready(
+        output_dir / LOCAL_VIDEO_NAME,
+        expected_duration=expected_duration,
+    )
     if not video_ready and video_id:
         video_ready = _download_youtube_video(
             video_id,

@@ -41,6 +41,21 @@ def test_accepts_ordered_syllables_that_reconstruct_the_word():
     assert validate_lyrics_document(payload) is payload
 
 
+def test_audio_words_receive_language_independent_syllable_structure():
+    words = [Word(1.0, 3.0, "полковнику", index=0)]
+    notes = [
+        VocalNote(1.0, 1.5, 60, word_index=0),
+        VocalNote(1.5, 3.0, 62, word_index=0),
+    ]
+
+    [result] = words_with_notes(words, notes)
+
+    assert [item["text"] for item in result["syllables"]] == ["пол", "ков", "ни", "ку"]
+    assert "".join(item["text"] for item in result["syllables"]) == "полковнику"
+    assert result["syllables"][0]["start"] == 1.0
+    assert result["syllables"][-1]["end"] == 3.0
+
+
 @pytest.mark.parametrize(
     "syllables",
     [
@@ -150,6 +165,19 @@ def test_sustained_acoustic_note_is_preserved_in_every_word_it_crosses():
         {"note": 60, "start": 1.1, "end": 1.4, "word_index": 0},
         {"note": 60, "start": 1.4, "end": 1.7, "word_index": 1},
     ]
+
+
+def test_owner_only_export_does_not_duplicate_a_note_into_an_overlapping_word():
+    words = [
+        Word(1.0, 2.0, "first", index=0),
+        Word(1.5, 2.5, "second", index=1),
+    ]
+    notes = [VocalNote(1.6, 1.9, 60, word_index=1)]
+
+    payload = words_with_notes(words, notes, owner_only=True)
+
+    assert payload[0]["notes"] == []
+    assert payload[1]["notes"] == [{"note": 60, "start": 1.6, "end": 1.9}]
 
 
 def test_export_preserves_every_acoustically_detected_interval_without_filling_gaps():

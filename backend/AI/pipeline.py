@@ -14,7 +14,7 @@ from .config import CoreConfig
 from .engines.device import release_torch_memory
 from .engines.registry import EngineRegistry
 from .engines.text import UniformTextFallback, tokenize
-from .errors import AlignmentTimeoutError, EngineUnavailableError, ProcessingCancelledError
+from .errors import EngineUnavailableError, ProcessingCancelledError
 from .lyrics_document import validate_lyrics_document, words_with_notes
 from .lyrics_sources import LyricsDiscovery, TimedLine, discover_lyrics
 from .models import StageReport, Word
@@ -67,6 +67,7 @@ class PipelineRequest:
     output_dir: str | Path
     language: str | None = None
     lyrics_path: str | Path | None = None
+    artist: str | None = None
     title: str | None = None
     progress: object | None = None
     cancelled: object | None = None
@@ -184,7 +185,11 @@ class KaraokePipeline:
         if request.lyrics_path and Path(request.lyrics_path).is_file():
             text = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
             return text, [], ()
-        found = discovery.result() if discovery else discover_lyrics(request.title)
+        found = discovery.result() if discovery else discover_lyrics(
+            request.title, request.artist
+        )
+        if found is None and discovery is not None:
+            found = discover_lyrics(request.title, request.artist)
         if found:
             print(
                 f"[AI] lyrics source={found.source} timed_lines={len(found.lines)}",
@@ -222,7 +227,7 @@ class KaraokePipeline:
             # A timed-out child has already been terminated. Do not leave the
             # whole song failed after minutes of useful work: publish a safe,
             # approximate word layout and let processing reach a terminal state.
-            if not isinstance(error, EngineUnavailableError) and not self.config.allow_fallback:
+            if not self.config.allow_fallback:
                 raise
             logger.warning("Acoustic alignment unavailable; using uniform timing: %s", error)
             words = UniformTextFallback().align(vocals, text, language)
@@ -238,7 +243,12 @@ class KaraokePipeline:
         output.mkdir(parents=True, exist_ok=True)
         reports: list[StageReport] = []
         warnings: list[str] = []
-        profile = resolve_processing_profile(request.processing_mode, get_runtime_plan())
+        requested_mode = (
+            "fast"
+            if str(request.processing_mode or "auto").strip().lower() == "auto"
+            else request.processing_mode
+        )
+        profile = resolve_processing_profile(requested_mode, get_runtime_plan())
         # Keep expensive model weights warm in system RAM between jobs while
         # returning their CUDA memory to the separator. Reloading Qwen's
         # checkpoint shards from disk added tens of seconds to every song.
@@ -255,7 +265,7 @@ class KaraokePipeline:
             mix, raw_vocals = work / "mix.wav", work / "vocals.raw.flac"
             vocals, instrumental, lyrics = work / "vocals.flac", work / "instrumental.flac", work / "lyricsSync.json"
             discovery = (
-                parallel.submit(discover_lyrics, request.title)
+                parallel.submit(discover_lyrics, request.title, request.artist)
                 if request.title and not request.lyrics_path else None
             )
 
@@ -372,7 +382,7 @@ class KaraokePipeline:
         reports: list[StageReport] = []
         timed_lines: tuple[TimedLine, ...] = ()
         if request.title:
-            found = discover_lyrics(request.title)
+            found = discover_lyrics(request.title, request.artist)
             if found and found.lines:
                 canonical = [token.casefold() for token in tokenize(text)]
                 discovered = [token.casefold() for token in tokenize(found.text)]

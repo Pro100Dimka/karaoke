@@ -15,6 +15,40 @@ LYRICS_SCHEMA_VERSION = 1
 
 MIN_BPM = 20
 MAX_BPM = 400
+_VOWELS = frozenset(
+    "aeiouyAEIOUY"
+    "аеёиоуыэюяАЕЁИОУЫЭЮЯ"
+    "аеиіоуяюєїАЕИІОУЯЮЄЇ"
+)
+
+
+def _syllable_texts(text: str) -> list[str]:
+    vowels = [index for index, character in enumerate(text) if character in _VOWELS]
+    if len(vowels) < 2:
+        return [text]
+    boundaries = [
+        max(left + 1, right - 1)
+        for left, right in zip(vowels, vowels[1:], strict=False)
+    ]
+    starts = [0, *boundaries]
+    ends = [*boundaries, len(text)]
+    return [text[start:end] for start, end in zip(starts, ends, strict=True) if end > start]
+
+
+def _word_syllables(word: Word) -> list[dict[str, Any]]:
+    texts = _syllable_texts(word.text)
+    if len(texts) < 2:
+        return []
+    weights = [max(1, sum(character.isalnum() for character in text)) for text in texts]
+    total_weight = sum(weights)
+    span = word.end - word.start
+    result, elapsed = [], 0
+    for index, (text, weight) in enumerate(zip(texts, weights, strict=True)):
+        start = word.start + span * elapsed / total_weight
+        elapsed += weight
+        end = word.end if index + 1 == len(texts) else word.start + span * elapsed / total_weight
+        result.append({"text": text, "start": start, "end": end})
+    return result
 
 
 def validate_lyrics_document(payload: Any) -> dict[str, Any]:
@@ -96,10 +130,20 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
     return payload
 
 
-def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str, Any]]:
+def words_with_notes(
+    words: list[Word],
+    notes: list[VocalNote],
+    *,
+    owner_only: bool = False,
+) -> list[dict[str, Any]]:
     result = []
     for word in words:
-        owned = [note for note in notes if note.end > word.start and note.start < word.end]
+        owned = [
+            note for note in notes
+            if note.end > word.start
+            and note.start < word.end
+            and (not owner_only or note.word_index == word.index)
+        ]
         clipped = []
         for note in owned:
             start, end = max(note.start, word.start), min(note.end, word.end)
@@ -112,7 +156,10 @@ def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str
                 )
                 continue
             clipped.append({"note": note.midi_note, "start": start, "end": end})
-        result.append({**to_dict(word), "notes": clipped})
+        item = {**to_dict(word), "notes": clipped}
+        if syllables := _word_syllables(word):
+            item["syllables"] = syllables
+        result.append(item)
     return result
 
 

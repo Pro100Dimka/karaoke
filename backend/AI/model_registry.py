@@ -43,6 +43,7 @@ MODELS = (
     ModelSpec("ctc_ru", "Russian CTC aligner", "jonatasgrosman/wav2vec2-large-xlsr-53-russian", "2329100508896c6d9b157019803ab5601e6f3406", "ctc/wav2vec2-large-xlsr-53-russian", "KARAOKE_AI_CTC_RU_MODEL", 1_265_908_849, filename="pytorch_model.bin", sha256="d1cdb1a7921de7d363f967a9b0101a713602e109dba62b6f3f9ae2e0b2df0c1c", ignore_patterns=("language_model/**", "flax_model.msgpack")),
     ModelSpec("ctc_uk", "Ukrainian CTC aligner", "Yehor/wav2vec2-xls-r-300m-uk-with-small-lm", "e3ced4def0d70be3aab0f2db598a59961fe9ab3b", "ctc/wav2vec2-xls-r-300m-uk", "KARAOKE_AI_CTC_UK_MODEL", 1_261_978_306, filename="model.safetensors", sha256="e8d3ea3825853c6016539d474878fc281cf0bbb2fa9209f34f403b91e2eb0fe9", ignore_patterns=("language_model/**", "flax_model.msgpack")),
     ModelSpec("roformer", "Mel-Band RoFormer", "KimberleyJSN/melbandroformer", "ac9b0614ab3cd7f77219e18ba494dfd93956c348", "roformer", "MSST_CHECKPOINT", 913_106_900, kind="file", filename="MelBandRoformer.ckpt", sha256="87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e"),
+    ModelSpec("vocalparse", "VocalParse symbolic score", "pymaster/VocalParse", "4c617b1a88c8e663351d9072c549d81d7f78a36f", "vocalparse", "KARAOKE_AI_VOCALPARSE_MODEL", 4_076_867_480, filename="model.safetensors", sha256="08a69f96082ed962950b7a6e90cd1482e87b132cecab1d805a7a024fcee7b08d"),
 )
 MODEL_BY_KEY = {model.key: model for model in MODELS}
 

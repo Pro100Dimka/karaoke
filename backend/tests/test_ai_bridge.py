@@ -20,12 +20,14 @@ def test_process_song_forwards_the_request(monkeypatch, tmp_path):
         "source",
         tmp_path,
         language="ru",
+        artist="Artist",
         title="Song",
         bpm_override=120,
         key_override="C",
         processing_mode="fast",
     ) == "result"
     assert service.process_song.call_args.kwargs["source_path"] == "source"
+    assert service.process_song.call_args.kwargs["artist"] == "Artist"
     assert service.process_song.call_args.kwargs["processing_mode"] == "fast"
 
 

@@ -87,6 +87,20 @@ def test_video_normalization_accepts_normal_video_intro_duration(monkeypatch, tm
         expected_duration=193.0,
     ) is True
 
+
+def test_local_clip_is_ready_only_when_complete_playable_and_matches_song(monkeypatch, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"0" * 1_000_001)
+    monkeypatch.setattr(metadata, "_video_info", Mock(return_value=(1280, 720, 206.0)))
+    monkeypatch.setattr(metadata, "_video_has_motion", Mock(return_value=True))
+
+    assert metadata.video_file_is_ready(clip, expected_duration=193.0) is True
+
+    metadata._video_info.return_value = (1280, 720, 400.0)
+    assert metadata.video_file_is_ready(clip, expected_duration=193.0) is False
+    clip.write_bytes(b"partial")
+    assert metadata.video_file_is_ready(clip, expected_duration=193.0) is False
+
 def test_youtube_download_has_a_format_fallback_and_quiet_logger(monkeypatch, tmp_path):
     captured = {}
 
@@ -117,6 +131,7 @@ def test_training_media_creates_cover_and_validated_local_clip(monkeypatch, tmp_
         _youtube_video_id=Mock(return_value="DAaLa3vF8sU"),
         _download_square_cover=Mock(return_value=True),
         _download_youtube_video=Mock(return_value=True),
+        video_file_is_ready=Mock(return_value=False),
     )
 
     result = metadata.prepare_training_media(
@@ -140,6 +155,66 @@ def test_training_media_creates_cover_and_validated_local_clip(monkeypatch, tmp_
         tmp_path,
         expected_duration=None,
     )
+
+
+def test_training_media_starts_in_a_dedicated_spawn_process(monkeypatch, tmp_path):
+    created = {}
+
+    class FakeQueue:
+        def get(self, timeout):
+            assert timeout == 0.25
+            return "ok", {"cover_status": "ready", "video_status": "ready"}
+
+        def close(self):
+            return None
+
+        def cancel_join_thread(self):
+            return None
+
+    class FakeProcess:
+        pid = 42
+        exitcode = 0
+
+        def __init__(self, **kwargs):
+            created.update(kwargs)
+            self.started = False
+
+        def start(self):
+            self.started = True
+
+        def is_alive(self):
+            return False
+
+        def join(self, timeout):
+            assert timeout in {1, 2}
+
+    class FakeContext:
+        def Queue(self, size):
+            assert size == 1
+            return FakeQueue()
+
+        def Process(self, **kwargs):
+            process = FakeProcess(**kwargs)
+            created["process"] = process
+            return process
+
+    get_context = Mock(return_value=FakeContext())
+    monkeypatch.setattr(metadata.multiprocessing, "get_context", get_context)
+
+    process = metadata.start_training_media_process(
+        "Song",
+        "Artist",
+        tmp_path,
+        expected_duration=193.25,
+    )
+
+    get_context.assert_called_once_with("spawn")
+    assert created["process"].started is True
+    assert created["daemon"] is True
+    assert created["name"] == "audio-v2-media"
+    assert created["args"][4] == 193.25
+    assert process.pid == 42
+    assert process.result()["video_status"] == "ready"
 
 
 def test_enrichment_persists_missing_metadata(monkeypatch):

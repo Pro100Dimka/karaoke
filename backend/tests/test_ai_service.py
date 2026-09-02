@@ -50,7 +50,11 @@ def test_process_song_allows_up_to_max_concurrent_jobs_at_once():
     service = make_service(pipeline, max_concurrent=2)
 
     threads = [
-        threading.Thread(target=service.process_song, args=(f"source-{i}", f"out-{i}"))
+        threading.Thread(
+            target=service.process_song,
+            args=(f"source-{i}", f"out-{i}"),
+            kwargs={"artist": "Artist", "title": f"Song {i}"},
+        )
         for i in range(3)
     ]
     for thread in threads:
@@ -72,7 +76,11 @@ def test_close_waits_for_in_flight_jobs_and_blocks_new_ones_meanwhile():
     service = make_service(pipeline, max_concurrent=2)
 
     job_threads = [
-        threading.Thread(target=service.process_song, args=(f"source-{i}", f"out-{i}"))
+        threading.Thread(
+            target=service.process_song,
+            args=(f"source-{i}", f"out-{i}"),
+            kwargs={"artist": "Artist", "title": f"Song {i}"},
+        )
         for i in range(2)
     ]
     for thread in job_threads:
@@ -98,7 +106,9 @@ def test_close_waits_for_in_flight_jobs_and_blocks_new_ones_meanwhile():
 
     def new_job():
         new_job_started.set()
-        new_job_result["ran"] = service.process_song("late-source", "late-out")
+        new_job_result["ran"] = service.process_song(
+            "late-source", "late-out", artist="Artist", title="Late song"
+        )
 
     new_job_thread = threading.Thread(target=new_job)
     new_job_thread.start()

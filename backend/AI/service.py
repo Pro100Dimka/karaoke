@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import threading
 
+from .audio_pipeline_v2 import AudioPipelineV2, AudioPipelineV2Request
 from .config import CoreConfig
 from .errors import ConfigurationError
-from .pipeline import KaraokePipeline, PipelineRequest, PipelineResult
+from .pipeline import KaraokePipeline, PipelineResult
 from .pitch_post import stabilize_pitch
 from .runtime import get_runtime_plan
 
@@ -12,7 +13,12 @@ from .runtime import get_runtime_plan
 class AICoreService:
     def __init__(self, config: CoreConfig | None = None):
         self.config = config or CoreConfig.from_env()
-        self.pipeline = KaraokePipeline(self.config)
+        # Ordinary audio uploads have their own implementation.  The legacy
+        # KaraokePipeline is retained only for the explicit "reprocess the
+        # already generated vocals" operation and is never called by
+        # process_song().
+        self.pipeline = AudioPipelineV2(self.config)
+        self._reprocessor: KaraokePipeline | None = None
         # A plain lock capped concurrent AI work at exactly one job, even
         # across unrelated songs (and users) that had nothing to serialize
         # for -- a GPU-bound stage on one song blocked a purely CPU-bound
@@ -24,11 +30,15 @@ class AICoreService:
 
     def process_song(self, source_path, output_dir, **options) -> PipelineResult:
         with self._lock:
-            return self.pipeline.run(PipelineRequest(source_path, output_dir, **options))
+            return self.pipeline.run(
+                AudioPipelineV2Request(source_path, output_dir, **options)
+            )
 
     def reprocess_song(self, output_dir, **options) -> PipelineResult:
         with self._lock:
-            return self.pipeline.reprocess(output_dir, **options)
+            if self._reprocessor is None:
+                self._reprocessor = KaraokePipeline(self.config)
+            return self._reprocessor.reprocess(output_dir, **options)
 
     def analyze_pitch(self, audio_path):
         with self._lock:
@@ -59,6 +69,9 @@ class AICoreService:
             self._lock.acquire()
         try:
             self.pipeline.close()
+            if (reprocessor := getattr(self, "_reprocessor", None)) is not None:
+                reprocessor.close()
+                self._reprocessor = None
         finally:
             for _ in range(self._max_concurrent):
                 self._lock.release()

@@ -151,6 +151,16 @@ def _ctc_tokens(tokens: list[str], language: str) -> list[str]:
     return [_ctc_token(token, language) or token for token in tokens]
 
 
+def _ctc_language_encodable(token: str, language: str) -> bool:
+    normalized = _ctc_token(token, language)
+    if language not in {"Russian", "Ukrainian"}:
+        return bool(normalized)
+    return bool(normalized) and all(
+        character == "'" or "CYRILLIC" in unicodedata.name(character, "")
+        for character in normalized
+    )
+
+
 def _ctc_role(language: str) -> str:
     return "ctc_uk" if language == "Ukrainian" else "ctc_ru"
 
@@ -500,6 +510,50 @@ def _timed_line_plan(text: str, lines, span: float):
     return tokens, entries, groups
 
 
+def _timed_line_offset(samples, rate: int, lines, span: float) -> float:
+    """Estimate a changed intro length from the isolated vocal energy."""
+    import numpy as np
+
+    if len(lines) < 2 or rate <= 0 or span <= 0:
+        return 0.0
+    frame_seconds = 0.1
+    frame_size = max(1, round(rate * frame_seconds))
+    signal = np.asarray(samples, dtype=np.float32).reshape(-1)
+    padding = (-len(signal)) % frame_size
+    if padding:
+        signal = np.pad(signal, (0, padding))
+    energy = np.sqrt(np.mean(signal.reshape(-1, frame_size) ** 2, axis=1) + 1e-10)
+    energy = np.log1p(energy * 100.0)
+    prefix = np.concatenate(([0.0], np.cumsum(energy)))
+    starts = [float(line.start) for line in lines]
+    word_counts = [max(1, len(tokenize(str(line.text)))) for line in lines]
+
+    def score(offset: float) -> float:
+        total = frames = valid = 0
+        for index, (start, count) in enumerate(zip(starts, word_counts, strict=True)):
+            shifted = start + offset
+            following = starts[index + 1] + offset if index + 1 < len(starts) else span
+            end = min(following, shifted + max(1.0, 0.45 * count))
+            lower = max(0, round(shifted / frame_seconds))
+            upper = min(len(energy), round(end / frame_seconds))
+            if upper <= lower:
+                continue
+            total += prefix[upper] - prefix[lower]
+            frames += upper - lower
+            valid += 1
+        if valid < max(2, round(len(starts) * 0.8)) or not frames:
+            return float("-inf")
+        return float(total / frames) - abs(offset) * 0.0005
+
+    limit = min(180.0, span)
+    candidates = np.arange(-limit, limit + frame_seconds / 2, frame_seconds)
+    best = max((score(float(offset)), float(offset)) for offset in candidates)
+    baseline = score(0.0)
+    if not np.isfinite(best[0]) or best[0] < baseline + max(0.05, abs(baseline) * 0.08):
+        return 0.0
+    return round(best[1], 3)
+
+
 def _timed_line_retry_stages(words, entries, span: float):
     """Yield retry policies in order, observing words filled by earlier stages."""
     per_line = []
@@ -646,6 +700,22 @@ class Qwen3Transcriber(Transcriber):
             )
         return _activate_loaded(self._model, "asr")
 
+    def transcribe_neural(self, audio, language):
+        chunks = _asr_voice_chunks(audio)
+        kwargs = {"audio": chunks if len(chunks) > 1 else chunks[0]}
+        if language:
+            resolved = resolve_alignment_language("", language)
+            kwargs["language"] = [resolved] * len(chunks) if len(chunks) > 1 else resolved
+        raw = self._load().transcribe(**kwargs)
+        items = list(raw) if isinstance(raw, (list, tuple)) else [raw]
+        text = "\n".join(
+            str(item.get("text", "") if isinstance(item, dict)
+                else getattr(item, "text", item)).strip()
+            for item in items
+            if item is not None
+        ).strip()
+        return text, _words(items[0]) if len(items) == 1 else []
+
     def transcribe(self, audio, language):
         resolved = resolve_alignment_language("", language)
         variable = {
@@ -675,20 +745,7 @@ class Qwen3Transcriber(Transcriber):
                     f"[AI] transcription=ctc-direct unavailable; falling back to Qwen: {error}",
                     flush=True,
                 )
-        chunks = _asr_voice_chunks(audio)
-        kwargs = {"audio": chunks if len(chunks) > 1 else chunks[0]}
-        if language:
-            resolved = resolve_alignment_language("", language)
-            kwargs["language"] = [resolved] * len(chunks) if len(chunks) > 1 else resolved
-        raw = self._load().transcribe(**kwargs)
-        items = list(raw) if isinstance(raw, (list, tuple)) else [raw]
-        text = "\n".join(
-            str(item.get("text", "") if isinstance(item, dict)
-                else getattr(item, "text", item)).strip()
-            for item in items
-            if item is not None
-        ).strip()
-        return text, _words(items[0]) if len(items) == 1 else []
+        return self.transcribe_neural(audio, language)
 
     def close(self) -> None:
         for transcriber in self._ctc.values():
@@ -730,6 +787,20 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
         _park_loaded(self._model)
         for aligner in self._ctc.values():
             getattr(aligner, "park", lambda: None)()
+
+    def transcribe_ctc(self, audio, language=None) -> list[Word]:
+        resolved = resolve_alignment_language("", language)
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if not model_path:
+            return []
+        ctc = self._ctc.setdefault(
+            model_path, _create_ctc_aligner(model_path, resolved)
+        )
+        return ctc.transcribe(audio)
 
     def _raw(self, audio, text, language) -> list[Word]:
         raw = self._load().align(audio=str(audio), text=text,
@@ -827,6 +898,84 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
             )
             return None
 
+    def _ctc_timed_lines(self, samples, rate, tokens, entries, span, resolved):
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if not model_path or not tokens:
+            return None
+        try:
+            ctc = self._ctc.setdefault(
+                model_path, _create_ctc_aligner(model_path, resolved)
+            )
+            resolved_words: list[Word | None] = [None] * len(tokens)
+            for line_index, (line_start, lower, upper) in enumerate(entries):
+                next_start = (
+                    entries[line_index + 1][0]
+                    if line_index + 1 < len(entries)
+                    else span
+                )
+                window_start = max(0.0, line_start - 0.6)
+                window_end = min(
+                    span,
+                    max(line_start + 0.75, min(next_start + 0.75, line_start + 20.0)),
+                )
+                segment = samples[
+                    round(window_start * rate):round(window_end * rate)
+                ]
+                original = tokens[lower:upper]
+                encodable = [
+                    index for index, token in enumerate(original)
+                    if _ctc_language_encodable(token, resolved)
+                ]
+                for run_start, run_end in _runs(encodable):
+                    run_tokens = original[run_start:run_end]
+                    try:
+                        aligned = ctc.align(
+                            segment,
+                            rate,
+                            _ctc_tokens(run_tokens, resolved),
+                            window_start,
+                        )
+                    except (EngineUnavailableError, InvalidArtifactError):
+                        continue
+                    relabelled = _relabel_ctc_words(
+                        aligned, run_tokens, lower + run_start
+                    )
+                    resolved_words[
+                        lower + run_start:lower + run_end
+                    ] = relabelled
+            _fill_unresolved_timed_lines(
+                resolved_words, entries, tokens, span
+            )
+            if any(word is None for word in resolved_words):
+                return None
+            words = [word for word in resolved_words if word is not None]
+            _enforce_monotonic_starts(words, span)
+            _repair_collapsed_timed_lines(words, entries, span)
+            _enforce_monotonic_starts(words, span)
+            validated = self._validate(words, tokens, span)
+            self.needs_voice_anchoring = False
+            print(
+                f"[AI] alignment=ctc-timed-lines language={resolved} "
+                f"lines={len(entries)} words={len(words)}",
+                flush=True,
+            )
+            return validated
+        except (
+            EngineUnavailableError,
+            InvalidArtifactError,
+            OSError,
+            RuntimeError,
+            ValueError,
+        ) as error:
+            print(
+                f"[AI] alignment=ctc-timed-lines unavailable: {error}",
+                flush=True,
+            )
+            return None
     @staticmethod
     def _validate(words: list[Word], tokens: list[str], span: float) -> list[Word]:
         if len(words) != len(tokens):
@@ -863,22 +1012,18 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
         from ..audio import read_mono
 
         span = duration(audio)
-        tokens, entries, groups = _timed_line_plan(text, lines, span)
         samples, rate = read_mono(audio)
         samples = samples.astype(np.float32)
+        offset = _timed_line_offset(samples, rate, lines, span)
+        if offset:
+            lines = tuple(type(line)(line.start + offset, line.text) for line in lines)
+            print(f"[AI] timed-lyrics global_offset={offset:+.3f}s", flush=True)
+        tokens, entries, groups = _timed_line_plan(text, lines, span)
         resolved = resolve_alignment_language(text, language)
-        if ctc_words := self._ctc_full(samples, rate, tokens, span, resolved):
-            # Repeated choruses can occasionally make a whole-song CTC path
-            # choose the wrong occurrence. Timed lyric line starts are cheap,
-            # trusted anchors: reject only a gross mismatch and retain the
-            # existing windowed Qwen path as the quality fallback.
-            if all(
-                abs(ctc_words[lower].start - line_start) <= 3.0
-                for line_start, lower, _upper in entries
-            ):
-                return ctc_words
-            self.needs_voice_anchoring = True
-            print("[AI] alignment=ctc-full rejected by timed-line anchors; Qwen fallback considered", flush=True)
+        if ctc_words := self._ctc_timed_lines(
+            samples, rate, tokens, entries, span, resolved
+        ):
+            return ctc_words
         self._ensure_heavy_alignment()
         words: list[Word | None] = [None] * len(tokens)
 
