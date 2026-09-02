@@ -190,7 +190,7 @@ def test_native_shared_candidate_does_not_switch_mode_or_buffer():
         monitor_worker._stream_candidates({**config, "wasapi_mode": "exclusive"})
 
 
-def test_native_shared_probes_valid_realtime_categories_and_keeps_compatibility_fallback():
+def test_native_shared_probes_only_categories_valid_for_capture_and_render():
     source = (native_wasapi.library_path().parents[3] / "backend/engines/wasapi/monitor.cpp").read_text(encoding="utf-8")
 
     probe = source.index("try_candidate")
@@ -198,10 +198,17 @@ def test_native_shared_probes_valid_realtime_categories_and_keeps_compatibility_
     shared_initialize = source.index("InitializeSharedAudioStream")
     assert probe < period_query < shared_initialize
     assert "AudioCategory_ProAudio" not in source
+    assert "if (flow == eCapture)" in source
+    assert "try_candidate(AudioCategory_Communications, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_Speech, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_Other, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_Other, static_cast<AUDCLNT_STREAMOPTIONS>(0))" in source
     assert "try_candidate(AudioCategory_Media, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_Movie, AUDCLNT_STREAMOPTIONS_RAW)" in source
+    assert "try_candidate(AudioCategory_SoundEffects, AUDCLNT_STREAMOPTIONS_RAW)" in source
     assert "try_candidate(AudioCategory_GameEffects, AUDCLNT_STREAMOPTIONS_RAW)" in source
-    assert "try_candidate(AudioCategory_GameMedia, AUDCLNT_STREAMOPTIONS_RAW)" in source
     assert "try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0))" in source
+    assert "AudioCategory_GameMedia" not in source
     assert "AUDCLNT_STREAMOPTIONS_RAW" in source
     assert "AUDCLNT_SHAREMODE_EXCLUSIVE" not in source
 

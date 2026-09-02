@@ -158,16 +158,29 @@ struct Endpoint {
             period = candidate_period;
             return true;
         };
-        // These are real Windows AUDIO_STREAM_CATEGORY values. Probe their
-        // driver-reported shared periods instead of assuming one policy is
-        // fastest on every Realtek/USB device. RAW bypasses endpoint APOs that
-        // can add monitoring latency. This never requests exclusive access.
-        try_candidate(AudioCategory_Media, AUDCLNT_STREAMOPTIONS_RAW);
-        try_candidate(AudioCategory_GameEffects, AUDCLNT_STREAMOPTIONS_RAW);
-        try_candidate(AudioCategory_GameMedia, AUDCLNT_STREAMOPTIONS_RAW);
-        // Some drivers reject RAW. Keep the official Media shared fallback.
-        if (!client)
-            try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0));
+        // Windows permits different AUDIO_STREAM_CATEGORY sets for capture
+        // and render. Probe only categories valid for this endpoint and select
+        // the shortest period reported by its driver. RAW bypasses endpoint
+        // APOs that can add monitoring latency. This remains shared mode.
+        if (flow == eCapture) {
+            // Prefer neutral Other on a tie. Speech/Communications win only
+            // when the endpoint genuinely exposes a shorter period for them.
+            try_candidate(AudioCategory_Other, AUDCLNT_STREAMOPTIONS_RAW);
+            try_candidate(AudioCategory_Speech, AUDCLNT_STREAMOPTIONS_RAW);
+            try_candidate(AudioCategory_Communications, AUDCLNT_STREAMOPTIONS_RAW);
+            // Some capture drivers reject RAW. Other is the neutral fallback
+            // and avoids opting into communications signal processing.
+            if (!client)
+                try_candidate(AudioCategory_Other, static_cast<AUDCLNT_STREAMOPTIONS>(0));
+        } else {
+            try_candidate(AudioCategory_Media, AUDCLNT_STREAMOPTIONS_RAW);
+            try_candidate(AudioCategory_Movie, AUDCLNT_STREAMOPTIONS_RAW);
+            try_candidate(AudioCategory_SoundEffects, AUDCLNT_STREAMOPTIONS_RAW);
+            try_candidate(AudioCategory_GameEffects, AUDCLNT_STREAMOPTIONS_RAW);
+            // Media keeps the backing track at normal playback priority.
+            if (!client)
+                try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0));
+        }
         if (!client) throw std::runtime_error("No supported low-latency shared WASAPI configuration");
         if (!initialize) return;
         check(client->InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, period, format, nullptr), "InitializeSharedAudioStream");
