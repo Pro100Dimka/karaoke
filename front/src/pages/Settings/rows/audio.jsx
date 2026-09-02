@@ -112,7 +112,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       tooltip: tr("settings.audio.buffer_size.description"),
       valueType: "number",
       label: tr("settings.audio.buffer_size.label"),
-      options: [64, 128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
+      options: [16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
     },
     {
       md: 12,
