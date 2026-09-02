@@ -26,7 +26,10 @@ export function calculateRadioLightingPulse(currentBands, previousBands, previou
   });
   const hit = Math.max(...attacks);
   const before = Math.min(1, Math.max(0, Number(previousPulse) || 0));
-  return hit > before ? before + (hit - before) * 0.82 : Math.max(0.045, before * 0.9);
+  // A percussion pulse is deliberately short-lived. A slow release makes
+  // frequent kicks accumulate into a permanently bright bed, hiding every
+  // later hit even though the detector still sees it.
+  return hit > before ? before + (hit - before) * 0.82 : before * 0.72;
 }
 
 export function calculateRadioSpectrum(data, sampleRate, fftSize, previousBass, previousBands) {

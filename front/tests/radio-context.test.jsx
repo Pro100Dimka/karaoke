@@ -157,6 +157,20 @@ describe("radio context", () => {
     expect(steady).toBeLessThan(0.8);
     expect(steady).toBeGreaterThan(0);
   });
+  test("forgets an old lighting hit before the next beat instead of building a bright bed", () => {
+    const bed = Array(18).fill(0.12);
+    const hit = bed.map((value, index) => (index < 6 ? value + 0.12 : value));
+    let pulse = calculateRadioLightingPulse(hit, bed, 0.04);
+    const peak = pulse;
+
+    for (let frame = 0; frame < 10; frame += 1) {
+      pulse = calculateRadioLightingPulse(bed, bed, pulse);
+    }
+
+    expect(peak).toBeGreaterThan(0.4);
+    expect(pulse).toBeLessThan(0.06);
+    expect(calculateRadioLightingPulse(hit, bed, pulse)).toBeGreaterThan(0.4);
+  });
   test("requires the provider", () => {
     const { log, restore } = suppressWindowErrors();
     verify([() => renderHook(() => useRadio()), "toThrow", "useRadio must be used inside RadioProvider"]);
