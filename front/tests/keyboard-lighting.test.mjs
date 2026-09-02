@@ -178,6 +178,26 @@ test("prefers available Windows keyboards and does not open OpenRGB too", async 
   await c.configure(false);
   expect(windows.request).toHaveBeenCalledWith(2);
 });
+test("prefers a device-specific USB driver over generic Windows lighting", async () => {
+  const windows = { request: vi.fn(async () => ({ state: "ready", count: 1 })) };
+  const usb = { request: vi.fn(async () => ({ state: "ready", count: 1 })) };
+  const fallback = vi.fn();
+  const c = controller({ windows, usb, openrgb: fallback });
+
+  expect(await c.configure(true)).toMatchObject({ provider: "usb", count: 1 });
+  await c.frame({
+    active: true,
+    rgb: [230, 20, 110],
+    zones: Array.from({ length: 5 }, () => [230, 20, 110])
+  });
+
+  expect(usb.request).toHaveBeenLastCalledWith(
+    1,
+    ...Array.from({ length: 5 }, () => [230, 20, 110]).flat()
+  );
+  expect(windows.request).not.toHaveBeenCalled();
+  expect(fallback).not.toHaveBeenCalled();
+});
 test("Windows LampArray receives five music zones while solid providers keep one color", async () => {
   const clock = 10000;
   const windows = { request: vi.fn(async () => ({ state: "ready", count: 1 })) };

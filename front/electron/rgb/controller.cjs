@@ -62,7 +62,13 @@ class LightingController {
     this.status = { state: enabled ? "connecting" : "disabled", count: 0 };
     if (!enabled || token !== this.generation) return this.status;
     let nativeStatus = null;
-    for (const name of ["windows", "usb"]) {
+    // Prefer a device-specific embedded protocol when one recognizes the
+    // keyboard. Some devices (notably Logitech G213) are also exposed through
+    // Windows LampArray by vendor software, even when that generic endpoint
+    // does not actually take control from the keyboard's onboard animation.
+    // Trying USB first lets the verified device protocol own all five zones;
+    // unsupported keyboards still fall through to Windows Dynamic Lighting.
+    for (const name of ["usb", "windows"]) {
       const bridge = this[name];
       if (!bridge?.request) continue;
       const status = await bridge.request(0).catch(() => ({ state: "unavailable", count: 0 }));
