@@ -313,11 +313,12 @@ describe("API domains", () => {
           echo: 0,
           delay: 0,
           octave: 0,
+          playback_rate: 1,
           room_mode: false
         }
       ],
       [
-        ["song", 1, 0.8, 0.7, 0.1, 0.2, 0.3, true],
+        ["song", 1, 0.8, 0.7, 0.1, 0.2, 0.3, true, 0, 1.25],
         {
           song_id: "song",
           position_sec: 1,
@@ -327,6 +328,7 @@ describe("API domains", () => {
           echo: 0.2,
           delay: 0.3,
           octave: 0,
+          playback_rate: 1.25,
           room_mode: true
         }
       ]
@@ -341,7 +343,7 @@ describe("API domains", () => {
       [() => recordingsApi.pauseRecording(null), "/recording/pause?session_id="],
       [() => recordingsApi.resumeRecording("a/b ?"), "/recording/resume?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.resumeRecording(null), "/recording/resume?session_id="],
-      [() => recordingsApi.syncRecording("a/b ?", 4.25), "/recording/sync?session_id=a%2Fb%20%3F&position_sec=4.25"],
+      [() => recordingsApi.syncRecording("a/b ?", 4.25, 1.25), "/recording/sync?session_id=a%2Fb%20%3F&position_sec=4.25&playback_rate=1.25"],
       [() => recordingsApi.stopRecording("a/b ?"), "/recording/stop?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.stopRecording(null), "/recording/stop?session_id="]
     ])

@@ -249,6 +249,7 @@ class RecordingStartRequest(BaseModel):
     echo: float = Field(default=0, ge=0, le=1)
     delay: float = Field(default=0, ge=0, le=1)
     octave: float = Field(default=0, ge=-1, le=1)
+    playback_rate: float = Field(default=1, ge=0.5, le=1.5)
     room_mode: bool = False
 
 

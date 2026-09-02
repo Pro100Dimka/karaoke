@@ -97,6 +97,18 @@ def test_normalized_settings_patch_handles_defaults_devices_and_asio(monkeypatch
     assert (updates['asio_driver_name'] == 'Studio ASIO') and ('asio_driver_name' in changed)
 
 
+def test_low_latency_driver_is_accepted_and_bypasses_asio_validation(monkeypatch):
+    # "auto-low-latency" (the browser-monitored "Windows Driver Low Latency"
+    # option) must be accepted like "auto" everywhere -- it never triggers
+    # the ASIO-specific bridge/driver-name checks below it.
+    current = settings(input_device_id=1, audio_driver="auto")
+    monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(side_effect=AssertionError("must not be called")))
+    updates, changed = audio_service._normalized_settings_patch(
+        current, {"audio_driver": "auto-low-latency"}
+    )
+    assert (updates == {'audio_driver': 'auto-low-latency'}) and (changed == {'audio_driver'})
+
+
 def test_update_settings_reconfigures_monitor_and_rolls_back(monkeypatch):
     current, database = settings(monitoring_enabled=True), Mock()
     monkeypatch.setattr(audio_service, "_get_or_create_settings", Mock(return_value=current))

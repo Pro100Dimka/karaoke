@@ -10,10 +10,8 @@ import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transpo
 import useKaraokeRecording from "./useKaraokeRecording";
 
 export { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
-
 const ROOM_PLAY_LEAD_MS = 450;
 const MASTER_PLAY_TIMEOUT_MS = 4_000;
-
 const wait = (milliseconds) =>
   new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, milliseconds)));
 const startMasterMedia = async (media) => {
@@ -51,6 +49,7 @@ export default function useKaraokeTransport({
   isPlaying,
   recordingSessionId,
   musicVolume,
+  speed,
   vocalVolume,
   microphoneVolume,
   microphoneEffects,
@@ -76,7 +75,6 @@ export default function useKaraokeTransport({
     fail: () => setIsPlaying(false)
   };
   const operationRef = useRef(Symbol("karaoke-operation"));
-
   const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);
   const { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording,
@@ -85,6 +83,7 @@ export default function useKaraokeTransport({
     onlineRoom,
     instrumentalRef,
     musicVolume,
+    speed,
     microphoneVolume,
     microphoneEffects,
     recordingSessionId,
@@ -94,7 +93,6 @@ export default function useKaraokeTransport({
     operationRef,
     roomCaptureRef
   });
-
   const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
 
   const broadcast = (action, position, executeAt = null) => {
@@ -103,7 +101,6 @@ export default function useKaraokeTransport({
   };
   const roomSyncCommand = onlineRoom?.syncCommand;
   const roomClockNow = onlineRoom?.roomClockNow;
-
   useEffect(() => {
     if (!onlineRoom?.room?.host || !isPlaying || !song?.id) return undefined;
     const timer = globalThis.setInterval(() => {
@@ -191,6 +188,7 @@ export default function useKaraokeTransport({
 
     const recordingStart = runRecording(operation);
     try {
+      await Promise.race([recordingStart, wait(ROOM_PLAY_LEAD_MS)]);
       if (scheduledAt != null) await wait(scheduledAt - onlineRoom.roomClockNow());
       await startOrResumeRoomCapture(instrumental.currentTime);
       const master = startMasterMedia(instrumental);
@@ -211,11 +209,13 @@ export default function useKaraokeTransport({
       // position and microphone frame observed at that exact later moment.
       recordingStart.then((recordingId) => {
         if (!recordingId || operation !== operationRef.current) return;
-        Promise.resolve(api.syncRecording(recordingId, instrumental.currentTime)).catch((error) => {
-          if (operation === operationRef.current) {
-            setRecordingError(formatError("karaoke.couldNotPreciselySynchronizeRecording", error));
+        Promise.resolve(api.syncRecording(recordingId, instrumental.currentTime, speed)).catch(
+          (error) => {
+            if (operation === operationRef.current) {
+              setRecordingError(formatError("karaoke.couldNotPreciselySynchronizeRecording", error));
+            }
           }
-        });
+        );
       });
     } catch {
       beginOperation();
@@ -312,7 +312,7 @@ export default function useKaraokeTransport({
     syncSecondaryMedia(position, true);
     setCurrentTime(position);
     if (isPlaying && sessionRef.current) {
-      Promise.resolve(api.syncRecording(sessionRef.current, position)).catch(() => {});
+      Promise.resolve(api.syncRecording(sessionRef.current, position, speed)).catch(() => {});
     }
     if (shouldBroadcast) broadcast("seek", position);
   };

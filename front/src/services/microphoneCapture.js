@@ -70,6 +70,11 @@ export async function acquireMicrophone(preferredDeviceId = "", { disabledEffect
       entry.graph.getStream?.({ disabledEffects }) ??
       (disabledEffects ? entry.graph.rawStream : entry.graph.stream),
     setNoiseSuppression: entry.graph.setNoiseSuppression,
+    // Local self-monitoring entirely inside the Web Audio graph -- no extra
+    // OS-level audio stream, so it stays in sync with whatever else already
+    // holds this same microphone (e.g. an online room capture) instead of
+    // fighting it for exclusive device access.
+    setMonitoring: entry.graph.setMonitoring,
     async release() {
       if (released) return;
       released = true;

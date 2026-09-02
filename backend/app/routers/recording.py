@@ -106,7 +106,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
                 settings.monitoring_enabled and not keep_native_monitor and not body.room_mode
             ),
             playback_offset_sec=body.position_sec,
-            playback_latency_sec=max(0, getattr(settings, "latency_ms", 50)) / 1000.0,
+            playback_rate=body.playback_rate,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
             effects={
@@ -141,9 +141,9 @@ def resume_recording(session_id: str):
 
 
 @router.post("/sync")
-def sync_recording(session_id: str, position_sec: float):
+def sync_recording(session_id: str, position_sec: float, playback_rate: float = 1):
     with http_error(KeyError, 404), http_error(RuntimeError, 409):
-        recording_service.sync_recording(session_id, position_sec)
+        recording_service.sync_recording(session_id, position_sec, playback_rate)
     return {"status": "synchronized"}
 
 

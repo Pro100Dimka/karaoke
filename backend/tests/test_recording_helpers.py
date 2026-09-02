@@ -257,6 +257,29 @@ def test_performance_mix_processes_voice_like_live_monitor_before_applying_slide
     assert voice_chain.index("volume=2.970000") < voice_chain.index("acompressor=")
 
 
+def test_performance_mix_uses_the_karaoke_playback_rate_for_each_timeline_segment(tmp_path):
+    current = recording(tmp_path / "take.wav")
+    command = recording_service._performance_mix_command(
+        "ffmpeg",
+        current,
+        tmp_path / "instrumental.flac",
+        tmp_path / "mix.wav",
+        0,
+        1,
+        {},
+        [{
+            "start_recording_sec": 0.25,
+            "start_playback_sec": 4.5,
+            "end_recording_sec": 5.125,
+            "playback_rate": 1.25,
+        }],
+    )
+
+    filters = command[command.index("-filter_complex") + 1]
+    assert "atrim=start=4.500000:duration=6.093750" in filters
+    assert "atempo=1.250000" in filters
+
+
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):
     assert recording_service._find_instrumental(tmp_path) is None
     instrumental = tmp_path / "instrumental.flac"

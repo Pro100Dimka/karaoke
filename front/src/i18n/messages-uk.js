@@ -717,6 +717,7 @@ export const ukMessages = {
     "Драйвер перейшов у резервний режим. Затримка може збільшитися.",
   "settings.audio.wasapiMode.label": "Режим WASAPI під час наступного запуску",
   "settings.audio.wasapiMode.options.shared": "Спільний — звук інших програм доступний",
+  "settings.audio.wasapiMode.options.lowLatency": "Windows Driver Low Latency",
   "settings.audio.wasapiMode.options.inputExclusive": "Ексклюзивний мікрофон, спільний вихід",
   "settings.audio.wasapiMode.options.exclusive": "Повністю ексклюзивний — лише моніторинг",
   "settings.audio.buffer_size.description":

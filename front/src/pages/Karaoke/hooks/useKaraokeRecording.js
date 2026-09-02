@@ -16,6 +16,7 @@ export default function useKaraokeRecording({
   onlineRoom,
   instrumentalRef,
   musicVolume,
+  speed,
   microphoneVolume,
   microphoneEffects,
   recordingSessionId,
@@ -27,6 +28,7 @@ export default function useKaraokeRecording({
 }) {
   const sessionRef = useRef(recordingSessionId);
   const pendingRecordingStartRef = useRef(null);
+  const previousSpeedRef = useRef(speed);
   // Pause/resume for one session must apply on the backend in the order the
   // user actually pressed them, not in whichever order the two network
   // responses happen to land -- otherwise a fast pause-then-resume can have
@@ -66,6 +68,16 @@ export default function useKaraokeRecording({
   useEffect(() => {
     sessionRef.current = recordingSessionId;
   }, [recordingSessionId]);
+
+  useEffect(() => {
+    const previous = previousSpeedRef.current;
+    previousSpeedRef.current = speed;
+    const instrumental = instrumentalRef.current;
+    if (previous === speed || !recordingSessionId || !instrumental) return;
+    Promise.resolve(api.syncRecording(recordingSessionId, instrumental.currentTime, speed)).catch(
+      () => {}
+    );
+  }, [instrumentalRef, recordingSessionId, speed]);
 
   useEffect(() => {
     if (!recordingSessionId) return undefined;
@@ -155,7 +167,8 @@ export default function useKaraokeRecording({
         microphoneEffects.echo,
         microphoneEffects.delay,
         Boolean(onlineRoom?.room),
-        microphoneEffects.octave
+        microphoneEffects.octave,
+        speed
       )) || {};
     if (!id) throw new Error(translateSaved(MISSING_RECORDING_ID));
     rememberPending(id);

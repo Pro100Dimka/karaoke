@@ -238,18 +238,31 @@ def test_playback_anchor_includes_audio_waiting_in_the_device_buffer(monkeypatch
     assert session.playback_segments[0]["start_recording_sec"] == pytest.approx(0.15)
 
 
-def test_playback_anchor_compensates_the_audible_output_latency(monkeypatch):
+def test_playback_anchor_keeps_the_reported_media_position_without_latency_adjustment(monkeypatch):
     session, _stream = make_session(
         monkeypatch,
         sample_rate=100,
         playback_offset_sec=0,
-        playback_latency_sec=0.05,
     )
     session._callback(np.zeros((10, 1), dtype=np.float32), 10, None, None)
 
     session.sync_playback(0.02)
 
-    assert session.playback_segments[0]["start_playback_sec"] == pytest.approx(-0.03)
+    assert session.playback_segments[0]["start_playback_sec"] == pytest.approx(0.02)
+
+
+def test_playback_anchor_tracks_rate_without_moving_the_reported_media_position(monkeypatch):
+    session, _stream = make_session(
+        monkeypatch,
+        sample_rate=100,
+        playback_offset_sec=0,
+    )
+    session._callback(np.zeros((10, 1), dtype=np.float32), 10, None, None)
+
+    session.sync_playback(2.0, 1.25)
+
+    assert session.playback_segments[0]["start_playback_sec"] == pytest.approx(2.0)
+    assert session.playback_segments[0]["playback_rate"] == 1.25
 
 
 def test_timeline_uses_captured_frames_when_driver_clock_is_unavailable(monkeypatch):
@@ -503,7 +516,7 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
     )
     database.add.assert_called_once_with(result)
     mix.assert_called_once_with(
-        result, current_song, 1.25, 0.8, {"reverb": 0.2}, segments, 1.4
+        result, current_song, 1.25, 0.8, {"reverb": 0.2}, segments, 1.4, 1.0
     )
     session.close.assert_called_once_with()
     database.close.assert_called_once_with()

@@ -270,6 +270,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     microphoneEffects,
     microphoneVolume,
     musicVolume,
+    speed,
     navigate,
     onlineRoom,
     recordingSessionId,

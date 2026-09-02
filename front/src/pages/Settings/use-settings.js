@@ -14,6 +14,17 @@ import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/
 
 const emit = (detail) => dispatchEvent(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// "Windows Driver Low Latency": monitors through a Web Audio graph on the
+// browser's own microphone capture (see components/LowLatencyMicMonitor)
+// instead of the native WASAPI worker. It never competes with the online
+// room's own getUserMedia capture for the device, unlike WASAPI exclusive
+// or ASIO -- at the cost of only running while some tab/window is open.
+const LOW_LATENCY_DRIVER = "auto-low-latency";
+// The driver dropdown's value is really `asio_driver_name` (empty = the
+// plain "auto" driver); reuse that same field to also carry this sentinel
+// so the dropdown can tell the two "auto" variants apart when re-reading
+// saved settings. No real ASIO driver can ever be named this.
+const LOW_LATENCY_SENTINEL = "__low_latency__";
 const useOpenPoll = (open, fn, interval, fallback) =>
   usePolling(() => (open ? fn() : Promise.resolve(fallback)), open ? interval : 0, [open]);
 
@@ -112,9 +123,15 @@ function useAudio(open) {
     setBusy(true);
     try {
       const enabled = !!values.monitoring_enabled && !retry;
-      const saved = await (enabled
-        ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode: "shared" }));
+      // The low-latency option monitors entirely inside the browser (see
+      // components/LowLatencyMicMonitor) -- persist the flag only, never
+      // start the native worker, or both would run and fight for the mic.
+      const saved =
+        values.audio_driver === LOW_LATENCY_DRIVER
+          ? await api.updateAudioSettings({ monitoring_enabled: !enabled })
+          : await (enabled
+              ? api.stopDirectMonitoring()
+              : api.startDirectMonitoring({ disabledEffects: true, wasapiMode: "shared" }));
 
       merge({ monitoring_enabled: !enabled });
       emit(saved);
@@ -128,9 +145,10 @@ function useAudio(open) {
   const selectDriver = (name) =>
     queue("driver", async () => {
       try {
+        const lowLatency = name === LOW_LATENCY_SENTINEL;
         const saved = await api.updateAudioSettings({
-          audio_driver: name ? "asio" : "auto",
-          asio_driver_name: name || ""
+          audio_driver: lowLatency ? LOW_LATENCY_DRIVER : name ? "asio" : "auto",
+          asio_driver_name: lowLatency ? LOW_LATENCY_SENTINEL : name || ""
         });
         merge(saved);
         emit(saved);
@@ -164,6 +182,7 @@ function useAudio(open) {
     options: {
       drivers: [
         { value: "", label: tr("settings.audio.wasapiMode.options.shared") },
+        { value: LOW_LATENCY_SENTINEL, label: tr("settings.audio.wasapiMode.options.lowLatency") },
         ...(asio.data ?? []).map(({ name }) => ({ value: name, label: `ASIO · ${name}` }))
       ],
       inputs: createInputDeviceOptions(inputs.data, values.input_device_id),

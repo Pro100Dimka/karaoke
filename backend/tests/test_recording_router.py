@@ -66,7 +66,7 @@ def test_recording_monitor_configuration_handles_auto_and_temporary_asio(monkeyp
     assert vars(current) == original
 
 
-def test_start_recording_builds_device_specific_session(monkeypatch):
+def test_start_recording_builds_session_without_driver_latency_adjustment(monkeypatch):
     database, body, song, settings = Mock(), start_body(), SimpleNamespace(id='song'), audio_settings(monitoring_enabled=True)
     patch_many(monkeypatch, (recording.repositories, "get_song", Mock(return_value=song)), (recording.audio_service, "get_settings", Mock(return_value=settings)), (recording, "_configure_recording_monitor", Mock(return_value=False)))
     patch_attrs(monkeypatch, recording.audio_service, preferred_input_device=Mock(return_value=3), preferred_output_device=Mock(return_value=4), preferred_sample_rate=Mock(return_value=48000))
@@ -85,7 +85,7 @@ def test_start_recording_builds_device_specific_session(monkeypatch):
         gain=1.5,
         monitoring_enabled=True,
         playback_offset_sec=2,
-        playback_latency_sec=0.05,
+        playback_rate=1,
         blocksize=64,
         music_gain=0.8,
             effects={"reverb": 0.4, "echo": 0.5, "delay": 0.6, "octave": 0},
@@ -142,7 +142,7 @@ def test_recording_actions_and_stop_error_mapping(monkeypatch):
     patch_attrs(monkeypatch, recording.recording_service, pause_recording=Mock(), resume_recording=Mock(), sync_recording=Mock())
     assert (recording.pause_recording('session') == {'status': 'paused'}) and (recording.resume_recording('session') == {'status': 'recording'})
     assert recording.sync_recording("session", 3.25) == {"status": "synchronized"}
-    recording.recording_service.sync_recording.assert_called_once_with("session", 3.25)
+    recording.recording_service.sync_recording.assert_called_once_with("session", 3.25, 1)
 
     database, saved = Mock(), object()
     stop = Mock(return_value=saved)

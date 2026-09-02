@@ -12,7 +12,8 @@ export const recordingsApi = {
     echo = 0,
     delay = 0,
     roomMode = false,
-    octave = 0
+    octave = 0,
+    playbackRate = 1
   ) =>
     request("/recording/start", {
       method: "POST",
@@ -25,6 +26,7 @@ export const recordingsApi = {
         echo,
         delay,
         octave,
+        playback_rate: playbackRate,
         room_mode: roomMode
       })
     }),
@@ -36,9 +38,9 @@ export const recordingsApi = {
     request(`/recording/resume?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
       method: "POST"
     }),
-  syncRecording: (sessionId, positionSec) =>
+  syncRecording: (sessionId, positionSec, playbackRate = 1) =>
     request(
-      `/recording/sync?session_id=${encodeURIComponent(String(sessionId ?? ""))}&position_sec=${encodeURIComponent(String(positionSec ?? 0))}`,
+      `/recording/sync?session_id=${encodeURIComponent(String(sessionId ?? ""))}&position_sec=${encodeURIComponent(String(positionSec ?? 0))}&playback_rate=${encodeURIComponent(String(playbackRate ?? 1))}`,
       { method: "POST" }
     ),
   updateRecordingControls: (sessionId, controls) =>

@@ -428,7 +428,14 @@ def _normalized_settings_patch(
         updates.get("audio_driver", settings.audio_driver),
         updates.get("asio_driver_name", settings.asio_driver_name),
     )
-    if driver not in {"auto", "asio"}:
+    # "auto-low-latency" behaves exactly like "auto" everywhere in this
+    # module (device/rate resolution, recording) -- every other branch here
+    # keys off `driver == "asio"` specifically, so it already falls through
+    # correctly. It only changes which monitoring path the frontend uses:
+    # a Web Audio graph on the browser's own microphone capture instead of
+    # the native WASAPI worker, so it never competes with the online room's
+    # separate getUserMedia capture for the device.
+    if driver not in {"auto", "asio", "auto-low-latency"}:
         raise RuntimeError("Unsupported audio driver")
     if driver == "asio" and {"audio_driver", "asio_driver_name"} & changed_fields:
         if not resolve_devices:

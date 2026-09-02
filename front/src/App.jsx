@@ -1,6 +1,7 @@
 import { HashRouter } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
 import KeyboardLighting from "./components/KeyboardLighting";
+import LowLatencyMicMonitor from "./components/LowLatencyMicMonitor";
 import { OnlineRoomDock } from "./components/OnlineRoomDock";
 import RoomRadioSync from "./components/RoomRadioSync";
 import BackendBootLoader from "./components/backend-boot-loader";
@@ -18,6 +19,7 @@ export default function App() {
             <OnlineRoomDock />
             <RoomRadioSync />
             <KeyboardLighting />
+            <LowLatencyMicMonitor />
           </HashRouter>
         </ContextProviders>
       </BackendBootLoader>

@@ -38,6 +38,7 @@ const createProps = (overrides = {}) => {
     isPlaying: false,
     recordingSessionId: null,
     musicVolume: 0.8,
+    speed: 1,
     vocalVolume: 0.7,
     microphoneVolume: 0.6,
     microphoneEffects: { reverb: 0.1, echo: 0.2, delay: 0.3 },
@@ -169,14 +170,17 @@ describe("karaoke transport", () => {
     );
   });
   test("starts all media and a new recording together", async () => {
-    const props = createProps();
+    const props = createProps({ speed: 1.25 });
     const { result } = renderHook(() => useKaraokeTransport(props));
     await expect(result.current.togglePlay()).resolves.toBe(true);
     expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
     expect(props.vocalsRef.current.play).toHaveBeenCalledOnce();
     expect(props.videoRef.current.play).toHaveBeenCalledOnce();
     expect(props.startMelodyGuide).toHaveBeenCalledOnce();
-    expect(api.syncRecording).toHaveBeenCalledWith("session", 4);
+    expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1.25);
+    expect(api.startRecording).toHaveBeenCalledWith(
+      "song", 4, 0.6400000000000001, 0.6, 0.1, 0.2, 0.3, true, undefined, 1.25
+    );
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(1, 4, true);
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(2, 4, true);
     verify([props.instrumentalRef.current.volume, "toBeCloseTo", 0.64], [props.vocalsRef.current.volume, "toBeCloseTo", 0.49]);
@@ -187,6 +191,25 @@ describe("karaoke transport", () => {
       })
     );
     verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", expect.objectContaining({ action: "play", songId: "song" })]);
+  });
+  test("opens microphone capture before the backing track emits its first frame", async () => {
+    let releaseRecording;
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseRecording = resolve;
+      })
+    );
+    const props = createProps({ onlineRoom: null });
+    const hook = renderHook(() => useKaraokeTransport(props));
+
+    const playback = hook.result.current.togglePlay({ forcePlaying: true });
+    await waitFor(() => expect(releaseRecording).toBeTypeOf("function"));
+    expect(props.instrumentalRef.current.play).not.toHaveBeenCalled();
+
+    releaseRecording({ recording_session_id: "session" });
+    await expect(playback).resolves.toBe(true);
+    expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
+    expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1);
   });
   test("updates every final-mix control when sliders change during an active take", async () => {
     const props = createProps({
@@ -216,6 +239,16 @@ describe("karaoke transport", () => {
         octave: -0.5
       })
     );
+  });
+  test("starts a new recording timeline segment when tempo changes", async () => {
+    const props = createProps({ recordingSessionId: "session", isPlaying: true, speed: 1 });
+    const hook = renderHook((current) => useKaraokeTransport(current), {
+      initialProps: props
+    });
+
+    hook.rerender({ ...props, speed: 1.2 });
+
+    await waitFor(() => expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1.2));
   });
   test("schedules room playback against the shared server clock", async () => {
     vi.useFakeTimers();
@@ -639,7 +672,7 @@ describe("karaoke transport", () => {
     const secondStart = stopHook.result.current.togglePlay({ forcePlaying: true });
     await act(async () => Promise.resolve());
     await stopHook.result.current.stop();
-    await expect(secondStart).resolves.toBe(true);
+    await expect(secondStart).resolves.toBe(false);
     releaseStop({ recording_session_id: "late-stop" });
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("late-stop"));
     calledWith([api.pauseRecording, ["late-stop"]], [stopProps.setRecordingSessionId, [null]]);
