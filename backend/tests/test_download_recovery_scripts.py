@@ -127,8 +127,15 @@ def test_fresh_clone_compiles_native_audio_before_development_launch():
         'call "%ROOT%\\scripts\\install-asio-sdk.bat" "%ROOT%"',
         'prepare-native-audio.ps1',
     )
+    # start-dev's ROOT ends in a backslash. Forwarding that value through a
+    # quoted nested cmd invocation can leave a literal quote in PowerShell's
+    # -Root argument (D:\\repo\\"), which GetFullPath rejects. The wrapper
+    # must derive its canonical root from its own stable location instead.
+    assert 'if "%~1"' not in wrapper
+    assert_contains(wrapper, 'for %%I in ("%~dp0..") do set "ROOT=%%~fI"')
     assert_contains(
         builder,
+        ".Trim().Trim('\"')",
         'backend\\engines\\asio',
         'generated\\build\\asio',
         'KaraokeAsioBridge.exe',
