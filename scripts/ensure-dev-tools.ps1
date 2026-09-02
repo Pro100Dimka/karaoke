@@ -15,8 +15,13 @@ function Find-CompatibleVisualStudio {
         (Join-Path $env:ProgramFiles "Microsoft Visual Studio\Installer\vswhere.exe")
     ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
     foreach ($vswhere in $candidates) {
-        $installation = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath 2>$null | Select-Object -First 1).Trim()
-        if ($LASTEXITCODE -eq 0 -and $installation) { return $installation }
+        # vswhere prints nothing (not an error) when no installation satisfies
+        # -requires -- e.g. Visual Studio is present but without the C++/CMake
+        # workload. Select-Object then yields $null, and calling .Trim() on
+        # that crashed with "Cannot call a method on a null-valued expression"
+        # instead of falling through to the Build Tools installer below.
+        $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.CMake.Project -property installationPath 2>$null | Select-Object -First 1
+        if ($LASTEXITCODE -eq 0 -and $installation) { return $installation.Trim() }
     }
     return $null
 }

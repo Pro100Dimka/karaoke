@@ -206,7 +206,15 @@ describe("AudioPlayer and error boundary", () => {
     const playing = { paused: false, pause: vi.fn() };
     expect(await toggleAudioPlayback(playing)).toBe(false);
     expect(playing.pause).toHaveBeenCalledOnce();
-    expect(await toggleAudioPlayback({ paused: true, play: vi.fn().mockResolvedValue() })).toBe(true);
+    const accelerated = {
+      paused: true,
+      playbackRate: 32,
+      defaultPlaybackRate: 32,
+      play: vi.fn().mockResolvedValue()
+    };
+    expect(await toggleAudioPlayback(accelerated)).toBe(true);
+    expect(accelerated.playbackRate).toBe(1);
+    expect(accelerated.defaultPlaybackRate).toBe(1);
     const blocked = {
       paused: true,
       pause: vi.fn(),

@@ -18,6 +18,13 @@ export const normalizeAudioVolume = (value) => {
 };
 export const formatAudioTime = (value) => formatClockTime(value, { padMinutes: true });
 const tryPlay = async (audio) => {
+  for (const key of ["defaultPlaybackRate", "playbackRate"]) {
+    try {
+      audio[key] = 1;
+    } catch {
+      // A restricted media implementation may expose this as read-only.
+    }
+  }
   await Promise.resolve(audio.play());
   return true;
 };
