@@ -5,6 +5,8 @@ import math
 import threading
 import time
 
+logger = logging.getLogger(__name__)
+
 _STREAM_STATISTICS = ("callback_frames", "callback_count", "glitch_count", "queue_frames",
                       "queue_capacity_frames", "queue_underruns", "queue_dropped_frames",
                       "queue_contentions", "queue_ms", "queue_capacity_ms", "queue_underruns_after_start",
@@ -26,6 +28,7 @@ class MonitorControl:
         self.pending = None
         self.live = None
         self.thread = None
+        self.latency_breakdown_logged = False
         self.status = {"state": "idle", "fallback_count": 0, "glitch_fallback_count": 0}
 
     def _begin(self, state, details):
@@ -92,6 +95,21 @@ class MonitorControl:
                 for key in _STREAM_STATISTICS:
                     if key in message:
                         self.status[key] = message[key]
+                stream_latency = message.get("stream_latency_ms")
+                if (self.status.get("engine") == "wasapi-native-shared" and
+                        isinstance(stream_latency, (int, float)) and math.isfinite(stream_latency) and
+                        stream_latency > 0 and not self.latency_breakdown_logged):
+                    logger.info(
+                        "WASAPI latency breakdown: stream_ms=%s capture_ms=%s program_ms=%s "
+                        "queue_ms=%s output_lead_ms=%s padding_ms=%s dsp_ms=%s "
+                        "input_period=%s@%s output_period=%s@%s",
+                        stream_latency, message.get("capture_delivery_ms"), message.get("program_residence_ms"),
+                        message.get("queue_residence_ms"), message.get("output_clock_lead_ms"),
+                        message.get("render_padding_ms"), message.get("dsp_compute_ms"),
+                        self.status.get("input_period_frames"), self.status.get("sample_rate"),
+                        self.status.get("output_period_frames"), self.status.get("output_sample_rate"),
+                    )
+                    self.latency_breakdown_logged = True
             if event == "started" and "buffer_size" in message:
                 # Normalize the existing ASIO bridge protocol without changing
                 # its command, callback, buffer selection or effects.
@@ -109,6 +127,7 @@ class MonitorControl:
                     if key in message:
                         self.status[key] = message[key]
                 if event == "started":
+                    self.latency_breakdown_logged = False
                     for key in _STREAM_STATISTICS:
                         self.status.pop(key, None)
                     self.status["state"] = "running"
@@ -163,4 +182,4 @@ class MonitorControl:
                 pass
             except Exception as exc:
                 self.publish(token, state="error", error=str(exc))
-                logging.getLogger(__name__).exception("Background audio monitoring failed")
+                logger.exception("Background audio monitoring failed")

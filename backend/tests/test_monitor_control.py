@@ -415,3 +415,26 @@ def test_native_stage_timings_are_exposed_and_cleared_on_restart(control):
     assert all(status[name] == value for name, value in values.items())
     control.event(control.token, {"event": "started", "engine": "wasapi-native-shared"})
     assert not any(name in control.snapshot() for name in values)
+
+
+def test_native_latency_breakdown_is_logged_once_per_connection(control, caplog):
+    control.event(control.token, {
+        "event": "started", "engine": "wasapi-native-shared",
+        "input_period_frames": 480, "output_period_frames": 144,
+        "sample_rate": 48000, "output_sample_rate": 48000,
+    })
+    level = {
+        "event": "level", "stream_latency_ms": 68.879,
+        "capture_delivery_ms": 43.2, "program_residence_ms": 0.4,
+        "queue_residence_ms": 0.1, "output_clock_lead_ms": 25.1,
+        "render_padding_ms": 3.0, "dsp_compute_ms": 0.2,
+    }
+    with caplog.at_level("INFO", logger="app.services.monitor_control"):
+        control.event(control.token, level)
+        control.event(control.token, level)
+    records = [record.message for record in caplog.records if "WASAPI latency breakdown" in record.message]
+    assert len(records) == 1
+    assert "stream_ms=68.879" in records[0]
+    assert "capture_ms=43.2" in records[0]
+    assert "input_period=480@48000" in records[0]
+    assert "output_period=144@48000" in records[0]
