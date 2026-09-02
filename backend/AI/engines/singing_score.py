@@ -132,7 +132,13 @@ def _physical_anchored_pitch(
     ]
     if not physical:
         return symbolic
-    return max(0, min(127, round(median(physical))))
+    anchor = median(physical)
+    pitch_class = symbolic % 12
+    candidates = range(pitch_class, 128, 12)
+    return min(
+        candidates,
+        key=lambda candidate: (abs(candidate - anchor), abs(candidate - symbolic)),
+    )
 
 
 def _letters(value: str) -> str:

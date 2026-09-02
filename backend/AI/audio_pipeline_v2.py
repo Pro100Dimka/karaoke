@@ -31,12 +31,17 @@ from .lyrics_document import validate_lyrics_document, words_with_notes
 from .lyrics_sources import LyricsDiscovery, discover_lyrics
 from .models import StageReport, VocalNote, Word
 from .music import analyze_music
-from .notes import build_vocal_notes, fit_notes_to_sung_words
+from .notes import (
+    build_vocal_notes,
+    constrain_line_final_words_to_voice,
+    fit_notes_to_sung_words,
+)
 from .pitch_post import stabilize_pitch
 from .processing_modes import resolve_processing_profile
 from .runtime import get_runtime_plan
 from .utils.io import write_json_atomic
 from .version import AI_BUILD_ID
+from .word_voicing import voice_activity_intervals
 
 logger = logging.getLogger(__name__)
 
@@ -346,6 +351,20 @@ class AudioPipelineV2:
 
                 self._notify(request, "notes", 92, "Строим вокальные ноты")
                 song_duration = duration(original)
+                line_end_indices = frozenset(
+                    line.last_word for line in score_lines
+                )
+                aligned_ends = {word.index: word.end for word in words}
+                words = constrain_line_final_words_to_voice(
+                    words,
+                    voice_activity_intervals(analysis_vocals),
+                    line_end_indices=line_end_indices,
+                )
+                word_end_limits = {
+                    word.index: word.end
+                    for word in words
+                    if word.end + 1e-6 < aligned_ends[word.index]
+                }
                 physical_notes = build_vocal_notes(
                     pitch,
                     words=words,
@@ -391,9 +410,8 @@ class AudioPipelineV2:
                         words,
                         physical_notes,
                         duration=song_duration,
-                        line_end_indices=frozenset(
-                            line.last_word for line in score_lines
-                        ),
+                        line_end_indices=line_end_indices,
+                        word_end_limits=word_end_limits,
                     )
                 words = self._normalized_words(words)
                 payload = build_audio_lyrics_document(

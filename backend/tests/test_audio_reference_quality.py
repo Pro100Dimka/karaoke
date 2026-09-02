@@ -1,4 +1,7 @@
+import json
+
 from AI.reference_quality import compare_lyrics_documents
+from scripts import run_audio_v2_reference
 
 
 def document(*words):
@@ -82,3 +85,35 @@ def test_reference_quality_matches_a_shared_pitch_inside_a_melisma():
     metrics = compare_lyrics_documents(reference, candidate)
 
     assert metrics.pitch_match_ratio == 1.0
+
+
+def test_reference_runner_forwards_the_requested_processing_mode(tmp_path, monkeypatch):
+    reference_dir = tmp_path / "reference" / "Song"
+    reference_dir.mkdir(parents=True)
+    payload = {
+        **document(("слово", 1.0, 1.5, 60)),
+        "artist": "Artist",
+        "title": "Song",
+    }
+    (reference_dir / "lyricsSync.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(run_audio_v2_reference, "ROOT", tmp_path)
+    captured = []
+
+    class Pipeline:
+        def run(self, request):
+            captured.append(request)
+            output = (
+                tmp_path / "generated" / "diagnostics" / "audio-v2-pipeline" / "Song"
+            )
+            output.mkdir(parents=True, exist_ok=True)
+            (output / "lyricsSync.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+
+    run_audio_v2_reference.run_one(
+        Pipeline(), reference_dir, processing_mode="quality"
+    )
+
+    assert captured[0].processing_mode == "quality"

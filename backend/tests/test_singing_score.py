@@ -152,7 +152,7 @@ def test_symbolic_projection_uses_physical_pitch_only_as_octave_anchor():
     assert notes[0].midi_note == 72
 
 
-def test_physical_vocal_pitch_corrects_a_wrong_symbolic_pitch_class():
+def test_physical_vocal_pitch_does_not_replace_the_symbolic_pitch_class():
     words = [Word(0.0, 1.0, "слово", 1.0, 0)]
     score = SymbolicScore(
         bpm=60,
@@ -164,7 +164,7 @@ def test_physical_vocal_pitch_corrects_a_wrong_symbolic_pitch_class():
         words, score, line_start=0.0, line_end=1.0, pitch=pitch
     )
 
-    assert notes[0].midi_note == 57
+    assert notes[0].midi_note == 53
 
 
 def test_song_projection_replaces_the_old_duration_heuristic_line_by_line():

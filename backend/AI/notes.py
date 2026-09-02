@@ -9,6 +9,45 @@ from .models import PitchFrame, VocalNote, Word
 NOTE_DECODER_VERSION = "clean-v1"
 
 
+def constrain_line_final_words_to_voice(
+    words: list[Word],
+    voice_intervals: list[tuple[float, float]],
+    *,
+    line_end_indices: set[int] | frozenset[int],
+    onset_tolerance: float = 0.15,
+    disconnected_tail_seconds: float = 4.0,
+) -> list[Word]:
+    """Stop an open-ended CTC line at its first continuous vocal interval."""
+    if not words or not voice_intervals or not line_end_indices:
+        return list(words)
+    result = list(words)
+    for position, word in enumerate(words):
+        if word.index not in line_end_indices:
+            continue
+        owner = next(
+            (
+                (start, end)
+                for start, end in voice_intervals
+                if start - onset_tolerance <= word.start <= end + onset_tolerance
+            ),
+            None,
+        )
+        if (
+            owner is None
+            or word.end - owner[1] < disconnected_tail_seconds
+        ):
+            continue
+        end = max(word.start + 0.01, owner[1])
+        result[position] = Word(
+            word.start,
+            end,
+            word.text,
+            word.confidence,
+            word.index,
+        )
+    return result
+
+
 def hz_to_midi(hz: float) -> float:
     return 69 + 12 * math.log2(float(hz) / 440)
 
@@ -102,6 +141,7 @@ def fit_notes_to_sung_words(
     *,
     duration: float | None = None,
     line_end_indices: set[int] | frozenset[int] | None = None,
+    word_end_limits: dict[int, float] | None = None,
     contiguous_gap: float = 0.2,
     phrase_tail: float = 0.25,
 ) -> tuple[list[Word], list[VocalNote]]:
@@ -145,6 +185,8 @@ def fit_notes_to_sung_words(
                     if duration is not None:
                         end = min(end, duration)
                 end = max(word.start + 0.001, end)
+                if word_end_limits and word.index in word_end_limits:
+                    end = min(end, word_end_limits[word.index])
                 fitted_notes.append(
                     VocalNote(
                         word.start,
@@ -179,6 +221,8 @@ def fit_notes_to_sung_words(
             target_end = last + phrase_tail
             if duration is not None:
                 target_end = min(target_end, duration)
+        if word_end_limits and word.index in word_end_limits:
+            target_end = min(target_end, word_end_limits[word.index])
         target_end = max(word.start + 0.001, target_end)
         source_span = max(0.001, last - first)
         scale = (target_end - word.start) / source_span

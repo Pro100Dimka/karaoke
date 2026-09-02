@@ -23,7 +23,12 @@ def _reference_root() -> Path:
     return ROOT / "generated" / "diagnostics" / "audio-reference-corpus"
 
 
-def run_one(pipeline: AudioPipelineV2, reference_dir: Path) -> dict:
+def run_one(
+    pipeline: AudioPipelineV2,
+    reference_dir: Path,
+    *,
+    processing_mode: str = "fast",
+) -> dict:
     reference = json.loads(
         (reference_dir / "lyricsSync.json").read_text(encoding="utf-8")
     )
@@ -41,7 +46,7 @@ def run_one(pipeline: AudioPipelineV2, reference_dir: Path) -> dict:
             artist=artist,
             title=title,
             language="Russian",
-            processing_mode="fast",
+            processing_mode=processing_mode,
             progress=_progress,
         )
     )
@@ -68,6 +73,12 @@ def run_one(pipeline: AudioPipelineV2, reference_dir: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--song", help="Reference directory name; omit for all songs")
+    parser.add_argument(
+        "--mode",
+        choices=("fast", "quality"),
+        default="fast",
+        help="Audio-v2 processing mode used for the comparison",
+    )
     parser.add_argument(
         "--neural-transcript",
         action="store_true",
@@ -101,7 +112,13 @@ def main() -> int:
             return 0
         for reference in references:
             try:
-                results.append(run_one(pipeline, reference))
+                results.append(
+                    run_one(
+                        pipeline,
+                        reference,
+                        processing_mode=arguments.mode,
+                    )
+                )
             except Exception as exc:
                 failure = {
                     "song": reference.name,

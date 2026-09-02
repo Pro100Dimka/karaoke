@@ -1,5 +1,9 @@
 from AI.models import PitchFrame, VocalNote, Word
-from AI.notes import build_vocal_notes, fit_notes_to_sung_words
+from AI.notes import (
+    build_vocal_notes,
+    constrain_line_final_words_to_voice,
+    fit_notes_to_sung_words,
+)
 
 
 def test_long_melisma_just_outside_word_uses_bounded_adaptive_tolerance():
@@ -122,3 +126,50 @@ def test_note_inside_the_same_lyric_line_extends_to_the_next_word_across_a_pause
 
     assert fitted_words[0].end == 3.0
     assert fitted_notes[0].end == 3.0
+
+
+def test_line_final_word_cannot_claim_a_disconnected_later_vocal_interval():
+    words = [
+        Word(74.4, 88.0, "метро", index=0),
+        Word(87.6, 87.9, "На", index=1),
+    ]
+
+    constrained = constrain_line_final_words_to_voice(
+        words,
+        [(68.4, 75.56), (86.9, 89.92)],
+        line_end_indices={0},
+    )
+
+    assert constrained[0].start == 74.4
+    assert constrained[0].end == 75.56
+    assert constrained[1] == words[1]
+
+
+def test_line_final_word_keeps_a_bounded_phrase_tail():
+    words = [Word(10.0, 13.0, "долго", index=0)]
+
+    constrained = constrain_line_final_words_to_voice(
+        words,
+        [(9.5, 11.0)],
+        line_end_indices={0},
+    )
+
+    assert constrained == words
+
+
+def test_fitted_line_final_note_respects_a_measured_voice_end_limit():
+    words = [
+        Word(74.4, 75.56, "метро", index=0),
+        Word(87.6, 87.9, "На", index=1),
+    ]
+    notes = [VocalNote(74.4, 75.54, 53, word_index=0)]
+
+    fitted_words, fitted_notes = fit_notes_to_sung_words(
+        words,
+        notes,
+        line_end_indices={0},
+        word_end_limits={0: 75.56},
+    )
+
+    assert fitted_words[0].end == 75.56
+    assert fitted_notes[0].end == 75.56
