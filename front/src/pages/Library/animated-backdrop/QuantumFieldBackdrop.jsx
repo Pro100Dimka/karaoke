@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // The iframe is an about:srcdoc document. Electron's packaged file:// renderer
 // does not reliably treat file assets referenced from that document as same-
@@ -39,6 +39,12 @@ function makeEmbeddedSource(source) {
 export default function QuantumFieldBackdrop() {
   const source = useMemo(() => makeEmbeddedSource(qftSource), []);
   const frameRef = useRef(null);
+  // A freshly created iframe document paints the browser's own opaque white
+  // default background for a moment before its own <style> (transparent
+  // html/body) takes effect. On this fixed, full-viewport layer that white
+  // covers the real backdrop image underneath -- so stay invisible until the
+  // runtime confirms (QFT_READY) it has actually applied its theme.
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -75,6 +81,7 @@ export default function QuantumFieldBackdrop() {
       if (event.source !== frame?.contentWindow) return;
       if (event.data?.type === "QFT_READY") {
         sendThemePalette();
+        setReady(true);
         return;
       }
       if (event.data?.type === "QFT_DISPOSED") {
@@ -167,7 +174,9 @@ export default function QuantumFieldBackdrop() {
         // inlined data URL so packaged file:// builds cannot replace it with
         // the iframe's white fallback surface.
         mixBlendMode: "normal",
-        filter: "none"
+        filter: "none",
+        opacity: ready ? 1 : 0,
+        transition: "opacity 200ms ease"
       }}
     >
       <iframe

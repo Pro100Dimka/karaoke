@@ -31,6 +31,7 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
   let context;
   let source;
   let input = rawStream;
+  let syncHandler = null;
   try {
     // Let the browser use the endpoint's native rate. 41 kHz is not a standard
     // hardware rate and makes some Windows devices resample or fail to open.
@@ -147,6 +148,7 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       if (["volume", "reverb", "echo", "delay"].some((name) => detail?.[name] != null))
         setEffects(detail);
     };
+    syncHandler = sync;
     globalThis.addEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, sync);
     destination.stream.getAudioTracks?.().forEach((track) => {
       track.contentHint = "music";
@@ -193,6 +195,7 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
       }
     };
   } catch (error) {
+    if (syncHandler) globalThis.removeEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, syncHandler);
     stop(rawStream);
     closeAudioContextQuietly(context);
     throw error;

@@ -222,6 +222,11 @@ def test_fast_processing_does_not_run_the_four_gigabyte_symbolic_model():
     assert AudioPipelineV2._uses_symbolic_model("quality") is True
 
 
+def test_symbolic_quality_reuses_the_fast_stem_profile():
+    assert AudioPipelineV2._separation_processing_mode("quality") == "fast"
+    assert AudioPipelineV2._separation_processing_mode("fast") == "fast"
+
+
 def test_fast_processing_keeps_small_analysis_models_warm_between_songs():
     assert AudioPipelineV2._keeps_analysis_models_warm("fast") is True
     assert AudioPipelineV2._keeps_analysis_models_warm("auto") is True

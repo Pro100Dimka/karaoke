@@ -292,6 +292,21 @@ describe("radio context", () => {
     verify([mocks.updateUiPreferences, "toHaveBeenCalledWith", "radio", expect.objectContaining({ stationId: "indiepop" })]);
     expect(mocks.updateUiPreferences).toHaveBeenCalledTimes(1);
   });
+  test("switching stations cancels an in-progress startup fade instead of leaking into the new station", async () => {
+    const hook = renderHook(() => useRadio(), { wrapper });
+    await act(async () => {
+      await hook.result.current.turnOn({ fadeIn: true, analyse: false });
+    });
+    expect(requestAnimationFrame).toHaveBeenCalled();
+    cancelAnimationFrame.mockClear();
+    act(() => hook.result.current.setStation("indiepop"));
+    // A fade cancels itself only when a NEW fade starts; switching stations
+    // here doesn't necessarily begin one (turnOn defaults fadeIn to false),
+    // so without an explicit cancel the stale rAF loop would keep nudging
+    // the new station's volume toward the OLD fade's target for its
+    // remaining duration -- heard as an unexplained dip-and-recover.
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
+  });
   test("resumes the selected station when switching during loading", async () => {
     let resolveOld;
     HTMLMediaElement.prototype.play.mockReturnValueOnce(

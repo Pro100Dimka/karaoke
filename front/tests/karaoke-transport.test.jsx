@@ -137,6 +137,35 @@ describe("karaoke transport", () => {
     await act(async () => Promise.resolve());
     notCalled(api.stopRecording, api.pauseRecording);
   });
+  test("orders pause and resume for one session by call sequence, not network response timing", async () => {
+    const props = createProps({ recordingSessionId: "session" });
+    let resolvePause;
+    api.pauseRecording.mockImplementation(
+      () => new Promise((resolve) => { resolvePause = resolve; })
+    );
+    const { result } = renderHook(() => useKaraokeTransport(props));
+
+    const pausing = result.current.togglePlay({ forcePlaying: false });
+    await Promise.resolve();
+    expect(api.pauseRecording).toHaveBeenCalledWith("session");
+
+    const resuming = result.current.togglePlay({ forcePlaying: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    // A fast pause-then-resume tap must not let resume reach the backend
+    // before the pause it followed -- otherwise the session can end up
+    // paused server-side while the UI reports "recording" for the rest of
+    // the take, silently losing whatever the user sings next.
+    expect(api.resumeRecording).not.toHaveBeenCalled();
+
+    resolvePause({});
+    await pausing;
+    await resuming;
+    expect(api.resumeRecording).toHaveBeenCalledWith("session");
+    expect(api.pauseRecording.mock.invocationCallOrder[0]).toBeLessThan(
+      api.resumeRecording.mock.invocationCallOrder[0]
+    );
+  });
   test("starts all media and a new recording together", async () => {
     const props = createProps();
     const { result } = renderHook(() => useKaraokeTransport(props));
@@ -387,6 +416,20 @@ describe("karaoke transport", () => {
       hook.unmount();
     }
     expect(props.navigate).toHaveBeenCalledWith("/");
+  });
+  test("coalesces concurrent stop() calls into a single run", async () => {
+    // A local stop click and a room-broadcast "stop" command can both call
+    // stop() at once (the room command deliberately bypasses the scene-flow
+    // handler's own mutex to react to a remote stop immediately). Without
+    // coalescing, both would independently release monitoring and race to
+    // finalize/navigate.
+    const props = createProps({ recordingSessionId: "existing" });
+    const { result } = renderHook(() => useKaraokeTransport(props));
+    const [first, second] = await Promise.all([result.current.stop(), result.current.stop()]);
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    expect(api.stopRecording).toHaveBeenCalledTimes(1);
+    expect(props.releaseMonitoring).toHaveBeenCalledTimes(1);
   });
   test("keeps a failed recording pending without blocking stop or exit", async () => {
     const props = createProps({ recordingSessionId: "existing" });

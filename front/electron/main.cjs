@@ -118,6 +118,20 @@ recordStartupMilestone("electron-process-start");
 let mainWindow = null;
 let isQuitting = false;
 let pendingVisibleBounds = null;
+// A second launch during the async window between app.whenReady() and the
+// window actually being shown (port negotiation, session/permission setup)
+// used to just drop the "focus me" signal on the floor -- neither
+// mainWindow.focus() (no window yet) nor a later re-check ever ran. Recorded
+// here and applied once the window is actually revealed.
+let pendingSecondInstanceFocus = false;
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+    pendingSecondInstanceFocus = true;
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+}
 let windowStateTimer = null;
 const backend = createBackendProcess({
   isDev,
@@ -305,6 +319,10 @@ function createWindow() {
     revealFallbackTimer = null;
     windowRevealed = true;
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+    if (pendingSecondInstanceFocus) {
+      pendingSecondInstanceFocus = false;
+      focusMainWindow();
+    }
   };
   mainWindow.__revealWhenVisualReady = revealWindow;
   mainWindow.once("ready-to-show", () => {
@@ -469,11 +487,7 @@ if (!hasSingleInstanceLock) {
   isQuitting = true;
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  });
+  app.on("second-instance", focusMainWindow);
 }
 
 app.whenReady().then(async () => {
@@ -522,12 +536,29 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   if (process.platform === "darwin") return;
   isQuitting = true;
-  stopBackend();
   app.quit();
 });
 
-app.on("before-quit", () => {
+// stopBackend()'s own shutdown sequence (ask the backend to cancel in-flight
+// work, release the audio monitor, then grace-kill the process tree) takes
+// up to BACKEND_STOP_GRACE_MS. Without gating quit on it, Electron could
+// finish exiting before that grace timer -- and its taskkill /T /F -- ever
+// runs, leaving the Python backend (and any native worker it spawned)
+// orphaned. This composes with installLightingShutdown's own before-quit
+// gate below: each blocks app.quit() until its own cleanup is done.
+let backendShutdownFinished = false;
+let backendShutdownPending = false;
+app.on("before-quit", (event) => {
   isQuitting = true;
-  stopBackend();
+  if (backendShutdownFinished) return;
+  event.preventDefault();
+  if (backendShutdownPending) return;
+  backendShutdownPending = true;
+  Promise.resolve(stopBackend())
+    .catch(() => {})
+    .finally(() => {
+      backendShutdownFinished = true;
+      app.quit();
+    });
 });
 installLightingShutdown(app, lighting);

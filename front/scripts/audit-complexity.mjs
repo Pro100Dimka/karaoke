@@ -22,7 +22,9 @@ export const FILE_COMPLEXITY_BUDGETS = Object.freeze({
   "src/i18n/messages-ru.js": { lines: 830, branches: 0 },
   "src/i18n/messages-uk.js": { lines: 830, branches: 0 },
   "src/i18n/messages-en.js": { lines: 825, branches: 0 },
-  "src/services/onlineVoiceMesh.js": { lines: 660, branches: 100 },
+  // +1 line: a WebRTC offer-glare fix (rollback before setRemoteDescription)
+  // that couldn't fit its condition and the awaited call on one line.
+  "src/services/onlineVoiceMesh.js": { lines: 661, branches: 100 },
   "src/contexts/OnlineRoomContext.jsx": { lines: 580, branches: 35 },
   "src/pages/Karaoke/index.jsx": { lines: 550, branches: 25 },
   "src/services/onlineRoom.js": { lines: 485, branches: 95 },

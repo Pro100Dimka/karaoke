@@ -2,6 +2,8 @@ import builtins
 import importlib
 import io
 import subprocess
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, PropertyMock
@@ -457,6 +459,49 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
     database.close.assert_called_once_with()
 
 
+def test_stop_recording_does_not_wait_for_the_shared_hardware_lock(monkeypatch, tmp_path):
+    # An unrelated monitor-process (re)start can hold hardware_lock for
+    # several seconds. stop_recording() must be able to pop the session and
+    # stop ITS OWN stream immediately regardless -- it used to also take
+    # hardware_lock here, so an unlucky settings change in flight could
+    # delay a user's own stop button for that whole time.
+    session = Mock(song_id="song", playback_offset_sec=0, music_gain=1, effects={}, playback_segments=[])
+    session.stop_and_save.return_value = (1.0, 48_000)
+    monkeypatch.setattr(recording_service, "_sessions", {"session": session})
+    current_song = make_song()
+    mock_song_lookup(monkeypatch, recording_service, current_song)
+    patch_attrs(
+        monkeypatch,
+        recording_service.song_service,
+        resolve_output_dir=Mock(return_value=tmp_path / "song"),
+    )
+    patch_attrs(
+        monkeypatch,
+        recording_service,
+        commit_refresh=Mock(side_effect=lambda _db, item: item),
+        _create_performance_mix_safely=Mock(),
+    )
+
+    lock_acquired = threading.Event()
+    release_lock = threading.Event()
+
+    def hold_lock():
+        with recording_service.hardware_lock:
+            lock_acquired.set()
+            release_lock.wait(timeout=2)
+
+    holder = threading.Thread(target=hold_lock, daemon=True)
+    holder.start()
+    try:
+        assert lock_acquired.wait(timeout=1)
+        started = time.monotonic()
+        recording_service.stop_recording("session")
+        assert time.monotonic() - started < 0.5
+    finally:
+        release_lock.set()
+        holder.join(timeout=2)
+
+
 def test_stop_recording_handles_missing_session_song_and_save_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(recording_service, "_sessions", {})
     raises(KeyError, lambda: recording_service.stop_recording('missing'))
@@ -657,3 +702,95 @@ def test_audio_backend_import_failure_degrades_without_crashing(monkeypatch):
         assert reloaded.backend_available() == (False, "optional audio dependency missing")
 
     importlib.reload(recording_service)
+
+
+def test_stop_capture_does_not_wait_for_the_shared_hardware_lock(monkeypatch):
+    # stop_capture() used to be @serialized (the same RLock a slow ASIO
+    # monitor-process (re)start can hold for seconds). An unrelated settings
+    # change in flight could then delay stopping THIS session's own stream
+    # for that whole time -- during which the real-time queue could overflow
+    # and stop_and_save() would discard an otherwise-complete take.
+    session, _stream = make_session(monkeypatch)
+    lock_acquired = threading.Event()
+    release_lock = threading.Event()
+
+    def hold_lock():
+        with recording_service.hardware_lock:
+            lock_acquired.set()
+            release_lock.wait(timeout=2)
+
+    holder = threading.Thread(target=hold_lock, daemon=True)
+    holder.start()
+    try:
+        assert lock_acquired.wait(timeout=1)
+        started = time.monotonic()
+        session.stop_capture()
+        assert time.monotonic() - started < 0.5
+    finally:
+        release_lock.set()
+        holder.join(timeout=2)
+
+
+def test_stop_capture_is_idempotent_under_concurrent_callers(monkeypatch):
+    # Without its own lock, two threads racing stop_capture() (e.g. the
+    # duration-limit watchdog and a user-initiated stop) could both pass the
+    # "already stopped" check before either flips it, and both close the
+    # same underlying stream concurrently.
+    session, stream = make_session(monkeypatch)
+    barrier = threading.Barrier(4)
+
+    def call_stop_capture():
+        barrier.wait(timeout=2)
+        session.stop_capture()
+
+    threads = [threading.Thread(target=call_stop_capture) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+    assert stream.close.call_count == 1
+
+
+def test_close_defers_storage_release_until_a_stuck_writer_thread_actually_exits(monkeypatch):
+    # _stop_writer() gives up waiting after its own timeout if the writer is
+    # still flushing to a slow/stuck disk. close() used to release the
+    # storage-budget reservation immediately regardless, letting a
+    # concurrent reservation elsewhere believe that space was free while
+    # bytes were still landing on disk.
+    session, _stream = make_session(monkeypatch)
+    reservation = Mock()
+    session._storage_reservations = [reservation]
+
+    release_gate = threading.Event()
+    stuck_thread = threading.Thread(target=release_gate.wait, daemon=True)
+    stuck_thread.start()
+    session._writer_thread = stuck_thread
+    monkeypatch.setattr(session, "_stop_writer", Mock())
+    monkeypatch.setattr(session, "_cleanup_temporary_file", Mock())
+
+    try:
+        session.close()
+        reservation.release.assert_not_called()
+        assert session._storage_reservations == []
+    finally:
+        release_gate.set()
+        stuck_thread.join(timeout=2)
+
+    for _ in range(50):
+        if reservation.release.called:
+            break
+        time.sleep(0.02)
+    reservation.release.assert_called_once_with()
+
+
+def test_close_releases_storage_immediately_when_writer_already_stopped(monkeypatch):
+    session, _stream = make_session(monkeypatch)
+    reservation = Mock()
+    session._storage_reservations = [reservation]
+    session._writer_thread = None
+    monkeypatch.setattr(session, "_stop_writer", Mock())
+    monkeypatch.setattr(session, "_cleanup_temporary_file", Mock())
+
+    session.close()
+    reservation.release.assert_called_once_with()
+    assert session._storage_reservations == []

@@ -125,6 +125,48 @@ test("identical theme-color keepalive frames do not restart the keyboard effect"
     [1, 184, 92, 255]
   ]);
 });
+test("a watchdog release while a frame send is still in flight does not resurrect stale output", async () => {
+  // Native device enumeration/frame sends can take a while (up to ~2s per
+  // device). If nothing calls frame() again for 2s, the idle watchdog
+  // releases the device out from under a still-pending request(1, ...) --
+  // that pending call must not be allowed to report success afterward.
+  vi.useFakeTimers();
+  try {
+    let resolveFrameRequest;
+    const windows = {
+      request: vi.fn((selector) => {
+        if (selector === 1) {
+          return new Promise((resolve) => {
+            resolveFrameRequest = () => resolve({ state: "ready", count: 1 });
+          });
+        }
+        return Promise.resolve({ state: "ready", count: 1 });
+      })
+    };
+    const c = controller({ windows, now: () => Date.now() });
+    await c.configure(true);
+
+    const sending = c.frame(frame);
+    for (let tick = 0; tick < 10 && !resolveFrameRequest; tick += 1) await Promise.resolve();
+    expect(resolveFrameRequest).toBeTypeOf("function");
+
+    // Enough 1s watchdog ticks pass with no new frame() call to refresh
+    // lastInput that its >2000ms-idle condition is strictly satisfied -- the
+    // watchdog releases the device while request(1, ...) above is pending.
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(windows.request).toHaveBeenCalledWith(2);
+    expect(c.provider).toBeNull();
+
+    resolveFrameRequest();
+    await sending;
+
+    // release() already cleared lastOutput; the now-stale frame() call must
+    // not have overwritten it as if the device were still driving that color.
+    expect(c.lastOutput).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 test("prefers available Windows keyboards and does not open OpenRGB too", async () => {
   const windows = { request: vi.fn(async () => ({ state: "ready", count: 1 })) };
   const fallback = vi.fn();

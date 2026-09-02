@@ -27,6 +27,7 @@ function createBackendProcess({
 
   let backendRestartTimer = null;
   let backendStopRequested = false;
+  let backendStopPromise = null;
   let backendRestartAttempts = 0;
   let backendStableTimer = null;
   let backendHealthTimer = null;
@@ -314,8 +315,12 @@ function createBackendProcess({
   }
 
   function stopBackend() {
-    if (backendStopRequested) return;
+    if (backendStopRequested) return backendStopPromise;
     backendStopRequested = true;
+    let resolveStopPromise;
+    backendStopPromise = new Promise((resolve) => {
+      resolveStopPromise = resolve;
+    });
     clearTimeout(backendRestartTimer);
     clearTimeout(backendStableTimer);
     clearTimeout(backendDuplicateWatchTimer);
@@ -327,15 +332,23 @@ function createBackendProcess({
     backendDuplicateWatchGeneration += 1;
 
     const terminateBackend = () => {
-      if (backendProcess && !backendProcess.killed) {
-        const { pid } = backendProcess;
-        backendProcess.kill();
-        if (IS_WINDOWS && pid) {
-          // PyInstaller/native workers can outlive a soft child kill; terminate
-          // the whole process tree on app shutdown.
-          spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
-        }
-        backendProcess = null;
+      const process_ = backendProcess;
+      backendProcess = null;
+      if (!process_) return;
+      const { pid } = process_;
+      // Don't gate on process_.killed: the health-check watchdog can also
+      // call childProcess.kill() on this same object (a plain soft kill) and
+      // win the race to flip that flag first. Always dispatch the tree-kill
+      // below regardless -- stopBackend() already guarantees this runs at
+      // most once, so there's no risk of double-killing.
+      if (!process_.killed) process_.kill();
+      if (IS_WINDOWS && pid) {
+        // PyInstaller/native workers can outlive a soft child kill; terminate
+        // the whole process tree on app shutdown.
+        const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
+        // An unhandled 'error' event (missing/blocked taskkill.exe) would
+        // otherwise throw and crash the whole main process mid-shutdown.
+        killer.on("error", () => {});
       }
     };
 
@@ -361,6 +374,7 @@ function createBackendProcess({
       if (finished) return;
       finished = true;
       terminateBackend();
+      resolveStopPromise();
     };
     const request = http.request(`${runtimeBackendUrl}/audio/direct-monitor/stop`, {
       method: "POST",
@@ -378,6 +392,7 @@ function createBackendProcess({
     });
     request.end();
     setTimeout(finish, BACKEND_STOP_GRACE_MS);
+    return backendStopPromise;
   }
 
   return {

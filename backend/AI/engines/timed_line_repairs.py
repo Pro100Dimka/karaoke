@@ -3,6 +3,65 @@ from __future__ import annotations
 from ..models import Word
 
 
+def _repair_duplicate_onsets(
+    words: list[Word],
+    entries: list[tuple[float, int, int]],
+    tokens: list[str],
+    span: float,
+) -> None:
+    for line_index, (_line_start, lower, upper) in enumerate(entries):
+        position = lower
+        line_end = (
+            min(span, entries[line_index + 1][0])
+            if line_index + 1 < len(entries) else span
+        )
+        while position < upper - 1:
+            run_end = position + 1
+            while (
+                run_end < upper
+                and abs(words[run_end].start - words[position].start) <= 1e-6
+            ):
+                run_end += 1
+            if run_end == position + 1:
+                position += 1
+                continue
+            boundary = (
+                words[run_end].start
+                if run_end < upper else min(
+                    line_end,
+                    max(word.end for word in words[position:run_end]),
+                )
+            )
+            if boundary <= words[position].start + 0.01 * (run_end - position):
+                position = run_end
+                continue
+            weights = [
+                max(1, sum(character.isalnum() for character in token))
+                for token in tokens[position:run_end]
+            ]
+            remaining = sum(weights)
+            cursor = words[position].start
+            for index, weight in zip(
+                range(position, run_end), weights, strict=True
+            ):
+                end = (
+                    boundary
+                    if index == run_end - 1
+                    else cursor + (boundary - cursor) * weight / remaining
+                )
+                original = words[index]
+                words[index] = Word(
+                    cursor,
+                    end,
+                    original.text,
+                    min(original.confidence, 0.5),
+                    original.index,
+                )
+                cursor = end
+                remaining -= weight
+            position = run_end
+
+
 def _repair_final_preposition_words(
     words: list[Word],
     entries: list[tuple[float, int, int]],
@@ -43,6 +102,8 @@ def _line_identity(tokens: list[str]) -> tuple[str, ...]:
 def _repeated_shape_is_outlier(template: list[Word], group: list[Word]) -> bool:
     template_span = template[-1].start - template[0].start
     current_span = group[-1].start - group[0].start
+    template_duration = template[-1].end - template[0].start
+    current_duration = group[-1].end - group[0].start
     if template_span <= 0:
         return False
     relative_error = max(
@@ -55,6 +116,10 @@ def _repeated_shape_is_outlier(template: list[Word], group: list[Word]) -> bool:
     return (
         relative_error > max(1.5, template_span * 0.45)
         or not 0.6 <= current_span / template_span <= 1.6
+        or current_duration > max(
+            template_duration * 2.5,
+            template_duration + 2.0,
+        )
     )
 
 
@@ -69,6 +134,35 @@ def _repair_repeated_line_shapes(
         identity = _line_identity(tokens[lower:upper])
         group = words[lower:upper]
         template = templates.get(identity)
+        if template is None:
+            prefix_templates = [
+                (
+                    sum(
+                        expected != current
+                        for expected, current in zip(
+                            candidate_identity[:len(identity)],
+                            identity,
+                            strict=True,
+                        )
+                    ),
+                    len(candidate_identity),
+                    candidate[:len(identity)],
+                )
+                for candidate_identity, candidate in templates.items()
+                if (
+                    len(candidate_identity) > len(identity)
+                    and sum(
+                        expected != current
+                        for expected, current in zip(
+                            candidate_identity[:len(identity)],
+                            identity,
+                            strict=True,
+                        )
+                    ) <= 1
+                )
+            ]
+            if prefix_templates:
+                template = min(prefix_templates, key=lambda item: item[:2])[2]
         if template is None:
             templates[identity] = list(group)
             continue
@@ -95,6 +189,7 @@ def _repair_repeated_line_shapes(
             ))
         if repaired:
             words[lower:upper] = repaired
+            templates[identity] = list(repaired)
 
 
 def repair_timed_line_outliers(
@@ -104,5 +199,6 @@ def repair_timed_line_outliers(
     span: float,
 ) -> None:
     """Repair gross CTC line geometry using evidence from the same recording."""
+    _repair_duplicate_onsets(words, entries, tokens, span)
     _repair_final_preposition_words(words, entries, tokens, span)
     _repair_repeated_line_shapes(words, entries, tokens, span)

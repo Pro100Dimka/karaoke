@@ -27,6 +27,17 @@ export default function useKaraokeRecording({
 }) {
   const sessionRef = useRef(recordingSessionId);
   const pendingRecordingStartRef = useRef(null);
+  // Pause/resume for one session must apply on the backend in the order the
+  // user actually pressed them, not in whichever order the two network
+  // responses happen to land -- otherwise a fast pause-then-resume can have
+  // resume apply first, leaving the backend paused while the UI reports
+  // "recording" for the rest of the take.
+  const recordingRequestQueueRef = useRef(Promise.resolve());
+  const queueRecordingRequest = useCallback((task) => {
+    const next = recordingRequestQueueRef.current.then(task, task);
+    recordingRequestQueueRef.current = next.catch(() => {});
+    return next;
+  }, []);
   const beginOperation = useCallback(
     () => (operationRef.current = Symbol("karaoke-operation")),
     [operationRef]
@@ -70,6 +81,8 @@ export default function useKaraokeRecording({
     const { error } = await finalizeRecording(id);
     if (!error) clearSession(id);
   };
+
+  const pauseRecording = (id) => queueRecordingRequest(() => api.pauseRecording(id));
 
   const startRecording = async () => {
     const { recording_session_id: id } =
@@ -115,7 +128,7 @@ export default function useKaraokeRecording({
     try {
       if (id) {
         rememberPending(id);
-        await api.resumeRecording(id);
+        await queueRecordingRequest(() => api.resumeRecording(id));
       } else {
         pendingStart = getPendingRecordingStart(operation);
         id = await pendingStart.promise;
@@ -123,7 +136,7 @@ export default function useKaraokeRecording({
       if (operation !== operationRef.current) {
         if (pendingStart && pendingStart.latestOperation !== operation) return null;
         if (pendingStart?.settle === "pause") {
-          await api.pauseRecording(id).catch(() => {});
+          await queueRecordingRequest(() => api.pauseRecording(id)).catch(() => {});
           sessionRef.current = id;
           setRecordingSessionId(id);
           return null;
@@ -149,5 +162,12 @@ export default function useKaraokeRecording({
     }
   };
 
-  return { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording };
+  return {
+    sessionRef,
+    pendingRecordingStartRef,
+    clearSession,
+    discardSession,
+    runRecording,
+    pauseRecording
+  };
 }

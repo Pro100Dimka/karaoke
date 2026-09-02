@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
@@ -29,6 +30,58 @@ _NOTE_BEATS = {
     "1": 4.0,
     "DOT_1": 6.0,
 }
+
+
+def _checkpoint_embedding_vocab(checkpoint: str | Path) -> int:
+    from safetensors import safe_open
+
+    with safe_open(checkpoint, framework="pt", device="cpu") as values:
+        shape = values.get_slice(
+            "thinker.model.embed_tokens.weight"
+        ).get_shape()
+    if len(shape) != 2 or int(shape[0]) <= 0:
+        raise ValueError("Invalid VocalParse embedding tensor")
+    return int(shape[0])
+
+
+def _set_checkpoint_vocab_size(config, vocab_size: int) -> None:
+    config.thinker_config.text_config.vocab_size = int(vocab_size)
+
+
+def _score_generation_budget(lyrics: str) -> int:
+    characters = sum(character.isalnum() for character in str(lyrics))
+    return max(32, min(160, 16 + 3 * characters))
+
+
+class _GenerationGuard:
+    def __init__(
+        self,
+        *,
+        cancelled=None,
+        timeout_seconds: float = 35.0,
+        clock=time.monotonic,
+    ):
+        self.cancelled = cancelled
+        self.clock = clock
+        self.deadline = clock() + max(0.1, float(timeout_seconds))
+        self.triggered = False
+
+    def should_stop(self) -> bool:
+        return bool(
+            (callable(self.cancelled) and self.cancelled())
+            or self.clock() >= self.deadline
+        )
+
+    def __call__(self, input_ids, _scores, **_kwargs):
+        import torch
+
+        self.triggered = self.should_stop()
+        return torch.full(
+            (input_ids.shape[0],),
+            self.triggered,
+            dtype=torch.bool,
+            device=input_ids.device,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +338,9 @@ def project_song_scores(
         line_notes: list[VocalNote] = []
         for position, word in enumerate(line_words):
             target = fitted[position]
+            model_owned = [
+                note for note in symbolic_notes if note.word_index == word.index
+            ]
             owned = sorted(
                 physical_by_word.get(word.index, ()), key=lambda note: note.start
             )
@@ -304,21 +360,26 @@ def project_song_scores(
                     fitted[position] = target
                 source_span = max(0.001, last - first)
                 scale = (target.end - word.start) / source_span
-                for note in owned:
+                for note_index, note in enumerate(owned):
                     start = word.start + (note.start - first) * scale
                     end = min(target.end, word.start + (note.end - first) * scale)
                     if end > start:
+                        midi_note = note.midi_note
+                        if model_owned:
+                            model_index = round(
+                                note_index
+                                * (len(model_owned) - 1)
+                                / max(1, len(owned) - 1)
+                            )
+                            midi_note = model_owned[model_index].midi_note
                         line_notes.append(VocalNote(
                             start,
                             end,
-                            note.midi_note,
+                            midi_note,
                             velocity=note.velocity,
                             word_index=word.index,
                         ))
                 continue
-            model_owned = [
-                note for note in symbolic_notes if note.word_index == word.index
-            ]
             if model_owned:
                 line_notes.extend(model_owned)
                 continue
@@ -387,25 +448,28 @@ class VocalParseScoreEngine:
             raise FileNotFoundError(f"VocalParse checkpoint is missing: {self.checkpoint}")
         import torch
         from qwen_asr import Qwen3ASRModel
-        from safetensors.torch import load_file
-        from transformers import GenerationConfig
+        from transformers import AutoConfig, GenerationConfig
 
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+        checkpoint_vocab = _checkpoint_embedding_vocab(
+            self.checkpoint / "model.safetensors"
+        )
+        config = AutoConfig.from_pretrained(str(self.checkpoint))
+        _set_checkpoint_vocab_size(config, checkpoint_vocab)
         wrapper = Qwen3ASRModel.from_pretrained(
             str(self.checkpoint),
+            config=config,
             dtype=dtype,
             device_map="cpu",
             attn_implementation="sdpa",
-            ignore_mismatched_sizes=True,
         )
         model, processor = wrapper.model, wrapper.processor
-        target_vocab = len(processor.tokenizer)
-        model.thinker.resize_token_embeddings(target_vocab)
-        model.thinker.config.text_config.vocab_size = target_vocab
-        model.thinker.vocab_size = target_vocab
-        model.load_state_dict(
-            load_file(str(self.checkpoint / "model.safetensors")), strict=False
-        )
+        if len(processor.tokenizer) != checkpoint_vocab:
+            raise ValueError(
+                "VocalParse tokenizer/checkpoint vocabulary mismatch: "
+                f"{len(processor.tokenizer)} != {checkpoint_vocab}"
+            )
+        model.thinker.vocab_size = checkpoint_vocab
         self._patch_forward(model)
         model.generation_config = GenerationConfig.from_model_config(model.config)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -455,6 +519,7 @@ class VocalParseScoreEngine:
         if callable(cancelled) and cancelled():
             raise ProcessingCancelledError("Song processing cancelled")
         import torch
+        from transformers import StoppingCriteriaList
 
         model, processor, device = self._load()
         audios = self._audio_lines(audio_path, lines)
@@ -477,8 +542,27 @@ class VocalParseScoreEngine:
             if "input_features" in inputs and inputs["input_features"].is_floating_point():
                 inputs["input_features"] = inputs["input_features"].to(model.dtype)
             prefix_length = inputs["input_ids"].shape[1]
+            guard = _GenerationGuard(
+                cancelled=cancelled,
+                timeout_seconds=float(
+                    os.getenv("KARAOKE_AI_SCORE_BATCH_TIMEOUT_SEC", "35")
+                ),
+            )
             with torch.inference_mode():
-                generated = model.generate(**inputs, max_new_tokens=192)
+                generated = model.generate(
+                    **inputs,
+                    max_new_tokens=max(
+                        _score_generation_budget(line.text)
+                        for line in chunk_lines
+                    ),
+                    stopping_criteria=StoppingCriteriaList([guard]),
+                )
+            if guard.triggered:
+                if callable(cancelled) and cancelled():
+                    raise ProcessingCancelledError("Song processing cancelled")
+                raise TimeoutError(
+                    "VocalParse score generation exceeded the per-batch timeout"
+                )
             sequences = generated.sequences if hasattr(generated, "sequences") else generated
             for sequence in sequences:
                 raw = processor.tokenizer.decode(

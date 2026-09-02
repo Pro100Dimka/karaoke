@@ -114,6 +114,7 @@ class RecordingSession:
         self._active_playback_segment: dict[str, float] | None = None
         self._closed = False
         self._paused = False
+        self._stop_lock = threading.Lock()
         self._monitoring_enabled = monitoring_enabled
         self._monitor_owner = monitor_owner
         self._monitor_mode = monitor_mode
@@ -250,21 +251,28 @@ class RecordingSession:
         self._signal = {"rms_db": round(20 * np.log10(rms), 1) if rms > 0 else -120.0,
                         "clipping": bool(np.any(np.abs(samples) >= .99)), "silent": rms < .0031623}
 
-    @serialized
     def stop_capture(self):
-        if self._capture_stopped:
-            return
-        self._capture_stopped = True
-        self._monitoring_enabled = False
-        try:
-            self._stream.stop()
-        except BaseException as exc:
-            self._capture_error = exc
-        finally:
+        # Guarded by a lock private to this session, not the global
+        # hardware_lock: tearing down a stream this session already owns
+        # exclusively never needs to wait behind an unrelated device-open
+        # elsewhere (e.g. the ASIO monitor bridge taking up to
+        # _MONITOR_START_TIMEOUT_SECONDS to (re)start) -- that contention used
+        # to let the real-time queue overflow, and stop_and_save() discards
+        # the whole take as corrupt whenever it sees an overflow.
+        with self._stop_lock:
+            if self._capture_stopped:
+                return
+            self._capture_stopped = True
+            self._monitoring_enabled = False
             try:
-                self._stream.close()
+                self._stream.stop()
             except BaseException as exc:
-                self._capture_error = self._capture_error or exc
+                self._capture_error = exc
+            finally:
+                try:
+                    self._stream.close()
+                except BaseException as exc:
+                    self._capture_error = self._capture_error or exc
 
     def _write_audio(self) -> None:
         assert self._temporary_path is not None
@@ -407,17 +415,38 @@ class RecordingSession:
 
     def close(self) -> None:
         if self._closed:
-            storage_budget_service.release_all(self._storage_reservations)
-            self._storage_reservations = []
+            self._release_storage_reservations(self._writer_thread)
             return
         self._closed = True
+        writer_thread = self._writer_thread
         try:
             self.stop_capture()
             self._stop_writer()
             self._cleanup_temporary_file()
         finally:
-            storage_budget_service.release_all(self._storage_reservations)
-            self._storage_reservations = []
+            self._release_storage_reservations(writer_thread)
+
+    def _release_storage_reservations(self, writer_thread: threading.Thread | None) -> None:
+        reservations, self._storage_reservations = self._storage_reservations, []
+        if not reservations:
+            return
+        if writer_thread is not None and writer_thread.is_alive():
+            # _stop_writer() gave up waiting (a slow/stuck disk) while the
+            # writer thread was still flushing bytes. Release the reserved
+            # budget only once it actually exits, so a concurrent reservation
+            # elsewhere can't treat this space as free while it's still being
+            # written to.
+            def release_when_done() -> None:
+                writer_thread.join()
+                storage_budget_service.release_all(reservations)
+
+            threading.Thread(
+                target=release_when_done,
+                name=f"recording-storage-release-{self.session_id[:8]}",
+                daemon=True,
+            ).start()
+            return
+        storage_budget_service.release_all(reservations)
 
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
         if self._closed: raise RuntimeError("Recording session is already closed")
@@ -679,7 +708,10 @@ def sync_recording(session_id: str, position_sec: float) -> None:
 
 
 def stop_recording(session_id: str) -> models.Recording:
-    with hardware_lock, _sessions_lock:
+    # No hardware_lock here: popping the session and stopping ITS OWN stream
+    # (see the comment on RecordingSession.stop_capture) never needs to wait
+    # behind an unrelated monitor-process (re)start elsewhere.
+    with _sessions_lock:
         session = _sessions.pop(session_id, None)
         completed_id = _completed_recordings.get(session_id)
         finalizing = _finalizing_recordings.get(session_id)

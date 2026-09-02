@@ -58,6 +58,23 @@ describe("karaoke scene flow", () => {
       [hook.result.current.sceneTransitioning, false]
     );
   });
+  test("treats a bailed-out (undefined) playback attempt as not started, restoring radio", async () => {
+    // togglePlay() resolves to undefined (not false) when it bails out early
+    // because the page had already unmounted mid-transition (e.g. the
+    // instrumental ref is gone) -- that must still count as "did not start"
+    // so radio playback paused for the intro gets turned back on, instead of
+    // being silently left off because `undefined !== false` looked truthy.
+    const input = props({ togglePlay: vi.fn().mockResolvedValue(undefined) });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    let result;
+    await act(async () => {
+      const pending = hook.result.current.handleTogglePlay();
+      await vi.runAllTimersAsync();
+      result = await pending;
+    });
+    expect(result).toBe(false);
+    expect(input.turnOnRadio).toHaveBeenCalledWith({ remember: false, fadeIn: true });
+  });
   test("transition guard rejects overlapping play and stop commands", async () => {
     const input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));

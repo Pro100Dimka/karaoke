@@ -153,6 +153,44 @@ test("guest UI changes are accepted, errors visible, reconnect leaves media alon
   expect(setRoomCommand).toHaveBeenCalledWith(expect.objectContaining({ commandId: "guest-pause" }));
 });
 
+test("re-invites a resumed participant whose peer was already torn down by an earlier participant-left", () => {
+  // The server reuses a reconnecting participant's id and marks the rejoin
+  // "resumed" so THEIR OWN client can self-heal via connection-restored
+  // instead of re-inviting. But every OTHER client already tore its own
+  // peer down when the earlier participant-left fired -- without a fresh
+  // invite here they stay silently disconnected from this participant.
+  const voice = { peers: new Map(), invite: vi.fn().mockResolvedValue(true), removePeer: vi.fn(), stop: vi.fn() };
+  const handler = createOnlineRoomMessageHandler({
+    id: "ROOM", client: {}, voice,
+    roomRef: { current: { selfId: "host", host: true } },
+    participantsRef: { current: [{ id: "host", role: "host" }] },
+    intentionalDisconnectRef: { current: false },
+    cleanupConnection: vi.fn(), setRoom: vi.fn(), setParticipants: vi.fn(),
+    setRoomUi: vi.fn(), setRoomCommand: vi.fn(), setVoiceError: vi.fn(),
+  });
+  handler({ type: "participant-joined", participant: { id: "guest", role: "guest" }, resumed: true });
+  expect(voice.invite).toHaveBeenCalledWith("guest");
+});
+
+test("does not re-invite a resumed participant whose peer connection is still alive", () => {
+  const voice = {
+    peers: new Map([["guest", {}]]),
+    invite: vi.fn().mockResolvedValue(true),
+    removePeer: vi.fn(),
+    stop: vi.fn(),
+  };
+  const handler = createOnlineRoomMessageHandler({
+    id: "ROOM", client: {}, voice,
+    roomRef: { current: { selfId: "host", host: true } },
+    participantsRef: { current: [{ id: "host", role: "host" }] },
+    intentionalDisconnectRef: { current: false },
+    cleanupConnection: vi.fn(), setRoom: vi.fn(), setParticipants: vi.fn(),
+    setRoomUi: vi.fn(), setRoomCommand: vi.fn(), setVoiceError: vi.fn(),
+  });
+  handler({ type: "participant-joined", participant: { id: "guest", role: "guest" }, resumed: true });
+  expect(voice.invite).not.toHaveBeenCalled();
+});
+
 test("mesh actually uses the received TURN settings and reports an initial connection timeout", async () => {
   const iceServers = [{ urls: "turn:relay.test:3478", username: "temp", credential: "temp" }];
   const peers = [];

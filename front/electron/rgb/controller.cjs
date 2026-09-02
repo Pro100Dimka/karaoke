@@ -34,7 +34,14 @@ class LightingController {
     this.status = { state: "disabled", count: 0 };
     this.configQueue = Promise.resolve();
     this.watchdog = setInterval(() => {
-      if (this.provider && this.now() - this.lastInput > 2000) this.release();
+      if (this.provider && this.now() - this.lastInput > 2000) {
+        // Bump the generation so a frame() call already awaiting a slow
+        // native request (device enumeration can take up to ~2s) discards
+        // its result instead of reporting "ready" with the stale provider
+        // name after this release already tore the device down.
+        this.generation += 1;
+        this.release();
+      }
     }, 1000);
     this.watchdog.unref?.();
   }

@@ -136,7 +136,12 @@ export default function useKaraokeSceneFlow({
         await waitForScene(120);
         restoreControls();
       }
-      return result !== false;
+      // `action()` returns undefined (not `false`) when it bailed out early
+      // because the page had already unmounted mid-transition (e.g. the
+      // instrumental ref is gone) -- that must count as "did not start",
+      // otherwise the caller thinks playback began and skips restoring radio
+      // playback that was paused for the intro.
+      return Boolean(result);
     },
     [hideControls, preloadSongMedia, revealStageActions, showControls]
   );

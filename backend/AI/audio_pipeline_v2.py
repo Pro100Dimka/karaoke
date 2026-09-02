@@ -192,6 +192,13 @@ class AudioPipelineV2:
     def _uses_symbolic_model(processing_mode: str | None) -> bool:
         return str(processing_mode or "auto").strip().lower() == "quality"
 
+    @staticmethod
+    def _separation_processing_mode(processing_mode: str | None) -> str:
+        # The symbolic quality pass operates on the isolated vocal melody;
+        # the slower separation tuning did not improve its reference metrics
+        # but added roughly a minute before score generation.
+        return "fast"
+
     @classmethod
     def _keeps_analysis_models_warm(cls, processing_mode: str | None) -> bool:
         return not cls._uses_symbolic_model(processing_mode)
@@ -286,8 +293,10 @@ class AudioPipelineV2:
         output.mkdir(parents=True, exist_ok=True)
         reports: list[StageReport] = []
         warnings: list[str] = []
-        mode = "fast" if request.processing_mode in {None, "", "auto"} else request.processing_mode
-        profile = resolve_processing_profile(mode, get_runtime_plan())
+        profile = resolve_processing_profile(
+            self._separation_processing_mode(request.processing_mode),
+            get_runtime_plan(),
+        )
 
         with tempfile.TemporaryDirectory(prefix=".audio-v2-", dir=output) as temporary:
             work = Path(temporary)

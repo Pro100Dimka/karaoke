@@ -159,6 +159,42 @@ def test_asio_matching_and_preferred_device_fallbacks(monkeypatch):
     )
 
 
+def test_preferred_sample_rate_trusts_the_asio_bridge_over_the_stale_device_table(monkeypatch):
+    # PortAudio's device table is captured once per process and never
+    # refreshed, but the ASIO bridge can change the interface's actual clock
+    # when monitoring starts (ASIOSetSampleRate). A stale 48000 here must not
+    # win once the bridge has reported the real negotiated rate back -- that
+    # exact mismatch is what stamped recordings with the wrong sample rate.
+    devices = [device("Focusrite USB ASIO", 0, inputs=2, outputs=2, rate=48000)]
+    install_devices(monkeypatch, devices, {0: "ASIO"})
+    monkeypatch.setattr(
+        audio_service._monitor_control,
+        "snapshot",
+        lambda: {"mode": "ASIO", "state": "running", "sample_rate": 44100.0},
+    )
+    assert audio_service.preferred_sample_rate(0, "asio") == 44100
+
+
+def test_preferred_sample_rate_falls_back_when_asio_monitor_is_not_running(monkeypatch):
+    devices = [device("Focusrite USB ASIO", 0, inputs=2, outputs=2, rate=48000)]
+    install_devices(monkeypatch, devices, {0: "ASIO"})
+    monkeypatch.setattr(audio_service._monitor_control, "snapshot", lambda: {"state": "idle"})
+    assert audio_service.preferred_sample_rate(0, "asio") == 48000
+
+
+def test_preferred_sample_rate_ignores_a_running_non_asio_monitor(monkeypatch):
+    devices = [device("Focusrite USB ASIO", 0, inputs=2, outputs=2, rate=48000)]
+    install_devices(monkeypatch, devices, {0: "ASIO"})
+    # A running WASAPI/generic monitor worker must never be mistaken for the
+    # ASIO bridge's own reported rate, even if it happens to report one.
+    monkeypatch.setattr(
+        audio_service._monitor_control,
+        "snapshot",
+        lambda: {"mode": "shared", "state": "running", "sample_rate": 44100.0},
+    )
+    assert audio_service.preferred_sample_rate(0, "asio") == 48000
+
+
 def test_asio_matching_rejects_empty_or_unrelated_names(monkeypatch):
     devices = [device("Generic microphone", 0, inputs=1)]
     install_devices(monkeypatch, devices, {0: "MME"})

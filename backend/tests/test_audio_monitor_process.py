@@ -35,7 +35,7 @@ def test_stop_monitoring_handles_idle_finished_and_running_processes(monkeypatch
     running.terminate.assert_called_once_with()
     running.wait.assert_called_once_with(timeout=1.5)
     assert running.stdout.closed
-    reader.join.assert_called_once_with(timeout=0.5)
+    reader.join.assert_called_once_with(timeout=1.0)
 
 
 def test_stop_monitoring_kills_timeout_and_tolerates_os_error(monkeypatch):
@@ -51,6 +51,20 @@ def test_stop_monitoring_kills_timeout_and_tolerates_os_error(monkeypatch):
     monkeypatch.setattr(audio_service, "_monitor_process", failed)
     audio_service.stop_monitoring()
     assert failed.stdout.closed
+
+
+def test_stop_monitoring_joins_reader_before_closing_stdout(monkeypatch):
+    # The reader thread iterates `for line in process.stdout`; closing that
+    # file out from under a REAL (non-mock) reader thread while it's still
+    # iterating can raise inside that thread. Assert the actual call order,
+    # not just that both eventually happen.
+    running = process(poll=None)
+    call_order = []
+    running.stdout.close = Mock(side_effect=lambda: call_order.append("close"))
+    reader = SimpleNamespace(join=Mock(side_effect=lambda **_kw: call_order.append("join")))
+    patch_attrs(monkeypatch, audio_service, _monitor_process=running, _monitor_reader=reader)
+    audio_service.stop_monitoring()
+    assert call_order == ["join", "close"]
 
 
 def test_frozen_monitor_worker_requires_packaged_binary(monkeypatch, tmp_path):

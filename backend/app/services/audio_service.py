@@ -288,6 +288,20 @@ def preferred_output_device(
 
 
 def preferred_sample_rate(input_device_id: int | None = None, driver: str = "auto") -> int:
+    if driver == "asio":
+        # PortAudio's device table is captured once (first ASIO host-API
+        # query in this process) and never refreshed, but the ASIO bridge can
+        # change the interface's actual clock at monitor start (see
+        # _start_asio_monitor). When the bridge is running, trust the rate it
+        # reported back after negotiating with the driver instead of that
+        # stale snapshot -- otherwise the WAV file gets stamped with a rate
+        # the hardware isn't actually running at, and playback speeds up or
+        # slows down.
+        monitor = _monitor_control.snapshot()
+        if monitor.get("mode") == "ASIO" and monitor.get("state") == "running":
+            live_rate = monitor.get("sample_rate")
+            if isinstance(live_rate, (int, float)) and live_rate > 0:
+                return int(round(live_rate))
     if _AUDIO_BACKEND_AVAILABLE and input_device_id is not None:
         devices = sd.query_devices()
         if 0 <= input_device_id < len(devices):
@@ -604,13 +618,16 @@ def _stop_monitoring_process(expected_process=None) -> None:
     except OSError as exc:
         logger.warning("Could not stop direct monitoring worker: %s", exc)
     finally:
+        # Join the reader before closing stdout: it is still iterating
+        # `for line in process.stdout`, and closing the file out from under
+        # that loop on another thread can raise inside the reader thread.
+        if reader is not None and reader is not threading.current_thread():
+            reader.join(timeout=1.0)
         if process.stdout is not None:
             process.stdout.close()
         if process.stdin is not None:
             with contextlib.suppress(OSError):
                 process.stdin.close()
-        if reader is not None and reader is not threading.current_thread():
-            reader.join(timeout=0.5)
 
 
 def _send_live_update(payload: dict) -> None:

@@ -443,6 +443,75 @@ def test_timed_alignment_reuses_a_stable_repeated_line_shape_for_a_gross_outlier
     assert [word.start for word in words[4:]] == [30.0, 31.0, 35.0, 36.0]
 
 
+def test_timed_alignment_does_not_let_a_repeated_line_claim_the_instrumental_gap():
+    tokens = ["Нэнси", "и", "Сид", "Нэнси", "и", "Сид"]
+    words = [
+        Word(10.0, 10.4, "Нэнси", 0.9, 0),
+        Word(10.4, 10.6, "и", 0.9, 1),
+        Word(10.6, 10.9, "Сид", 0.9, 2),
+        Word(30.0, 30.4, "Нэнси", 0.9, 3),
+        Word(30.4, 30.6, "и", 0.9, 4),
+        Word(30.6, 47.0, "Сид", 0.9, 5),
+    ]
+
+    _repair_timed_line_outliers(
+        words,
+        [(10.0, 0, 3), (30.0, 3, 6)],
+        tokens,
+        50.0,
+    )
+
+    assert words[5].end == pytest.approx(30.9)
+
+
+def test_timed_alignment_uses_a_complete_line_for_its_truncated_repeated_prefix():
+    tokens = [
+        "Как", "Сид", "и", "Нэнси", "Сид", "и", "Нэнси",
+        "Мы", "Сид", "и", "Нэнси", "Сид", "и",
+    ]
+    words = [
+        Word(10.0, 10.3, "Как", 0.9, 0),
+        Word(10.3, 10.6, "Сид", 0.9, 1),
+        Word(10.6, 10.8, "и", 0.9, 2),
+        Word(10.8, 11.3, "Нэнси", 0.9, 3),
+        Word(11.3, 11.6, "Сид", 0.9, 4),
+        Word(11.6, 11.8, "и", 0.9, 5),
+        Word(11.8, 12.3, "Нэнси", 0.9, 6),
+        Word(30.0, 30.3, "Мы", 0.9, 7),
+        Word(30.3, 30.6, "Сид", 0.9, 8),
+        Word(30.6, 30.8, "и", 0.9, 9),
+        Word(30.8, 31.3, "Нэнси", 0.9, 10),
+        Word(31.3, 47.0, "Сид", 0.9, 11),
+        Word(47.0, 47.01, "и", 0.1, 12),
+    ]
+
+    _repair_timed_line_outliers(
+        words,
+        [(10.0, 0, 7), (30.0, 7, 13)],
+        tokens,
+        50.0,
+    )
+
+    assert words[11].end == pytest.approx(31.6)
+    assert words[12].end == pytest.approx(31.8)
+
+
+def test_timed_alignment_separates_duplicate_word_onsets_inside_one_line():
+    tokens = ["Ты", "ничего", "не"]
+    words = [
+        Word(59.4, 59.7, "Ты", 0.4, 0),
+        Word(59.4, 60.4, "ничего", 0.4, 1),
+        Word(60.4, 60.8, "не", 0.9, 2),
+    ]
+
+    _repair_timed_line_outliers(words, [(59.0, 0, 3)], tokens, 61.0)
+
+    assert words[0].start == 59.4
+    assert words[0].end == words[1].start
+    assert 59.4 < words[1].start < 60.4
+    assert words[1].end == 60.4
+
+
 def test_lrclib_uses_exact_artist_and_title_fields(monkeypatch):
     requested = []
 

@@ -215,12 +215,19 @@ function normalizeTransferMetadata(message) {
 
 function resumeIncomingTransfer(transfers, participantId, channel, metadata) {
   const transfer = transfers.resumableIncomingFiles.get(participantId);
-  if (
-    !transfer ||
-    transfer.metadata.transferId !== metadata.transferId ||
-    transfer.metadata.size !== metadata.size
-  )
+  if (!transfer) return false;
+  const { metadata: prior } = transfer;
+  const stale = prior.transferId !== metadata.transferId || prior.size !== metadata.size;
+  if (stale) {
+    // A fresh file-start for this participant supersedes whatever paused
+    // resume slot is sitting here -- without disposing it now, it leaks its
+    // open sink/file handle until its own TTL timer fires, up to
+    // TRANSFER_RESUME_TTL_MS later.
+    globalThis.clearTimeout(transfer.resumeTimer);
+    transfers.resumableIncomingFiles.delete(participantId);
+    cleanupIncomingTransfer(transfer);
     return false;
+  }
   globalThis.clearTimeout(transfer.resumeTimer);
   transfers.resumableIncomingFiles.delete(participantId);
   Object.assign(transfer, {

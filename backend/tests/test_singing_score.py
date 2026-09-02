@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from AI.engines.singing_score import (
@@ -7,6 +9,10 @@ from AI.engines.singing_score import (
     SymbolicEvent,
     SymbolicScore,
     VocalParseScoreEngine,
+    _checkpoint_embedding_vocab,
+    _GenerationGuard,
+    _score_generation_budget,
+    _set_checkpoint_vocab_size,
     parse_vocalparse_score,
     project_song_scores,
     project_symbolic_score,
@@ -215,6 +221,28 @@ def test_song_projection_uses_physical_notes_when_model_syllable_labels_are_wron
     assert fitted[1].end >= 2.0
 
 
+def test_song_projection_uses_symbolic_pitch_with_physical_note_timing():
+    words = [Word(1.0, 2.0, "слово", 1.0, 0)]
+    lines = [ScoreLine("слово", 1.0, 2.0, 0, 0)]
+    scores = [SymbolicScore(
+        120,
+        (SymbolicEvent(0, 1, 65, "слово"),),
+    )]
+    physical = [VocalNote(1.1, 1.8, 60, word_index=0)]
+
+    _fitted, notes = project_song_scores(
+        words,
+        lines,
+        scores,
+        pitch=[PitchFrame(1.2, 261.63, 0.9, True)],
+        physical_notes=physical,
+    )
+
+    assert len(notes) == 1
+    assert notes[0].midi_note % 12 == 65 % 12
+    assert notes[0].start == 1.0
+
+
 def test_score_engine_honours_cancellation_before_loading_the_large_model(tmp_path):
     engine = VocalParseScoreEngine(tmp_path)
 
@@ -224,6 +252,53 @@ def test_score_engine_honours_cancellation_before_loading_the_large_model(tmp_pa
             [ScoreLine("строка", 0, 1, 0, 0)],
             cancelled=lambda: True,
         )
+
+
+def test_checkpoint_embedding_vocab_is_applied_before_model_construction(tmp_path):
+    import torch
+    from safetensors.torch import save_file
+
+    checkpoint = tmp_path / "model.safetensors"
+    save_file({"thinker.model.embed_tokens.weight": torch.zeros(17, 4)}, checkpoint)
+    config = SimpleNamespace(
+        thinker_config=SimpleNamespace(
+            text_config=SimpleNamespace(vocab_size=3),
+        )
+    )
+
+    size = _checkpoint_embedding_vocab(checkpoint)
+    _set_checkpoint_vocab_size(config, size)
+
+    assert size == 17
+    assert config.thinker_config.text_config.vocab_size == 17
+
+
+def test_score_generation_budget_tracks_line_size_without_using_the_old_192_limit():
+    short = _score_generation_budget("Короткая строка")
+    long = _score_generation_budget("Очень длинная вокальная строка " * 4)
+
+    assert 32 <= short < long <= 160
+
+
+def test_generation_guard_stops_inside_a_batch_on_timeout_or_cancellation():
+    import torch
+
+    current = [10.0]
+    guard = _GenerationGuard(
+        cancelled=lambda: False,
+        timeout_seconds=2.0,
+        clock=lambda: current[0],
+    )
+
+    assert guard.should_stop() is False
+    current[0] = 12.1
+    assert guard.should_stop() is True
+    assert _GenerationGuard(
+        cancelled=lambda: True,
+        timeout_seconds=20,
+    ).should_stop() is True
+    mask = guard(torch.ones((3, 2), dtype=torch.long), None)
+    assert mask.shape == (3,)
 
 
 def test_projection_repairs_zero_length_ctc_word_intervals():

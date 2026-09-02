@@ -550,6 +550,8 @@ export default class OnlineVoiceMesh {
           return true;
         }
         if (!signal.description) return false;
+        if (`${signal.description.type}:${peer.signalingState}` === "offer:have-local-offer")
+          await peer.setLocalDescription({ type: "rollback" }); // glare: roll back our own offer first
         await peer.setRemoteDescription(signal.description);
         if (!isCurrentPeer()) return false;
         const candidates = this.pendingCandidates.get(fromId) || [];

@@ -79,21 +79,21 @@ export default function useKaraokeTransport({
 
   const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);
-  const { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording } =
-    useKaraokeRecording({
-      song,
-      onlineRoom,
-      instrumentalRef,
-      musicVolume,
-      microphoneVolume,
-      microphoneEffects,
-      recordingSessionId,
-      setRecordingSessionId,
-      setRecordingError,
-      setAnalysisRecordingId,
-      operationRef,
-      roomCaptureRef
-    });
+  const { sessionRef, pendingRecordingStartRef, clearSession, discardSession, runRecording,
+    pauseRecording } = useKaraokeRecording({
+    song,
+    onlineRoom,
+    instrumentalRef,
+    musicVolume,
+    microphoneVolume,
+    microphoneEffects,
+    recordingSessionId,
+    setRecordingSessionId,
+    setRecordingError,
+    setAnalysisRecordingId,
+    operationRef,
+    roomCaptureRef
+  });
 
   const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
 
@@ -169,7 +169,7 @@ export default function useKaraokeTransport({
       lifecycle.paused();
       if (shouldBroadcast) broadcast("pause", instrumental.currentTime);
       // Room transport must not wait for a local recording driver/backend.
-      if (sessionRef.current) await api.pauseRecording(sessionRef.current).catch(() => {});
+      if (sessionRef.current) await pauseRecording(sessionRef.current).catch(() => {});
       return true;
     }
 
@@ -239,8 +239,13 @@ export default function useKaraokeTransport({
     if (shouldBroadcast && scheduledAt == null) broadcast("play", instrumental.currentTime);
     return true;
   };
-
+  const stopInFlightRef = useRef(null); // coalesces a local stop with a concurrent room "stop"
   const stop = async ({ broadcast: shouldBroadcast = true } = {}) => {
+    if (stopInFlightRef.current) return stopInFlightRef.current;
+    const run = runStop(shouldBroadcast).finally(() => (stopInFlightRef.current = null));
+    return (stopInFlightRef.current = run);
+  };
+  const runStop = async (shouldBroadcast) => {
     const instrumental = instrumentalRef.current;
     if (!instrumental || !song?.id) return undefined;
     lifecycle.stop();

@@ -586,6 +586,39 @@ describe("online voice mesh", () => {
     expect(cancelled.sink.chunks).toEqual([]);
     mesh.stop();
   });
+  test("disposes a stale resumable slot immediately when a new file-start supersedes it", async () => {
+    // A fresh file-start for a participant clearly supersedes whatever
+    // paused resume slot is sitting there. Without disposing it right away
+    // it used to leak its open sink until its own TTL fired, up to 10
+    // minutes later.
+    vi.useFakeTimers();
+    const mesh = makeMesh();
+    const startPartial = (transferId) => {
+      const channel = new FakeChannel();
+      mesh.setupDataChannel("host", channel);
+      channel.onmessage({
+        data: JSON.stringify({ type: "file-start", transferId, size: 100, chunkSize: 32 * 1024 })
+      });
+      const transfer = mesh.transfers.incomingFiles.get("host");
+      channel.readyState = "closed";
+      channel.onclose();
+      return transfer;
+    };
+
+    const stale = startPartial("old-transfer");
+    expect(mesh.transfers.resumableIncomingFiles.get("host")).toBe(stale);
+
+    const fresh = new FakeChannel();
+    mesh.setupDataChannel("host", fresh);
+    fresh.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "new-transfer", size: 200, chunkSize: 32 * 1024 })
+    });
+
+    expect(mesh.transfers.resumableIncomingFiles.has("host")).toBe(false);
+    expect(stale.sink.chunks).toEqual([]);
+    expect(mesh.transfers.incomingFiles.get("host").metadata.transferId).toBe("new-transfer");
+    mesh.stop();
+  });
   test("normalizes missing outbound metadata and validates every input boundary", async () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
@@ -859,6 +892,44 @@ describe("online voice mesh", () => {
     expect(peer.addIceCandidate).toHaveBeenCalledWith("ice");
     expect(peer.createAnswer).not.toHaveBeenCalled();
     expect(mesh.pendingCandidates.has("guest")).toBe(false);
+  });
+  test("rolls back its own outgoing offer to accept a simultaneous incoming offer (glare)", async () => {
+    // Both sides can end up mid-offer to each other at once (e.g. both
+    // reconnect from a shared network blip and both send a fresh invite).
+    // Without yielding, an incoming offer while in have-local-offer throws
+    // InvalidStateError and the peer never negotiates.
+    const mesh = makeMesh();
+    const peer = mesh.createPeer("guest");
+    peer.signalingState = "have-local-offer";
+    const order = [];
+    peer.setLocalDescription = vi.fn(async (description) => {
+      order.push(["setLocalDescription", description.type]);
+      peer.localDescription = description;
+      if (description.type === "rollback") peer.signalingState = "stable";
+    });
+    peer.setRemoteDescription = vi.fn(async (description) => {
+      order.push(["setRemoteDescription", description.type]);
+      peer.remoteDescription = description;
+    });
+
+    const accepted = await mesh.accept("guest", {
+      description: { type: "offer", sdp: "their-offer" }
+    });
+
+    expect(accepted).toBe(true);
+    expect(order.slice(0, 2)).toEqual([
+      ["setLocalDescription", "rollback"],
+      ["setRemoteDescription", "offer"]
+    ]);
+    // Having yielded to the incoming offer, it must still answer normally.
+    expect(peer.createAnswer).toHaveBeenCalled();
+  });
+  test("does not roll back when there is no local offer in flight", async () => {
+    const mesh = makeMesh();
+    const peer = mesh.createPeer("guest");
+    peer.signalingState = "stable";
+    await mesh.accept("guest", { description: { type: "offer", sdp: "their-offer" } });
+    expect(peer.setLocalDescription).not.toHaveBeenCalledWith({ type: "rollback" });
   });
   test("validates each incoming start boundary independently", () => {
     const cases = [

@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import fs from "node:fs";
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { QuantumFieldBackdrop as LibraryBackdrop } from "../src/pages/Library/animated-backdrop/index.js";
 
@@ -12,6 +12,27 @@ test("library backdrop is decorative and cannot intercept controls", () => {
   expect(backdrop.style.pointerEvents).toBe("none");
   expect(backdrop.style.mixBlendMode).toBe("normal");
   expect(backdrop.style.filter).toBe("none");
+});
+
+test("stays hidden until the runtime confirms QFT_READY, then fades in", () => {
+  // A freshly created iframe document paints the browser's own opaque white
+  // default background for a moment before its own transparent html/body
+  // style takes effect. On this fixed, full-viewport layer that white used
+  // to cover the real backdrop image underneath for a beat on every mount
+  // (app startup, and every time Library remounts after returning from
+  // Karaoke) -- it must stay invisible until the runtime says it's ready.
+  const { container } = render(<LibraryBackdrop />);
+  const backdrop = container.firstElementChild;
+  const frame = container.querySelector("iframe");
+  expect(backdrop.style.opacity).toBe("0");
+
+  act(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", { data: { type: "QFT_READY" }, source: frame.contentWindow })
+    );
+  });
+
+  expect(backdrop.style.opacity).toBe("1");
 });
 
 test("library backdrop keeps its packaged runtime URL stable and query-free", () => {

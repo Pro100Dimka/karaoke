@@ -345,7 +345,7 @@ export function createOnlineRoomMessageHandler(options) {
       setParticipants((items) => upsertParticipant(items, participant));
       if (!message.resumed && participant?.id && participant.id !== activeRoomRef.current?.selfId)
         onParticipantJoined(participant);
-      if (participant?.id && !message.resumed)
+      if (participant?.id && (!message.resumed || !voice.peers?.has(participant.id)))
         voice.invite(participant.id).catch((error) => setVoiceError(getErrorMessage(error)));
     },
     "participant-updated": (message) =>

@@ -371,6 +371,13 @@ export function RadioProvider({ children }) {
       // takes effect, since that state update hasn't committed yet.
       const shouldResume = resume ?? (isPlaying || isLoading);
       playbackVersionRef.current = createVersion();
+      // A fade started for the previous station (e.g. the startup fade-in)
+      // only cancels itself when a NEW fade begins -- switching stations
+      // here doesn't necessarily start one (turnOn below defaults fadeIn to
+      // false), so the stale loop would otherwise keep nudging the new
+      // station's volume toward the old fade's target for its remaining
+      // duration, heard as an unexplained dip-and-recover.
+      cancelVolumeFade();
       audioRef.current.pause();
       stopAnalysis();
       setPlaying(false);
@@ -382,7 +389,7 @@ export function RadioProvider({ children }) {
       loadStream(0, next);
       if (shouldResume && !suspendedRef.current) turnOn({ remember: false, targetStation: next });
     },
-    [isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
+    [cancelVolumeFade, isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
   );
   const setRecordingActive = useCallback(
     (active) => {
@@ -404,6 +411,7 @@ export function RadioProvider({ children }) {
     // Initial/fallback playback is handled by turnOn() itself so onError must
     // not race with its pending play() promise.
     if (streamAttemptRef.current) return;
+    cancelVolumeFade();
     const nextIndex = streamIndexRef.current + 1;
     if (nextIndex < station.streams.length && isPlaying) {
       turnOn({ remember: false, startIndex: nextIndex });
@@ -413,7 +421,7 @@ export function RadioProvider({ children }) {
     setLoading(false);
     setError(translateSaved("radio.temporarilyUnavailable", { 0: station.name }));
     stopAnalysis();
-  }, [isPlaying, station, stopAnalysis, turnOn]);
+  }, [cancelVolumeFade, isPlaying, station, stopAnalysis, turnOn]);
   const turnOnRef = useRef(turnOn);
   turnOnRef.current = turnOn;
   useRadioLifecycle({
