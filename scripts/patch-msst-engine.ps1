@@ -38,7 +38,7 @@ $oldWindow = @'
 
                     for j, (start, seg_len) in enumerate(batch_locations):
                         if mode == "generic":
-'@
+'@.Replace("`r`n", "`n")
 $newWindow = @'
                     for j, (start, seg_len) in enumerate(batch_locations):
                         if mode == "generic":
@@ -47,7 +47,7 @@ $newWindow = @'
                                 window[:min(fade_size, seg_len)] = 1
                             if start + seg_len >= mix.shape[1]:
                                 window[max(0, seg_len - fade_size):seg_len] = 1
-'@
+'@.Replace("`r`n", "`n")
 
 if ($content.Contains($oldStep)) {
     $content = $content.Replace($oldStep, $newStep)

@@ -1,8 +1,12 @@
 import json
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from tests._shared import assert_contains, assert_excludes, project_text
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize(
@@ -141,6 +145,46 @@ def test_msst_installer_recovery_contract():
         "models\\bs_roformer\\mel_band_roformer.py",
         "config_vocals_mel_band_roformer_kj.yaml",
     )
+
+
+def test_msst_patch_applies_regardless_of_the_patch_scripts_own_line_endings(tmp_path):
+    # patch-msst-engine.ps1's here-string literals (the old/new code blocks)
+    # preserve whatever line endings the .ps1 file itself was checked out
+    # with, while the target model_utils.py is normalized to LF before
+    # matching. A CRLF checkout of the *patch script* (git core.autocrlf=true
+    # is a common Windows default, and this repo has no .gitattributes
+    # forcing LF) used to make every multi-line here-string match fail,
+    # throwing "Unsupported MSST window implementation" against an unmodified
+    # upstream file -- not a real incompatibility.
+    engine = tmp_path / "engine"
+    (engine / "utils").mkdir(parents=True)
+    source = (
+        'step = chunk_size // num_overlap\n'
+        'step = chunk_size // num_overlap\n'
+        '                    if mode == "generic":\n'
+        '                        window = windowing_array.clone() # using clone() fixes the clicks at chunk edges when using batch_size=1\n'
+        '                        if i - step == 0:  # First audio chunk, no fadein\n'
+        '                            window[:fade_size] = 1\n'
+        '                        elif i >= mix.shape[1]:  # Last audio chunk, no fadeout\n'
+        '                            window[-fade_size:] = 1\n'
+        '\n'
+        '                    for j, (start, seg_len) in enumerate(batch_locations):\n'
+        '                        if mode == "generic":\n'
+    )
+    real_script = (PROJECT_ROOT / "scripts" / "patch-msst-engine.ps1").read_text(encoding="utf-8")
+    variants = {"LF (as committed)": real_script, "CRLF (autocrlf=true checkout)": real_script.replace("\n", "\r\n")}
+    for label, script_text in variants.items():
+        (engine / "utils" / "model_utils.py").write_text(source, encoding="utf-8", newline="")
+        script_path = tmp_path / f"patch-{hash(label)}.ps1"
+        script_path.write_text(script_text, encoding="utf-8", newline="")
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path), "-Engine", str(engine)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"{label}: {result.stderr}"
+        patched = (engine / "utils" / "model_utils.py").read_text(encoding="utf-8")
+        assert patched.count("step = max(1, int(chunk_size / float(num_overlap)))") == 2, label
+        assert "window[max(0, seg_len - fade_size):seg_len] = 1" in patched, label
 
 
 def test_directml_optional_assets_run_before_cached_fast_path():
