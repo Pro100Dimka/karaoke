@@ -867,6 +867,7 @@ def _complete_audio_media(
         metadata_enrichment_service.video_file_is_ready(
             out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME,
             expected_duration=expected_duration,
+            allow_extended_duration=bool(media.get("video_id")),
         )
     )
     if not video_ready:

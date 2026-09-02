@@ -92,6 +92,49 @@ def test_video_normalization_accepts_normal_video_intro_duration(monkeypatch, tm
     ) is True
 
 
+def test_verified_official_video_may_be_much_longer_than_album_audio(
+    monkeypatch, tmp_path
+):
+    source = tmp_path / "official-video.mp4"
+    destination = tmp_path / "clip.mp4"
+    source.write_bytes(b"video")
+    monkeypatch.setattr(metadata, "_video_info", Mock(return_value=(1920, 1080, 372.0)))
+    monkeypatch.setattr(metadata, "_video_has_motion", Mock(return_value=True))
+    monkeypatch.setattr(metadata, "_detected_crop", Mock(return_value="crop=1920:1080:0:0"))
+
+    def encoded(*_args, **_kwargs):
+        temporary = destination.with_name(f".{destination.stem}-normalizing{destination.suffix}")
+        temporary.write_bytes(b"0" * 1_000_001)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(metadata, "_ffmpeg_output", encoded)
+
+    assert metadata._normalize_video(
+        source,
+        destination,
+        expected_duration=187.944,
+        allow_extended_duration=True,
+    ) is True
+
+
+def test_unverified_long_video_is_still_rejected(monkeypatch, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"0" * 1_000_001)
+    monkeypatch.setattr(metadata, "_video_info", Mock(return_value=(1920, 1080, 372.0)))
+    monkeypatch.setattr(metadata, "_video_has_motion", Mock(return_value=True))
+
+    assert metadata.video_file_is_ready(
+        clip,
+        expected_duration=187.944,
+        allow_extended_duration=False,
+    ) is False
+    assert metadata.video_file_is_ready(
+        clip,
+        expected_duration=187.944,
+        allow_extended_duration=True,
+    ) is True
+
+
 def test_local_clip_is_ready_only_when_complete_playable_and_matches_song(monkeypatch, tmp_path):
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"0" * 1_000_001)

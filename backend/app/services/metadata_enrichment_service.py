@@ -427,10 +427,32 @@ def _video_has_motion(path: Path, duration: float) -> bool:
     return sum(change >= 3.5 for change in changes) >= 3
 
 
+def _video_duration_matches(
+    duration: float,
+    expected_duration: float | None,
+    *,
+    allow_extended_duration: bool,
+) -> bool:
+    if not expected_duration or expected_duration <= 0:
+        return True
+    maximum_drift = max(45.0, expected_duration * 0.25)
+    if abs(duration - expected_duration) <= maximum_drift:
+        return True
+    # A verified official video can contain a substantial narrative intro,
+    # interlude or outro. Only relax the upper bound; suspiciously short
+    # results still fail the ordinary recording-length check.
+    return bool(
+        allow_extended_duration
+        and duration > expected_duration
+        and duration <= expected_duration * 3.0
+    )
+
+
 def video_file_is_ready(
     path: Path,
     *,
     expected_duration: float | None = None,
+    allow_extended_duration: bool = False,
 ) -> bool:
     """Return true only for a complete, playable and song-length local clip."""
     try:
@@ -444,10 +466,12 @@ def video_file_is_ready(
     width, height, duration = info
     if width < 640 or height < 360 or duration < 20:
         return False
-    if expected_duration and expected_duration > 0:
-        maximum_drift = max(45.0, expected_duration * 0.25)
-        if abs(duration - expected_duration) > maximum_drift:
-            return False
+    if not _video_duration_matches(
+        duration,
+        expected_duration,
+        allow_extended_duration=allow_extended_duration,
+    ):
+        return False
     return _video_has_motion(path, duration)
 
 
@@ -477,6 +501,7 @@ def _normalize_video(
     destination: Path,
     *,
     expected_duration: float | None = None,
+    allow_extended_duration: bool = False,
 ) -> bool:
     info = _video_info(source)
     if not info:
@@ -484,13 +509,12 @@ def _normalize_video(
     width, height, duration = info
     if width < 640 or height < 360 or duration < 20 or not _video_has_motion(source, duration):
         return False
-    if expected_duration and expected_duration > 0:
-        # Music videos often contain an intro/outro that is absent from the
-        # album audio. Reject a genuinely different recording, not a normal
-        # video edit of the same song.
-        maximum_drift = max(45.0, expected_duration * 0.25)
-        if abs(duration - expected_duration) > maximum_drift:
-            return False
+    if not _video_duration_matches(
+        duration,
+        expected_duration,
+        allow_extended_duration=allow_extended_duration,
+    ):
+        return False
     crop = _detected_crop(source, width, height, duration)
     target_width, target_height = (1920, 1080) if height >= 1080 else (1280, 720)
     temporary = destination.with_name(f".{destination.stem}-normalizing{destination.suffix}")
@@ -566,6 +590,7 @@ def _download_youtube_video(
             source,
             destination,
             expected_duration=expected_duration,
+            allow_extended_duration=True,
         ):
             destination.unlink(missing_ok=True)
             source_metadata.unlink(missing_ok=True)
