@@ -30,7 +30,12 @@ echo   %ENGINE%
 echo.
 
 rmdir /s /q "%TMP%" >nul 2>&1
-mkdir "%DL%\engines" >nul 2>&1 || goto :fail
+rem Native `mkdir` fails (errorlevel 1) if the target already exists, unlike
+rem `mkdir -p`. downloads\engines is shared with the ASIO/other engines and is
+rem almost always already there by the time MSST installs -- an unguarded
+rem `mkdir || goto :fail` here jumped straight to :fail on every run, before
+rem ever attempting a download, with no visible reason (output is silenced).
+if not exist "%DL%\engines" mkdir "%DL%\engines" >nul 2>&1 || goto :fail
 mkdir "%TMP%" >nul 2>&1 || goto :fail
 
 where git.exe >nul 2>&1
