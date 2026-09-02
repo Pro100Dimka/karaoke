@@ -1,6 +1,7 @@
 import contextlib
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -15,9 +16,17 @@ from sqlalchemy.orm import Session
 import config
 import models
 from AI.utils.numeric import clamp01
-from app.services.audio_runtime import hardware_lock
+from app.services.audio_runtime import hardware_lock, run_on_audio_thread
 from app.services.db_utils import commit_refresh
 from app.services.monitor_control import MonitorCancelled, MonitorControl
+
+# PortAudio's bundled binary only exposes the real "ASIO" host API when this
+# is set before sounddevice loads its native library (sounddevice.py checks
+# it once at import time to pick libportaudio64bit-asio.dll over the plain
+# build). Without it, no device ever reports host API "ASIO" -- every ASIO
+# driver match below silently falls back to whichever MME/WASAPI/DirectSound
+# device happens to share a name with it, instead of the real interface.
+os.environ.setdefault("SD_ENABLE_ASIO", "1")
 
 try:
     import numpy as np
@@ -989,16 +998,20 @@ def check_signal_quality(
     rates.extend((44_100, 48_000, 16_000))
     last_error: Exception | None = None
     recording = None
+    def _capture(rate: int):
+        result = sd.rec(
+            int(duration_sec * rate),
+            samplerate=rate,
+            channels=1,
+            device=resolved_device,
+            dtype="float32",
+        )
+        sd.wait()
+        return result
+
     for sample_rate in dict.fromkeys(rates):
         try:
-            recording = sd.rec(
-                int(duration_sec * sample_rate),
-                samplerate=sample_rate,
-                channels=1,
-                device=resolved_device,
-                dtype="float32",
-            )
-            sd.wait()
+            recording = run_on_audio_thread(_capture, sample_rate)
             break
         except Exception as exc:  # PortAudio errors depend on the Windows host API.
             last_error = exc

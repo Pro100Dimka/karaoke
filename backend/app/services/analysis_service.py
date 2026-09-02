@@ -113,11 +113,36 @@ def _normalized_reference_notes(reference_notes: list[dict[str, Any]]) -> list[d
     return sorted(normalized, key=lambda note: note["start"])
 
 
+def _take_cutoff_song_time(
+    playback_segments: list[dict[str, float]],
+    pitch_frames: list[dict[str, Any]],
+    fallback_offset: float,
+) -> float | None:
+    """How far into the song this take actually reached, win or lose the mic.
+
+    Rhythm and coverage must only be scored against notes the singer could
+    have attempted; grading notes after an early stop as missed would punish
+    a perfect partial take. Segments (exact play/pause/seek tracking) are the
+    precise source when present; legacy takes without them fall back to the
+    furthest raw frame timestamp the vocal analyzer produced.
+    """
+    if playback_segments:
+        return max(
+            segment["start_playback_sec"] + (segment["end_recording_sec"] - segment["start_recording_sec"])
+            for segment in playback_segments
+        )
+    timestamps = [
+        float(frame["time"]) for frame in pitch_frames if isinstance(frame.get("time"), (int, float))
+    ]
+    return max(timestamps) + fallback_offset if timestamps else None
+
+
 def _singing_metrics(
     reference_notes: list[dict[str, float | int]],
     voiced_frames: list[tuple[float, int]],
     deviations: list[float],
     pitch_accuracy: float | None,
+    cutoff_song_time: float | None,
 ) -> dict[str, float | None]:
     if pitch_accuracy is None or not voiced_frames or not reference_notes:
         return {
@@ -129,8 +154,13 @@ def _singing_metrics(
 
     voiced_frames.sort(key=lambda frame: frame[0])
     times = [frame[0] for frame in voiced_frames]
+    attempted_notes = (
+        [note for note in reference_notes if float(note["start"]) < cutoff_song_time]
+        if cutoff_song_time is not None
+        else reference_notes
+    )
     covered, rhythm_scores = 0, []
-    for note in reference_notes:
+    for note in attempted_notes:
         start, end, target = float(note["start"]), float(note["end"]), int(note["midi"])
         note_left = bisect.bisect_left(times, start)
         note_right = bisect.bisect_left(times, end, lo=note_left)
@@ -146,13 +176,13 @@ def _singing_metrics(
         timing_error = min(matching) if matching else _RHYTHM_WINDOW_SECONDS
         rhythm_scores.append(max(0.0, 1.0 - timing_error / _RHYTHM_WINDOW_SECONDS) * 100)
 
-    rhythm = round(statistics.fmean(rhythm_scores), 1)
+    rhythm = round(statistics.fmean(rhythm_scores), 1) if rhythm_scores else None
     hold = round(
         sum(value <= _HOLD_TOLERANCE_SEMITONES for value in deviations) / len(deviations) * 100,
         1,
     )
-    coverage = round(covered / len(reference_notes) * 100, 1)
-    overall = _overall_score(pitch_accuracy, rhythm, hold, coverage)
+    coverage = round(covered / len(attempted_notes) * 100, 1) if attempted_notes else None
+    overall = _overall_score(pitch_accuracy, rhythm or 0.0, hold, coverage or 0.0)
     return {
         "rhythm_accuracy_percent": rhythm,
         "note_hold_percent": hold,
@@ -196,10 +226,11 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict[st
         hits += deviation <= _HIT_TOLERANCE_SEMITONES
 
     accuracy, mean_deviation, sections = round(hits / len(deviations) * 100, 1) if deviations else None, round(statistics.fmean(deviations), 3) if deviations else None, _sections_breakdown(structure, frames) if isinstance(structure, list) else None
+    cutoff_song_time = _take_cutoff_song_time(playback_segments, pitch_frames, playback_offset_sec)
     return {
         "pitch_accuracy_percent": accuracy,
         "mean_deviation_semitones": mean_deviation,
-        **_singing_metrics(normalized_reference, voiced_frames, deviations, accuracy),
+        **_singing_metrics(normalized_reference, voiced_frames, deviations, accuracy, cutoff_song_time),
         "sections": sections,
     }
 

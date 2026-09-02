@@ -118,6 +118,35 @@ def test_analysis_maps_frames_through_play_pause_and_seek_segments(monkeypatch, 
     assert result["note_coverage_percent"] == 100.0
 
 
+def test_analysis_does_not_penalize_rhythm_and_coverage_for_notes_after_an_early_stop(monkeypatch, tmp_path):
+    # The take stops at song time 1s (segment ends there); a reference note
+    # starting well after that point was never attempted and must not count
+    # as a missed/off-rhythm note against a perfectly sung partial take.
+    recording = models.Recording(
+        song_id="song",
+        filename="take.wav",
+        path="take.wav",
+        playback_segments_json='[{"start_recording_sec":0.0,"end_recording_sec":1.0,"start_playback_sec":0.0}]',
+    )
+    reference = [
+        {"start": 0, "end": 1, "note": 60},
+        {"start": 5, "end": 6, "note": 62},
+    ]
+    frames = [{"time": 0.0, "midi": 60}]
+    patch_many(
+        monkeypatch,
+        (analysis_service.song_service, "resolve_output_dir", lambda _song: tmp_path),
+        (analysis_service.ai_bridge, "get_reference_notes", lambda _path: reference),
+        (analysis_service, "read_json", lambda _path: []),
+        (analysis_service.ai_bridge, "analyze_vocal", lambda _path: frames),
+    )
+
+    result = analysis_service.analyze_recording(recording, domain_song(str(tmp_path)))
+
+    assert result["rhythm_accuracy_percent"] == 100.0
+    assert result["note_coverage_percent"] == 100.0
+
+
 def test_analysis_returns_empty_metrics_without_comparable_frames(monkeypatch, tmp_path):
     recording = models.Recording(song_id="song", filename="take.wav", path="take.wav")
     monkeypatch.setattr(analysis_service.song_service, "resolve_output_dir", lambda _song: tmp_path)

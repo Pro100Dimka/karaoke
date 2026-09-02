@@ -17,7 +17,7 @@ import models
 from AI.utils.numeric import clamp01
 from app import repositories
 from app.services import song_artifacts, song_service, storage_budget_service
-from app.services.audio_runtime import hardware_lock, serialized
+from app.services.audio_runtime import hardware_lock, run_on_audio_thread, serialized
 from app.services.db_utils import commit_refresh
 from app.services.microphone_quality import (
     MonitorEffectsChain,
@@ -39,6 +39,8 @@ def _playback_rate(value: object) -> float:
     if rate != rate:
         return 1.0
     return max(0.5, min(1.5, rate))
+
+os.environ.setdefault("SD_ENABLE_ASIO", "1")
 
 try:
     import sounddevice as sd
@@ -153,23 +155,27 @@ class RecordingSession:
             )
             output_channels = min(2, int(output_info["max_output_channels"]))
             if output_channels < 1: raise RuntimeError("No output device is available for microphone monitoring")
-            self._stream = sd.Stream(
-                samplerate=sample_rate,
-                channels=(channels, output_channels),
-                device=(device_id, output_device_id),
-                blocksize=blocksize,
-                latency=latency,
-                callback=self._monitoring_callback,
-                **extra,
+            self._stream = run_on_audio_thread(
+                lambda: sd.Stream(
+                    samplerate=sample_rate,
+                    channels=(channels, output_channels),
+                    device=(device_id, output_device_id),
+                    blocksize=blocksize,
+                    latency=latency,
+                    callback=self._monitoring_callback,
+                    **extra,
+                )
             )
         else:
-            self._stream = sd.InputStream(
-                samplerate=sample_rate,
-                channels=channels,
-                device=device_id,
-                blocksize=blocksize,
-                latency=latency,
-                callback=self._callback,
+            self._stream = run_on_audio_thread(
+                lambda: sd.InputStream(
+                    samplerate=sample_rate,
+                    channels=channels,
+                    device=device_id,
+                    blocksize=blocksize,
+                    latency=latency,
+                    callback=self._callback,
+                )
             )
         # Some Windows/ASIO drivers negotiate a different hardware rate than
         # the stale value PortAudio advertised during device enumeration. The
