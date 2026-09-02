@@ -383,7 +383,7 @@ export function createOnlineRoomMessageHandler(options) {
       )
         return;
       const shared = Object.fromEntries(
-        ["query", "filters", "radio", "karaoke"]
+        ["query", "filters", "libraryFiltersOpen", "radio", "karaoke"]
           .filter((key) => Object.hasOwn(state, key))
           .map((key) => [key, state[key]])
       );

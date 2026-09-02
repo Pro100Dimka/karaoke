@@ -153,7 +153,11 @@ export default function useSpeakingLevels() {
           stopSpeakingMeter(key);
           return;
         }
-        const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.004) / 0.12));
+        // Float analyser samples preserve quiet microphones below the 8-bit
+        // analyser's ~-42 dB quantisation floor. Keep a small analogue-noise
+        // floor, then map normal speech onto the visible indicator range.
+        const visibleRms = rms >= 0.004 ? (rms - 0.004) / 0.12 : (rms - 0.0005) / 0.08;
+        const normalizedLevel = Math.min(1, Math.max(0, visibleRms));
         const response = normalizedLevel > smoothed ? 0.48 : 0.18;
         smoothed += (normalizedLevel - smoothed) * response;
         const rounded = Number(smoothed.toFixed(2));

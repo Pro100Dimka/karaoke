@@ -53,7 +53,7 @@ export function normalizeParticipantEffects(value) {
 
 const isRecord = (value) =>
   value && typeof value === "object" && !Array.isArray(value);
-const SHARED_UI_KEYS = ["query", "filters", "radio", "karaoke"];
+const SHARED_UI_KEYS = ["query", "filters", "libraryFiltersOpen", "radio", "karaoke"];
 const uiText = (value) => typeof value === "string" && value.length <= 200;
 const uiBool = (value) => typeof value === "boolean";
 const uiNumber = (min, max) => (value) =>
@@ -78,6 +78,8 @@ export function normalizeRoomUi(value) {
   const state = {};
   if (typeof value.query === "string" && value.query.length <= 500)
     state.query = value.query;
+  if (typeof value.libraryFiltersOpen === "boolean")
+    state.libraryFiltersOpen = value.libraryFiltersOpen;
   // Only these namespaces are shared. Identity, roles and per-person maps
   // are always assigned by the server, never accepted from a client.
   for (const key of ["filters", "radio", "karaoke"]) {

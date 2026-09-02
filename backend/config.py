@@ -346,4 +346,3 @@ def ensure_directories() -> None:
 
 ensure_directories()
 configure_runtime_cache_environment()
-configure_ai_resource_environment()

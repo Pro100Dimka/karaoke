@@ -5,9 +5,9 @@ import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-cont
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
 import { resolveMicrophoneDevice } from "./microphoneDevice";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
+import { updatePeerIceServers } from "./onlineVoicePeerConfiguration";
 import OnlineVoicePeerRecovery from "./onlineVoicePeerRecovery";
-// Audio is transferred directly between participants. The Worker is used only
-// for signalling, therefore microphone data is never stored in the cloud.
+// Audio is peer-to-peer; the signaling Worker never stores microphone data.
 
 import OnlineVoiceTransferSession from "./onlineVoiceTransferSession";
 
@@ -528,7 +528,7 @@ export default class OnlineVoiceMesh {
         )
           return false;
         const peer = this.createPeer(fromId);
-        if (peer.setConfiguration) peer.setConfiguration({ iceServers: this.iceServers });
+        updatePeerIceServers(peer, this.iceServers);
         const isCurrentPeer = () =>
           lifecycleVersion === this.lifecycleVersion &&
           (this.peerVersions.get(fromId) || 0) === peerVersion &&

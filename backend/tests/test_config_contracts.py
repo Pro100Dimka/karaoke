@@ -212,3 +212,11 @@ def test_ensure_directories_creates_every_runtime_location(monkeypatch, tmp_path
         monkeypatch.setattr(config, attribute, path)
     config.ensure_directories()
     assert all(path.is_dir() for path in paths)
+
+
+def test_backend_import_defers_expensive_model_validation_until_startup_worker():
+    source = config.Path(config.__file__).read_text(encoding="utf-8")
+    module_tail = source[source.rfind("ensure_directories()") :]
+
+    assert "configure_runtime_cache_environment()" in module_tail
+    assert "configure_ai_resource_environment()" not in module_tail

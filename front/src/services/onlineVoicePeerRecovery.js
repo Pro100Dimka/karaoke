@@ -1,5 +1,6 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime";
+import { updatePeerIceServers } from "./onlineVoicePeerConfiguration";
 
 export default class OnlineVoicePeerRecovery {
   constructor(mesh, formatOffer) {
@@ -77,7 +78,7 @@ export default class OnlineVoicePeerRecovery {
     if (mesh.roomClient.getIceServers)
       mesh.iceServers = await mesh.roomClient.getIceServers({ force: true });
     if (!isCurrent()) return false;
-    peer.setConfiguration?.({ iceServers: mesh.iceServers });
+    updatePeerIceServers(peer, mesh.iceServers);
     const offer = this.formatOffer(await peer.createOffer({ iceRestart: true }));
     if (!isCurrent()) return false;
     await peer.setLocalDescription(offer);

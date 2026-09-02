@@ -144,6 +144,22 @@ function installAudioContext({ sample = 255, state = "running", resumeError, res
 }
 const streamWith = (track) => ({ getAudioTracks: () => (track ? [track] : []) });
 describe("speaking level meters", () => {
+  test("shows a quiet local microphone that is lost by 8-bit analyser samples", () => {
+    vi.useFakeTimers();
+    const contexts = installAudioContext({ sample: 128 });
+    const localTrack = new FakeTrack();
+    const hook = renderHook(() => useSpeakingLevels());
+    hook.result.current.prepareSpeakingMeter();
+    contexts[0].analyser.getFloatTimeDomainData = vi.fn((samples) => samples.fill(0.002));
+
+    act(() => {
+      hook.result.current.startSpeakingMeter("local", streamWith(localTrack));
+      vi.advanceTimersByTime(140);
+    });
+
+    expect(hook.result.current.localSpeakingLevel).toBeGreaterThan(0);
+  });
+
   test("publishes local and remote levels and removes ended meters", async () => {
     vi.useFakeTimers();
     const contexts = installAudioContext();

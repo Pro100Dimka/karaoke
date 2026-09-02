@@ -38,6 +38,7 @@ export default function LibraryActions({
   fileInputRef,
   filterOptions: o = {},
   filters = defaults,
+  filtersOpen,
   importing,
   onAdd,
   onFileChosen,
@@ -45,9 +46,12 @@ export default function LibraryActions({
   roomActive,
   query,
   setFilters,
+  setFiltersOpen,
   setQuery
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = typeof filtersOpen === "boolean" ? filtersOpen : localOpen;
+  const setOpen = setFiltersOpen || setLocalOpen;
   const [draft, setDraft] = useState(filters);
   const anchor = useRef();
 

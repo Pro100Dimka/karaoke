@@ -893,6 +893,43 @@ describe("online voice mesh", () => {
     expect(peer.createAnswer).not.toHaveBeenCalled();
     expect(mesh.pendingCandidates.has("guest")).toBe(false);
   });
+  test("keeps immutable peer configuration while rotating ICE servers", async () => {
+    globalThis.RTCPeerConnection = class StrictConfigurationPeer extends FakePeer {
+      constructor(configuration) {
+        super(configuration);
+        this.getConfiguration = vi.fn(() => ({ ...this.configuration }));
+        this.setConfiguration = vi.fn((next) => {
+          for (const field of ["bundlePolicy", "rtcpMuxPolicy", "iceCandidatePoolSize"]) {
+            if (next[field] !== this.configuration[field]) {
+              throw new DOMException(
+                "Attempted to modify the PeerConnection's configuration in an unsupported way.",
+                "InvalidModificationError"
+              );
+            }
+          }
+          this.configuration = { ...next };
+        });
+      }
+    };
+    const mesh = makeMesh();
+    await expect(mesh.invite("guest")).resolves.toBe(true);
+
+    await expect(mesh.accept("guest", { candidate: "ice" })).resolves.toBe(true);
+
+    const peer = FakePeer.instances.at(-1);
+    expect(peer.setConfiguration).toHaveBeenCalledWith({
+      iceServers: mesh.iceServers,
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      iceCandidatePoolSize: 4
+    });
+    const channel = peer.createDataChannel.mock.results[0].value;
+    const sending = mesh.sendFile("guest", new Blob(["song-package"]), { songId: "song" });
+    await vi.waitFor(() => expect(mesh.transfers.pendingTransferConfirmations.size).toBe(1));
+    const transferId = [...mesh.transfers.pendingTransferConfirmations.keys()][0];
+    channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId }) });
+    await expect(sending).resolves.toBeUndefined();
+  });
   test("rolls back its own outgoing offer to accept a simultaneous incoming offer (glare)", async () => {
     // Both sides can end up mid-offer to each other at once (e.g. both
     // reconnect from a shared network blip and both send a fresh invite).
@@ -2150,7 +2187,12 @@ describe("online voice mesh", () => {
 
     expect(mesh.onPeerRecovering).toHaveBeenCalledWith("guest");
     expect(mesh.roomClient.getIceServers).toHaveBeenLastCalledWith({ force: true });
-    expect(peer.setConfiguration).toHaveBeenLastCalledWith({ iceServers: rotated });
+    expect(peer.setConfiguration).toHaveBeenLastCalledWith({
+      iceServers: rotated,
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      iceCandidatePoolSize: 4
+    });
     expect(peer.createOffer).toHaveBeenLastCalledWith({ iceRestart: true });
     expect(mesh.roomClient.send).toHaveBeenCalledWith("signal", {
       targetId: "guest",

@@ -35,8 +35,10 @@ export default function Library() {
           query={state.query}
           setQuery={state.setQuery}
           filters={state.filters}
+          filtersOpen={state.filtersOpen}
           filterOptions={state.filterOptions}
           setFilters={state.setFilters}
+          setFiltersOpen={state.setFiltersOpen}
         />
         <SongsGrid
           state={state}

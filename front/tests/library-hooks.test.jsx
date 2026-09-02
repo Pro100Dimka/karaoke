@@ -155,6 +155,34 @@ describe("library file import", () => {
 });
 
 describe("library room synchronization", () => {
+  test("synchronizes filter popover visibility without echoing remote changes", () => {
+    const syncUi = vi.fn();
+    const setFiltersOpen = vi.fn();
+    const base = {
+      localSongs: [],
+      query: "",
+      filters: {},
+      filtersOpen: false,
+      room: { host: true, selfId: "self" },
+      roomEventId: 1,
+      roomFiltersOpen: true,
+      participantCount: 1,
+      setQuery: vi.fn(),
+      setFilters: vi.fn(),
+      setFiltersOpen,
+      syncUi
+    };
+    const hook = renderHook((value) => useLibraryRoomSync(value), { initialProps: base });
+
+    expect(setFiltersOpen).toHaveBeenCalledWith(true);
+    syncUi.mockClear();
+    hook.rerender({ ...base, filtersOpen: true });
+    expect(syncUi).not.toHaveBeenCalledWith({ libraryFiltersOpen: true });
+
+    hook.rerender({ ...base, filtersOpen: false, roomFiltersOpen: undefined });
+    expect(syncUi).toHaveBeenCalledWith({ libraryFiltersOpen: false });
+  });
+
   test("caps Cyrillic room libraries by UTF-8 bytes", () => {
     const songs = Array.from({ length: 500 }, (_, index) => ({
       id: index,

@@ -659,6 +659,23 @@ test("host can broadcast shared library filters including sort", async () => {
   });
 });
 
+test("room broadcasts whether the library filter popover is visible", async () => {
+  const host = new FakeSocket({ id: "host", role: "host" });
+  const guest = new FakeSocket({ id: "guest", role: "guest" });
+  const room = new KaraokeRoom({ getWebSockets: () => [host, guest] });
+
+  await room.webSocketMessage(
+    host,
+    JSON.stringify({ type: "ui", state: { libraryFiltersOpen: true } }),
+  );
+
+  assert.deepEqual(withoutOrdering(guest.messages.at(-1)), {
+    type: "ui",
+    fromId: "host",
+    state: { libraryFiltersOpen: true },
+  });
+});
+
 test("host can broadcast all shared karaoke preferences", async () => {
   const sender = new FakeSocket({ id: "sender", role: "host" });
   const target = new FakeSocket({ id: "target", role: "guest" });

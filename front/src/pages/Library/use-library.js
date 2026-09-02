@@ -39,6 +39,7 @@ export default function useLibrary() {
   const returning = Boolean(location.state?.fromKaraokeFade);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(defaultLibraryFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
   const [settingsSongId, setSettingsSongId] = useState(null);
@@ -200,13 +201,16 @@ export default function useLibrary() {
     localSongs,
     query,
     filters,
+    filtersOpen,
     room: room?.room,
     roomEventId: room?.roomUi?.__eventId,
     roomQuery: room?.roomUi?.query,
     roomFilters: room?.roomUi?.filters,
+    roomFiltersOpen: room?.roomUi?.libraryFiltersOpen,
     participantCount: room?.participants?.length,
     setQuery,
     setFilters,
+    setFiltersOpen,
     syncUi: room.syncUi
   });
 
@@ -336,6 +340,7 @@ export default function useLibrary() {
     filteredSongs,
     filterOptions,
     filters,
+    filtersOpen,
     online: {
       open: onlineRoomOpen,
       setOpen: setOnlineRoomOpen,
@@ -370,6 +375,7 @@ export default function useLibrary() {
     setAnalysis,
     setQuery,
     setFilters,
+    setFiltersOpen,
     settingsSongId,
     setSettingsSongId,
     songActions,

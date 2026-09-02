@@ -35,29 +35,38 @@ export default function useLibraryRoomSync({
   localSongs,
   query,
   filters,
+  filtersOpen,
   room,
   roomEventId,
   roomQuery,
   roomFilters,
+  roomFiltersOpen,
   participantCount,
   setQuery,
   setFilters,
+  setFiltersOpen,
   syncUi
 }) {
   const remote = useRef(null);
   const remoteFilters = useRef(null);
   const sentQuery = useRef(null);
   const sentFilters = useRef(null);
+  const remoteFiltersOpen = useRef(null);
+  const sentFiltersOpen = useRef(null);
   const currentQuery = useRef(query);
   const currentFilters = useRef(filters);
+  const currentFiltersOpen = useRef(filtersOpen);
   currentQuery.current = query;
   currentFilters.current = filters;
+  currentFiltersOpen.current = filtersOpen;
 
   useEffect(() => {
     remote.current = null;
     remoteFilters.current = null;
     sentQuery.current = room && !room.host ? currentQuery.current : null;
     sentFilters.current = room && !room.host ? JSON.stringify(currentFilters.current) : null;
+    remoteFiltersOpen.current = null;
+    sentFiltersOpen.current = room && !room.host ? currentFiltersOpen.current : null;
   }, [room?.host, room?.id, room?.selfId]);
 
   useEffect(() => {
@@ -102,6 +111,27 @@ export default function useLibraryRoomSync({
     sentFilters.current = current;
     syncUi({ filters });
   }, [filters, room, syncUi]);
+
+  useEffect(() => {
+    if (typeof roomFiltersOpen !== "boolean" || roomFiltersOpen === currentFiltersOpen.current) {
+      if (typeof roomFiltersOpen === "boolean") sentFiltersOpen.current = roomFiltersOpen;
+      return;
+    }
+    remoteFiltersOpen.current = roomFiltersOpen;
+    sentFiltersOpen.current = roomFiltersOpen;
+    setFiltersOpen(roomFiltersOpen);
+  }, [roomEventId, roomFiltersOpen, setFiltersOpen]);
+
+  useEffect(() => {
+    if (!room) return;
+    if (remoteFiltersOpen.current !== null) {
+      if (remoteFiltersOpen.current === filtersOpen) remoteFiltersOpen.current = null;
+      return;
+    }
+    if (sentFiltersOpen.current === filtersOpen) return;
+    sentFiltersOpen.current = filtersOpen;
+    syncUi({ libraryFiltersOpen: filtersOpen });
+  }, [filtersOpen, room, syncUi]);
 
   useEffect(() => {
     if (!room?.selfId) return undefined;
