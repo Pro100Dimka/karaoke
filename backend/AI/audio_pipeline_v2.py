@@ -25,12 +25,19 @@ from .engines.singing_score import (
     VocalParseScoreEngine,
     project_song_scores,
 )
-from .engines.text import tokenize
+from .engines.text import normalize_lyrics_text, tokenize
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .lyrics_document import validate_lyrics_document, words_with_notes
-from .lyrics_sources import LyricsDiscovery, discover_lyrics
+from .lyrics_sources import (
+    LyricsDiscovery,
+    _lyrics_arrangement_candidates,
+    _select_lyrics_arrangement,
+    _select_reprise_candidate_at_time,
+    discover_lyrics,
+)
 from .models import StageReport, VocalNote, Word
 from .music import analyze_music
+from .music_structure import extract_music_structure, find_section_reprise
 from .notes import (
     build_vocal_notes,
     constrain_line_final_words_to_voice,
@@ -120,8 +127,10 @@ def validate_audio_artifacts(output_dir: str | Path) -> None:
     missing = [name for name in required if not (output / name).is_file()]
     if missing:
         raise ValueError("Missing audio reference artifacts: " + ", ".join(missing))
+    audio_info = {}
     for name in ("original.flac", "vocals.flac", "instrumental.flac"):
         info = sf.info(output / name)
+        audio_info[name] = info
         if info.frames <= 0:
             raise ValueError(f"{name} is empty")
         if info.channels != 2:
@@ -130,6 +139,16 @@ def validate_audio_artifacts(output_dir: str | Path) -> None:
             raise ValueError(f"{name} must be 24-bit like the reference corpus")
     payload = json.loads((output / "lyricsSync.json").read_text(encoding="utf-8"))
     validate_lyrics_document(payload)
+    try:
+        document_duration = float(payload["duration"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("lyricsSync.json duration is invalid") from exc
+    original_duration = float(audio_info["original.flac"].duration)
+    if abs(document_duration - original_duration) > 0.25:
+        raise ValueError(
+            "lyricsSync.json duration does not match original.flac "
+            f"({document_duration:.3f}s vs {original_duration:.3f}s)"
+        )
     required_keys = {
         "schemaVersion", "bpm", "duration", "key", "reference_audio",
         "text", "words", "source", "title", "artist",
@@ -215,6 +234,7 @@ class AudioPipelineV2:
         request: AudioPipelineV2Request,
         analysis_vocals: Path,
         discovered: LyricsDiscovery | None,
+        structure_audio: Path | None = None,
     ) -> tuple[str, list[Word], str, list[ScoreLine]]:
         if request.lyrics_path and Path(request.lyrics_path).is_file():
             text = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
@@ -227,6 +247,93 @@ class AudioPipelineV2:
                 raise EngineUnavailableError("Could not transcribe the complete vocal")
             words = self._normalized_words(direct)
             return text.strip(), words, "asr", self._score_lines(words, text.splitlines())
+        discovered = LyricsDiscovery(
+            text=normalize_lyrics_text(discovered.text),
+            source=discovered.source,
+            query=discovered.query,
+            language=discovered.language,
+            lines=tuple(
+                type(line)(line.start, normalize_lyrics_text(line.text))
+                for line in discovered.lines
+            ),
+        )
+        if discovered.source != "user":
+            source_lines = tuple(
+                line.text for line in discovered.lines
+            ) or tuple(discovered.text.splitlines())
+            candidates = _lyrics_arrangement_candidates(source_lines)
+            transcribe_ctc = getattr(self.engines.aligner, "transcribe_ctc", None)
+            common_lines = 0
+            for rows in zip(*candidates, strict=False):
+                if len(set(rows)) != 1:
+                    break
+                common_lines += 1
+            split_seconds = (
+                discovered.lines[common_lines].start
+                if discovered.lines and common_lines < len(discovered.lines)
+                else None
+            )
+            music_selected = 0
+            if (
+                len(candidates) > 1
+                and structure_audio is not None
+                and discovered.lines
+                and split_seconds is not None
+            ):
+                alternative = candidates[1]
+                opening_lines = 0
+                for position in range(common_lines, len(alternative)):
+                    matched = 0
+                    while (
+                        matched < len(candidates[0])
+                        and position + matched < len(alternative)
+                        and alternative[position + matched] == candidates[0][matched]
+                    ):
+                        matched += 1
+                    opening_lines = max(opening_lines, matched)
+                if opening_lines >= 2 and opening_lines < len(discovered.lines):
+                    features, frame_rate, audio_duration = extract_music_structure(
+                        structure_audio
+                    )
+                    template_start = discovered.lines[0].start
+                    template_end = discovered.lines[opening_lines].start
+                    reprise = find_section_reprise(
+                        features,
+                        frames_per_second=frame_rate,
+                        template_start=template_start,
+                        template_end=template_end,
+                        search_start=split_seconds,
+                        search_end=max(split_seconds, audio_duration - 1.0),
+                    )
+                    if reprise is not None:
+                        music_selected = _select_reprise_candidate_at_time(
+                            discovered.lines, candidates, reprise.start
+                        )
+                        if music_selected:
+                            selected = candidates[music_selected]
+                            discovered = LyricsDiscovery(
+                                text="\n".join(selected),
+                                source=f"{discovered.source}+music-arrangement",
+                                query=discovered.query,
+                                language=discovered.language,
+                            )
+            if not music_selected and len(candidates) > 1 and callable(transcribe_ctc):
+                try:
+                    heard_words = transcribe_ctc(analysis_vocals, request.language)
+                    heard_text = " ".join(word.text for word in heard_words)
+                    selected = _select_lyrics_arrangement(candidates, heard_text)
+                except Exception as error:
+                    logger.warning(
+                        "Acoustic lyrics-arrangement check unavailable: %s", error
+                    )
+                else:
+                    if selected != candidates[0]:
+                        discovered = LyricsDiscovery(
+                            text="\n".join(selected),
+                            source=f"{discovered.source}+audio-arrangement",
+                            query=discovered.query,
+                            language=discovered.language,
+                        )
         text = discovered.text.strip()
         setter = getattr(self.engines.aligner, "set_cancelled", None)
         if callable(setter):
@@ -355,6 +462,7 @@ class AudioPipelineV2:
                     request,
                     analysis_vocals,
                     discovered,
+                    original,
                 )
                 getattr(self.engines.transcriber, "close", lambda: None)()
                 if not self._keeps_analysis_models_warm(request.processing_mode):
@@ -384,6 +492,13 @@ class AudioPipelineV2:
                     split_semitones=self.config.split_note_semitones,
                     max_gap=self.config.max_gap_sec,
                     min_confidence=self.config.min_voiced_confidence,
+                )
+                words, physical_notes = fit_notes_to_sung_words(
+                    words,
+                    physical_notes,
+                    duration=song_duration,
+                    line_end_indices=line_end_indices,
+                    word_end_limits=word_end_limits,
                 )
                 if self._uses_symbolic_model(request.processing_mode):
                     if score_lines:
@@ -418,13 +533,7 @@ class AudioPipelineV2:
                         physical_notes=physical_notes,
                     )
                 else:
-                    words, notes = fit_notes_to_sung_words(
-                        words,
-                        physical_notes,
-                        duration=song_duration,
-                        line_end_indices=line_end_indices,
-                        word_end_limits=word_end_limits,
-                    )
+                    notes = physical_notes
                 words = self._normalized_words(words)
                 payload = build_audio_lyrics_document(
                     artist=request.artist,

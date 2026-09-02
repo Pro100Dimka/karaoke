@@ -11,6 +11,8 @@ import urllib.request
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
+from .engines.text import normalize_lyrics_text
+
 # Each individual request already has its own 8s socket timeout, but pisni.org.ua
 # lookups can chain up to 8 detail-page fetches after the search page -- on a
 # network that hangs (not fails fast) rather than being cleanly unreachable,
@@ -84,6 +86,7 @@ def _trim_incomplete_repeated_tail(
 
 
 def _identity(value: str) -> str:
+    value = normalize_lyrics_text(value)
     value = re.sub(r"\s*[\[(].*?[\])]\s*", " ", value)
     value = value.translate(str.maketrans({"i": "і", "I": "і"})).casefold()
     return " ".join(re.findall(r"[\w']+", value, flags=re.UNICODE))
@@ -122,6 +125,167 @@ def _select_complete_lyrics(
             selected = candidate
             selected_size = len(candidate_tokens)
     return selected
+
+
+def _lyrics_arrangement_candidates(
+    lines: tuple[str, ...] | list[str],
+) -> tuple[tuple[str, ...], ...]:
+    """Build conservative alternatives for a catalog's repetitive outro.
+
+    Lyrics providers sometimes publish one studio arrangement while another
+    release reprises the opening verse near the end.  This function never
+    chooses or publishes an alternative: it only offers structurally plausible
+    candidates which the audio alignment stage can score later.
+    """
+    original = tuple(lines)
+    count = len(original)
+    candidates = [original]
+    identities = tuple(_identity(line) for line in original)
+
+    for block_size in range(1, min(4, count // 4) + 1):
+        unit = identities[-block_size:]
+        if not all(unit):
+            continue
+
+        repeats = 1
+        cursor = count - 2 * block_size
+        while cursor >= 0 and identities[cursor:cursor + block_size] == unit:
+            repeats += 1
+            cursor -= block_size
+        if repeats < 4:
+            continue
+
+        suffix_start = count - repeats * block_size
+        earlier_start = next(
+            (
+                index
+                for index in range(suffix_start - block_size + 1)
+                if identities[index:index + block_size] == unit
+            ),
+            None,
+        )
+        if earlier_start is None or earlier_start == 0:
+            continue
+
+        opening = original[:earlier_start]
+        repeated_unit = original[-block_size:]
+        retained_counts = sorted({1, max(1, repeats // 2), max(1, repeats - 2)})
+        for retained in retained_counts:
+            candidate = (
+                original[:suffix_start]
+                + repeated_unit * retained
+                + opening
+                + repeated_unit
+            )
+            if candidate not in candidates:
+                candidates.append(candidate)
+        break
+
+    return tuple(candidates)
+
+
+def _select_lyrics_arrangement(
+    candidates: tuple[tuple[str, ...], ...] | list[tuple[str, ...]],
+    heard_text: str,
+    *,
+    minimum_improvement: float = 0.04,
+) -> tuple[str, ...]:
+    """Select an arrangement only when an acoustic transcript supports it."""
+    available = tuple(tuple(candidate) for candidate in candidates)
+    if not available:
+        return ()
+    heard = _lyrics_tokens(heard_text)
+    if len(heard) < 4:
+        return available[0]
+
+    def score(candidate: tuple[str, ...]) -> tuple[float, float]:
+        expected = _lyrics_tokens("\n".join(candidate))
+        if not expected:
+            return 0.0, 0.0
+        matcher = SequenceMatcher(None, expected, heard, autojunk=False)
+        matched = sum(block.size for block in matcher.get_matching_blocks())
+        precision = matched / len(expected)
+        recall = matched / len(heard)
+        f1 = 2 * precision * recall / max(1e-9, precision + recall)
+        return f1, recall
+
+    baseline_score, _ = score(available[0])
+    selected, selected_score = available[0], baseline_score
+    for candidate in available[1:]:
+        candidate_score, recall = score(candidate)
+        if recall >= 0.55 and candidate_score > selected_score:
+            selected, selected_score = candidate, candidate_score
+    if selected is available[0] or selected_score < baseline_score + minimum_improvement:
+        return available[0]
+    return selected
+
+
+def _select_scored_lyrics_arrangement(
+    candidates: tuple[tuple[str, ...], ...] | list[tuple[str, ...]],
+    acoustic_scores: tuple[float | None, ...] | list[float | None],
+    *,
+    minimum_improvement: float = 0.05,
+) -> int:
+    """Return the best candidate index when CTC likelihood clearly improves."""
+    if not candidates or len(candidates) != len(acoustic_scores):
+        return 0
+    baseline = acoustic_scores[0]
+    if baseline is None:
+        return 0
+    selected, selected_score = 0, float(baseline)
+    for index, score in enumerate(acoustic_scores[1:], start=1):
+        if score is not None and float(score) > selected_score:
+            selected, selected_score = index, float(score)
+    if selected_score < float(baseline) + minimum_improvement:
+        return 0
+    return selected
+
+
+def _select_reprise_candidate_at_time(
+    timed_lines: tuple[TimedLine, ...] | list[TimedLine],
+    candidates: tuple[tuple[str, ...], ...] | list[tuple[str, ...]],
+    reprise_time: float,
+) -> int:
+    """Map a detected musical reprise time to a generated lyric structure."""
+    if len(candidates) < 2 or len(timed_lines) < 4:
+        return 0
+    original = tuple(line.text for line in timed_lines)
+    identities = tuple(_identity(line) for line in original)
+    count = len(original)
+    for block_size in range(1, min(4, count // 4) + 1):
+        unit = identities[-block_size:]
+        repeats, cursor = 1, count - 2 * block_size
+        while cursor >= 0 and identities[cursor:cursor + block_size] == unit:
+            repeats += 1
+            cursor -= block_size
+        if repeats < 4:
+            continue
+        suffix_start = count - repeats * block_size
+        earlier_start = next((index for index in range(suffix_start)
+                              if identities[index:index + block_size] == unit), None)
+        if earlier_start is None or earlier_start == 0:
+            continue
+        opening = original[:earlier_start]
+        repeated_unit = original[-block_size:]
+        best: tuple[float, int] | None = None
+        for retained in sorted({1, max(1, repeats // 2), max(1, repeats - 2)}):
+            predicted_line = suffix_start + retained * block_size
+            if predicted_line >= len(timed_lines):
+                continue
+            candidate = (
+                original[:suffix_start] + repeated_unit * retained
+                + opening + repeated_unit
+            )
+            try:
+                candidate_index = tuple(candidates).index(candidate)
+            except ValueError:
+                continue
+            distance = abs(timed_lines[predicted_line].start - reprise_time)
+            if best is None or distance < best[0]:
+                best = distance, candidate_index
+        if best is not None:
+            return best[1]
+    return 0
 
 
 _CYRILLIC_LATIN = str.maketrans({

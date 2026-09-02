@@ -215,12 +215,38 @@ def _interpolate_invalid_words(words: list[Word], tokens: list[str], span: float
     return words
 
 
+_LATIN_CYRILLIC_HOMOGLYPHS = str.maketrans({
+    "A": "А", "B": "В", "C": "С", "E": "Е", "H": "Н", "K": "К",
+    "M": "М", "O": "О", "P": "Р", "T": "Т", "X": "Х", "Y": "У",
+    "a": "а", "c": "с", "e": "е", "o": "о", "p": "р", "x": "х",
+    "y": "у",
+})
+_REPEATED_HYPHEN_WORD_RE = re.compile(
+    r"(?<!\w)([^\W\d_]+)[\-‐‑‒–—]\1(?!\w)",
+    flags=re.IGNORECASE | re.UNICODE,
+)
+
+
+def normalize_lyrics_text(text: str) -> str:
+    """Repair provider encoding artifacts without rewriting real Latin words."""
+    def clean_token(match: re.Match[str]) -> str:
+        token = match.group(0)
+        has_cyrillic = any("а" <= char.casefold() <= "я" or char.casefold() in "ёіїєґ"
+                            for char in token)
+        has_latin = any("a" <= char.casefold() <= "z" for char in token)
+        if has_cyrillic and has_latin:
+            token = token.translate(_LATIN_CYRILLIC_HOMOGLYPHS)
+        return _REPEATED_HYPHEN_WORD_RE.sub(r"\1 \1", token)
+
+    return re.sub(r"\S+", clean_token, text)
+
+
 def tokenize(text: str) -> list[str]:
     def kept(char: str) -> bool:
         return char == "'" or unicodedata.category(char)[:1] in {"L", "N"}
 
     result = []
-    for part in text.split():
+    for part in normalize_lyrics_text(text).split():
         positions = [index for index, char in enumerate(part) if kept(char)]
         if positions:
             result.append(part[positions[0]:positions[-1] + 1])
@@ -802,6 +828,31 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
             model_path, _create_ctc_aligner(model_path, resolved)
         )
         return ctc.transcribe(audio)
+
+    def align_ctc_candidates(
+        self, audio, texts, language=None, *, split_seconds=None
+    ):
+        """Score and align transcript alternatives with one acoustic pass."""
+        resolved = resolve_alignment_language("\n".join(texts), language)
+        variable = {
+            "Russian": "KARAOKE_AI_CTC_RU_MODEL",
+            "Ukrainian": "KARAOKE_AI_CTC_UK_MODEL",
+        }.get(resolved)
+        model_path = os.getenv(variable) if variable else None
+        if not model_path:
+            raise EngineUnavailableError(
+                f"{resolved} CTC model is unavailable"
+            )
+        ctc = self._ctc.setdefault(
+            model_path, _create_ctc_aligner(model_path, resolved)
+        )
+        transcripts = [
+            _ctc_tokens(tokenize(text), resolved)
+            for text in texts
+        ]
+        return ctc.align_transcripts(
+            audio, transcripts, split_seconds=split_seconds
+        )
 
     def _raw(self, audio, text, language) -> list[Word]:
         raw = self._load().align(audio=str(audio), text=text,

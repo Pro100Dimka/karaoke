@@ -217,7 +217,7 @@ def test_song_projection_uses_physical_notes_when_model_syllable_labels_are_wron
 
     assert {note.word_index for note in notes} == {0, 1}
     assert [note.midi_note for note in notes] == [60, 64]
-    assert fitted[0].end == 1.5
+    assert fitted[0].end == 1.3
     assert fitted[1].end >= 2.0
 
 
@@ -261,6 +261,33 @@ def test_song_projection_rejects_symbolic_pitch_far_from_the_sung_note():
     )
 
     assert notes[0].midi_note == 60
+
+
+def test_song_projection_preserves_the_measured_physical_note_duration():
+    words = [
+        Word(1.0, 1.35, "первое", 1.0, 0),
+        Word(2.0, 2.4, "второе", 1.0, 1),
+    ]
+    lines = [ScoreLine("первое второе", 1.0, 2.5, 0, 1)]
+    scores = [SymbolicScore(120, (
+        SymbolicEvent(0, 2, 60, "первое"),
+        SymbolicEvent(2, 1, 62, "второе"),
+    ))]
+    physical = [
+        VocalNote(1.1, 1.3, 60, word_index=0),
+        VocalNote(2.1, 2.35, 62, word_index=1),
+    ]
+
+    fitted, notes = project_song_scores(
+        words,
+        lines,
+        scores,
+        pitch=[],
+        physical_notes=physical,
+    )
+
+    assert fitted[0].end == pytest.approx(1.35)
+    assert notes[0].end - notes[0].start == pytest.approx(0.2)
 
 
 def test_score_engine_honours_cancellation_before_loading_the_large_model(tmp_path):

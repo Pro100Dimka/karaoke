@@ -32,7 +32,7 @@ class CTCWordAligner:
             self._device = device
         return self._model, self._processor
 
-    def align(self, samples, rate: int, tokens: list[str], offset: float) -> list[Word]:
+    def _compute_logits(self, samples, rate: int):
         import torch
         import torchaudio
 
@@ -46,6 +46,20 @@ class CTCWordAligner:
         inputs = processor(audio.numpy(), sampling_rate=target_rate, return_tensors="pt")
         with torch.inference_mode():
             logits = model(inputs.input_values.to(self._device)).logits.log_softmax(dim=-1)
+        duration = len(audio) / target_rate
+        return logits, model, processor, duration
+
+    def _acoustic_logits(self, audio):
+        from ..audio import read_mono
+
+        samples, rate = read_mono(audio)
+        return self._compute_logits(samples, rate)
+
+    @staticmethod
+    def _align_logits(logits, model, processor, duration, tokens, offset=0.0):
+        import torch
+        import torchaudio
+
         delimiter = processor.tokenizer.word_delimiter_token_id
         targets, ranges = [], []
         for token in tokens:
@@ -79,8 +93,8 @@ class CTCWordAligner:
                 end += 1
             spans.append((start, end, values[start:end]))
             cursor = end
-        seconds = len(audio) / target_rate / len(labels)
-        return [
+        seconds = duration / len(labels)
+        words = [
             Word(
                 offset + spans[start][0] * seconds,
                 offset + spans[end - 1][1] * seconds,
@@ -90,6 +104,97 @@ class CTCWordAligner:
             )
             for index, (token, (start, end)) in enumerate(zip(tokens, ranges, strict=True))
         ]
+        frame_count = sum(len(span[2]) for span in spans)
+        score = sum(sum(span[2]) for span in spans) / max(1, frame_count)
+        return score, words
+
+    def align(self, samples, rate: int, tokens: list[str], offset: float) -> list[Word]:
+        logits, model, processor, duration = self._compute_logits(samples, rate)
+        _score, words = self._align_logits(
+            logits, model, processor, duration, tokens, offset
+        )
+        return words
+
+    def _align_split_transcripts(
+        self,
+        logits,
+        model,
+        processor,
+        duration,
+        transcripts,
+        split_seconds,
+    ):
+        if not transcripts or not 0 < split_seconds < duration:
+            return None
+        common = 0
+        for values in zip(*transcripts, strict=False):
+            if len(set(values)) != 1:
+                break
+            common += 1
+        if common == 0:
+            return None
+        frames = int(logits.shape[1])
+        split_frame = min(
+            frames - 1,
+            max(1, round(frames * split_seconds / duration)),
+        )
+        prefix_score, prefix_words = self._align_logits(
+            logits[:, :split_frame, :],
+            model,
+            processor,
+            split_seconds,
+            transcripts[0][:common],
+            0.0,
+        )
+        results = []
+        for tokens in transcripts:
+            tail = tokens[common:]
+            try:
+                tail_score, tail_words = self._align_logits(
+                    logits[:, split_frame:, :],
+                    model,
+                    processor,
+                    duration - split_seconds,
+                    tail,
+                    split_seconds,
+                )
+            except (EngineUnavailableError, InvalidArtifactError):
+                results.append(None)
+                continue
+            total = common + len(tail)
+            score = (
+                prefix_score * common + tail_score * len(tail)
+            ) / max(1, total)
+            words = [
+                Word(word.start, word.end, word.text, word.confidence, index)
+                for index, word in enumerate(prefix_words + tail_words)
+            ]
+            results.append((score, words))
+        return results
+
+    def align_transcripts(self, audio, transcripts, *, split_seconds=None):
+        """Align alternatives while sharing one expensive model inference."""
+        logits, model, processor, duration = self._acoustic_logits(audio)
+        if split_seconds is not None:
+            split = self._align_split_transcripts(
+                logits,
+                model,
+                processor,
+                duration,
+                transcripts,
+                split_seconds,
+            )
+            if split is not None:
+                return split
+        results = []
+        for tokens in transcripts:
+            try:
+                results.append(self._align_logits(
+                    logits, model, processor, duration, tokens, 0.0
+                ))
+            except (EngineUnavailableError, InvalidArtifactError):
+                results.append(None)
+        return results
 
     def transcribe(self, audio, *, max_window_seconds: float = 22.0) -> list[Word]:
         """Greedy CTC transcription with native word timestamps.

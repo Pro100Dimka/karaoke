@@ -83,6 +83,7 @@ _GOOD_VIDEO_HINT_SCORES = (
 LOCAL_VIDEO_URL = "local:clip"
 LOCAL_VIDEO_NAME = "clip.mp4"
 LOCAL_VIDEO_SOURCE_NAME = "clip.source.json"
+_MAX_VIDEO_DOWNLOAD_CANDIDATES = 4
 _active: set[str] = set()
 _validated_video_urls: set[str] = set()
 _lock = threading.Lock()
@@ -297,9 +298,11 @@ def _youtube_video_is_acceptable(video_id: str, title: str, artist: str | None) 
     return acceptable and _youtube_has_motion(video_id) is not False
 
 
-def _youtube_video_id(title: str, artist: str | None) -> str | None:
-    query = " ".join(value for value in (artist, title, "official music video") if value).strip()
-    if not query: return None
+def _youtube_video_candidates(title: str, artist: str | None) -> list[str]:
+    """Return ranked, moving clip candidates instead of one fragile result."""
+    query = " ".join(value for value in (artist, title, "official video") if value).strip()
+    if not query: return []
+    selected: list[str] = []
     api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
     if api_key:
         url = "https://www.googleapis.com/youtube/v3/search?" + urllib.parse.urlencode({
@@ -326,7 +329,8 @@ def _youtube_video_id(title: str, artist: str | None) -> str | None:
             )
             if score is not None: ranked.append((score, video_id))
         for _, video_id in sorted(ranked, reverse=True):
-            if _youtube_video_is_acceptable(video_id, title, artist) is True: return video_id
+            if _youtube_video_is_acceptable(video_id, title, artist) is True:
+                selected.append(video_id)
 
     # Keyless fallback keeps local installations useful. It stores only the
     # public video id and streams through YouTube's muted embed player; no
@@ -349,8 +353,14 @@ def _youtube_video_id(title: str, artist: str | None) -> str | None:
         )
         if score is not None: ranked.append((score, video_id))
     for _, video_id in sorted(ranked, reverse=True):
-        if _youtube_has_motion(video_id) is not False: return video_id
-    return None
+        if video_id not in selected and _youtube_has_motion(video_id) is not False:
+            selected.append(video_id)
+    return selected
+
+
+def _youtube_video_id(title: str, artist: str | None) -> str | None:
+    candidates = _youtube_video_candidates(title, artist)
+    return candidates[0] if candidates else None
 
 
 def resolve_local_video(song: models.Song) -> Path | None:
@@ -618,8 +628,10 @@ def prepare_training_media(
     output_dir.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
     video_id: str | None = None
+    video_candidates: list[str] = []
     try:
-        video_id = _youtube_video_id(title, artist)
+        video_candidates = _youtube_video_candidates(title, artist)
+        video_id = video_candidates[0] if video_candidates else None
     except Exception as exc:
         warnings.append(f"Не удалось найти клип: {exc}")
 
@@ -644,12 +656,16 @@ def prepare_training_media(
         output_dir / LOCAL_VIDEO_NAME,
         expected_duration=expected_duration,
     )
-    if not video_ready and video_id:
-        video_ready = _download_youtube_video(
-            video_id,
-            output_dir,
-            expected_duration=expected_duration,
-        )
+    if not video_ready:
+        for candidate_id in video_candidates[:_MAX_VIDEO_DOWNLOAD_CANDIDATES]:
+            if _download_youtube_video(
+                candidate_id,
+                output_dir,
+                expected_duration=expected_duration,
+            ):
+                video_ready = True
+                video_id = candidate_id
+                break
     if not video_ready:
         warnings.append(
             "Подходящий движущийся клип не найден; караоке использует стандартное видео"

@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import numpy as np
 import pytest
 import soundfile as sf
 
@@ -47,7 +48,12 @@ def test_audio_document_matches_the_reference_shape_without_internal_fields():
 
 def test_audio_artifact_contract_requires_every_reference_output(tmp_path: Path):
     for name in ("original.flac", "vocals.flac", "instrumental.flac"):
-        sf.write(tmp_path / name, [[0.0, 0.0], [0.0, 0.0]], 44_100, subtype="PCM_24")
+        sf.write(
+            tmp_path / name,
+            np.zeros((44_100, 2), dtype=np.float32),
+            44_100,
+            subtype="PCM_24",
+        )
     (tmp_path / "lyricsSync.json").write_text(
         json.dumps({
             "schemaVersion": 1,
@@ -70,6 +76,38 @@ def test_audio_artifact_contract_requires_every_reference_output(tmp_path: Path)
 
     (tmp_path / "cover.jpg").write_bytes(b"reference-cover")
     validate_audio_artifacts(tmp_path)
+
+
+def test_audio_artifact_contract_rejects_json_duration_that_disagrees_with_audio(
+    tmp_path: Path,
+):
+    for name in ("original.flac", "vocals.flac", "instrumental.flac"):
+        sf.write(
+            tmp_path / name,
+            np.zeros((44_100, 2), dtype=np.float32),
+            44_100,
+            subtype="PCM_24",
+        )
+    (tmp_path / "cover.jpg").write_bytes(b"cover")
+    (tmp_path / "metadata.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "lyricsSync.json").write_text(
+        json.dumps({
+            "schemaVersion": 1,
+            "bpm": 120,
+            "duration": 8.4,
+            "key": "C",
+            "reference_audio": "original.flac",
+            "text": "тест",
+            "words": [{"text": "тест", "start": 0.1, "end": 0.5, "notes": []}],
+            "source": "audio",
+            "title": "Тест",
+            "artist": "Автор",
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duration.*original.flac"):
+        validate_audio_artifacts(tmp_path)
 
 
 def test_audio_artifact_contract_rejects_old_mono_vocals(tmp_path: Path):
@@ -203,6 +241,135 @@ def test_complete_online_text_is_forced_aligned_without_ctc_rewriting(tmp_path):
     assert score_lines[0].last_word == 1
     aligner.transcribe_ctc.assert_not_called()
     aligner.align_long_text.assert_called_once()
+
+
+def test_online_text_is_normalized_before_alignment_and_publication(tmp_path):
+    aligner = SimpleNamespace(
+        set_cancelled=Mock(),
+        align_long_text=Mock(side_effect=lambda _audio, text, _language: [
+            Word(index * 0.1, index * 0.1 + 0.05, token, 0.9, index)
+            for index, token in enumerate(text.split())
+        ]),
+    )
+    pipeline = AudioPipelineV2(engines=SimpleNamespace(aligner=aligner))
+    request = AudioPipelineV2Request(
+        tmp_path / "song.flac", tmp_path, artist="Artist", title="Song"
+    )
+
+    text, words, _source, _lines = pipeline._align(
+        request,
+        tmp_path / "vocals.flac",
+        LyricsDiscovery(
+            "Hа дачу\nОна жуёт оpбит\nА ты жуй-жуй",
+            "internet",
+            "query",
+        ),
+    )
+
+    assert text == "На дачу\nОна жуёт орбит\nА ты жуй жуй"
+    assert [word.text for word in words][-2:] == ["жуй", "жуй"]
+    assert aligner.align_long_text.call_args.args[1] == text
+
+
+def test_repetitive_catalog_outro_is_rearranged_only_from_acoustic_evidence(tmp_path):
+    catalog_lines = (
+        "verse one", "verse two", "vocalise", "chorus",
+        "middle one", "middle two", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+    )
+    heard = [
+        "verse", "one", "verse", "two", "vocalise", "chorus",
+        "middle", "one", "middle", "two", "vocalise", "chorus",
+        "vocalise", "chorus", "verse", "one", "verse", "two",
+        "vocalise", "chorus",
+    ]
+    aligner = SimpleNamespace(
+        transcribe_ctc=Mock(return_value=[
+            Word(index * 0.1, index * 0.1 + 0.05, token, 0.8, index)
+            for index, token in enumerate(heard)
+        ]),
+        set_cancelled=Mock(),
+        align_long_text=Mock(side_effect=lambda _audio, text, _language: [
+            Word(index * 0.1, index * 0.1 + 0.05, token, 0.9, index)
+            for index, token in enumerate(text.split())
+        ]),
+    )
+    pipeline = AudioPipelineV2(engines=SimpleNamespace(aligner=aligner))
+    request = AudioPipelineV2Request(
+        source_path=tmp_path / "song.flac",
+        output_dir=tmp_path,
+        artist="Artist",
+        title="Song",
+    )
+
+    text, _words, source, score_lines = pipeline._align(
+        request,
+        tmp_path / "vocals.flac",
+        LyricsDiscovery(
+            "\n".join(catalog_lines),
+            "internet",
+            "query",
+            lines=tuple(TimedLine(index, line) for index, line in enumerate(catalog_lines)),
+        ),
+    )
+
+    assert text.splitlines()[-4:] == [
+        "verse one", "verse two", "vocalise", "chorus",
+    ]
+    assert source == "internet+audio-arrangement"
+    assert score_lines[-1].text == "chorus"
+    aligner.transcribe_ctc.assert_called_once()
+    aligner.align_long_text.assert_called_once()
+
+
+def test_long_outro_uses_music_reprise_before_fallback_transcription(
+    tmp_path, monkeypatch
+):
+    lines = (
+        "verse one", "verse two", "vocalise", "chorus",
+        "middle one", "middle two", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+    )
+    monkeypatch.setattr(
+        "AI.audio_pipeline_v2.extract_music_structure",
+        lambda _path: (__import__("numpy").zeros((2, 200)), 1.0, 180.0),
+    )
+    monkeypatch.setattr(
+        "AI.audio_pipeline_v2.find_section_reprise",
+        lambda *_args, **_kwargs: SimpleNamespace(start=120.0),
+    )
+    aligner = SimpleNamespace(
+        align_ctc_candidates=Mock(),
+        transcribe_ctc=Mock(side_effect=AssertionError("music already selected")),
+        set_cancelled=Mock(),
+        align_long_text=Mock(side_effect=lambda _audio, text, _language: [
+            Word(index * 0.1, index * 0.1 + 0.05, token, 0.9, index)
+            for index, token in enumerate(text.split())
+        ]),
+    )
+    pipeline = AudioPipelineV2(engines=SimpleNamespace(aligner=aligner))
+    request = AudioPipelineV2Request(
+        tmp_path / "song.flac", tmp_path, artist="Artist", title="Song"
+    )
+
+    text, _words, source, _score_lines = pipeline._align(
+        request,
+        tmp_path / "vocals.flac",
+        LyricsDiscovery(
+            "\n".join(lines), "internet", "query",
+            lines=tuple(TimedLine(index * 10.0, line)
+                        for index, line in enumerate(lines)),
+        ),
+        tmp_path / "original.flac",
+    )
+
+    assert text.splitlines()[-4:] == [
+        "verse one", "verse two", "vocalise", "chorus",
+    ]
+    assert source == "internet+music-arrangement"
+    aligner.transcribe_ctc.assert_not_called()
 
 
 def test_ctc_word_intervals_are_made_monotonic_before_document_validation():

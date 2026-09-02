@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 import config
 import models
 from AI.artifacts import recover_orphaned_backups
-from AI.audio_pipeline_v2 import AudioPipelineV2
+from AI.audio_pipeline_v2 import AudioPipelineV2, validate_audio_artifacts
 from AI.cache import StageCache
 from AI.notes import NOTE_DECODER_VERSION
 from AI.pitch_post import PITCH_STABILIZER_VERSION
@@ -863,26 +863,48 @@ def _complete_audio_media(
     )
     if media.get("cover_status") != "ready" or not (out_dir / "cover.jpg").is_file():
         raise ValueError("Не удалось загрузить и проверить обложку песни")
-    if media.get("video_status") != "ready" or not (
+    video_ready = media.get("video_status") == "ready" and (
         metadata_enrichment_service.video_file_is_ready(
             out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME,
             expected_duration=expected_duration,
         )
-    ):
-        raise ValueError("Не удалось загрузить и полностью проверить клип песни")
+    )
+    if not video_ready:
+        # No valid clip is a supported result. The dedicated media process has
+        # already finished at this point, so this cannot publish a partial
+        # download while it is still in progress.
+        (out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME).unlink(missing_ok=True)
+        (out_dir / metadata_enrichment_service.LOCAL_VIDEO_SOURCE_NAME).unlink(missing_ok=True)
     if not isinstance(metadata, dict):
         metadata = {}
     metadata["media"] = {
         "cover_status": "ready",
-        "video_status": "ready",
-        "video_id": media.get("video_id"),
+        "video_status": "ready" if video_ready else "fallback",
+        "video_id": media.get("video_id") if video_ready else None,
     }
     warnings = media.get("warnings")
     metadata["warnings"] = list(warnings) if isinstance(warnings, list) else []
     files = set(metadata.get("files", [])) if isinstance(metadata.get("files"), list) else set()
-    files.update({"cover.jpg", "clip.mp4", "clip.source.json"})
+    files.add("cover.jpg")
+    if video_ready:
+        files.update({"clip.mp4", "clip.source.json"})
+    else:
+        files.difference_update({"clip.mp4", "clip.source.json"})
     metadata["files"] = sorted(files)
     write_json(metadata_path, metadata)
+
+
+def _audio_artifacts_waiting_for_media(out_dir: Path) -> bool:
+    """Recognize an AI-complete job that failed only in optional clip media."""
+    metadata = _read_optional_generated_json(out_dir / "metadata.json", {})
+    media = metadata.get("media", {}) if isinstance(metadata, dict) else {}
+    if not isinstance(media, dict) or media.get("video_status") != "pending":
+        return False
+    try:
+        validate_audio_artifacts(out_dir)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
 
 
 def _finalize_processed_job(
@@ -1087,24 +1109,39 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
                 out_dir,
                 expected_duration=source_duration,
             )
-        _ensure_cover_extracted(source_path, out_dir)
-        _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
-        model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
-
-        runtime_plan = _configure_ai_runtime()
-        capture.write(
-            f"[backend] AI build={AI_BUILD_ID} pipeline={AudioPipelineV2.VERSION} "
-            f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
+        resume_media_only = (
+            not reuse_vocals and _audio_artifacts_waiting_for_media(out_dir)
         )
-        capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
-        for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
-
-        with _limit_background_native_threads():
-            result = _invoke_ai_pipeline(
-                song_id, source_path, out_dir, lyrics_path, artist, title, genre,
-                bpm_override, key_override, processing_mode, capture,
-                reuse_vocals=reuse_vocals,
+        result = None
+        if resume_media_only:
+            _update_progress(
+                song_id,
+                step_label="Повторно загружаем и проверяем клип",
+                percent=98.0,
             )
+            capture.write(
+                "[backend] Valid AI artifacts found; retrying media only\n"
+            )
+        else:
+            _ensure_cover_extracted(source_path, out_dir)
+            _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
+            model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
+
+            runtime_plan = _configure_ai_runtime()
+            capture.write(
+                f"[backend] AI build={AI_BUILD_ID} pipeline={AudioPipelineV2.VERSION} "
+                f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
+            )
+            capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
+            for line in format_runtime_plan(runtime_plan):
+                capture.write(f"[backend] AI runtime: {line}\n")
+
+            with _limit_background_native_threads():
+                result = _invoke_ai_pipeline(
+                    song_id, source_path, out_dir, lyrics_path, artist, title, genre,
+                    bpm_override, key_override, processing_mode, capture,
+                    reuse_vocals=reuse_vocals,
+                )
         if not reuse_vocals:
             _complete_audio_media(
                 song_id,

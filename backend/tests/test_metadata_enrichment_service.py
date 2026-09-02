@@ -19,7 +19,8 @@ def test_itunes_lookup_returns_the_first_catalog_genre(monkeypatch):
 
 def test_youtube_lookup_uses_keyless_embeddable_result(monkeypatch):
     monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
-    monkeypatch.setattr(metadata, "_request", Mock(return_value=b'ignored {"videoId":"DAaLa3vF8sU"} ignored'))
+    request = Mock(return_value=b'ignored {"videoId":"DAaLa3vF8sU"} ignored')
+    monkeypatch.setattr(metadata, "_request", request)
     monkeypatch.setattr(metadata, "_youtube_oembed", Mock(return_value={
         "title": "Artist - 8th Color (Official Music Video)",
         "author_name": "Artist",
@@ -27,6 +28,9 @@ def test_youtube_lookup_uses_keyless_embeddable_result(monkeypatch):
     monkeypatch.setattr(metadata, "_youtube_has_motion", Mock(return_value=True))
 
     assert metadata._youtube_video_id("8th Color", "Artist") == "DAaLa3vF8sU"
+    search_url = request.call_args_list[0].args[0]
+    assert "official+video" in search_url
+    assert "official+music+video" not in search_url
 
 
 def test_youtube_quality_rejects_static_and_low_quality_candidates(monkeypatch):
@@ -128,7 +132,7 @@ def test_training_media_creates_cover_and_validated_local_clip(monkeypatch, tmp_
     patch_attrs(
         monkeypatch,
         metadata,
-        _youtube_video_id=Mock(return_value="DAaLa3vF8sU"),
+        _youtube_video_candidates=Mock(return_value=["DAaLa3vF8sU"]),
         _download_square_cover=Mock(return_value=True),
         _download_youtube_video=Mock(return_value=True),
         video_file_is_ready=Mock(return_value=False),
@@ -155,6 +159,50 @@ def test_training_media_creates_cover_and_validated_local_clip(monkeypatch, tmp_
         tmp_path,
         expected_duration=None,
     )
+
+
+def test_training_media_retries_ranked_video_candidates_until_one_is_complete(
+    monkeypatch, tmp_path
+):
+    """A broken/private first search result must not fail the whole song."""
+    monkeypatch.setattr(
+        metadata,
+        "_youtube_video_candidates",
+        Mock(return_value=["FIRSTCLIP01", "SECONDCLIP2"]),
+        raising=False,
+    )
+    monkeypatch.setattr(metadata, "_youtube_video_id", Mock(return_value="FIRSTCLIP01"))
+    monkeypatch.setattr(metadata, "_download_square_cover", Mock(return_value=True))
+    monkeypatch.setattr(metadata, "video_file_is_ready", Mock(return_value=False))
+    download = Mock(side_effect=[False, True])
+    monkeypatch.setattr(metadata, "_download_youtube_video", download)
+
+    result = metadata.prepare_training_media("Song", "Artist", tmp_path)
+
+    assert result["video_status"] == "ready"
+    assert result["video_id"] == "SECONDCLIP2"
+    assert [call.args[0] for call in download.call_args_list] == [
+        "FIRSTCLIP01",
+        "SECONDCLIP2",
+    ]
+
+
+def test_training_media_caps_failed_clip_attempts_to_keep_processing_bounded(
+    monkeypatch, tmp_path
+):
+    candidates = [f"CLIPID0000{index}" for index in range(6)]
+    monkeypatch.setattr(
+        metadata, "_youtube_video_candidates", Mock(return_value=candidates)
+    )
+    monkeypatch.setattr(metadata, "_download_square_cover", Mock(return_value=True))
+    monkeypatch.setattr(metadata, "video_file_is_ready", Mock(return_value=False))
+    download = Mock(return_value=False)
+    monkeypatch.setattr(metadata, "_download_youtube_video", download)
+
+    result = metadata.prepare_training_media("Song", "Artist", tmp_path)
+
+    assert result["video_status"] == "fallback"
+    assert download.call_count == 4
 
 
 def test_training_media_starts_in_a_dedicated_spawn_process(monkeypatch, tmp_path):

@@ -37,7 +37,11 @@ from AI.lyrics_sources import (
     LyricsDiscovery,
     TimedLine,
     _expand_notation,
+    _lyrics_arrangement_candidates,
     _select_complete_lyrics,
+    _select_lyrics_arrangement,
+    _select_reprise_candidate_at_time,
+    _select_scored_lyrics_arrangement,
     discover_lyrics,
 )
 from AI.models import PitchFrame, Word
@@ -338,6 +342,20 @@ def test_lyrics_tokens_match_qwen_space_language_contract():
     assert resolve_alignment_language("український текст", "ru") == "Ukrainian"
 
 
+def test_catalog_text_repairs_mixed_cyrillic_homoglyphs_and_sung_repetition():
+    import AI.engines.text as text_engine
+
+    source = "Hа дачу\nОна жуёт свой оpбит\nА ты жуй-жуй\nDuke Nukem"
+
+    cleaned = text_engine.normalize_lyrics_text(source)
+
+    assert cleaned == "На дачу\nОна жуёт свой орбит\nА ты жуй жуй\nDuke Nukem"
+    assert tokenize(source) == [
+        "На", "дачу", "Она", "жуёт", "свой", "орбит",
+        "А", "ты", "жуй", "жуй", "Duke", "Nukem",
+    ]
+
+
 def test_lyrics_discovery_falls_back_to_verified_ukrainian_catalog(monkeypatch):
     search = '<a href="/songs/42.html">Лови момент</a>'
     detail = '''
@@ -405,6 +423,106 @@ def test_lyrics_selection_rejects_a_longer_unrelated_version():
     )
 
     assert _select_complete_lyrics((exact, unrelated)) is exact
+
+
+def test_lyrics_arrangements_offer_a_verse_reprise_for_a_repetitive_outro():
+    lines = (
+        "verse one",
+        "verse two",
+        "vocalise",
+        "chorus",
+        "middle one",
+        "middle two",
+        "vocalise",
+        "chorus",
+        "vocalise",
+        "chorus",
+        "vocalise",
+        "chorus",
+        "vocalise",
+        "chorus",
+        "vocalise",
+        "chorus",
+    )
+
+    candidates = _lyrics_arrangement_candidates(lines)
+
+    assert candidates[0] == lines
+    assert len(candidates) <= 4
+    assert any(
+        candidate[-4:] == ("verse one", "verse two", "vocalise", "chorus")
+        for candidate in candidates[1:]
+    )
+
+
+def test_lyrics_arrangements_do_not_invent_a_reprise_without_a_long_outro():
+    lines = ("verse one", "verse two", "chorus", "final line")
+
+    assert _lyrics_arrangement_candidates(lines) == (lines,)
+
+
+def test_lyrics_arrangement_uses_the_structure_heard_in_the_recording():
+    catalog = (
+        "verse one", "verse two", "vocalise", "chorus",
+        "middle one", "middle two", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+    )
+    candidates = _lyrics_arrangement_candidates(catalog)
+    heard = (
+        "verse one verse two vocalise chorus middle one middle two "
+        "vocalise chorus vocalise chorus verse one verse two vocalise chorus"
+    )
+
+    selected = _select_lyrics_arrangement(candidates, heard)
+
+    assert selected[-4:] == ("verse one", "verse two", "vocalise", "chorus")
+
+
+def test_lyrics_arrangement_keeps_catalog_when_audio_evidence_is_weak():
+    catalog = ("verse one", "chorus", "vocalise", "chorus")
+    alternative = ("verse one", "chorus", "verse one", "chorus")
+
+    assert _select_lyrics_arrangement(
+        (catalog, alternative), "unrelated uncertain words"
+    ) == catalog
+
+
+def test_scored_lyrics_arrangement_requires_a_real_ctc_improvement():
+    original = ("verse", "chorus", "chorus", "chorus", "chorus")
+    reprise = ("verse", "chorus", "verse", "chorus")
+
+    assert _select_scored_lyrics_arrangement(
+        (original, reprise), (-1.20, -0.72)
+    ) == 1
+    assert _select_scored_lyrics_arrangement(
+        (original, reprise), (-0.75, -0.73)
+    ) == 0
+
+
+def test_reprise_time_selects_the_matching_number_of_outro_repeats():
+    lines = (
+        "verse one", "verse two", "vocalise", "chorus",
+        "middle one", "middle two", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+        "vocalise", "chorus", "vocalise", "chorus",
+        "vocalise", "chorus",
+    )
+    starts = (0, 5, 10, 13, 16, 20, 30, 33, 40, 43, 50, 53,
+              60, 63, 90, 93, 100, 103, 110, 113, 120, 123)
+    timed = tuple(
+        TimedLine(float(start), line)
+        for start, line in zip(starts, lines, strict=True)
+    )
+    candidates = _lyrics_arrangement_candidates(lines)
+
+    selected = _select_reprise_candidate_at_time(timed, candidates, 110.2)
+
+    assert selected > 0
+    assert candidates[selected][-4:] == (
+        "verse one", "verse two", "vocalise", "chorus",
+    )
 
 
 def test_complete_lyrics_lookup_compares_lrclib_with_the_plain_catalog(monkeypatch):
@@ -1093,6 +1211,73 @@ def test_russian_asr_prefers_fast_ctc_words_without_loading_qwen(monkeypatch):
     assert text == "это быстрый прямой текст"
     assert words == direct
     assert transcriber._model is None
+
+
+def test_ctc_candidate_alignment_scores_all_texts_in_one_engine_call(monkeypatch):
+    calls = []
+
+    class AcousticCTC:
+        @staticmethod
+        def align_transcripts(audio, transcripts, *, split_seconds=None):
+            assert split_seconds is None
+            calls.append((audio, transcripts))
+            return [
+                (-1.1, [Word(0.0, 0.2, "первая", 0.7, 0)]),
+                (-0.6, [Word(0.0, 0.2, "вторая", 0.8, 0)]),
+            ]
+
+    monkeypatch.setenv("KARAOKE_AI_CTC_RU_MODEL", "ctc-model")
+    monkeypatch.setattr(
+        "AI.engines.text._create_ctc_aligner",
+        lambda _model, _language: AcousticCTC(),
+    )
+    aligner = Qwen3ForcedAligner("unused", isolated=False)
+
+    result = aligner.align_ctc_candidates(
+        "vocals.flac", ["Первая", "Вторая"], "ru"
+    )
+
+    assert [item[0] for item in result] == [-1.1, -0.6]
+    assert calls == [("vocals.flac", [["первая"], ["вторая"]])]
+
+
+def test_ctc_transcript_candidates_share_one_neural_forward_pass():
+    from AI.engines.ctc import CTCWordAligner
+
+    aligner = object.__new__(CTCWordAligner)
+    aligner._acoustic_logits = Mock(
+        return_value=("logits", "model", "processor", 12.0)
+    )
+    aligner._align_logits = Mock(side_effect=[
+        (-1.0, [Word(0.0, 0.2, "one", 0.7, 0)]),
+        (-0.5, [Word(0.0, 0.2, "two", 0.8, 0)]),
+    ])
+
+    result = aligner.align_transcripts("vocals.flac", [["one"], ["two"]])
+
+    assert [item[0] for item in result] == [-1.0, -0.5]
+    aligner._acoustic_logits.assert_called_once_with("vocals.flac")
+    assert aligner._align_logits.call_count == 2
+
+
+def test_ctc_candidate_alignment_splits_the_common_prefix_from_changed_tail():
+    from AI.engines.ctc import CTCWordAligner
+
+    aligner = object.__new__(CTCWordAligner)
+    acoustic = ("logits", "model", "processor", 12.0)
+    expected = [(-0.5, [Word(0.0, 0.2, "one", 0.8, 0)])]
+    aligner._acoustic_logits = Mock(return_value=acoustic)
+    aligner._align_split_transcripts = Mock(return_value=expected)
+
+    result = aligner.align_transcripts(
+        "vocals.flac", [["one", "tail"]], split_seconds=7.0
+    )
+
+    assert result == expected
+    aligner._acoustic_logits.assert_called_once_with("vocals.flac")
+    aligner._align_split_transcripts.assert_called_once_with(
+        *acoustic, [["one", "tail"]], 7.0
+    )
 
 
 def test_long_alignment_realigns_collapsed_ranges_acoustically(tmp_path, monkeypatch):

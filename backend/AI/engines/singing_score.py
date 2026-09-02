@@ -345,24 +345,13 @@ def project_song_scores(
                 physical_by_word.get(word.index, ()), key=lambda note: note.start
             )
             if owned:
-                first, last = owned[0].start, owned[-1].end
-                target_end = target.end
-                if position == len(line_words) - 1:
-                    target_end = min(line.end, target.end, last + 0.25)
-                    target_end = max(word.start + 0.05, target_end)
-                    target = Word(
-                        target.start,
-                        target_end,
-                        target.text,
-                        target.confidence,
-                        target.index,
-                    )
-                    fitted[position] = target
-                source_span = max(0.001, last - first)
-                scale = (target.end - word.start) / source_span
+                first = owned[0].start
+                target = word
+                fitted[position] = target
+                offset = word.start - first
                 for note_index, note in enumerate(owned):
-                    start = word.start + (note.start - first) * scale
-                    end = min(target.end, word.start + (note.end - first) * scale)
+                    start = note.start + offset
+                    end = min(target.end, note.end + offset)
                     if end > start:
                         midi_note = note.midi_note
                         if model_owned:
