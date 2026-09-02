@@ -353,6 +353,53 @@ def _install_models(
             future.result()
 
 
+def _write_environment(
+    downloads: Path,
+    models_root: Path,
+    msst: Path,
+    environment_file: Path,
+) -> None:
+    values: dict[str, str | Path] = {
+        "HF_HOME": downloads / "cache" / "huggingface",
+        "HF_HUB_CACHE": downloads / "cache" / "huggingface" / "hub",
+        "KARAOKE_AI_ALLOW_FALLBACK": "false",
+        "KARAOKE_AI_REQUIRE_CTC": "0",
+        "MSST_ENGINE_DIR": msst,
+        "MSST_CONFIG": (
+            msst
+            / "configs"
+            / "KimberleyJensen"
+            / "config_vocals_mel_band_roformer_kj.yaml"
+        ),
+    }
+    for model in MODELS:
+        values[model.env_var] = model_path(models_root, model)
+
+    fcpe_onnx = models_root / "optimized" / "fcpe" / "fcpe-core.onnx"
+    if fcpe_onnx.is_file():
+        values["KARAOKE_AI_FCPE_ONNX"] = fcpe_onnx
+    directml_runtime = downloads / "runtimes" / "onnxruntime-directml"
+    if (directml_runtime / "onnxruntime").is_dir():
+        values["KARAOKE_AI_ORT_DIRECTML_PATH"] = directml_runtime
+
+    environment_file.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["@echo off", *(f'set "{name}={value}"' for name, value in values.items())]
+    environment_file.write_bytes(("\r\n".join(lines) + "\r\n").encode("utf-8"))
+
+
+def _write_requested_environment(args, models_root: Path) -> None:
+    if not args.env:
+        return
+    if not args.downloads or not args.msst:
+        raise ValueError("--env requires both --downloads and --msst")
+    _write_environment(
+        args.downloads.resolve(),
+        models_root,
+        args.msst.resolve(),
+        args.env.resolve(),
+    )
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Install or verify A&D Voice AI models")
     parser.add_argument(
@@ -394,6 +441,8 @@ def main(argv=None) -> int:
     if args.check or args.quick_check:
         ready = verify_all(models_root)
         logger.info("AI model verification: %s", "ready" if ready else "missing")
+        if ready:
+            _write_requested_environment(args, models_root)
         return 0 if ready else 1
 
     reporter = ProgressReporter(models_root, args.progress_file)
@@ -408,6 +457,7 @@ def main(argv=None) -> int:
         )
         if not verify_all(models_root):
             raise RuntimeError("AI model verification failed after installation")
+        _write_requested_environment(args, models_root)
         reporter.finish(True)
         logger.info("All AI models are ready in %s", models_root)
         return 0

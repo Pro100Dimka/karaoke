@@ -1,5 +1,6 @@
 import hashlib
 import os
+from unittest.mock import Mock
 
 from AI import install_models
 from AI.model_registry import ModelSpec, get_model
@@ -121,3 +122,35 @@ def test_is_valid_verifies_the_primary_snapshot_weight(tmp_path):
     assert install_models.is_valid(tmp_path, model)
     weights.write_bytes(b"corrupt")
     assert not install_models.is_valid(tmp_path, model)
+
+
+def test_successful_fresh_install_writes_the_environment_used_by_final_quick_check(
+    monkeypatch, tmp_path
+):
+    downloads = tmp_path / "downloads"
+    msst = downloads / "engines" / "msst"
+    environment = downloads / "ai-environment.bat"
+    model = ModelSpec(
+        key="test",
+        name="Test",
+        repo_id="owner/model",
+        revision="revision",
+        relative_path="test-model",
+        env_var="TEST_MODEL",
+        expected_bytes=1,
+    )
+    monkeypatch.setattr(install_models, "MODELS", (model,))
+    monkeypatch.setattr(install_models, "verify_all", Mock(return_value=True))
+
+    result = install_models.main([
+        "--downloads", str(downloads),
+        "--msst", str(msst),
+        "--env", str(environment),
+        "--check",
+    ])
+
+    assert result == 0
+    assert b"\r\r\n" not in environment.read_bytes()
+    written = environment.read_text(encoding="utf-8")
+    assert f'set "MSST_ENGINE_DIR={msst.resolve()}"' in written
+    assert f'set "TEST_MODEL={(downloads / "models" / "test-model").resolve()}"' in written
