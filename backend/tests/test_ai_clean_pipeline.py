@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import threading
@@ -19,6 +20,7 @@ from AI.engines.text import (
     _fill_unresolved_timed_lines,
     _invalid_runs,
     _repair_collapsed_timed_lines,
+    _repair_timed_line_outliers,
     _timed_line_offset,
     _timed_line_plan,
     _timed_line_retry_stages,
@@ -369,6 +371,76 @@ def test_lrclib_synced_text_is_kept_with_its_line_timestamps(monkeypatch):
     assert result is not None
     assert result.text == "right line\nnext line"
     assert result.lines == (TimedLine(1.0, "right line"), TimedLine(3.0, "next line"))
+
+
+def test_lrclib_drops_an_incomplete_final_repetition_block(monkeypatch):
+    synced = "\n".join((
+        "[00:01.00]Куплет начинается",
+        "[00:10.00]Припев первая строка",
+        "[00:14.00]Припев вторая строка полностью",
+        "[00:20.00]Припев первая строка",
+        "[00:24.00]Припев вторая строка полностью",
+        "[00:30.00]Припев первая строка",
+        "[00:34.00]Припев вторая",
+    ))
+    payload = json.dumps([{
+        "trackName": "Song",
+        "artistName": "Artist",
+        "plainLyrics": "unused",
+        "syncedLyrics": synced,
+    }], ensure_ascii=False)
+    monkeypatch.setattr(
+        "AI.lyrics_sources._request",
+        lambda _url, _encoding="utf-8": payload,
+    )
+
+    result = discover_lyrics("Song", "Artist")
+
+    assert result is not None
+    assert result.text.splitlines() == [
+        "Куплет начинается",
+        "Припев первая строка",
+        "Припев вторая строка полностью",
+        "Припев первая строка",
+        "Припев вторая строка полностью",
+    ]
+    assert [line.start for line in result.lines] == [1.0, 10.0, 14.0, 20.0, 24.0]
+
+
+def test_timed_alignment_repairs_a_line_final_word_collapsed_onto_next_line():
+    tokens = ["Он", "не", "сошёл", "с", "ума", "Ты", "знала"]
+    words = [
+        Word(1.0, 1.2, "Он", 0.9, 0),
+        Word(1.2, 1.4, "не", 0.9, 1),
+        Word(1.4, 2.0, "сошёл", 0.9, 2),
+        Word(2.0, 2.1, "с", 0.9, 3),
+        Word(5.95, 6.1, "ума", 0.2, 4),
+        Word(6.0, 6.3, "Ты", 0.9, 5),
+        Word(6.3, 7.0, "знала", 0.9, 6),
+    ]
+
+    _repair_timed_line_outliers(words, [(1.0, 0, 5), (6.0, 5, 7)], tokens, 8.0)
+
+    assert words[4].start == words[3].start
+    assert words[4].end <= 6.0
+
+
+def test_timed_alignment_reuses_a_stable_repeated_line_shape_for_a_gross_outlier():
+    tokens = ["Припев", "никто", "не", "ждёт"] * 2
+    words = [
+        Word(10.0, 11.0, "Припев", 0.9, 0),
+        Word(11.0, 15.0, "никто", 0.9, 1),
+        Word(15.0, 16.0, "не", 0.9, 2),
+        Word(16.0, 18.0, "ждёт", 0.9, 3),
+        Word(30.0, 36.0, "Припев", 0.9, 4),
+        Word(36.0, 44.0, "никто", 0.2, 5),
+        Word(44.0, 45.0, "не", 0.2, 6),
+        Word(45.0, 47.0, "ждёт", 0.2, 7),
+    ]
+
+    _repair_timed_line_outliers(words, [(10.0, 0, 4), (30.0, 4, 8)], tokens, 50.0)
+
+    assert [word.start for word in words[4:]] == [30.0, 31.0, 35.0, 36.0]
 
 
 def test_lrclib_uses_exact_artist_and_title_fields(monkeypatch):

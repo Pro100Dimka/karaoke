@@ -12,6 +12,7 @@ from .alignment_process import IsolatedAlignerMixin
 from .alignment_tokens import reconcile_words
 from .base import Aligner, Transcriber
 from .device import select_torch_device
+from .timed_line_repairs import repair_timed_line_outliers as _repair_timed_line_outliers
 
 ASR_PIPELINE_VERSION = "clean-v1"
 LONG_TEXT_ALIGNMENT_VERSION = "clean-v2"
@@ -955,6 +956,7 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
             words = [word for word in resolved_words if word is not None]
             _enforce_monotonic_starts(words, span)
             _repair_collapsed_timed_lines(words, entries, span)
+            _repair_timed_line_outliers(words, entries, tokens, span)
             _enforce_monotonic_starts(words, span)
             validated = self._validate(words, tokens, span)
             self.needs_voice_anchoring = False
@@ -1123,6 +1125,7 @@ class Qwen3ForcedAligner(IsolatedAlignerMixin, Aligner):
         aligned_words = [word for word in words if word is not None]
         _enforce_monotonic_starts(aligned_words, span)
         _repair_collapsed_timed_lines(aligned_words, entries, span)
+        _repair_timed_line_outliers(aligned_words, entries, tokens, span)
         # Independently aligned neighbouring line windows can overlap by one
         # timestamp quantum even when every individual result is valid. Keep
         # that harmless boundary disagreement from rejecting the complete

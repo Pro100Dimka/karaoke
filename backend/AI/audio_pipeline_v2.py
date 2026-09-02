@@ -191,6 +191,13 @@ class AudioPipelineV2:
     def _keeps_analysis_models_warm(cls, processing_mode: str | None) -> bool:
         return not cls._uses_symbolic_model(processing_mode)
 
+    @classmethod
+    def _keeps_separator_warm(cls, processing_mode: str | None) -> bool:
+        # MSST occupies enough VRAM to severely slow FCPE/CTC and can make
+        # forced alignment hit its timeout. Its worker must be released after
+        # separation even in fast mode.
+        return False
+
     def _align(
         self,
         request: AudioPipelineV2Request,
@@ -310,7 +317,8 @@ class AudioPipelineV2:
                     original, vocals, instrumental,
                     profile=profile, cancelled=request.cancelled,
                 )
-                getattr(self.engines.separator, "close", lambda: None)()
+                if not self._keeps_separator_warm(request.processing_mode):
+                    getattr(self.engines.separator, "close", lambda: None)()
                 self._report(reports, "separate", self.engines.separator.name, started)
 
                 # The published stem remains untouched stereo, matching the

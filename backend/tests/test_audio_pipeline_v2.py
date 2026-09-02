@@ -226,3 +226,9 @@ def test_fast_processing_keeps_small_analysis_models_warm_between_songs():
     assert AudioPipelineV2._keeps_analysis_models_warm("fast") is True
     assert AudioPipelineV2._keeps_analysis_models_warm("auto") is True
     assert AudioPipelineV2._keeps_analysis_models_warm("quality") is False
+
+
+def test_separator_is_released_before_alignment_to_avoid_gpu_contention():
+    assert AudioPipelineV2._keeps_separator_warm("fast") is False
+    assert AudioPipelineV2._keeps_separator_warm("auto") is False
+    assert AudioPipelineV2._keeps_separator_warm("quality") is False

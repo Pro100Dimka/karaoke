@@ -49,6 +49,40 @@ def _timed(value: str) -> tuple[TimedLine, ...]:
     return tuple(lines)
 
 
+def _trim_incomplete_repeated_tail(
+    lines: tuple[TimedLine, ...],
+) -> tuple[TimedLine, ...]:
+    """Remove a provider-truncated final copy of an otherwise complete refrain.
+
+    Synced-lyrics catalogs occasionally end with ``A, B, A, B, A, B...``
+    where the last line is only a prefix of ``B``.  Passing that damaged copy
+    to forced alignment invents timestamps for words which are not present in
+    the recording.  Two complete adjacent copies are required as evidence, so
+    an intentional one-off shortened ending is left untouched.
+    """
+    count = len(lines)
+    for block_size in range(1, min(8, count // 3) + 1):
+        first = lines[count - 3 * block_size:count - 2 * block_size]
+        second = lines[count - 2 * block_size:count - block_size]
+        tail = lines[count - block_size:]
+        if [_identity(line.text) for line in first] != [
+            _identity(line.text) for line in second
+        ]:
+            continue
+        incomplete = False
+        for expected, actual in zip(second, tail, strict=True):
+            expected_tokens = _identity(expected.text).split()
+            actual_tokens = _identity(actual.text).split()
+            if not actual_tokens or actual_tokens != expected_tokens[:len(actual_tokens)]:
+                break
+            if len(actual_tokens) < len(expected_tokens):
+                incomplete = True
+        else:
+            if incomplete:
+                return lines[:-block_size]
+    return lines
+
+
 def _identity(value: str) -> str:
     value = re.sub(r"\s*[\[(].*?[\])]\s*", " ", value)
     value = value.translate(str.maketrans({"i": "і", "I": "і"})).casefold()
@@ -97,9 +131,15 @@ def _lrclib_result(
         # alignment too. A provider's plainLyrics can differ by repeated
         # choruses or punctuation, making its line timestamps impossible to
         # map onto the otherwise similar plain transcript.
-        text = _plain(synced) or row.get("plainLyrics") or ""
+        timed_lines = _trim_incomplete_repeated_tail(_timed(synced))
+        text = (
+            "\n".join(line.text for line in timed_lines)
+            if timed_lines else _plain(synced)
+        ) or row.get("plainLyrics") or ""
         if str(text).strip():
-            return LyricsDiscovery(str(text).strip(), "LRCLIB", query, lines=_timed(synced))
+            return LyricsDiscovery(
+                str(text).strip(), "LRCLIB", query, lines=timed_lines
+            )
     return None
 
 
