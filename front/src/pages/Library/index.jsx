@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
-import QuantumFieldBackdrop from "./animated-backdrop";
+import QuantumFieldBackdrop from "./backdrop/index.jsx";
 import LibraryHero from "./hero";
 import SongsGrid from "./songs-grid";
 import useLibrary from "./use-library";

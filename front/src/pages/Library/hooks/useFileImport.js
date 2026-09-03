@@ -4,8 +4,12 @@ import { isAmbiguousTransportError } from "../../../api/core";
 import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
-import { DEFAULT_PROCESSING_MODE, normalizeProcessingMode } from "../processing-modes";
 
+const DEFAULT_PROCESSING_MODE = "auto";
+
+const MODES = new Set([DEFAULT_PROCESSING_MODE, "fast", "quality"]);
+
+const normalizeProcessingMode = (value) => (MODES.has(value) ? value : DEFAULT_PROCESSING_MODE);
 export const suggestedIdentity = (file, metadata = {}) => {
   const stem = file.name
     .replace(/\.[^.]+$/, "")
