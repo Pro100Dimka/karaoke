@@ -1,6 +1,6 @@
-import { translateSaved as tr } from "../../../i18n/runtime";
 import { FormikContext, getIn, setIn } from "formik";
 import { Suspense, useContext, useEffect, useId, useRef } from "react";
+import { translateSaved as tr } from "../../../i18n/runtime";
 import Button from "../Button";
 import FolderField from "../FolderField";
 import Grid from "../Grid";
@@ -242,15 +242,14 @@ export default function RenderFormikFields({
   const rows = items.map((row) => decorateFormikRows([row], { formik: row.formik ?? state })[0]);
   return (
     <Grid {...props} container gap={gap} rowGap={rowGap} columnGap={columnGap}>
-      {rows.map(({ xs, sm, md, lg, xl, size, showFor, gSx, key, ...row }, index) => {
+      {rows.map(({ xs, sm, md, lg, xl, showFor, gSx, key, ...row }, index) => {
         if (
           showFor !== undefined &&
           !(typeof showFor === "function" ? showFor(showForProps ?? state?.values) : showFor)
         )
           return null;
         const sizes = {
-          ...(size && typeof size === "object" ? size : { xs: size ?? 12 }),
-          xs: xs ?? (size && typeof size === "object" ? size.xs : size) ?? 12
+          xs: xs ?? 12
         };
         for (const [point, span] of Object.entries({ sm, md, lg, xl }))
           if (span !== undefined) sizes[point] = span;

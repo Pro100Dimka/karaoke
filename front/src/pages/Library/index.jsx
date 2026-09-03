@@ -1,14 +1,16 @@
 import { lazy, Suspense } from "react";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
-import { OnlineRoomModal } from "../OnlineRoom";
 import QuantumFieldBackdrop from "./animated-backdrop";
 import LibraryHero from "./hero";
-import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";
 import SongsGrid from "./songs-grid";
 import useLibrary from "./use-library";
 
-const SongSettings = lazy(() => import("./song-settings"));
+const SongSettings = lazy(() => import("./modals/song-settings"));
+const AddSongModal = lazy(() => import("./modals/add-song"));
+const ProcessingModal = lazy(() => import("./modals/processing"));
+const RecordingsModal = lazy(() => import("./modals/recordings"));
+const OnlineRoomModal = lazy(() => import("./modals/online-room/index.jsx"));
 
 export default function Library() {
   const state = useLibrary();
@@ -56,32 +58,38 @@ export default function Library() {
         }}
       />
       {online.open && (
-        <OnlineRoomModal
-          onlineName={online.name}
-          onOnlineNameChange={online.setName}
-          onClose={() => online.setOpen(false)}
-        />
+        <Suspense>
+          <OnlineRoomModal
+            onlineName={online.name}
+            onOnlineNameChange={online.setName}
+            onClose={() => online.setOpen(false)}
+          />
+        </Suspense>
       )}
-      <RecordingsModal
-        song={recordings.song}
-        recordings={recordings.items}
-        error={recordings.error}
-        onClose={() => recordings.setSong(null)}
-        onDelete={recordings.delete}
-        onAnalyze={(recording) => {
-          state.setAnalysis({
-            analysisRecordingId: recording.id,
-            analysisRecordings: recordings.items
-          });
-          recordings.setSong(null);
-        }}
-      />
-      <AddSongsModal
-        review={fileImport.review}
-        onCancel={fileImport.cancelDraft}
-        onConfirm={fileImport.confirmDraft}
-        onUpdate={fileImport.updateDraft}
-      />
+      <Suspense>
+        <RecordingsModal
+          song={recordings.song}
+          recordings={recordings.items}
+          error={recordings.error}
+          onClose={() => recordings.setSong(null)}
+          onDelete={recordings.delete}
+          onAnalyze={(recording) => {
+            state.setAnalysis({
+              analysisRecordingId: recording.id,
+              analysisRecordings: recordings.items
+            });
+            recordings.setSong(null);
+          }}
+        />
+      </Suspense>
+      <Suspense>
+        <AddSongModal
+          review={fileImport.review}
+          onCancel={fileImport.cancelDraft}
+          onConfirm={fileImport.confirmDraft}
+          onUpdate={fileImport.updateDraft}
+        />
+      </Suspense>
       {state.settingsSongId && (
         <Suspense>
           <SongSettings
@@ -91,24 +99,28 @@ export default function Library() {
         </Suspense>
       )}
       {analysis.analysisRecordingId && (
-        <PerformanceAnalysisModal
-          recordingId={analysis.analysisRecordingId}
-          recordings={analysis.analysisRecordings}
-          onClose={state.closeAnalysis}
-          onDone={state.closeAnalysis}
-          onDeleted={state.closeAnalysis}
-        />
+        <Suspense>
+          <PerformanceAnalysisModal
+            recordingId={analysis.analysisRecordingId}
+            recordings={analysis.analysisRecordings}
+            onClose={state.closeAnalysis}
+            onDone={state.closeAnalysis}
+            onDeleted={state.closeAnalysis}
+          />
+        </Suspense>
       )}
       {!fileImport.review && (
-        <ProcessingModal
-          song={processing.song}
-          songs={processing.songs}
-          status={processing.status}
-          onSelectSong={processing.track}
-          onClose={processing.close}
-          onCancel={processing.cancel}
-          onOpenKaraoke={() => state.openKaraoke(processing.song)}
-        />
+        <Suspense>
+          <ProcessingModal
+            song={processing.song}
+            songs={processing.songs}
+            status={processing.status}
+            onSelectSong={processing.track}
+            onClose={processing.close}
+            onCancel={processing.cancel}
+            onOpenKaraoke={() => state.openKaraoke(processing.song)}
+          />
+        </Suspense>
       )}
     </Stack>
   );
