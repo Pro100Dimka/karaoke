@@ -4,12 +4,13 @@ import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
-import { translateSaved } from "../../i18n/runtime";
+import { translateSaved as t } from "../../i18n/runtime";
 import { queryKeys } from "../../query-client";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
 import { flattenLyricsNotes, shiftLyricsSync } from "../../utils/lyrics-sync";
+import { clamp } from "../../utils/math";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
@@ -31,14 +32,24 @@ import { transposeKey } from "./utils/data";
 import { formatCompactKey } from "./utils/display";
 import { getMicrophoneLevel } from "./utils/transport";
 
+const noop = () => {};
+
+const usePoll = (request, interval, queryKey) => usePolling(request, interval, [], { queryKey });
+
+function useLatest(value) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
+const notifyAudio = (detail) =>
+  globalThis.dispatchEvent?.(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
+
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
-  const {
-    room: onlineRoomState,
-    setLocalMonitoring: setRoomLocalMonitoring,
-    syncUi: syncRoomUi
-  } = onlineRoom;
-  const onlineParticipantCount = onlineRoom.participants.length;
+  const { room, roomUi, participants = [], setLocalMonitoring, syncUi } = onlineRoom;
+  const roomProps = { room, participantCount: participants.length, syncUi };
+
   const {
     isPlaying: isRadioPlaying,
     setRecordingActive,
@@ -46,27 +57,38 @@ export default function Karaoke({ onOpenAppSettings }) {
     turnOff: turnOffRadio,
     turnOn: turnOnRadio
   } = useRadio();
+
   const location = useLocation();
   const navigate = useNavigate();
-  const { data: songs, error: songsError } = usePolling(
+
+  const { data: songs, error: songsError } = usePoll(
     api.listSongs,
     POLLING_INTERVALS.settings,
-    [],
-    { queryKey: queryKeys.songs }
+    queryKeys.songs
   );
-  const songId = location.state?.songId || null;
+
+  const songId = location.state?.songId ?? null;
   const song = useRoutedSong(songs, songId);
   const { result, loading: resultLoading, error: resultError } = useKaraokeResult(song);
+  const lyricsSync = result?.lyrics_sync;
+
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
   const containerRef = useRef(null);
+  const playbackEndedRef = useRef(null);
+  const effectMutationRef = useRef(0);
+  const mediaRefs = { instrumentalRef, vocalsRef, videoRef };
+
   const playback = usePlaybackMachine();
-  const { isPlaying } = playback;
-  const resetPlayback = playback.reset;
+  const { isPlaying, reset: resetPlayback, setPlaying } = playback;
+
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const karaokePreferences = useKaraokePreferences();
+  const currentTimeRef = useLatest(currentTime);
+  const durationRef = useLatest(duration);
+
+  const preferences = useKaraokePreferences();
   const {
     musicVolume,
     setMusicVolume,
@@ -89,161 +111,160 @@ export default function Karaoke({ onOpenAppSettings }) {
     setEffectPreset,
     timingOffsets,
     setTimingOffsets
-  } = karaokePreferences;
-  useKaraokeRoomPreferences({
-    participantCount: onlineParticipantCount,
-    preferences: karaokePreferences,
-    room: onlineRoomState,
-    roomUi: onlineRoom.roomUi,
-    syncUi: syncRoomUi
-  });
+  } = preferences;
+
+  useKaraokeRoomPreferences({ ...roomProps, preferences, roomUi });
+
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
-  const analysisRecordingIdRef = useRef(null);
-  const updateAnalysisRecordingId = useCallback((value) => {
-    if (typeof value === "function") {
-      setAnalysisRecordingId((previous) => {
-        const next = value(previous);
-        analysisRecordingIdRef.current = next;
-        return next;
-      });
-      return;
-    }
-    analysisRecordingIdRef.current = value;
-    setAnalysisRecordingId(value);
-  }, []);
   const [recordingError, setRecordingError] = useState(null);
+  const analysisRecordingIdRef = useRef(null);
+
+  const setAnalysisId = useCallback((value) => {
+    setAnalysisRecordingId((previous) => {
+      const next = typeof value === "function" ? value(previous) : value;
+      analysisRecordingIdRef.current = next;
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    // A paused recording session must not block the background radio. Only
-    // suspend radio output while karaoke playback is actually running.
     setRecordingActive(Boolean(recordingSessionId) && isPlaying);
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
-  const autoStartRequested = Boolean(location.state?.autoPlay);
-  const roomPrepared = Boolean(location.state?.roomPrepared);
+
   const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
     autoHideEnabled: autoHideConsole
   });
-  const currentTimeRef = useRef(currentTime);
-  const durationRef = useRef(duration);
-  const playbackEndedRef = useRef(null);
-  const effectPresetMutationRef = useRef(0);
-  currentTimeRef.current = currentTime;
-  durationRef.current = duration;
-  const { data: directOutputDevices } = usePolling(
-    () => api.listAudioOutputDevices(),
+
+  const { data: directOutputDevices } = usePoll(
+    api.listAudioOutputDevices,
     POLLING_INTERVALS.devices,
-    [],
-    { queryKey: ["audio-output-devices"] }
+    ["audio-output-devices"]
   );
-  const { data: audioSettings } = usePolling(
-    () => api.getAudioSettings(),
+
+  const { data: audioSettings } = usePoll(
+    api.getAudioSettings,
     POLLING_INTERVALS.devices,
-    [],
-    { queryKey: queryKeys.audioSettings }
+    queryKeys.audioSettings
   );
-  const { data: signal } = usePolling(
-    () => api.getSignalQuality(),
-    POLLING_INTERVALS.karaokeSignal,
-    [],
-    { queryKey: ["signal-quality"] }
-  );
-  const microphoneLevel = getMicrophoneLevel(signal);
-  const microphoneSettings = useMicrophoneSettings({ audioSettings, onError: setRecordingError });
-  const { microphoneVolume, setMicrophoneVolume, microphoneEffects, setMicrophoneEffects } =
-    microphoneSettings;
-  useKaraokeRoomEffects({
-    room: onlineRoomState,
-    participantCount: onlineParticipantCount,
-    volume: microphoneVolume,
-    effects: microphoneEffects,
-    syncUi: syncRoomUi
-  });
+
+  const { data: signal } = usePoll(api.getSignalQuality, POLLING_INTERVALS.karaokeSignal, [
+    "signal-quality"
+  ]);
+
   const {
     audioDriver,
     directOutputDeviceId,
     setDirectOutputDeviceId,
     monitoringEnabled,
     setMonitoringEnabled,
-    monitorInputDeviceId
-  } = microphoneSettings;
-  const { updateMicrophone, updateMicrophoneEffects } = microphoneSettings;
-  const [roomMonitoringEnabled, setRoomMonitoringEnabled] = useState(false);
-  const effectiveMonitoringEnabled = onlineRoomState ? roomMonitoringEnabled : monitoringEnabled;
-  const monitoringEnabledRef = useRef(monitoringEnabled);
-  monitoringEnabledRef.current = monitoringEnabled;
+    monitorInputDeviceId,
+    microphoneVolume,
+    setMicrophoneVolume,
+    microphoneEffects,
+    setMicrophoneEffects,
+    updateMicrophone,
+    updateMicrophoneEffects
+  } = useMicrophoneSettings({ audioSettings, onError: setRecordingError });
+
+  useKaraokeRoomEffects({
+    ...roomProps,
+    volume: microphoneVolume,
+    effects: microphoneEffects
+  });
+
+  const monitoringRef = useLatest(monitoringEnabled);
+  const [roomMonitoring, setRoomMonitoring] = useState(false);
+  const effectiveMonitoring = room ? roomMonitoring : monitoringEnabled;
+
+  const setNativeMonitoring = useCallback(
+    (updated) => {
+      const enabled = Boolean(updated?.monitoring_enabled);
+
+      monitoringRef.current = enabled;
+      setMonitoringEnabled(enabled);
+      notifyAudio(updated);
+
+      return updated;
+    },
+    [setMonitoringEnabled]
+  );
+
   const releaseMonitoring = useCallback(async () => {
-    if (roomMonitoringEnabled) {
-      await setRoomLocalMonitoring(false);
-      setRoomMonitoringEnabled(false);
+    if (roomMonitoring) {
+      setRoomMonitoring(false);
+      await Promise.resolve(setLocalMonitoring(false)).catch(noop);
     }
-    if (!monitoringEnabledRef.current) return null;
-    const updated = await api.stopDirectMonitoring();
-    monitoringEnabledRef.current = false;
-    setMonitoringEnabled(false);
-    globalThis.dispatchEvent?.(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated }));
-    return updated;
-  }, [roomMonitoringEnabled, setMonitoringEnabled, setRoomLocalMonitoring]);
+
+    return monitoringRef.current ? setNativeMonitoring(await api.stopDirectMonitoring()) : null;
+  }, [roomMonitoring, setLocalMonitoring, setNativeMonitoring]);
+
+  useEffect(() => {
+    if (!room) setRoomMonitoring(false);
+  }, [room]);
+
   useEffect(
     () => () => {
-      // Back, window navigation and error exits must also release the native
-      // output device so Library recordings can play immediately.
-      if (monitoringEnabledRef.current) api.releaseDirectMonitoring();
-      setRoomLocalMonitoring(false);
+      if (monitoringRef.current) Promise.resolve(api.releaseDirectMonitoring()).catch(noop);
+      Promise.resolve(setLocalMonitoring(false)).catch(noop);
     },
-    [setRoomLocalMonitoring]
+    [setLocalMonitoring]
   );
+
   useAudioOutputRouting({
+    ...mediaRefs,
     audioDriver,
     audioSettings,
     directOutputDeviceId,
     directOutputDevices,
-    instrumentalRef,
     setDirectOutputDeviceId,
-    updateMicrophone,
-    videoRef,
-    vocalsRef
+    updateMicrophone
   });
+
   useEffect(() => {
     resetPlayback();
     setCurrentTime(0);
     setDuration(0);
   }, [resetPlayback, song?.id]);
 
-  const lyricsSync = result?.lyrics_sync;
   const sourceNotes = useMemo(() => flattenLyricsNotes(lyricsSync), [lyricsSync]);
-  const timingPreferenceKey = [
+
+  const timingKey = [
     song?.id ?? "",
     lyricsSync?.bpm ?? "",
     lyricsSync?.duration ?? "",
     lyricsSync?.words?.[0]?.start ?? ""
   ].join("|");
-  const embeddedLyricsOffset = Math.max(
-    -10,
-    Math.min(10, Number(lyricsSync?.alignment?.offset_seconds) || 0)
-  );
-  const savedLyricsOffset = Number(timingOffsets?.[timingPreferenceKey]);
-  const lyricsOffset = Number.isFinite(savedLyricsOffset)
-    ? savedLyricsOffset
-    : embeddedLyricsOffset;
-  const runtimeLyricsOffset = lyricsOffset - embeddedLyricsOffset;
+
+  const embeddedOffset = clamp(Number(lyricsSync?.alignment?.offset_seconds) || 0, -10, 10);
+  const savedOffset = Number(timingOffsets?.[timingKey]);
+  const lyricsOffset = Number.isFinite(savedOffset) ? savedOffset : embeddedOffset;
+  const runtimeOffset = lyricsOffset - embeddedOffset;
+
   const displayLyricsSync = useMemo(
-    () => shiftLyricsSync(lyricsSync, runtimeLyricsOffset),
-    [lyricsSync, runtimeLyricsOffset]
+    () => shiftLyricsSync(lyricsSync, runtimeOffset),
+    [lyricsSync, runtimeOffset]
   );
+
   const displayNotes = useMemo(() => flattenLyricsNotes(displayLyricsSync), [displayLyricsSync]);
+
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } = useMelodyGuide({
     notes: sourceNotes,
     volume: melodyVolume,
     keyShift,
     currentTimeRef
   });
+
   const [clipAvailable, setClipAvailable] = useState(false);
-  useEffect(() => setClipAvailable(false), [song?.id, song?.video_url]);
+
+  useEffect(() => {
+    setClipAvailable(false);
+  }, [song?.id, song?.video_url]);
 
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
+    ...mediaRefs,
     currentTimeRef,
-    instrumentalRef,
     isPlaying,
     keyShift,
     melodyVolume,
@@ -251,21 +272,20 @@ export default function Karaoke({ onOpenAppSettings }) {
     onPlaybackEndedRef: playbackEndedRef,
     setCurrentTime,
     setDuration,
-    setIsPlaying: playback.setPlaying,
+    setIsPlaying: setPlaying,
     silenceMelodyGuide,
     songId: song?.id,
     speed,
     startMelodyGuide,
     updateMelodyGuide,
-    videoRef,
-    vocalVolume,
-    vocalsRef
+    vocalVolume
   });
+
   const { returnToLibrary, seekTo, skip, stop, togglePlay } = useKaraokeTransport({
+    ...mediaRefs,
     currentTime,
     duration,
     durationRef,
-    instrumentalRef,
     isPlaying,
     microphoneEffects,
     microphoneVolume,
@@ -275,9 +295,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     onlineRoom,
     recordingSessionId,
     sendYouTubeCommand,
-    setAnalysisRecordingId: updateAnalysisRecordingId,
+    setAnalysisRecordingId: setAnalysisId,
     setCurrentTime,
-    setIsPlaying: playback.setPlaying,
+    setIsPlaying: setPlaying,
     playback,
     releaseMonitoring,
     setRecordingError,
@@ -286,10 +306,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     song,
     startMelodyGuide,
     syncSecondaryMedia,
-    videoRef,
-    vocalVolume,
-    vocalsRef
+    vocalVolume
   });
+
   const {
     handleStop,
     handleTogglePlay,
@@ -301,8 +320,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     stageActionsVisible
   } = useKaraokeSceneFlow({
     analysisRecordingIdRef,
-    autoStartRequested,
-    roomPrepared,
+    autoStartRequested: Boolean(location.state?.autoPlay),
+    roomPrepared: Boolean(location.state?.roomPrepared),
     hideControls,
     instrumentalRef,
     isPlaying,
@@ -318,7 +337,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     turnOnRadio,
     vocalsRef
   });
+
   playbackEndedRef.current = handleStop;
+
   useKaraokeHotkeys({
     scopeRef: containerRef,
     currentTime,
@@ -327,132 +348,108 @@ export default function Karaoke({ onOpenAppSettings }) {
     onSeek: seekTo,
     onStop: handleStop
   });
+
   useKaraokeStageLayout(containerRef);
-  const isBlocked =
-    Boolean(songsError) ||
+
+  if (
+    songsError ||
     !songs ||
     !song ||
     song.status !== "done" ||
     resultLoading ||
-    Boolean(resultError) ||
-    !result;
-  if (isBlocked) {
+    resultError ||
+    !result
+  ) {
     return (
       <KaraokeLoadState
-        songs={songs}
-        songsError={songsError}
-        song={song}
-        songId={songId}
-        result={result}
-        resultLoading={resultLoading}
-        resultError={resultError}
+        {...{ songs, songsError, song, songId, result, resultLoading, resultError }}
       />
     );
   }
-  const rawBaseTempo = Number(lyricsSync?.bpm);
-  const baseTempo = Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
-  const currentTempo = Math.max(1, Math.round(baseTempo * speed));
-  const compactKey = formatCompactKey(transposeKey(lyricsSync.key, keyShift));
+
+  const bpm = Number(lyricsSync?.bpm);
+  const baseTempo = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
+  const currentTempo = Math.max(1, Math.round(baseTempo * (Number(speed) || 1)));
+
+  const compactKey = lyricsSync?.key
+    ? formatCompactKey(transposeKey(lyricsSync.key, keyShift))
+    : "";
+
   const changeTempo = (delta) => {
-    const nextTempo = Math.max(1, currentTempo + delta);
-    setSpeed(Math.max(0.5, Math.min(1.5, nextTempo / baseTempo)));
+    setSpeed(clamp((currentTempo + delta) / baseTempo, 0.5, 1.5));
   };
+
   const changeLyricsOffset = (value) => {
-    const next = Math.max(-10, Math.min(10, Math.round(Number(value) * 10) / 10));
-    if (!Number.isFinite(next) || !song?.id) return;
-    setTimingOffsets({ ...timingOffsets, [timingPreferenceKey]: next });
+    const next = clamp(Math.round(Number(value) * 10) / 10, -10, 10);
+    if (Number.isFinite(next)) setTimingOffsets({ ...timingOffsets, [timingKey]: next });
   };
-  const applyEffectPreset = async (preset) => {
-    const previousPreset = effectPreset;
-    const mutationSequence = effectPresetMutationRef.current + 1;
-    effectPresetMutationRef.current = mutationSequence;
-    setEffectPreset(preset.id);
-    const updated = await updateMicrophoneEffects({
-      reverb: preset.reverb,
-      echo: preset.echo,
-      delay: preset.delay
-    });
-    if (updated === null && mutationSequence === effectPresetMutationRef.current) {
-      setEffectPreset(previousPreset);
+
+  const saveEffects = async (preset, effects) => {
+    const previous = effectPreset;
+    const sequence = ++effectMutationRef.current;
+
+    setEffectPreset(preset);
+
+    if (
+      (await updateMicrophoneEffects(effects)) === null &&
+      sequence === effectMutationRef.current
+    ) {
+      setEffectPreset(previous);
     }
   };
-  const handleAnalysisClose = () => {
-    updateAnalysisRecordingId(null);
-    navigateToLibraryFromBlackout();
-  };
-  const handleEffectChange = (key, value) => {
-    setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
-  };
-  const handleEffectCommit = async (key, value) => {
-    const previousPreset = effectPreset;
-    const mutationSequence = effectPresetMutationRef.current + 1;
-    effectPresetMutationRef.current = mutationSequence;
-    setEffectPreset("custom");
-    const updated = await updateMicrophoneEffects({ [key]: value });
-    if (updated === null && mutationSequence === effectPresetMutationRef.current) {
-      setEffectPreset(previousPreset);
-    }
-  };
+
   const handleMonitoringChange = async (enabled) => {
     try {
-      if (onlineRoomState) {
-        // The room already owns a realtime, processed microphone stream.
-        // Monitoring that stream in Web Audio avoids a second capture and the
-        // large Windows/PortAudio round trip heard on ordinary USB headsets.
-        if (monitoringEnabledRef.current) {
-          const updated = await api.stopDirectMonitoring();
-          monitoringEnabledRef.current = false;
-          setMonitoringEnabled(false);
-          globalThis.dispatchEvent?.(
-            new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
-          );
+      if (room) {
+        if (monitoringRef.current) {
+          setNativeMonitoring(await api.stopDirectMonitoring());
         }
-        const active = await setRoomLocalMonitoring(enabled, {
+
+        const active = await setLocalMonitoring(enabled, {
           volume: microphoneVolume,
           ...microphoneEffects
         });
-        setRoomMonitoringEnabled(active);
+
+        setRoomMonitoring(Boolean(active));
         return;
       }
-      const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
-      const updated = await action();
-      setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
-      globalThis.dispatchEvent?.(
-        new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
+
+      setNativeMonitoring(
+        await (enabled ? api.startDirectMonitoring() : api.stopDirectMonitoring())
       );
     } catch (error) {
       setRecordingError(
-        translateSaved("karaoke.failedToChangeMicrophoneListening", {
+        t("karaoke.failedToChangeMicrophoneListening", {
           0: getErrorMessage(error)
         })
       );
     }
   };
+
   return (
     <KaraokeView
       containerRef={containerRef}
       isPlaying={isPlaying}
       controlsVisible={controlsVisible && !sceneTransitioning}
       onMouseMove={(event) => {
-        if (sceneTransitioning) return;
-        if (!revealControls(event)) return;
-        revealStageActions();
+        if (!sceneTransitioning && revealControls(event)) revealStageActions();
       }}
       mediaProps={{
-        instrumentalRef,
+        ...mediaRefs,
         isPlaying,
         musicVolume,
         song,
         speed,
         syncSecondaryMedia,
-        videoRef,
         vocalVolume,
-        vocalsRef,
         onClipAvailabilityChange: setClipAvailable
       }}
-      recordingError={recordingError || karaokePreferences.persistenceError}
+      recordingError={recordingError || preferences.persistenceError}
       analysisRecordingId={analysisRecordingId}
-      onAnalysisClose={handleAnalysisClose}
+      onAnalysisClose={() => {
+        setAnalysisId(null);
+        navigateToLibraryFromBlackout();
+      }}
       stageActionProps={{
         controlsVisible,
         hideControls,
@@ -465,14 +462,14 @@ export default function Karaoke({ onOpenAppSettings }) {
         toggleRadio
       }}
       performanceProps={{
-        getLocalVoiceStream: onlineRoomState ? onlineRoom.getLocalVoiceStream : undefined,
+        getLocalVoiceStream: room ? onlineRoom.getLocalVoiceStream : undefined,
         currentTime,
         currentTimeRef,
         isPlaying,
         keyShift,
         lyricsSync: displayLyricsSync,
         monitorInputDeviceId,
-        monitoringEnabled: effectiveMonitoringEnabled,
+        monitoringEnabled: effectiveMonitoring,
         hasSongClip: clipAvailable,
         notes: displayNotes,
         sceneBlackout,
@@ -493,7 +490,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         song,
         currentTime,
         duration,
-        microphoneLevel,
+        microphoneLevel: getMicrophoneLevel(signal),
         volumes: {
           microphone: microphoneVolume,
           music: musicVolume,
@@ -513,8 +510,9 @@ export default function Karaoke({ onOpenAppSettings }) {
           melody: setMelodyVolume
         },
         microphoneEffects,
-        onEffectChange: handleEffectChange,
-        onEffectCommit: handleEffectCommit,
+        onEffectChange: (key, value) =>
+          setMicrophoneEffects((effects) => ({ ...effects, [key]: value })),
+        onEffectCommit: (key, value) => saveEffects("custom", { [key]: value }),
         isPlaying,
         onSkip: skip,
         onTogglePlay: handleTogglePlay,
@@ -535,8 +533,9 @@ export default function Karaoke({ onOpenAppSettings }) {
         onAutoHideChange: setAutoHideConsole,
         onClose: hideControls,
         effectPreset,
-        onApplyEffectPreset: applyEffectPreset,
-        monitoringEnabled: effectiveMonitoringEnabled,
+        onApplyEffectPreset: ({ id, echo, reverb, delay }) =>
+          saveEffects(id, { echo, reverb, delay }),
+        monitoringEnabled: effectiveMonitoring,
         onMonitoringChange: handleMonitoringChange,
         onSeek: seekTo
       }}
