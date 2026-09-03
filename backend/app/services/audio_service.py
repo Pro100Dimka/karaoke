@@ -224,6 +224,15 @@ def _matching_asio_device_index(driver_name: str | None, kind: str) -> int | Non
     for index, device in enumerate(sd.query_devices()):
         if int(device.get(capability, 0)) < 1:
             continue
+        # Unlike _resolved_device_index's plain-driver path, this scores by
+        # raw name-token overlap across every host API PortAudio exposes for
+        # the interface (ASIO, WASAPI, MME, DirectSound, WDM-KS all share the
+        # same product name) -- without this exclusion a same-named WDM-KS
+        # entry could legitimately out-score the real ASIO one and get
+        # returned instead, and that pin can fail outright just being opened
+        # (see _is_wdm_ks_device).
+        if _is_wdm_ks_device(device):
+            continue
         name = str(device.get("name", "")).lower()
         overlap = sum(token in name for token in hint.split() if len(token) > 2)
         if overlap == 0:
@@ -241,6 +250,12 @@ def preferred_input_device(
     devices=None,
 ) -> int | None:
     if driver == "asio":
+        if (
+            device_id is not None and _AUDIO_BACKEND_AVAILABLE
+            and 0 <= device_id < len(sd.query_devices())
+            and _is_wdm_ks_device(sd.query_devices()[device_id])
+        ):
+            device_id = None  # Saved id now resolves to a broken WDM-KS pin; re-match by name.
         if device_id is not None and (
             not _AUDIO_BACKEND_AVAILABLE or 0 <= device_id < len(sd.query_devices())
         ):

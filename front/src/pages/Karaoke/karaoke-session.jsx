@@ -92,7 +92,6 @@ export default function KaraokeSession({
     silenceMelodyGuide: timeline.silenceMelodyGuide,
     syncSecondaryMedia,
     setCurrentTime,
-    setIsPlaying: playback.setPlaying,
     playback,
     releaseMonitoring: audio.releaseMonitoring
   });

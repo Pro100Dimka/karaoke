@@ -2,26 +2,25 @@ import { useEffect, useMemo, useRef } from "react";
 import { createRoomSyncChannel } from "../../../services/roomSyncChannel";
 import { normalizeKaraokePreferences } from "../utils/preferences";
 
-const valuesOf = (preferences) =>
-  normalizeKaraokePreferences({
-    musicVolume: preferences.musicVolume,
-    vocalVolume: preferences.vocalVolume,
-    melodyVolume: preferences.melodyVolume,
-    speed: preferences.speed,
-    keyShift: preferences.keyShift,
-    showLyrics: preferences.showLyrics,
-    showNotes: preferences.showNotes,
-    autoHideConsole: preferences.autoHideConsole,
-    effectPreset: preferences.effectPreset
-  });
+const KEYS = [
+  "musicVolume",
+  "vocalVolume",
+  "melodyVolume",
+  "speed",
+  "keyShift",
+  "showLyrics",
+  "showNotes",
+  "autoHideConsole",
+  "effectPreset"
+];
+const valuesOf = (state) =>
+  normalizeKaraokePreferences(Object.fromEntries(KEYS.map((key) => [key, state[key]])));
 
-export default function useKaraokeRoomPreferences({ preferences, room, roomUi, syncUi }) {
+export default function useKaraokeRoomPreferences({ preferences, room, roomUi, syncUi, onReceive }) {
   const channel = useRef(createRoomSyncChannel());
   const local = useMemo(() => valuesOf(preferences), [preferences]);
   const localRef = useRef(local);
-  const preferencesRef = useRef(preferences);
   localRef.current = local;
-  preferencesRef.current = preferences;
 
   useEffect(() => {
     channel.current = createRoomSyncChannel(room && !room.host ? localRef.current : undefined);
@@ -29,16 +28,9 @@ export default function useKaraokeRoomPreferences({ preferences, room, roomUi, s
 
   useEffect(() => {
     if (!room || !roomUi?.karaoke) return;
-
     const remote = valuesOf(roomUi.karaoke);
-    if (!channel.current.receiveState(remote, localRef.current)) return;
-
-    Object.entries(remote).forEach(([key, value]) => {
-      if (localRef.current[key] === value) return;
-      const setter = `set${key[0].toUpperCase()}${key.slice(1)}`;
-      preferencesRef.current[setter]?.(value);
-    });
-  }, [room?.host, room?.id, roomUi?.__eventId, roomUi?.karaoke]);
+    if (channel.current.receiveState(remote, localRef.current)) onReceive?.(remote);
+  }, [onReceive, room, roomUi?.__eventId, roomUi?.karaoke]);
 
   useEffect(() => {
     if (!room || typeof syncUi !== "function" || !channel.current.shouldSend(local)) return;

@@ -214,6 +214,29 @@ def test_asio_matching_and_preferred_device_fallbacks(monkeypatch):
     )
 
 
+def test_asio_input_resolution_never_lands_on_wdm_ks(monkeypatch):
+    # Every host API PortAudio exposes for the same interface shares its
+    # product name, so a same-named WDM-KS entry can otherwise out-score (or
+    # simply stand in for) the real ASIO one -- and its pin can fail outright
+    # just being opened for recording (see _is_wdm_ks_device).
+    devices = [
+        device("Audient iD4", 0, inputs=2, outputs=2),  # Windows WDM-KS
+        device("Audient iD4", 1, inputs=2, outputs=2),  # ASIO
+    ]
+    install_devices(monkeypatch, devices, {0: "Windows WDM-KS", 1: "ASIO"})
+
+    # Name-matched search skips the WDM-KS entry even though it matches too.
+    assert audio_service._matching_asio_device_index("Audient iD4", "input") == 1
+    # No saved device id: falls through to the (WDM-KS-free) name match.
+    assert audio_service.preferred_input_device(None, "asio", "Audient iD4") == 1
+    # A saved device id that now happens to resolve to the WDM-KS entry (e.g.
+    # after the device list reordered) is not trusted blindly either --
+    # falls back to the same name match instead of the broken pin.
+    assert audio_service.preferred_input_device(0, "asio", "Audient iD4") == 1
+    # A saved id pointing at the real ASIO entry is still honored as-is.
+    assert audio_service.preferred_input_device(1, "asio", "Audient iD4") == 1
+
+
 def test_preferred_sample_rate_trusts_the_asio_bridge_over_the_stale_device_table(monkeypatch):
     # PortAudio's device table is captured once per process and never
     # refreshed, but the ASIO bridge can change the interface's actual clock

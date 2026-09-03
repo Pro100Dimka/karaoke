@@ -15,7 +15,8 @@ import useMicrophoneSettings from "./useMicrophoneSettings";
 
 const noop = () => {};
 const safe = (task) => Promise.resolve().then(task).catch(noop);
-const poll = (request, interval, queryKey) => usePolling(request, interval, [], { queryKey });
+const usePoll = (request, interval, queryKey) =>
+  usePolling(request, interval, [], { queryKey });
 const notify = (detail) =>
   globalThis.dispatchEvent?.(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
 
@@ -35,15 +36,15 @@ export default function useKaraokeAudio({
   const roomMonitoringRef = useRef(false);
   const effectMutation = useRef(0);
 
-  const { data: devices } = poll(api.listAudioOutputDevices, POLLING_INTERVALS.devices, [
+  const { data: devices } = usePoll(api.listAudioOutputDevices, POLLING_INTERVALS.devices, [
     "audio-output-devices"
   ]);
-  const { data: audioSettings } = poll(
+  const { data: audioSettings } = usePoll(
     api.getAudioSettings,
     POLLING_INTERVALS.devices,
     queryKeys.audioSettings
   );
-  const { data: signal } = poll(api.getSignalQuality, POLLING_INTERVALS.karaokeSignal, [
+  const { data: signal } = usePoll(api.getSignalQuality, POLLING_INTERVALS.karaokeSignal, [
     "signal-quality"
   ]);
 
@@ -198,15 +199,11 @@ export default function useKaraokeAudio({
 
   const saveEffects = useCallback(
     async (preset, patch) => {
-      const previous = effectPreset;
       const sequence = ++effectMutation.current;
-      setEffectPreset(preset);
-
-      if ((await updateMicrophoneEffects(patch)) === null && sequence === effectMutation.current) {
-        setEffectPreset(previous);
-      }
+      const updated = await updateMicrophoneEffects(patch);
+      if (updated !== null && sequence === effectMutation.current) setEffectPreset(preset);
     },
-    [effectPreset, setEffectPreset, updateMicrophoneEffects]
+    [setEffectPreset, updateMicrophoneEffects]
   );
 
   const onEffectChange = useCallback(

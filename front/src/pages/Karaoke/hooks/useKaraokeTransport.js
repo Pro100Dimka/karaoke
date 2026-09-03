@@ -60,7 +60,6 @@ export default function useKaraokeTransport({
   silenceMelodyGuide,
   syncSecondaryMedia,
   setCurrentTime,
-  setIsPlaying,
   playback,
   releaseMonitoring
 }) {
@@ -77,15 +76,7 @@ export default function useKaraokeTransport({
   }, []);
   const clearAnalysis = useCallback(() => setAnalysisRecordingId(null), [setAnalysisRecordingId]);
 
-  const lifecycle = playback ?? {
-    start: () => {},
-    played: () => setIsPlaying(true),
-    pause: () => {},
-    paused: () => setIsPlaying(false),
-    stop: () => {},
-    stopped: () => setIsPlaying(false),
-    fail: () => setIsPlaying(false)
-  };
+  const lifecycle = playback;
   const { operationRef, beginOperation, waitForOperation } = useOperationGate();
   const roomCaptureRef = useRef(null);
   const stopVersionRef = useRef(0);

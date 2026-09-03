@@ -39,7 +39,19 @@ export default function useKaraokePreferences(roomSync = {}) {
   const mounted = useMountedRef();
   const state = useStore(store);
 
-  useKaraokeRoomPreferences({ ...roomSync, preferences: state });
+  const applyRoomPreferences = useCallback(
+    (preferences) => {
+      skipPersistence.current = true;
+      store.setState(preferences);
+    },
+    [store]
+  );
+
+  useKaraokeRoomPreferences({
+    ...roomSync,
+    preferences: state,
+    onReceive: applyRoomPreferences
+  });
 
   useEffect(
     () =>
