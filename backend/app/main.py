@@ -21,6 +21,7 @@ from AI import service as ai_service
 from app.api.correlation import get_current, new_id, set_current
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
 from app.services import (
+    audio_runtime,
     audio_service,
     background_task_supervisor,
     pipeline_service,
@@ -47,6 +48,7 @@ def _is_benign_client_disconnect(context: dict) -> bool:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     loop = asyncio.get_running_loop()
+    audio_runtime.bind_main_loop(loop)
     previous_exception_handler = loop.get_exception_handler()
 
     def handle_loop_exception(active_loop, context):
