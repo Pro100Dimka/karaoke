@@ -278,7 +278,37 @@ def test_asio_monitor_validates_bridge_driver_and_clamps_command(monkeypatch, tm
         )
     )
     command = launch.call_args.args[0]
-    assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0') and (launch.call_args.kwargs == {'cwd': tmp_path})
+    assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0')
+    assert launch.call_args.kwargs["cwd"] == tmp_path
+    assert callable(launch.call_args.kwargs["on_driver_reset"])
+
+
+def test_asio_reset_restart_closure_holds_a_detached_snapshot_not_the_live_row(monkeypatch, tmp_path):
+    # configure_monitoring can be called with a live, DB-session-bound
+    # AudioSettings row (see app/routers/recording.py) whose session may
+    # already be closed by the time a driver reset happens later -- the
+    # restart closure must capture its own plain snapshot up front rather
+    # than close over that row.
+    bridge = tmp_path / "bridge.exe"
+    bridge.write_bytes(b"bridge")
+    monkeypatch.setattr(audio_service, "_asio_bridge_path", Mock(return_value=bridge))
+    monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(return_value=["Studio ASIO"]))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_launch_monitor_process", launch)
+    live_row = settings(audio_driver="asio", asio_driver_name="Studio ASIO", buffer_size=256)
+
+    audio_service._start_asio_monitor(live_row)
+    on_driver_reset = launch.call_args.kwargs["on_driver_reset"]
+
+    request = Mock()
+    monkeypatch.setattr(audio_service, "request_monitoring", request)
+    on_driver_reset()
+
+    request.assert_called_once()
+    (resubmitted,), _ = request.call_args
+    assert resubmitted is not live_row
+    assert resubmitted.buffer_size == 256
+    assert resubmitted.asio_driver_name == "Studio ASIO"
 
 
 def test_asio_bridge_converts_supported_mismatched_input_and_output_formats():

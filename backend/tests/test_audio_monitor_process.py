@@ -117,6 +117,64 @@ def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch,
     assert audio_service._monitor_signal["silent"] is True
 
 
+def test_asio_driver_reset_restarts_the_monitor_instead_of_reporting_an_error(monkeypatch, tmp_path):
+    worker = process(
+        '{"event":"started"}\n',
+        '{"event":"reset_requested"}\n',
+        '{"event":"stopped","reset_requested":true}\n',
+        poll=0,
+    )
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+    on_driver_reset = Mock()
+
+    audio_service._launch_monitor_process(["worker"], cwd=tmp_path, on_driver_reset=on_driver_reset)
+    audio_service._monitor_reader.join(timeout=2)
+
+    on_driver_reset.assert_called_once_with()
+    assert audio_service.monitoring_status().get("state") != "error"
+
+
+def test_asio_normal_stop_does_not_trigger_a_restart(monkeypatch, tmp_path):
+    worker = process(
+        '{"event":"started"}\n',
+        '{"event":"stopped","reset_requested":false}\n',
+        poll=0,
+    )
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+    on_driver_reset = Mock()
+
+    audio_service._launch_monitor_process(["worker"], cwd=tmp_path, on_driver_reset=on_driver_reset)
+    audio_service._monitor_reader.join(timeout=2)
+
+    on_driver_reset.assert_not_called()
+    assert audio_service.monitoring_status().get("state") == "error"
+
+
+def test_asio_reset_does_not_restart_a_process_already_superseded(monkeypatch, tmp_path):
+    release = threading.Event()
+
+    class StalledOutput(OutputLines):
+        def __iter__(self):
+            yield '{"event":"started"}\n'
+            release.wait(2)
+            yield '{"event":"stopped","reset_requested":true}\n'
+
+    worker = process(poll=0)
+    worker.stdout = StalledOutput()
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+    on_driver_reset = Mock()
+
+    audio_service._launch_monitor_process(["worker"], cwd=tmp_path, on_driver_reset=on_driver_reset)
+    # A newer monitor already replaced this one (e.g. the user changed
+    # settings right as the driver reset) -- the stale process's own reset
+    # must not resurrect it.
+    monkeypatch.setattr(audio_service, "_monitor_process", Mock())
+    release.set()
+    audio_service._monitor_reader.join(timeout=2)
+
+    on_driver_reset.assert_not_called()
+
+
 def test_monitor_process_reports_worker_error_and_early_exit(monkeypatch, tmp_path):
     stop = Mock()
     monkeypatch.setattr(audio_service, "_stop_monitoring_process", stop)

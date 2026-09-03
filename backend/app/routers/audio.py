@@ -84,8 +84,16 @@ def select_device(device_id: int, db: Session = Depends(get_db)):
 def signal_quality(db: Session = Depends(get_db)):
     settings = audio_service.get_settings(db)
     with http_error(RuntimeError, 503):
+        # Resolve the device the same way monitoring/recording do: an ASIO
+        # driver selection with no explicit device saved must probe the
+        # matching ASIO input, not whatever Windows treats as the default
+        # WASAPI/MME device (check_signal_quality's own fallback, which has
+        # no notion of the selected driver at all).
+        resolved_device_id = audio_service.preferred_input_device(
+            settings.input_device_id, settings.audio_driver, settings.asio_driver_name
+        )
         return audio_service.check_signal_quality(
-            settings.input_device_id,
+            resolved_device_id,
             gain=settings.volume,
             monitoring_expected=settings.monitoring_enabled,
         )

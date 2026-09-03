@@ -875,7 +875,24 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
             -1.0, min(1.0, float(getattr(settings, "octave", 0.0) or 0.0))
         )),
     ]
-    _launch_monitor_process(command, cwd=bridge.parent)
+    # kAsioResetRequest fires when the driver's own control panel changes
+    # something (buffer size, sample rate) out from under the running stream;
+    # the ASIO SDK's contract for that message is to close and reopen the
+    # driver, which is exactly what re-running request_monitoring does
+    # (through the normal coalescing lane, so it plays correctly with any
+    # concurrent user-initiated stop/settings change instead of racing it).
+    # settings itself may be a live, DB-session-bound AudioSettings row (some
+    # callers of configure_monitoring pass one directly, not the detached
+    # snapshot request_monitoring builds for itself) -- that session can be
+    # long closed by the time a reset actually happens, so a fresh detached
+    # snapshot is captured here rather than closing over settings as-is.
+    reset_snapshot = SimpleNamespace(**{
+        field: getattr(settings, field, None)
+        for field in _MONITOR_RESTART_FIELDS | _LIVE_UPDATE_FIELDS | {"monitoring_enabled"}
+    })
+    _launch_monitor_process(
+        command, cwd=bridge.parent, on_driver_reset=lambda: request_monitoring(reset_snapshot)
+    )
 
 
 def _start_monitor_worker(worker_options: dict) -> None:
@@ -892,7 +909,9 @@ def _start_monitor_worker(worker_options: dict) -> None:
     _launch_monitor_process(command, cwd=Path(config.BASE_DIR))
 
 
-def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
+def _launch_monitor_process(
+    command: list[str], *, cwd: Path, on_driver_reset=None
+) -> None:
     global _monitor_process, _monitor_reader
     ready = threading.Event()
     state: dict[str, str | None] = {"error": None, "stage": "process bootstrap (before Python entry point)"}
@@ -922,6 +941,7 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
 
     def consume_output() -> None:
         assert process.stdout is not None
+        reset_requested = False
         for line in process.stdout:
             try:
                 message = json.loads(line)
@@ -962,9 +982,24 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
             elif event == "error":
                 state["error"] = str(message.get("message") or "unknown audio worker error")
                 ready.set()
+            elif event == "stopped":
+                reset_requested = bool(message.get("reset_requested"))
         if not ready.is_set():
             state["error"] = state["error"] or "audio monitoring worker terminated during startup"
             ready.set()
+        with _monitor_lock:
+            superseded = _monitor_process is not process
+        if superseded:
+            return
+        if reset_requested and on_driver_reset is not None:
+            # The driver reset itself (e.g. its control panel's buffer size
+            # changed), not a stop we asked for -- _monitor_process is still
+            # this process (checked above), so this is not racing a
+            # concurrent stop/settings change. Restart through the normal
+            # coalescing lane instead of reporting a monitoring failure.
+            logger.info("ASIO driver requested a reset; restarting the monitor to pick up its new settings")
+            on_driver_reset()
+            return
         with _monitor_lock:
             if _monitor_process is process:
                 _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)

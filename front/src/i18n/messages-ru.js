@@ -720,8 +720,6 @@ export const ruMessages = {
     "Драйвер перешёл на резервный режим. Задержка может увеличиться.",
   "settings.audio.wasapiMode.label": "Режим WASAPI при следующем запуске",
   "settings.audio.wasapiMode.options.shared": "Windows Driver",
-  "settings.audio.wasapiMode.options.inputExclusive": "Эксклюзивный микрофон, совместный выход",
-  "settings.audio.wasapiMode.options.exclusive": "Полностью эксклюзивный — только мониторинг",
   "settings.audio.buffer_size.description": "Меньше буфер — ниже задержка, выше риск треска.",
   "settings.audio.wasapiMode.warning":
     "Exclusive может занять устройство и помешать записи или комнате. Полный exclusive также может отключить минусовку. При отказе драйвера будет показана ошибка; выбранные режим и буфер не меняются автоматически.",

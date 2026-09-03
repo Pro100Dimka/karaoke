@@ -29,6 +29,12 @@ constexpr long kMaxInputChannels = 8;
 constexpr long kMaxOutputChannels = 2;
 constexpr long kMaxBuffers = kMaxInputChannels + kMaxOutputChannels;
 std::atomic_bool g_running{true};
+// Set only from kAsioResetRequest (asio_message), never from a host-initiated
+// stop (Ctrl+C, or the parent process terminating this one) -- lets the host
+// tell those two "the stream stopped" cases apart in the final "stopped"
+// event, so it can reopen the driver (as the ASIO SDK's own comment on
+// kAsioResetRequest instructs) instead of reporting a monitoring failure.
+std::atomic_bool g_reset_requested{false};
 std::atomic<float> g_rms{-120.0F};
 std::atomic_bool g_clipping{false};
 AsioDrivers* g_drivers = nullptr;
@@ -371,7 +377,12 @@ long asio_message(long selector, long value, void*, double*) {
     return value == kAsioEngineVersion || value == kAsioSupportsTimeInfo || value == kAsioResetRequest;
   }
   if (selector == kAsioEngineVersion) return 2;
-  if (selector == kAsioResetRequest) { g_running = false; return 1; }
+  if (selector == kAsioResetRequest) {
+    g_reset_requested = true;
+    emit("{\"event\":\"reset_requested\"}");
+    g_running = false;
+    return 1;
+  }
   return 0;
 }
 
@@ -514,6 +525,7 @@ int main(int argc, char** argv) {
   }
   ASIOStop();
   cleanup();
-  emit("{\"event\":\"stopped\"}");
+  emit(std::string("{\"event\":\"stopped\",\"reset_requested\":") +
+       (g_reset_requested.load() ? "true" : "false") + "}");
   return 0;
 }
