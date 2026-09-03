@@ -3,9 +3,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../api/client";
 import { useAppDialog } from "../../../../contexts/AppDialog";
-import { usePolling } from "../../../../hooks/usePolling";
 import { translateSaved as tr } from "../../../../i18n/runtime";
-import { POLLING_INTERVALS } from "../../../../runtime-config";
 import {
   Button,
   Modal,
@@ -16,18 +14,16 @@ import {
 } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import getRows from "./rows";
-import { createSongPayload, getSelectedSong, validateSongSettings } from "./utils";
+import { createSongPayload, validateSongSettings } from "./utils";
 
 export const HALF = 6;
 export const THIRD = 4;
 export const FULL = 12;
 
-export default function SongSettings({ songId, onClose }) {
+export default function SongSettings({ song, onClose, onSaved }) {
   const { alert } = useAppDialog();
   const navigate = useNavigate();
-  const query = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
   const loaded = useRef();
-  const song = getSelectedSong(query.data, songId);
   const form = useGetForm({
     initialValues: {},
     enableReinitialize: false,
@@ -37,7 +33,7 @@ export default function SongSettings({ songId, onClose }) {
       try {
         const updated = await api.updateSong(song.id, createSongPayload(values, song));
         if (updated) form.setValues((values) => ({ ...values, ...updated }));
-        await query.refresh?.();
+        await onSaved?.();
       } catch (error) {
         await alert(tr("library.failedToSave", { 0: getErrorMessage(error) }));
       }
@@ -74,19 +70,7 @@ export default function SongSettings({ songId, onClose }) {
       }}
     >
       <Stack sx={{ padding: "var(--space-5)" }}>
-        {query.error ? (
-          <Stack gap={0.75}>
-            <Typography role="alert" tone="danger">
-              {tr("library.failedToLoadSong")} {getErrorMessage(query.error)}
-            </Typography>
-
-            <Button variant="outlined" onClick={query.refresh}>
-              {tr("backend.retry")}
-            </Button>
-          </Stack>
-        ) : !query.data ? (
-          <Typography tone="muted">{tr("library.loadingSongSettings")}</Typography>
-        ) : !song ? (
+        {!song ? (
           <Typography role="alert" tone="danger">
             {tr("library.songNotFoundItMayHaveBeenDeleted")}
           </Typography>
@@ -97,15 +81,12 @@ export default function SongSettings({ songId, onClose }) {
             <form onSubmit={form.handleSubmit} noValidate>
               <RenderFormikFields formik={form} items={getRows()} />
             </form>
-
             {song.status === "done" && (
               <Stack gap={0.5}>
                 <Typography sx={{ fontWeight: 800 }}>{tr("library.melodyAndLyrics")}</Typography>
-
                 <Typography variant="body2" tone="muted">
                   {tr("library.openThePianoRollEditorToAdjustNotesDurations")}
                 </Typography>
-
                 <Button
                   variant="outlined"
                   startIcon={<Piano />}

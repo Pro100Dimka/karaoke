@@ -35,12 +35,10 @@ const opts = (all, items = []) => [
 
 export default function LibraryActions({
   canManageLibrary: can,
-  fileInputRef,
   filterOptions: o = {},
   filters = defaults,
   filtersOpen,
   importing,
-  onAdd,
   onFileChosen,
   onOpenRoom,
   roomActive,
@@ -49,9 +47,8 @@ export default function LibraryActions({
   setFiltersOpen,
   setQuery
 }) {
-  const [localOpen, setLocalOpen] = useState(false);
-  const open = typeof filtersOpen === "boolean" ? filtersOpen : localOpen;
-  const setOpen = setFiltersOpen || setLocalOpen;
+  const open = filtersOpen;
+  const setOpen = setFiltersOpen;
   const [draft, setDraft] = useState(filters);
   const anchor = useRef();
 
@@ -87,7 +84,7 @@ export default function LibraryActions({
 
   const buttons = [
     [!roomActive, UsersRound, "library.singAlong", "outlined", onOpenRoom],
-    [can, Plus, "library.addASong", undefined, onAdd, importing]
+    [can, Plus, "library.addASong", undefined, drop.open, importing]
   ];
 
   return (
@@ -137,7 +134,7 @@ export default function LibraryActions({
           </Button>
         ))}
 
-      <input {...drop.getInputProps()} ref={fileInputRef} />
+      <input {...drop.getInputProps()} />
 
       <Popover open={open} anchorRef={anchor} placement="bottom-end" onClose={() => setOpen(false)}>
         <Stack gap="var(--space-4)">

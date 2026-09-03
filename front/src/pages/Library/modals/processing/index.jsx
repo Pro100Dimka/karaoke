@@ -6,7 +6,7 @@ import { translateSaved as tr } from "../../../../i18n/runtime";
 import ProcessingSignal from "../../../../theme/features/ProcessingSignal";
 import { Button, Chip, Modal, Stack } from "../../../../theme/ui";
 import * as platform from "../../../../utils/platform";
-import { getProcessingProgress, isProcessingActive } from "../../utils";
+import { getProcessingProgress, isProcessingActive, sameId } from "../../utils";
 import getProcessingFailureInfo from "./processing-failure-info";
 import QueueNav from "./queue-nav";
 import Failure from "./statuses/failure";
@@ -21,19 +21,20 @@ export default function ProcessingModal({
   onOpenKaraoke,
   onSelectSong
 }) {
-  const current = status?.song_id && status.song_id !== song?.id ? null : status;
+  const current = status?.song_id && !sameId(status.song_id, song?.id) ? null : status;
   const state = current?.status ?? song?.status;
   const cover = useSongCover(song?.id, state);
-  const fetchParams = useMemo(() => {
-    const token = platform.apiToken();
-    return token ? { headers: { "X-ADVoice-Token": token } } : undefined;
-  }, []);
+  const token = platform.apiToken();
+  const fetchParams = useMemo(
+    () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
+    [token]
+  );
   if (!song) return null;
   const progress = getProcessingProgress(current, song);
   const active = isProcessingActive(state);
   const stage = current?.progress_detail || current?.progress_step || song.progress_step;
-  const queue = songs.some(({ id }) => id === song.id) ? songs : [song, ...songs];
-  const index = queue.findIndex(({ id }) => id === song.id);
+  const queue = songs.some(({ id }) => sameId(id, song.id)) ? songs : [song, ...songs];
+  const index = queue.findIndex(({ id }) => sameId(id, song.id));
   const failure =
     state === "error"
       ? getProcessingFailureInfo(current?.error_message ?? song.error_message)
@@ -67,7 +68,7 @@ export default function ProcessingModal({
                 <Button
                   variant="contained"
                   startIcon={<Play />}
-                  onClick={() => onOpenKaraoke(song.id)}
+                  onClick={() => onOpenKaraoke(song)}
                 >
                   {tr("library.open")}
                 </Button>

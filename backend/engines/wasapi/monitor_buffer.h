@@ -7,13 +7,19 @@
 #include <vector>
 
 namespace shared_audio {
+// Mirrors the ASIO bridge's resolve_buffer_size: the device's own
+// min/max/fundamental always wins. A user-requested size outside that range
+// is clamped into it (and aligned up to the fundamental granularity) rather
+// than rejected -- a buffer setting that happens to be too large for one
+// endpoint must not fail the whole monitor with "No supported low-latency
+// shared WASAPI configuration" when a smaller, still-valid period is right
+// there.
 inline uint32_t engine_period(uint32_t requested, uint32_t minimum, uint32_t maximum, uint32_t fundamental) {
     if (!requested || !fundamental || minimum > maximum)
         throw std::runtime_error("Invalid shared engine periods");
-    const uint64_t wanted = std::max(requested, minimum);
-    const uint64_t legal = (wanted + fundamental - 1) / fundamental * fundamental;
-    if (legal > maximum) throw std::runtime_error("Requested buffer exceeds the shared engine maximum");
-    return static_cast<uint32_t>(legal);
+    const uint64_t wanted = std::clamp<uint64_t>(requested, minimum, maximum);
+    const uint64_t aligned = (wanted + fundamental - 1) / fundamental * fundamental;
+    return static_cast<uint32_t>(std::clamp<uint64_t>(aligned, minimum, maximum));
 }
 inline float decode(const uint8_t* data, unsigned bits, bool floating) {
     if (floating) { float value; std::memcpy(&value, data, 4); return std::isfinite(value) ? value : 0; }

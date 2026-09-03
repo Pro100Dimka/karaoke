@@ -1,4 +1,4 @@
-import { clamp } from "../../../utils/math";
+import { clamp } from "../../../../../utils/math";
 
 export const PIANO_ROLL_VIEW = {
   width: 1200,

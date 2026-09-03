@@ -2,8 +2,8 @@ import { AlertCircle } from "lucide-react";
 import { Box, Card, Stack, Typography } from "../../theme/ui";
 import KaraokeConsole from "./components/console";
 import KaraokeMedia from "./components/karaoke-media";
-import KaraokePerformanceStage from "./components/karaoke-performance-stage";
 import KaraokeStageActions from "./components/karaoke-stage-actions";
+import KaraokePerformanceStage from "./components/performance-stage";
 import PerformanceAnalysisModal from "./performance-analysis-modal";
 
 export default function KaraokeView({

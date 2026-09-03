@@ -1,8 +1,5 @@
 import { translateSaved as tr } from "../../../../i18n/runtime";
 
-export const getSelectedSong = (songs, id) =>
-  Array.isArray(songs) ? songs.find((song) => song && (!id || song.id === id)) : undefined;
-
 export const normalizeText = (value) => (typeof value === "string" ? value.trim() || null : null);
 
 export const number = (value) => {

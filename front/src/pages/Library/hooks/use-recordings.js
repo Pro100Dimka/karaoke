@@ -12,6 +12,7 @@ export default function useLibraryRecordings(dialog) {
     [song?.id],
     { queryKey: ["recordings", song?.id ?? null] }
   );
+
   const remove = async ({ id }) => {
     if (!(await dialog.confirm(tr("karaoke.shouldIDeleteThisRecordedPerformance")))) return;
     try {
@@ -21,5 +22,6 @@ export default function useLibraryRecordings(dialog) {
       await dialog.alert(tr("karaoke.failedToDeleteEntry", { 0: getErrorMessage(error) }));
     }
   };
+
   return { song, setSong, delete: remove, error, items: data ?? [] };
 }

@@ -1,4 +1,4 @@
-import { clamp } from "../../../utils/math";
+import { clamp } from "../../../../../utils/math";
 
 const roundRect = (context, x, y, width, height, radius) => {
   context.beginPath();

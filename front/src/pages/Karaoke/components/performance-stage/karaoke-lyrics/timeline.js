@@ -1,4 +1,4 @@
-import { lyricsNoteFillPercent, lyricsSyllableFillPercent } from "../../../utils/lyrics-sync";
+import { lyricsNoteFillPercent, lyricsSyllableFillPercent } from "../../../../../utils/lyrics-sync";
 
 const WORD = /[\p{L}\p{N}_]+(?:[’'-][\p{L}\p{N}_]+)*/gu;
 const LINE_HOLD_SECONDS = 1.2;

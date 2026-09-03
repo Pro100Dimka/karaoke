@@ -209,6 +209,40 @@ def test_started_event_with_a_missing_buffer_size_does_not_call_the_callback(mon
     on_buffer_negotiated.assert_not_called()
 
 
+def test_started_log_prefers_the_negotiated_wasapi_period_over_the_raw_request(monkeypatch, tmp_path, caplog):
+    # blocksize on the native WASAPI engine is the raw requested value
+    # echoed back (Info.blocksize in monitor.cpp); input_period_frames is
+    # what GetSharedModeEnginePeriod actually negotiated with the device --
+    # the log must report the latter, or a user changing the buffer setting
+    # sees the same "buffer_size" logged even when it made no difference.
+    worker = process(
+        '{"event":"started","engine":"wasapi-native-shared","blocksize":256,'
+        '"input_period_frames":441,"output_period_frames":441,"sample_rate":44100}\n',
+        poll=0,
+    )
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+
+    with caplog.at_level("INFO", logger="app.services.audio_service"):
+        audio_service._launch_monitor_process(["worker"], cwd=tmp_path)
+        audio_service._monitor_reader.join(timeout=2)
+
+    [record] = [r for r in caplog.records if "Audio monitor started" in r.message]
+    assert "buffer_size=441" in record.message
+    assert "driver=wasapi-native-shared" in record.message
+
+
+def test_started_log_falls_back_to_blocksize_when_no_period_was_reported(monkeypatch, tmp_path, caplog):
+    worker = process('{"event":"started","engine":"wasapi-split","blocksize":128}\n', poll=0)
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+
+    with caplog.at_level("INFO", logger="app.services.audio_service"):
+        audio_service._launch_monitor_process(["worker"], cwd=tmp_path)
+        audio_service._monitor_reader.join(timeout=2)
+
+    [record] = [r for r in caplog.records if "Audio monitor started" in r.message]
+    assert "buffer_size=128" in record.message
+
+
 def test_monitor_process_reports_worker_error_and_early_exit(monkeypatch, tmp_path):
     stop = Mock()
     monkeypatch.setattr(audio_service, "_stop_monitoring_process", stop)

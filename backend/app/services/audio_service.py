@@ -132,7 +132,9 @@ def _device_latency(device: dict, kind: str) -> float:
         return 1.0
 
 
-def _low_latency_equivalent(device_id: int | None, kind: str, devices=None) -> int:
+def _low_latency_equivalent(
+    device_id: int | None, kind: str, devices=None, *, preferred_host_api: str = "wasapi"
+) -> int:
     devices = sd.query_devices() if devices is None else devices
     source_id = _resolved_device_index(device_id, kind, devices)
     source, capability = devices[source_id], f"max_{kind}_channels"
@@ -143,7 +145,7 @@ def _low_latency_equivalent(device_id: int | None, kind: str, devices=None) -> i
         if int(candidate.get(capability, 0)) < 1:
             continue
         host = _host_api_name(candidate).casefold()
-        if "wasapi" not in host:
+        if preferred_host_api not in host:
             continue
         overlap = len(source_tokens & _device_tokens(str(candidate.get("name", ""))))
         if device_id is not None and overlap == 0 and index != source_id:
@@ -237,8 +239,15 @@ def preferred_input_device(
         ):
             return device_id
         return _matching_asio_device_index(asio_driver_name, "input")
-    return (
-        device_id if not _AUDIO_BACKEND_AVAILABLE else _low_latency_equivalent(device_id, "input", devices)
+    if not _AUDIO_BACKEND_AVAILABLE:
+        return device_id
+    # "mme" pins the search to an MME-hosted equivalent instead of the
+    # default "auto" preference for a WASAPI one -- otherwise an explicitly
+    # selected MME device would be silently upgraded back to a same-named
+    # WASAPI device, making it impossible to actually monitor (and compare
+    # latency) on plain MME.
+    return _low_latency_equivalent(
+        device_id, "input", devices, preferred_host_api="mme" if driver == "mme" else "wasapi"
     )
 
 
@@ -300,7 +309,9 @@ def preferred_output_device(
                 if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0:
                     return input_device_id
         return _matching_asio_device_index(asio_driver_name, "output")
-    resolved_input = _low_latency_equivalent(input_device_id, "input", devices)
+    resolved_input = _low_latency_equivalent(
+        input_device_id, "input", devices, preferred_host_api="mme" if driver == "mme" else "wasapi"
+    )
     return _matching_output_for_input(resolved_input, output_device_id, devices)
 
 
@@ -444,7 +455,7 @@ def _normalized_settings_patch(
         updates.get("audio_driver", settings.audio_driver),
         updates.get("asio_driver_name", settings.asio_driver_name),
     )
-    if driver not in {"auto", "asio"}:
+    if driver not in {"auto", "asio", "mme"}:
         raise RuntimeError("Unsupported audio driver")
     if driver == "asio" and {"audio_driver", "asio_driver_name"} & changed_fields:
         if not resolve_devices:
@@ -995,10 +1006,22 @@ def _launch_monitor_process(
                 # schemas so this line reports real values for either,
                 # instead of silently logging None for whichever one is not
                 # currently running.
+                #
+                # For the native WASAPI engine specifically, "blocksize" is
+                # just the requested value echoed back (see Info.blocksize in
+                # backend/engines/wasapi/monitor.cpp) -- the period actually
+                # negotiated with the device (clamped into its own
+                # min/max/fundamental via GetSharedModeEnginePeriod) is
+                # input_period_frames/output_period_frames instead. Prefer
+                # that so this line reports what really applied, not just
+                # what was asked for.
                 logger.info(
                     "Audio monitor started: driver=%s buffer_size=%s sample_rate=%s latency=%s exclusive=%s",
                     message.get("driver", message.get("engine")),
-                    message.get("buffer_size", message.get("blocksize")),
+                    message.get(
+                        "buffer_size",
+                        message.get("input_period_frames", message.get("blocksize")),
+                    ),
                     message.get("sample_rate"),
                     message.get("latency", message.get("latency_source")),
                     message.get("exclusive"),

@@ -3,33 +3,59 @@ import { api } from "../../../api/client";
 
 const MAX_SONGS = 500;
 const MAX_BYTES = 120 * 1024;
-const encodedBytes = (value) => new TextEncoder().encode(value).byteLength;
+const bytes = (value) => new TextEncoder().encode(value).byteLength;
+const json = JSON.stringify;
+
 export const capParticipantSongs = (songs) => {
-  const candidates = songs.slice(0, MAX_SONGS);
-  // The Worker enforces UTF-8 bytes, not JavaScript character count. Cyrillic
-  // metadata is commonly two bytes per character, so the old length check
-  // could send >128 KiB and the Worker correctly closed the whole room.
-  // Binary search avoids repeatedly serializing almost the entire library
-  // hundreds of times when a large list needs trimming.
-  let lower = 0;
-  let upper = candidates.length;
-  while (lower < upper) {
-    const middle = Math.ceil((lower + upper) / 2);
-    if (encodedBytes(JSON.stringify({ songs: candidates.slice(0, middle) })) <= MAX_BYTES)
-      lower = middle;
-    else upper = middle - 1;
+  const list = songs.slice(0, MAX_SONGS);
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (bytes(json({ songs: list.slice(0, mid) })) <= MAX_BYTES) low = mid;
+    else high = mid - 1;
   }
-  return candidates.slice(0, lower);
+  return list.slice(0, low);
 };
-// The revisions endpoint caps a single request to the same count (see
-// schemas.SongRevisionsRequest), so a library larger than that still needs
-// chunking -- just far fewer requests than one per song.
-const chunk = (items, size) => {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size)
-    chunks.push(items.slice(index, index + size));
-  return chunks;
-};
+
+const chunks = (items, size) =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));
+
+function useSharedValue({ room, eventId, remote, value, setValue, syncUi, key, valid, serialize = String }) {
+  const state = useRef({ remote: null, sent: null, current: value });
+  state.current.current = value;
+
+  useEffect(() => {
+    state.current.remote = null;
+    state.current.sent = room && !room.host ? serialize(state.current.current) : null;
+  }, [room?.host, room?.id, room?.selfId, serialize]);
+
+  useEffect(() => {
+    if (!valid(remote)) return;
+    const incoming = serialize(remote);
+    if (incoming !== serialize(state.current.current)) {
+      state.current.remote = incoming;
+      setValue(remote);
+    }
+    state.current.sent = incoming;
+  }, [eventId, remote, setValue, serialize, valid]);
+
+  useEffect(() => {
+    if (!room) return;
+    const current = serialize(value);
+    if (state.current.remote !== null) {
+      if (state.current.remote === current) state.current.remote = null;
+      return;
+    }
+    if (state.current.sent === current) return;
+    state.current.sent = current;
+    syncUi({ [key]: value });
+  }, [key, room, serialize, syncUi, value]);
+}
+
+const isString = (value) => typeof value === "string";
+const isBoolean = (value) => typeof value === "boolean";
+const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
 
 export default function useLibraryRoomSync({
   localSongs,
@@ -47,122 +73,68 @@ export default function useLibraryRoomSync({
   setFiltersOpen,
   syncUi
 }) {
-  const remote = useRef(null);
-  const remoteFilters = useRef(null);
-  const sentQuery = useRef(null);
-  const sentFilters = useRef(null);
-  const remoteFiltersOpen = useRef(null);
-  const sentFiltersOpen = useRef(null);
-  const currentQuery = useRef(query);
-  const currentFilters = useRef(filters);
-  const currentFiltersOpen = useRef(filtersOpen);
-  currentQuery.current = query;
-  currentFilters.current = filters;
-  currentFiltersOpen.current = filtersOpen;
+  useSharedValue({
+    room,
+    eventId: roomEventId,
+    remote: roomQuery,
+    value: query,
+    setValue: setQuery,
+    syncUi,
+    key: "query",
+    valid: isString
+  });
+
+  useSharedValue({
+    room,
+    eventId: roomEventId,
+    remote: roomFilters,
+    value: filters,
+    setValue: setFilters,
+    syncUi,
+    key: "filters",
+    valid: isObject,
+    serialize: json
+  });
+
+  useSharedValue({
+    room,
+    eventId: roomEventId,
+    remote: roomFiltersOpen,
+    value: filtersOpen,
+    setValue: setFiltersOpen,
+    syncUi,
+    key: "libraryFiltersOpen",
+    valid: isBoolean
+  });
 
   useEffect(() => {
-    remote.current = null;
-    remoteFilters.current = null;
-    sentQuery.current = room && !room.host ? currentQuery.current : null;
-    sentFilters.current = room && !room.host ? JSON.stringify(currentFilters.current) : null;
-    remoteFiltersOpen.current = null;
-    sentFiltersOpen.current = room && !room.host ? currentFiltersOpen.current : null;
-  }, [room?.host, room?.id, room?.selfId]);
-
-  useEffect(() => {
-    if (typeof roomQuery === "string" && roomQuery !== currentQuery.current) {
-      remote.current = roomQuery;
-      sentQuery.current = roomQuery;
-      setQuery(roomQuery);
-    }
-  }, [roomEventId, roomQuery, setQuery]);
-
-  useEffect(() => {
-    if (!room) return;
-    if (remote.current !== null) {
-      if (remote.current === query) remote.current = null;
-      return;
-    }
-    if (sentQuery.current === query) return;
-    sentQuery.current = query;
-    syncUi({ query });
-  }, [query, room, syncUi]);
-
-  useEffect(() => {
-    if (!roomFilters || typeof roomFilters !== "object" || Array.isArray(roomFilters)) return;
-    const incoming = JSON.stringify(roomFilters);
-    if (incoming === JSON.stringify(currentFilters.current)) {
-      sentFilters.current = incoming;
-      return;
-    }
-    remoteFilters.current = incoming;
-    sentFilters.current = incoming;
-    setFilters(roomFilters);
-  }, [roomEventId, roomFilters, setFilters]);
-
-  useEffect(() => {
-    if (!room) return;
-    const current = JSON.stringify(filters);
-    if (remoteFilters.current !== null) {
-      if (remoteFilters.current === current) remoteFilters.current = null;
-      return;
-    }
-    if (sentFilters.current === current) return;
-    sentFilters.current = current;
-    syncUi({ filters });
-  }, [filters, room, syncUi]);
-
-  useEffect(() => {
-    if (typeof roomFiltersOpen !== "boolean" || roomFiltersOpen === currentFiltersOpen.current) {
-      if (typeof roomFiltersOpen === "boolean") sentFiltersOpen.current = roomFiltersOpen;
-      return;
-    }
-    remoteFiltersOpen.current = roomFiltersOpen;
-    sentFiltersOpen.current = roomFiltersOpen;
-    setFiltersOpen(roomFiltersOpen);
-  }, [roomEventId, roomFiltersOpen, setFiltersOpen]);
-
-  useEffect(() => {
-    if (!room) return;
-    if (remoteFiltersOpen.current !== null) {
-      if (remoteFiltersOpen.current === filtersOpen) remoteFiltersOpen.current = null;
-      return;
-    }
-    if (sentFiltersOpen.current === filtersOpen) return;
-    sentFiltersOpen.current = filtersOpen;
-    syncUi({ libraryFiltersOpen: filtersOpen });
-  }, [filtersOpen, room, syncUi]);
-
-  useEffect(() => {
-    if (!room?.selfId) return undefined;
+    if (!room?.selfId) return;
     let active = true;
-    const doneIds = localSongs.filter((song) => song?.status === "done").map((song) => song.id);
-    // A handful of batched requests for every "done" song's revision instead
-    // of one request per song -- with a large library this turned publishing
-    // it to the room into a burst of N requests all serializing on the
-    // backend's library-wide lock (see
-    // song_package_service.content_revisions_for_songs).
-    Promise.all(
-      chunk(doneIds, MAX_SONGS).map((ids) => api.getSongRevisions(ids).catch(() => null))
-    ).then((results) => {
-      if (!active) return;
-      const revisionById = new Map();
-      results.forEach((result) => {
-        (result?.revisions || []).forEach((entry) => {
-          if (entry.revision) revisionById.set(entry.song_id, entry.revision);
+    const ids = localSongs.filter(({ status } = {}) => status === "done").map(({ id }) => id);
+
+    Promise.all(chunks(ids, MAX_SONGS).map((chunk) => api.getSongRevisions(chunk).catch(() => null))).then(
+      (results) => {
+        if (!active) return;
+        const revisions = new Map();
+        results.forEach((result) =>
+          (result?.revisions || []).forEach(({ song_id, revision }) => {
+            if (revision) revisions.set(String(song_id), revision);
+          })
+        );
+
+        const songs = localSongs.map((song) => {
+          const revision = revisions.get(String(song.id));
+          return {
+            ...song,
+            __roomOwnerId: room.selfId,
+            ...(revision && { __roomRevision: revision })
+          };
         });
-      });
-      const songs = localSongs.map((song) => {
-        const owned = { ...song, __roomOwnerId: room.selfId };
-        const revision = revisionById.get(song.id);
-        return revision ? { ...owned, __roomRevision: revision } : owned;
-      });
-      // Every participant publishes their own local library under the
-      // worker's allowed `songs` contract. `participantSongs` was silently
-      // discarded for guests, so the host could not know that a guest
-      // already had (or was missing) a particular revision.
-      syncUi({ songs: capParticipantSongs(songs) });
-    });
+
+        syncUi({ songs: capParticipantSongs(songs) });
+      }
+    );
+
     return () => {
       active = false;
     };

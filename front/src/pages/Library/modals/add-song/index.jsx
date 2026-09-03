@@ -11,9 +11,10 @@ export default function AddSongsModal({ review, onCancel, onConfirm }) {
       title: item?.title || "",
       processingMode: item?.processingMode || ""
     },
+    enableReinitialize: true,
     onSubmit: (values) => values.title.trim() && onConfirm(values)
   });
-  const fields = getRows({ ...form.values, ...item });
+
   return (
     <Modal
       isOpen={!!item}
@@ -43,7 +44,7 @@ export default function AddSongsModal({ review, onCancel, onConfirm }) {
     >
       {item && (
         <Box as="form" onSubmit={form.handleSubmit} sx={{ padding: "var(--space-5)" }}>
-          <RenderFormikFields formik={form} items={fields} />
+          <RenderFormikFields formik={form} items={getRows(item)} />
         </Box>
       )}
     </Modal>

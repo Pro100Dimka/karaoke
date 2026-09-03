@@ -4,29 +4,31 @@ import { Stack, Typography } from "../../../theme/ui";
 import LibraryActions from "./actions";
 import StatCard from "./stat-card";
 
-const STAT_CARDS = [
-  [Music2, "songCount", () => tr("library.totalSongs")],
-  [Mic2, "readyCount", () => tr("library.readyForKaraoke")]
+const TEXT = [
+  ["h5", "library.yourMusicCollection"],
+  ["h1", "library.songLibrary"],
+  ["h5", "library.addTracksControlProcessingAndOpenThemInKaraoke"]
 ];
+const STATS = [
+  [Music2, "songCount", "library.totalSongs"],
+  [Mic2, "readyCount", "library.readyForKaraoke"]
+];
+const column = { width: "auto", flex: "1 1 40%", minInlineSize: "40%" };
 
 export default function LibraryHero({ songCount, readyCount, ...actions }) {
-  const stats = { songCount, readyCount };
-  const columnSx = { width: "auto", flex: "1 1 40%", minInlineSize: "40%" };
-  const HERO_TEXT = [
-    ["h5", "library.yourMusicCollection"],
-    ["h1", "library.songLibrary"],
-    ["h5", "library.addTracksControlProcessingAndOpenThemInKaraoke"]
-  ];
+  const values = { songCount, readyCount };
+  const icon = getComputedStyle(document.documentElement)
+    .getPropertyValue("--app-icon-image")
+    .replace(/^url\(["']?|["']?\)$/g, "");
+
   return (
     <Stack gap="var(--space-16)" py="var(--space-16)">
       <Stack direction="row" gap="var(--space-8)" wrap align="center">
-        <Stack direction="row" align="center" gap="var(--space-5)" sx={columnSx}>
+        <Stack direction="row" align="center" gap="var(--space-5)" sx={column}>
           <img
             alt=""
             aria-hidden
-            src={getComputedStyle(document.documentElement)
-              .getPropertyValue("--app-icon-image")
-              .replace(/^url\(["']?|["']?\)$/g, "")}
+            src={icon}
             style={{
               width: "12%",
               objectFit: "contain",
@@ -35,21 +37,19 @@ export default function LibraryHero({ songCount, readyCount, ...actions }) {
             }}
           />
           <Stack gap="1rem">
-            {HERO_TEXT.map(([variant, text]) => (
-              <Typography
-                key={text}
-                variant={variant}
-                tone={variant === "h5" ? "muted" : undefined}
-              >
-                {tr(text)}
+            {TEXT.map(([variant, key]) => (
+              <Typography key={key} variant={variant} tone={variant === "h5" ? "muted" : undefined}>
+                {tr(key)}
               </Typography>
             ))}
           </Stack>
         </Stack>
-        {STAT_CARDS.map(([Icon, key, label]) => (
-          <StatCard key={key} Icon={Icon} value={stats[key]} label={label()} />
+
+        {STATS.map(([Icon, key, label]) => (
+          <StatCard key={key} Icon={Icon} value={values[key]} label={tr(label)} />
         ))}
       </Stack>
+
       <Stack direction="row" justify="end">
         <LibraryActions {...actions} />
       </Stack>

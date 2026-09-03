@@ -1,29 +1,32 @@
 import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import { Box, Card, Grid, Stack, Typography } from "../../../theme/ui";
+import { sameId } from "../utils";
 import LibrarySongCard from "./card";
 
 export const selectSongTransferStatus = (statuses, id) => {
-  const all = statuses.filter((s) => s?.songId === id);
+  const all = statuses.filter((status) => sameId(status?.songId, id));
   return (
-    all.find((s) => s.stage === "error") ||
+    all.find(({ stage }) => stage === "error") ||
     all
-      .filter((s) => s.participantId && s.participantId !== "room")
+      .filter(({ participantId }) => participantId && participantId !== "room")
       .sort((a, b) => a.percent - b.percent)[0] ||
     all.at(-1)
   );
 };
 
-export default function LibrarySongsGrid({ state, fileImport, processing, recordings }) {
-  const {
-    filteredSongs: songs,
-    songsError: error,
-    transferStatuses,
-    canManageLibrary,
-    openKaraoke,
-    setSettingsSongId,
-    songActions
-  } = state;
+export default function LibrarySongsGrid({
+  songs,
+  error,
+  transferStatuses,
+  canManageLibrary,
+  fileImport,
+  processing,
+  recordings,
+  openKaraoke,
+  onOpenSettings,
+  songActions
+}) {
   const statuses = [...(transferStatuses?.values?.() || [])];
   const { getRootProps, isDragActive } = useDropzone({
     accept: {
@@ -36,7 +39,8 @@ export default function LibrarySongsGrid({ state, fileImport, processing, record
     noClick: true,
     noKeyboard: true
   });
-  if (error || !songs.length)
+
+  if (error || !songs.length) {
     return (
       <Stack align="center" justify="center" sx={{ minHeight: "30vw" }}>
         <Card
@@ -44,7 +48,7 @@ export default function LibrarySongsGrid({ state, fileImport, processing, record
           sx={{ textAlign: "center" }}
           cardContent={{ style: { padding: "var(--space-16)" } }}
         >
-          <Typography variant="h4" tone={error ? "danger" : "muted"} role={error && "alert"}>
+          <Typography variant="h4" tone={error ? "danger" : "muted"} role={error ? "alert" : undefined}>
             {error
               ? `${tr("library.failedToLoadList")} ${error.message || error}`
               : tr("library.thereAreNoSongsYetAddTheFirstOne")}
@@ -52,6 +56,8 @@ export default function LibrarySongsGrid({ state, fileImport, processing, record
         </Card>
       </Stack>
     );
+  }
+
   return (
     <Box
       {...getRootProps()}
@@ -62,12 +68,14 @@ export default function LibrarySongsGrid({ state, fileImport, processing, record
         {songs.map((song, cardIndex) => (
           <LibrarySongCard
             key={song.id}
-            {...{ song, cardIndex, canManageLibrary }}
+            song={song}
+            cardIndex={cardIndex}
+            canManageLibrary={canManageLibrary}
             transferStatus={selectSongTransferStatus(statuses, song.id)}
             onOpenKaraoke={openKaraoke}
             onOpenProcessing={processing.track}
             onOpenRecordings={recordings.setSong}
-            onOpenSettings={setSettingsSongId}
+            onOpenSettings={onOpenSettings}
             onDelete={songActions.deleteSong}
             onOpenFolder={songActions.openSongFolder}
             onProcess={songActions.processSong}

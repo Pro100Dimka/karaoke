@@ -1,11 +1,18 @@
+import { useMemo } from "react";
 import { api } from "../../../../api/client";
 import { translateSaved as tr } from "../../../../i18n/runtime";
 import { Button, ProcessingSignal, Stack, Typography } from "../../../../theme/ui";
 import { apiToken } from "../../../../utils/platform";
 import { formatSongKey } from "../../utils";
 
-export default ({ song, transfer, isWorking, onOpenProcessing, openKaraoke }) => {
-  if (!isWorking && !transfer)
+export default function SongState({ song, transfer, isWorking, onOpenProcessing, openKaraoke }) {
+  const token = apiToken();
+  const fetchParams = useMemo(
+    () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
+    [token]
+  );
+
+  if (!isWorking && !transfer) {
     return (
       <Typography variant="body2" tone="muted">
         {[
@@ -17,16 +24,18 @@ export default ({ song, transfer, isWorking, onOpenProcessing, openKaraoke }) =>
           .join(" · ")}
       </Typography>
     );
+  }
+
   const retry = ["error", "cancelled"].includes(transfer?.stage);
-  const token = apiToken();
   return (
     <Button
       variant="outlined"
       fullWidth
       sx={{ flex: 1, background: "unset", border: "unset", boxShadow: "unset" }}
-      onClick={(e) => {
-        e.stopPropagation();
-        isWorking ? onOpenProcessing(song) : retry && openKaraoke();
+      onClick={(event) => {
+        event.stopPropagation();
+        if (isWorking) onOpenProcessing(song);
+        else if (retry) openKaraoke();
       }}
     >
       {retry ? (
@@ -39,22 +48,19 @@ export default ({ song, transfer, isWorking, onOpenProcessing, openKaraoke }) =>
             <Typography variant="body2" tone="muted">
               {tr(
                 `library.${
-                  song.__roomLocal
-                    ? "waitingForOtherParticipantsToReceiveTheSong"
-                    : "downloadingSong"
+                  song.__roomLocal ? "waitingForOtherParticipantsToReceiveTheSong" : "downloadingSong"
                 }`
               )}
             </Typography>
           )}
-
           <ProcessingSignal
             compact
             progress={transfer?.percent ?? song.progress_percent}
-            url={isWorking && api.getAudioTrackUrl(song.id, "song")}
-            fetchParams={token && { headers: { "X-ADVoice-Token": token } }}
+            url={isWorking ? api.getAudioTrackUrl(song.id, "song") : undefined}
+            fetchParams={fetchParams}
           />
         </Stack>
       )}
     </Button>
   );
-};
+}

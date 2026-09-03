@@ -5,25 +5,19 @@ import { translateSaved as tr } from "../../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../../runtime-config";
 import { getErrorMessage } from "../../../utils/errors";
 import { setProcessingLoadActive } from "../../../utils/performance-profile";
-import {
-  getProcessingSongs,
-  hasActiveSongProcessing,
-  isProcessingActive,
-  mergeSongProcessingStatus
-} from "../utils";
+import { getProcessingSongs, isProcessingActive, mergeSongProcessingStatus, sameId } from "../utils";
 
-export default function useLibraryProcessing(songsQuery, dialog) {
+export default function useLibraryProcessing({ data, refresh }, dialog) {
   const [song, setSong] = useState(null);
   const [trackedId, setTrackedId] = useState(null);
-
   const status = usePolling(
     () => (trackedId ? api.getStatus(trackedId) : Promise.resolve(null)),
     trackedId ? POLLING_INTERVALS.processing : 0,
     [trackedId],
     {
       queryKey: ["song-status", trackedId],
-      shouldContinue: ({ status } = {}) => isProcessingActive(status),
-      shouldRetryError: ({ status } = {}) => status !== 404
+      shouldContinue: (value) => isProcessingActive(value?.status),
+      shouldRetryError: (error) => error?.status !== 404
     }
   );
 
@@ -32,14 +26,13 @@ export default function useLibraryProcessing(songsQuery, dialog) {
     setTrackedId(song?.id ?? null);
   }, []);
 
-  const currentSongs = useMemo(
-    () => mergeSongProcessingStatus(songsQuery.data, status.data),
-    [songsQuery.data, status.data]
-  );
+  const { currentSongs, songs } = useMemo(() => {
+    const currentSongs = mergeSongProcessingStatus(data, status.data);
+    return { currentSongs, songs: getProcessingSongs(currentSongs) };
+  }, [data, status.data]);
 
-  const songs = useMemo(() => getProcessingSongs(currentSongs), [currentSongs]);
-  const selected = currentSongs.find(({ id }) => id === song?.id) ?? song;
-  const active = hasActiveSongProcessing(currentSongs);
+  const selected = currentSongs.find(({ id }) => sameId(id, song?.id)) ?? song;
+  const active = !!songs.length;
 
   useEffect(() => {
     setProcessingLoadActive(active);
@@ -47,53 +40,38 @@ export default function useLibraryProcessing(songsQuery, dialog) {
   }, [active]);
 
   useEffect(() => {
-    if (trackedId) return;
-
-    const next = getProcessingSongs(songsQuery.data)[0];
-    if (next) track(next);
-  }, [songsQuery.data, trackedId, track]);
+    if (!trackedId && songs[0]) track(songs[0]);
+  }, [songs, trackedId, track]);
 
   useEffect(() => {
-    if (status.error?.status === 404) {
-      setTrackedId(null);
-      return;
-    }
+    if (!trackedId) return;
+    const missing = status.error?.status === 404;
+    const finished = sameId(status.data?.song_id, trackedId) && !isProcessingActive(status.data?.status);
+    if (!missing && !finished) return;
 
-    if (
-      !trackedId ||
-      status.data?.song_id !== trackedId ||
-      isProcessingActive(status.data?.status)
-    ) {
-      return;
-    }
-
-    setSong((song) => (song?.id === trackedId ? { ...song, ...status.data } : song));
+    setSong((song) =>
+      sameId(song?.id, trackedId) ? (missing ? null : { ...song, ...status.data }) : song
+    );
 
     let mounted = true;
-
     Promise.resolve()
-      .then(songsQuery.refresh)
+      .then(refresh)
       .catch(() => {})
       .finally(() => mounted && setTrackedId(null));
-
     return () => {
       mounted = false;
     };
-  }, [trackedId, status.data, status.error, songsQuery.refresh]);
+  }, [trackedId, status.data, status.error, refresh]);
 
   const cancel = useCallback(async () => {
     if (!song || !(await dialog.confirm(tr("library.cancelProcessingOfThisSong")))) return;
     try {
       await api.cancelProcessing(song.id);
-      await songsQuery.refresh();
     } catch (error) {
-      await dialog.alert(
-        tr("library.failedToCancelProcessing", {
-          0: getErrorMessage(error)
-        })
-      );
+      return dialog.alert(tr("library.failedToCancelProcessing", { 0: getErrorMessage(error) }));
     }
-  }, [song, dialog, songsQuery.refresh]);
+    await refresh().catch(() => {});
+  }, [song, dialog, refresh]);
 
   return {
     currentSongs,
@@ -103,6 +81,6 @@ export default function useLibraryProcessing(songsQuery, dialog) {
     track,
     cancel,
     close: () => setSong(null),
-    status: status.data?.song_id === selected?.id ? status.data : null
+    status: sameId(status.data?.song_id, selected?.id) ? status.data : null
   };
 }

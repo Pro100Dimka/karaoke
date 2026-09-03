@@ -7,8 +7,11 @@ int main() {
     verify(engine_period(64, 48, 480, 48) == 96);
     verify(engine_period(64, 441, 441, 441) == 441);
     verify(engine_period(128, 32, 1024, 32) == 128);
+    // A request above the device's maximum is clamped into range (matching
+    // the ASIO bridge's resolve_buffer_size), not rejected.
+    verify(engine_period(2048, 48, 480, 48) == 480);
     bool rejected = false;
-    try { engine_period(2048, 48, 480, 48); } catch (const std::exception&) { rejected = true; }
+    try { engine_period(64, 480, 48, 48); } catch (const std::exception&) { rejected = true; }
     verify(rejected);
     for (unsigned bits : {16, 24, 32}) for (float value : {-.9F, 0.0F, .9F}) {
         uint8_t data[4]{};

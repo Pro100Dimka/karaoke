@@ -9,11 +9,10 @@ import {
   useRef,
   useState
 } from "react";
-import { translateSaved as t } from "../../../i18n/runtime";
-import Box from "../../ui/Box";
-import PianoKeyboard from "../../ui/PianoKeyboard";
+import { translateSaved as t } from "../../../../../i18n/runtime";
+import { Box, PianoKeyboard } from "../../../../../theme/ui";
 import { drawPianoRoll } from "./draw";
-import { normalizePianoNotes, pianoPitchRange, pianoRollFrame, PIANO_ROLL_VIEW } from "./geometry";
+import { normalizePianoNotes, PIANO_ROLL_VIEW, pianoPitchRange, pianoRollFrame } from "./geometry";
 
 const color = (style, name, fallback) => style.getPropertyValue(name).trim() || fallback;
 const PixiPianoRoll = lazy(() => import("./pixi-scene"));

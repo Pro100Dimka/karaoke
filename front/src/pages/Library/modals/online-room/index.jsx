@@ -5,9 +5,9 @@ import { Button, Modal, RenderFormikFields, Stack, Typography } from "../../../.
 import getRows from "./rows";
 import useRoomModal from "./use-room-modal";
 
-export function OnlineRoomModal(props) {
+export default function OnlineRoomModal(props) {
   const { form, join, busy, error, toggle } = useRoomModal(props);
-  const fields = getRows(busy);
+  const fields = getRows(busy, join);
   const invalidCode = join && normalizeRoomId(form.values.roomId).length < 4;
 
   return (

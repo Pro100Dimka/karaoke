@@ -4,6 +4,7 @@ import { isAmbiguousTransportError } from "../../../api/core";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 import * as platform from "../../../utils/platform";
+import { sameId } from "../utils";
 
 const removeFromSet = (setter, id) =>
   setter((ids) => {
@@ -12,34 +13,38 @@ const removeFromSet = (setter, id) =>
     return next;
   });
 
+const exclusive = async (set, id, action) => {
+  if (!id || set.has(id)) return;
+  set.add(id);
+  try {
+    return await action();
+  } finally {
+    set.delete(id);
+  }
+};
+
 const mediaUrl = (media) => String(media?.currentSrc || media?.src || "");
 
 export async function releaseSongMedia(songId, root = globalThis.document) {
   if (!songId || !root?.querySelectorAll) return;
   const marker = `/songs/${encodeURIComponent(String(songId))}/`;
-  const mediaElements = [...root.querySelectorAll("audio, video")].filter((media) => {
-    const urls = [
-      mediaUrl(media),
-      ...[...(media.querySelectorAll?.("source") || [])].map(mediaUrl)
-    ];
-    return urls.some((url) => url.includes(marker));
-  });
-  if (!mediaElements.length) return;
-  for (const media of mediaElements) {
+  const media = [...root.querySelectorAll("audio, video")].filter((element) =>
+    [mediaUrl(element), ...[...(element.querySelectorAll?.("source") || [])].map(mediaUrl)].some(
+      (url) => url.includes(marker)
+    )
+  );
+
+  for (const element of media) {
     try {
-      media.pause?.();
-      if ("srcObject" in media) media.srcObject = null;
-      media.removeAttribute?.("src");
-      media.querySelectorAll?.("source").forEach((source) => source.removeAttribute("src"));
-      media.load?.();
-    } catch {
-      // A detached/partially initialized media element may reject load().
-      // Continue releasing every other reference to the same song.
-    }
+      element.pause?.();
+      if ("srcObject" in element) element.srcObject = null;
+      element.removeAttribute?.("src");
+      element.querySelectorAll?.("source").forEach((source) => source.removeAttribute("src"));
+      element.load?.();
+    } catch {}
   }
-  // Chromium's network service releases the Windows file handle
-  // asynchronously after load() detaches the source.
-  await new Promise((resolve) => globalThis.setTimeout(resolve, 350));
+
+  if (media.length) await new Promise((resolve) => globalThis.setTimeout(resolve, 350));
 }
 
 export default function useLibrarySongActions({
@@ -53,77 +58,76 @@ export default function useLibrarySongActions({
   setRecordingsSong
 }) {
   const busy = useRef({ delete: new Set(), process: new Set() });
+
   const process = useCallback(
-    async (song, request, message) => {
-      if (!song?.id || busy.current.process.has(song.id)) return;
-      busy.current.process.add(song.id);
-      try {
+    (song, request, errorMessage) =>
+      exclusive(busy.current.process, song?.id, async () => {
         try {
           await request(song.id);
         } catch (error) {
+          const ambiguous = isAmbiguousTransportError(error);
           await notify(
-            isAmbiguousTransportError(error)
+            ambiguous
               ? tr("library.backendDidNotConfirmTheOperationResult", { 0: getErrorMessage(error) })
-              : `${message}: ${getErrorMessage(error)}`
+              : `${errorMessage}: ${getErrorMessage(error)}`
           );
-          if (!isAmbiguousTransportError(error)) return;
+          if (!ambiguous) return;
         }
+
         setProcessingSong(song);
         try {
           await onChanged?.();
         } catch (error) {
           await notify(
-            tr("library.operationCompletedButTheListDidNotRefresh", {
-              0: getErrorMessage(error)
-            })
+            tr("library.operationCompletedButTheListDidNotRefresh", { 0: getErrorMessage(error) })
           );
         }
-      } finally {
-        busy.current.process.delete(song.id);
-      }
-    },
+      }),
     [notify, onChanged, setProcessingSong]
   );
 
-  const confirmReprocess = useCallback(
-    (text) => confirmDialog(text, tr("library.reworkTheSong")),
-    [confirmDialog]
+  const start = useCallback(
+    async (song, request, confirmKey, errorKey) => {
+      if (!song?.id) return;
+      if (
+        confirmKey &&
+        !(await confirmDialog(
+          tr(confirmKey, { 0: song.title || tr("api.untitled") }),
+          tr("library.reworkTheSong")
+        ))
+      ) {
+        return;
+      }
+      await process(song, request, tr(errorKey));
+    },
+    [confirmDialog, process]
   );
 
   const processSong = useCallback(
-    async (song) => {
-      if (!song?.id) return;
-      if (
-        song?.status !== "pending" &&
-        !(await confirmReprocess(
-          tr("library.areYouSureYouWantToReArrangeThe", { 0: song?.title || tr("api.untitled") })
-        ))
-      )
-        return;
-      await process(song, api.processSong, tr("library.failedToStartProcessing"));
-    },
-    [confirmReprocess, process]
+    (song) =>
+      start(
+        song,
+        api.processSong,
+        song?.status === "pending" ? null : "library.areYouSureYouWantToReArrangeThe",
+        "library.failedToStartProcessing"
+      ),
+    [start]
   );
 
   const reprocessSong = useCallback(
-    async (song) => {
-      if (!song?.id) return;
-      if (
-        !(await confirmReprocess(
-          tr("library.areYouSureYouWantToReArrangeThe2", { 0: song?.title || tr("api.untitled") })
-        ))
-      )
-        return;
-      await process(song, api.reprocessMelody, tr("library.failedToReprocessTheMelody"));
-    },
-    [confirmReprocess, process]
+    (song) =>
+      start(
+        song,
+        api.reprocessMelody,
+        "library.areYouSureYouWantToReArrangeThe2",
+        "library.failedToReprocessTheMelody"
+      ),
+    [start]
   );
 
   const deleteSong = useCallback(
-    async (song) => {
-      if (!song?.id || busy.current.delete.has(song.id)) return;
-      busy.current.delete.add(song.id);
-      try {
+    (song) =>
+      exclusive(busy.current.delete, song?.id, async () => {
         let confirmed;
         try {
           confirmed = await confirmDialog(
@@ -131,48 +135,41 @@ export default function useLibrarySongActions({
             tr("library.deleteASong")
           );
         } catch (error) {
-          await notify(tr("library.failedToConfirmDeletion", { 0: getErrorMessage(error) }));
-          return;
+          return notify(tr("library.failedToConfirmDeletion", { 0: getErrorMessage(error) }));
         }
         if (!confirmed) return;
+
         setHiddenSongIds((ids) => new Set(ids).add(song.id));
-        if (recordingsSongId === song.id) setRecordingsSong(null);
-        if (processingSongId === song.id) setProcessingSong(null);
+        if (sameId(recordingsSongId, song.id)) setRecordingsSong(null);
+        if (sameId(processingSongId, song.id)) setProcessingSong(null);
+
         try {
           await releaseSongMedia(song.id);
           await api.deleteSong(song.id);
         } catch (error) {
           if (!isAmbiguousTransportError(error)) {
             removeFromSet(setHiddenSongIds, song.id);
-            await notify(tr("library.failedToDelete", { 0: getErrorMessage(error) }));
-            return;
+            return notify(tr("library.failedToDelete", { 0: getErrorMessage(error) }));
           }
+
           await notify(
-            tr("library.backendDidNotConfirmDeletionCheckingStatus", {
-              0: getErrorMessage(error)
-            })
+            tr("library.backendDidNotConfirmDeletionCheckingStatus", { 0: getErrorMessage(error) })
           );
           try {
             await onChanged?.();
             removeFromSet(setHiddenSongIds, song.id);
-          } catch {
-            return;
-          }
+          } catch {}
           return;
         }
+
         try {
           await onChanged?.();
         } catch (error) {
           await notify(
-            tr("library.songDeletedButTheListDidNotRefresh", {
-              0: getErrorMessage(error)
-            })
+            tr("library.songDeletedButTheListDidNotRefresh", { 0: getErrorMessage(error) })
           );
         }
-      } finally {
-        busy.current.delete.delete(song.id);
-      }
-    },
+      }),
     [
       confirmDialog,
       notify,
@@ -189,10 +186,7 @@ export default function useLibrarySongActions({
     async (song) => {
       try {
         const result = await platform.openSongFolder(song);
-        if (!result.supported) {
-          await notify(tr("library.openingAFolderIsOnlyAvailableInTheInstalled"));
-          return;
-        }
+        if (!result.supported) return notify(tr("library.openingAFolderIsOnlyAvailableInTheInstalled"));
         if (result.error) await notify(result.error, tr("library.failedToOpenFolder"));
       } catch (error) {
         await notify(
