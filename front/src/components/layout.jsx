@@ -123,7 +123,7 @@ export default function AppLayout() {
         flexDirection: "column",
         minBlockSize: "100vh",
         backgroundColor: "var(--color-bg-deep)",
-        backgroundImage: "var(--bg-image)",
+        // backgroundImage: "var(--bg-image)",
         backgroundPosition: "center",
         backgroundSize: "cover",
         backgroundRepeat: "no-repeat",

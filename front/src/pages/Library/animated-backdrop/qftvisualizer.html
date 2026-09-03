@@ -10,7 +10,9 @@
         }
 
         :root {
-            --ar: 167; --ag: 139; --ab: 250;
+            --ar: 167;
+            --ag: 139;
+            --ab: 250;
         }
 
         html,
@@ -71,7 +73,7 @@
             letter-spacing: 1px;
             font-size: 34px;
             margin: 0 0 8px 0;
-            background: linear-gradient(135deg, #ffffff 0%, rgba(var(--ar),var(--ag),var(--ab),0.75) 40%, rgb(var(--ar),var(--ag),var(--ab)) 100%);
+            background: linear-gradient(135deg, #ffffff 0%, rgba(var(--ar), var(--ag), var(--ab), 0.75) 40%, rgb(var(--ar), var(--ag), var(--ab)) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -93,8 +95,8 @@
 
         button,
         .file-upload {
-            background: linear-gradient(135deg, rgba(var(--ar),var(--ag),var(--ab),0.12) 0%, rgba(var(--ar),var(--ag),var(--ab),0.06) 100%);
-            border: 1px solid rgba(var(--ar),var(--ag),var(--ab),0.25);
+            background: linear-gradient(135deg, rgba(var(--ar), var(--ag), var(--ab), 0.12) 0%, rgba(var(--ar), var(--ag), var(--ab), 0.06) 100%);
+            border: 1px solid rgba(var(--ar), var(--ag), var(--ab), 0.25);
             color: rgba(255, 255, 255, 0.85);
             padding: 15px 30px;
             font-size: 13px;
@@ -108,8 +110,8 @@
 
         button:hover,
         .file-upload:hover {
-            background: linear-gradient(135deg, rgba(var(--ar),var(--ag),var(--ab),0.25) 0%, rgba(var(--ar),var(--ag),var(--ab),0.18) 100%);
-            border-color: rgba(var(--ar),var(--ag),var(--ab),0.45);
+            background: linear-gradient(135deg, rgba(var(--ar), var(--ag), var(--ab), 0.25) 0%, rgba(var(--ar), var(--ag), var(--ab), 0.18) 100%);
+            border-color: rgba(var(--ar), var(--ag), var(--ab), 0.45);
             transform: translateY(-2px);
             box-shadow: 0 12px 35px rgba(139, 92, 246, 0.2);
         }
@@ -197,8 +199,8 @@
 
         #play-pause-btn {
             min-width: 78px;
-            background: linear-gradient(135deg, rgba(var(--ar),var(--ag),var(--ab),0.18) 0%, rgba(var(--ar),var(--ag),var(--ab),0.10) 100%) !important;
-            border-color: rgba(var(--ar),var(--ag),var(--ab),0.28) !important;
+            background: linear-gradient(135deg, rgba(var(--ar), var(--ag), var(--ab), 0.18) 0%, rgba(var(--ar), var(--ag), var(--ab), 0.10) 100%) !important;
+            border-color: rgba(var(--ar), var(--ag), var(--ab), 0.28) !important;
             color: #e9d5ff !important;
         }
 
@@ -217,7 +219,7 @@
 
         #progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, rgb(var(--ar),var(--ag),var(--ab)), rgba(var(--ar),var(--ag),var(--ab),0.6), rgba(var(--ar),var(--ag),var(--ab),0.3));
+            background: linear-gradient(90deg, rgb(var(--ar), var(--ag), var(--ab)), rgba(var(--ar), var(--ag), var(--ab), 0.6), rgba(var(--ar), var(--ag), var(--ab), 0.3));
             border-radius: 4px;
             width: 0%;
         }
@@ -242,12 +244,12 @@
         .lil-gui {
             --background-color: rgba(15, 10, 25, 0.9);
             --text-color: #e2e8f0;
-            --title-background-color: rgba(var(--ar),var(--ag),var(--ab),0.1);
+            --title-background-color: rgba(var(--ar), var(--ag), var(--ab), 0.1);
             --widget-color: #475569;
             --hover-color: #64748b;
-            --focus-color: rgb(var(--ar),var(--ag),var(--ab));
-            --number-color: rgb(var(--ar),var(--ag),var(--ab));
-            --string-color: rgb(var(--ar),var(--ag),var(--ab));
+            --focus-color: rgb(var(--ar), var(--ag), var(--ab));
+            --number-color: rgb(var(--ar), var(--ag), var(--ab));
+            --string-color: rgb(var(--ar), var(--ag), var(--ab));
             --width: 320px;
         }
 
@@ -271,12 +273,12 @@
             line-height: 36px;
             font-weight: 600;
             background: transparent;
-            color: rgb(var(--ar),var(--ag),var(--ab));
-            border-bottom: 1px solid rgba(var(--ar),var(--ag),var(--ab),0.15);
+            color: rgb(var(--ar), var(--ag), var(--ab));
+            border-bottom: 1px solid rgba(var(--ar), var(--ag), var(--ab), 0.15);
         }
 
         .lil-gui>.children {
-            border: 1px solid rgba(var(--ar),var(--ag),var(--ab),0.3);
+            border: 1px solid rgba(var(--ar), var(--ag), var(--ab), 0.3);
             /* Purple glass border */
             border-radius: 16px;
             overflow: hidden;
@@ -308,11 +310,11 @@
             border-radius: 6px;
             height: 22px;
             margin-top: 4px;
-            color: rgb(var(--ar),var(--ag),var(--ab));
+            color: rgb(var(--ar), var(--ag), var(--ab));
         }
 
         .lil-gui input:focus {
-            border-color: rgb(var(--ar),var(--ag),var(--ab));
+            border-color: rgb(var(--ar), var(--ag), var(--ab));
         }
 
         /* Sliders */
@@ -322,8 +324,8 @@
         }
 
         .lil-gui .slider-fg {
-            background: rgb(var(--ar),var(--ag),var(--ab));
-            box-shadow: 0 0 10px rgba(var(--ar),var(--ag),var(--ab),0.4);
+            background: rgb(var(--ar), var(--ag), var(--ab));
+            box-shadow: 0 0 10px rgba(var(--ar), var(--ag), var(--ab), 0.4);
         }
 
         /* Checkboxes */
@@ -334,8 +336,8 @@
         }
 
         .lil-gui .checkbox.checked {
-            background: rgb(var(--ar),var(--ag),var(--ab));
-            border-color: rgb(var(--ar),var(--ag),var(--ab));
+            background: rgb(var(--ar), var(--ag), var(--ab));
+            border-color: rgb(var(--ar), var(--ag), var(--ab));
         }
 
         .lil-gui .checkbox.checked:before {
@@ -358,7 +360,7 @@
         }
 
         .lil-gui .folder>.title:hover {
-            background: rgba(var(--ar),var(--ag),var(--ab),0.08);
+            background: rgba(var(--ar), var(--ag), var(--ab), 0.08);
             color: #fff;
         }
 
@@ -374,10 +376,10 @@
             top: 24px;
             right: 24px;
             z-index: 1001;
-            background: linear-gradient(135deg, rgba(var(--ar),var(--ag),var(--ab),0.15) 0%, rgba(var(--ar),var(--ag),var(--ab),0.08) 100%);
+            background: linear-gradient(135deg, rgba(var(--ar), var(--ag), var(--ab), 0.15) 0%, rgba(var(--ar), var(--ag), var(--ab), 0.08) 100%);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(var(--ar),var(--ag),var(--ab),0.3);
-            color: rgb(var(--ar),var(--ag),var(--ab));
+            border: 1px solid rgba(var(--ar), var(--ag), var(--ab), 0.3);
+            color: rgb(var(--ar), var(--ag), var(--ab));
             padding: 10px 20px;
             border-radius: 20px;
             font-size: 11px;
@@ -390,8 +392,8 @@
         }
 
         #gui-toggle:hover {
-            background: linear-gradient(135deg, rgba(var(--ar),var(--ag),var(--ab),0.25) 0%, rgba(var(--ar),var(--ag),var(--ab),0.18) 100%);
-            box-shadow: 0 6px 20px rgba(var(--ar),var(--ag),var(--ab),0.25);
+            background: linear-gradient(135deg, rgba(var(--ar), var(--ag), var(--ab), 0.25) 0%, rgba(var(--ar), var(--ag), var(--ab), 0.18) 100%);
+            box-shadow: 0 6px 20px rgba(var(--ar), var(--ag), var(--ab), 0.25);
             transform: translateY(-1px);
             color: #fff;
         }
@@ -427,8 +429,8 @@
         .btn-group button {
             flex: 1;
             background: transparent;
-            border: 1px solid rgba(var(--ar),var(--ag),var(--ab),0.3);
-            color: rgb(var(--ar),var(--ag),var(--ab));
+            border: 1px solid rgba(var(--ar), var(--ag), var(--ab), 0.3);
+            color: rgb(var(--ar), var(--ag), var(--ab));
             padding: 14px 0;
             border-radius: 12px;
             font-size: 12px;
@@ -439,9 +441,9 @@
         }
 
         .btn-group button:hover {
-            background: rgba(var(--ar),var(--ag),var(--ab),0.1);
-            border-color: rgb(var(--ar),var(--ag),var(--ab));
-            box-shadow: 0 0 20px rgba(var(--ar),var(--ag),var(--ab),0.2);
+            background: rgba(var(--ar), var(--ag), var(--ab), 0.1);
+            border-color: rgb(var(--ar), var(--ag), var(--ab));
+            box-shadow: 0 0 20px rgba(var(--ar), var(--ag), var(--ab), 0.2);
         }
     </style>
 </head>
@@ -1803,24 +1805,24 @@ void main() {
             vertexShader: secondaryVertexShader,
             fragmentShader: secondaryFragmentShader,
             uniforms: {
-                uTime:             { value: 0 },
-                uPixelRatio:       { value: STATE.pixelRatio },
-                uSubBass:          { value: 0 },
-                uBass:             { value: 0 },
-                uLowMid:           { value: 0 },
-                uMid:              { value: 0 },
-                uHighMid:          { value: 0 },
-                uHigh:             { value: 0 },
-                uUltraHigh:        { value: 0 },
-                uBeatEnergy:       { value: 0 },
+                uTime: { value: 0 },
+                uPixelRatio: { value: STATE.pixelRatio },
+                uSubBass: { value: 0 },
+                uBass: { value: 0 },
+                uLowMid: { value: 0 },
+                uMid: { value: 0 },
+                uHighMid: { value: 0 },
+                uHigh: { value: 0 },
+                uUltraHigh: { value: 0 },
+                uBeatEnergy: { value: 0 },
                 uSpectralCentroid: { value: 0 },
-                uSpectralFlux:     { value: 0 },
-                uOnsetEnergy:      { value: 0 },
-                uVortexStrength:   { value: STATE.vortexStrength },
-                uAudioActivity:    { value: 0 },
-                uColor1:           { value: new THREE.Color(def.sc1) },
-                uColor2:           { value: new THREE.Color(def.sc2) },
-                uRadius:           { value: CONFIG.fieldRadius }
+                uSpectralFlux: { value: 0 },
+                uOnsetEnergy: { value: 0 },
+                uVortexStrength: { value: STATE.vortexStrength },
+                uAudioActivity: { value: 0 },
+                uColor1: { value: new THREE.Color(def.sc1) },
+                uColor2: { value: new THREE.Color(def.sc2) },
+                uRadius: { value: CONFIG.fieldRadius }
             },
             transparent: true,
             depthWrite: false,
@@ -1957,7 +1959,7 @@ void main() {
         }
     `,
             uniforms: {
-                uColor:  { value: new THREE.Color(def.c2) },
+                uColor: { value: new THREE.Color(def.c2) },
                 uColor2: { value: new THREE.Color(def.c1) },
                 uOpacity: { value: 1.0 },
                 uBeatEnergy: { value: 0 },
@@ -2046,15 +2048,15 @@ void main() {
         }
 
         // ═══════ NETWORK CRAWLERS ═══════
-        const CRAWLER_COUNT    = 24;   // concurrent crawlers
-        const CRAWLER_TAIL     = 10;   // trail positions per crawler
-        const crawlerMaxSegs   = CRAWLER_COUNT * (CRAWLER_TAIL - 1);
+        const CRAWLER_COUNT = 24;   // concurrent crawlers
+        const CRAWLER_TAIL = 10;   // trail positions per crawler
+        const crawlerMaxSegs = CRAWLER_COUNT * (CRAWLER_TAIL - 1);
 
         const crawlerGeo = new THREE.BufferGeometry();
         const crawlerPos = new Float32Array(crawlerMaxSegs * 6);
         const crawlerAlp = new Float32Array(crawlerMaxSegs * 2);
         crawlerGeo.setAttribute('position', new THREE.BufferAttribute(crawlerPos, 3));
-        crawlerGeo.setAttribute('alpha',    new THREE.BufferAttribute(crawlerAlp, 1));
+        crawlerGeo.setAttribute('alpha', new THREE.BufferAttribute(crawlerAlp, 1));
         crawlerGeo.setDrawRange(0, 0);
 
         const crawlerMaterial = new THREE.ShaderMaterial({
@@ -2076,12 +2078,12 @@ void main() {
                 }
             `,
             uniforms: {
-                uColor:      { value: new THREE.Color(def.c1) },
+                uColor: { value: new THREE.Color(def.c1) },
                 uBeatEnergy: { value: 0 }
             },
             transparent: true,
-            depthWrite:  false,
-            blending:    THREE.AdditiveBlending
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
         });
 
         const crawlerMesh = new THREE.LineSegments(crawlerGeo, crawlerMaterial);
@@ -2092,13 +2094,13 @@ void main() {
         const CRAWLER_MIN_STEP = 1.8; // min world-space distance before adding a tail point
         for (let i = 0; i < CRAWLER_COUNT; i++) {
             crawlers.push({
-                fromIdx:   Math.floor(Math.random() * connectionCount),
-                toIdx:     Math.floor(Math.random() * connectionCount),
-                t:         Math.random(),
-                speed:     0.0015 + Math.random() * 0.002,
-                tail:      [],
+                fromIdx: Math.floor(Math.random() * connectionCount),
+                toIdx: Math.floor(Math.random() * connectionCount),
+                t: Math.random(),
+                speed: 0.0015 + Math.random() * 0.002,
+                tail: [],
                 lastTailPos: null, // last world position a tail point was recorded
-                hue:       Math.random()
+                hue: Math.random()
             });
         }
 
@@ -2115,10 +2117,10 @@ void main() {
             function nearestNeighbour(fromIdx, excludeIdx) {
                 const origin = particlePos(fromIdx);
                 const threshold = STATE.connectionThreshold * (1.2 + highMid * 0.4);
-                const threshSq  = threshold * threshold;
+                const threshSq = threshold * threshold;
                 let bestDist = Infinity, bestIdx = -1;
                 const check = Math.min(trackedParticles.length, 80); // sample subset for perf
-                const start  = Math.floor(Math.random() * (trackedParticles.length - check));
+                const start = Math.floor(Math.random() * (trackedParticles.length - check));
                 for (let k = start; k < start + check; k++) {
                     const ki = k % trackedParticles.length;
                     if (ki === fromIdx || ki === excludeIdx) continue;
@@ -2142,19 +2144,19 @@ void main() {
                 if (c.t >= 1.0) {
                     c.t -= 1.0;
                     c.fromIdx = c.toIdx;
-                    c.toIdx   = nearestNeighbour(c.fromIdx, c.fromIdx);
+                    c.toIdx = nearestNeighbour(c.fromIdx, c.fromIdx);
                     // Occasionally teleport to keep crawlers spread across the field
                     if (Math.random() < 0.04) {
-                        c.fromIdx    = Math.floor(Math.random() * trackedParticles.length);
-                        c.toIdx      = nearestNeighbour(c.fromIdx, c.fromIdx);
-                        c.tail       = [];
+                        c.fromIdx = Math.floor(Math.random() * trackedParticles.length);
+                        c.toIdx = nearestNeighbour(c.fromIdx, c.fromIdx);
+                        c.tail = [];
                         c.lastTailPos = null;
                     }
                 }
 
                 // Current head position
                 const from = particlePos(c.fromIdx);
-                const to   = particlePos(c.toIdx);
+                const to = particlePos(c.toIdx);
                 const head = new THREE.Vector3().lerpVectors(from, to, c.t);
 
                 // Contain within field sphere — clamp head to max radius
@@ -2187,7 +2189,7 @@ void main() {
             }
 
             crawlerGeo.attributes.position.needsUpdate = true;
-            crawlerGeo.attributes.alpha.needsUpdate    = true;
+            crawlerGeo.attributes.alpha.needsUpdate = true;
             crawlerGeo.setDrawRange(0, segIdx * 2);
         }
 
@@ -2506,7 +2508,7 @@ void main() {
             const wG = Math.round((accent.g * 0.4 + accent2.g * 0.3) * 180 + 30);
             const wB = Math.round((accent.b * 0.4 + accent2.b * 0.3) * 180 + 30);
             el.style.setProperty('--widget-color', `rgb(${wR},${wG},${wB})`);
-            el.style.setProperty('--hover-color',  `rgb(${Math.min(wR+25,255)},${Math.min(wG+25,255)},${Math.min(wB+25,255)})`);
+            el.style.setProperty('--hover-color', `rgb(${Math.min(wR + 25, 255)},${Math.min(wG + 25, 255)},${Math.min(wB + 25, 255)})`);
         }
 
         // Smooth GUI theme transition in animation loop — interpolates over time
@@ -2823,20 +2825,20 @@ void main() {
 
             // Update secondary particles
             secondaryPoints.visible = STATE.secondaryEnabled;
-            secondaryMaterial.uniforms.uTime.value             = material.uniforms.uTime.value;
-            secondaryMaterial.uniforms.uSubBass.value          = material.uniforms.uSubBass.value;
-            secondaryMaterial.uniforms.uBass.value             = material.uniforms.uBass.value;
-            secondaryMaterial.uniforms.uLowMid.value           = material.uniforms.uLowMid.value;
-            secondaryMaterial.uniforms.uMid.value              = material.uniforms.uMid.value;
-            secondaryMaterial.uniforms.uHighMid.value          = material.uniforms.uHighMid.value;
-            secondaryMaterial.uniforms.uHigh.value             = material.uniforms.uHigh.value;
-            secondaryMaterial.uniforms.uUltraHigh.value        = material.uniforms.uUltraHigh.value;
-            secondaryMaterial.uniforms.uBeatEnergy.value       = material.uniforms.uBeatEnergy.value;
+            secondaryMaterial.uniforms.uTime.value = material.uniforms.uTime.value;
+            secondaryMaterial.uniforms.uSubBass.value = material.uniforms.uSubBass.value;
+            secondaryMaterial.uniforms.uBass.value = material.uniforms.uBass.value;
+            secondaryMaterial.uniforms.uLowMid.value = material.uniforms.uLowMid.value;
+            secondaryMaterial.uniforms.uMid.value = material.uniforms.uMid.value;
+            secondaryMaterial.uniforms.uHighMid.value = material.uniforms.uHighMid.value;
+            secondaryMaterial.uniforms.uHigh.value = material.uniforms.uHigh.value;
+            secondaryMaterial.uniforms.uUltraHigh.value = material.uniforms.uUltraHigh.value;
+            secondaryMaterial.uniforms.uBeatEnergy.value = material.uniforms.uBeatEnergy.value;
             secondaryMaterial.uniforms.uSpectralCentroid.value = material.uniforms.uSpectralCentroid.value;
-            secondaryMaterial.uniforms.uSpectralFlux.value     = material.uniforms.uSpectralFlux.value;
-            secondaryMaterial.uniforms.uOnsetEnergy.value      = material.uniforms.uOnsetEnergy.value;
-            secondaryMaterial.uniforms.uVortexStrength.value   = STATE.vortexStrength;
-            secondaryMaterial.uniforms.uAudioActivity.value    = material.uniforms.uAudioActivity.value;
+            secondaryMaterial.uniforms.uSpectralFlux.value = material.uniforms.uSpectralFlux.value;
+            secondaryMaterial.uniforms.uOnsetEnergy.value = material.uniforms.uOnsetEnergy.value;
+            secondaryMaterial.uniforms.uVortexStrength.value = STATE.vortexStrength;
+            secondaryMaterial.uniforms.uAudioActivity.value = material.uniforms.uAudioActivity.value;
 
             // Update nebula background
             nebulaSphere.visible = STATE.nebulaEnabled;

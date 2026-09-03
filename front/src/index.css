@@ -27,7 +27,7 @@ body {
   min-block-size: 100dvh;
   overflow-x: hidden;
   color: var(--color-text);
-  background: var(--bg-image) center / cover no-repeat fixed;
+  /* background: var(--bg-image) center / cover no-repeat fixed; */
 }
 
 button,

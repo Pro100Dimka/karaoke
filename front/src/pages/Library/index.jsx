@@ -2,9 +2,8 @@ import { lazy, Suspense } from "react";
 import { Box, Stack } from "../../theme/ui";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
 import { OnlineRoomModal } from "../OnlineRoom";
-import { QuantumFieldBackdrop } from "./animated-backdrop";
+import QuantumFieldBackdrop from "./animated-backdrop/quantum-field-backdrop";
 import LibraryHero from "./hero";
-import LibraryParallaxBackground from "./library-parallax-background";
 import { AddSongsModal, ProcessingModal, RecordingsModal } from "./modals";
 import SongsGrid from "./songs-grid";
 import useLibrary from "./use-library";
@@ -15,11 +14,7 @@ export default function Library() {
   const state = useLibrary();
   const { fileImport, online, processing, recordings, analysis } = state;
   return (
-    <Stack
-      align="center"
-      sx={{ position: "relative", minBlockSize: "100vh", backgroundColor: "var(--color-bg-deep)" }}
-    >
-      <LibraryParallaxBackground />
+    <Stack align="center" sx={{ position: "relative", minBlockSize: "100vh" }}>
       {!processing.active && <QuantumFieldBackdrop />}
       <Stack sx={{ paddingInline: "var(--library-gutter)", position: "relative" }}>
         <LibraryHero
