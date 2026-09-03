@@ -105,7 +105,10 @@ function PianoRoll({
     });
   }, []);
   useEffect(() => {
-    if (!isPlaying || !currentTimeRef) return undefined;
+    // When usePixi is true, the canvas below is never mounted and PixiPianoRoll
+    // drives its own per-frame redraw via useTick -- this rAF loop would just
+    // call draw() against a missing canvas 60 times a second for nothing.
+    if (!isPlaying || !currentTimeRef || usePixi) return undefined;
     let animation;
     const render = () => {
       draw(Number(currentTimeRef.current) || 0);
@@ -113,7 +116,7 @@ function PianoRoll({
     };
     animation = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animation);
-  }, [currentTimeRef, draw, isPlaying]);
+  }, [currentTimeRef, draw, isPlaying, usePixi]);
 
   return (
     <Box

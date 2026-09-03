@@ -89,13 +89,21 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   useEffect(() => {
     if (!state.playing) return undefined;
     let frame = 0;
-    const draw = () => {
+    let lastSync = 0;
+    const draw = (now) => {
       const audio = media.current;
       if (!audio || audio.paused) return;
-      setState((current) => ({
-        ...current,
-        position: normalizeAudioPosition(audio.currentTime, state.duration)
-      }));
+      // The progress bar looks identical to a viewer whether it updates 60
+      // times a second or 10, so the position state is synced at ~100ms
+      // instead of every animation frame to avoid re-rendering the player
+      // (and its Waveform/Slider children) 60 times a second.
+      if (now - lastSync >= 100) {
+        lastSync = now;
+        setState((current) => ({
+          ...current,
+          position: normalizeAudioPosition(audio.currentTime, state.duration)
+        }));
+      }
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);

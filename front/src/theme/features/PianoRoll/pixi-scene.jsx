@@ -84,7 +84,7 @@ export default function PixiPianoRoll(props) {
         antialias: true,
         backgroundAlpha: 0,
         autoDensity: true,
-        resolution: globalThis.devicePixelRatio || 1
+        resolution: Math.min(globalThis.devicePixelRatio || 1, 2)
       }}
       style={{ display: "block", width: "100%", height: "100%" }}
     >

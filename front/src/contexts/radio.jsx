@@ -156,6 +156,11 @@ export function RadioProvider({ children }) {
     const audioContext = audioContextRef.current;
     const analysisVersion = createVersion();
     analysisVersionRef.current = analysisVersion;
+    // The only consumer (Library backdrop) samples these custom properties at
+    // ~30 Hz via getComputedStyle, and the values it reads are lerped further
+    // still -- writing them on every rAF tick (~60 Hz) just doubles style
+    // recalculation on documentElement for no visible gain.
+    let frameIndex = 0;
     const readBass = () => {
       if (
         analysisVersion !== analysisVersionRef.current ||
@@ -181,12 +186,15 @@ export function RadioProvider({ children }) {
       spectrum.bands.forEach((level, index) => {
         bands[index] = level;
       });
-      const rootStyle = document.documentElement.style;
-      rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
-      rootStyle.setProperty("--radio-analysis-active", "1");
-      bands.forEach((level, index) => {
-        rootStyle.setProperty(`--radio-band-${index}`, level.toFixed(3));
-      });
+      if (frameIndex % 2 === 0) {
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
+        rootStyle.setProperty("--radio-analysis-active", "1");
+        bands.forEach((level, index) => {
+          rootStyle.setProperty(`--radio-band-${index}`, level.toFixed(3));
+        });
+      }
+      frameIndex += 1;
       animationRef.current = requestAnimationFrame(readBass);
     };
     cancelAnimationFrame(animationRef.current);
