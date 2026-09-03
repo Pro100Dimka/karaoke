@@ -63,7 +63,7 @@ def test_native_asio_keeps_its_monitor_owner(capture, monkeypatch):
     monkeypatch.setattr(audio_service._monitor_control, "check", Mock())
     current = settings(audio_driver="asio", asio_driver_name="Test ASIO", monitoring_enabled=True)
     audio_service._configure_monitoring(current)
-    native.assert_called_once_with(current)
+    native.assert_called_once_with(current, adopt_driver_buffer=False)
     assert not capture._monitoring_enabled
 
 

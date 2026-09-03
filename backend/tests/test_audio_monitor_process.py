@@ -175,6 +175,40 @@ def test_asio_reset_does_not_restart_a_process_already_superseded(monkeypatch, t
     on_driver_reset.assert_not_called()
 
 
+def test_started_event_calls_on_buffer_negotiated_with_the_reported_size(monkeypatch, tmp_path):
+    worker = process('{"event":"started","buffer_size":256}\n', poll=0)
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+    on_buffer_negotiated = Mock()
+
+    audio_service._launch_monitor_process(
+        ["worker"], cwd=tmp_path, on_buffer_negotiated=on_buffer_negotiated
+    )
+    audio_service._monitor_reader.join(timeout=2)
+
+    on_buffer_negotiated.assert_called_once_with(256)
+
+
+def test_started_event_without_a_buffer_callback_does_not_raise(monkeypatch, tmp_path):
+    worker = process('{"event":"started","buffer_size":256}\n', poll=0)
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+
+    audio_service._launch_monitor_process(["worker"], cwd=tmp_path)
+    audio_service._monitor_reader.join(timeout=2)
+
+
+def test_started_event_with_a_missing_buffer_size_does_not_call_the_callback(monkeypatch, tmp_path):
+    worker = process('{"event":"started"}\n', poll=0)
+    monkeypatch.setattr(audio_service.subprocess, "Popen", Mock(return_value=worker))
+    on_buffer_negotiated = Mock()
+
+    audio_service._launch_monitor_process(
+        ["worker"], cwd=tmp_path, on_buffer_negotiated=on_buffer_negotiated
+    )
+    audio_service._monitor_reader.join(timeout=2)
+
+    on_buffer_negotiated.assert_not_called()
+
+
 def test_monitor_process_reports_worker_error_and_early_exit(monkeypatch, tmp_path):
     stop = Mock()
     monkeypatch.setattr(audio_service, "_stop_monitoring_process", stop)

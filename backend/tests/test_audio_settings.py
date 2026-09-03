@@ -281,6 +281,7 @@ def test_asio_monitor_validates_bridge_driver_and_clamps_command(monkeypatch, tm
     assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0')
     assert launch.call_args.kwargs["cwd"] == tmp_path
     assert callable(launch.call_args.kwargs["on_driver_reset"])
+    assert launch.call_args.kwargs["on_buffer_negotiated"] is None
 
 
 def test_asio_reset_restart_closure_holds_a_detached_snapshot_not_the_live_row(monkeypatch, tmp_path):
@@ -305,10 +306,56 @@ def test_asio_reset_restart_closure_holds_a_detached_snapshot_not_the_live_row(m
     on_driver_reset()
 
     request.assert_called_once()
-    (resubmitted,), _ = request.call_args
+    (resubmitted,), kwargs = request.call_args
     assert resubmitted is not live_row
     assert resubmitted.buffer_size == 256
     assert resubmitted.asio_driver_name == "Studio ASIO"
+    assert kwargs.get("adopt_driver_buffer") is True
+
+
+def test_asio_monitor_adopts_the_drivers_own_buffer_instead_of_the_saved_one(monkeypatch, tmp_path):
+    # A driver-initiated reset (see the test above) means the driver's own
+    # control panel changed something -- re-asserting this app's last-saved
+    # buffer_size would just clamp straight back to it and the panel change
+    # would never actually take effect. "0" is the bridge's sentinel for
+    # "use whatever the driver currently prefers" (resolve_buffer_size in
+    # bridge_main.cpp).
+    bridge = tmp_path / "bridge.exe"
+    bridge.write_bytes(b"bridge")
+    monkeypatch.setattr(audio_service, "_asio_bridge_path", Mock(return_value=bridge))
+    monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(return_value=["Studio ASIO"]))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_launch_monitor_process", launch)
+
+    audio_service._start_asio_monitor(
+        settings(audio_driver="asio", asio_driver_name="Studio ASIO", buffer_size=64),
+        adopt_driver_buffer=True,
+    )
+
+    command = launch.call_args.args[0]
+    assert command[command.index("--buffer-size") + 1] == "0"
+    assert launch.call_args.kwargs["on_buffer_negotiated"] is audio_service._persist_negotiated_buffer_size
+
+
+def test_persist_negotiated_buffer_size_writes_only_when_it_actually_changed(monkeypatch):
+    import database
+
+    current = settings(buffer_size=64)
+    db = Mock()
+    monkeypatch.setattr(database, "SessionLocal", Mock(return_value=db))
+    monkeypatch.setattr(audio_service, "_get_or_create_settings", Mock(return_value=current))
+    commit = Mock()
+    monkeypatch.setattr(audio_service, "commit_refresh", commit)
+
+    audio_service._persist_negotiated_buffer_size(64)
+    commit.assert_not_called()
+    db.close.assert_called_once_with()
+
+    db.close.reset_mock()
+    audio_service._persist_negotiated_buffer_size(256)
+    commit.assert_called_once_with(db, current)
+    assert current.buffer_size == 256
+    db.close.assert_called_once_with()
 
 
 def test_asio_bridge_converts_supported_mismatched_input_and_output_formats():

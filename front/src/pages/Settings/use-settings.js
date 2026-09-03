@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useRadio } from "../../contexts/radio";
@@ -86,6 +86,27 @@ function useAudio(open) {
   const outputs = useOpenPoll(open, api.listAudioOutputDevices, POLL.devices, []);
   const signal = useOpenPoll(open, api.getSignalQuality, POLL.realtimeSignal, null);
   const monitorStatus = useOpenPoll(open, api.getDirectMonitorStatus, 750, null);
+  // The ASIO driver's own control panel can change the buffer out from
+  // under a running monitor (e.g. ASIO4ALL/an interface's mixer app); the
+  // backend detects that, restarts, and persists the size it actually
+  // negotiated (see audio_service._persist_negotiated_buffer_size). The
+  // fast-polled monitor status reflects that new size within ~1s; the
+  // buffer_size dropdown otherwise only follows the much slower settings
+  // poll, so react to that change here instead of leaving it stale for up
+  // to POLL.settings.
+  const negotiatedBlocksizeRef = useRef();
+  useEffect(() => {
+    const blocksize = monitorStatus.data?.blocksize;
+    if (blocksize == null) return;
+    if (
+      negotiatedBlocksizeRef.current !== undefined &&
+      negotiatedBlocksizeRef.current !== blocksize
+    ) {
+      settings.refresh();
+    }
+    negotiatedBlocksizeRef.current = blocksize;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monitorStatus.data?.blocksize]);
   const [local, setLocal] = useState({});
   const [busy, setBusy] = useState(false);
   const values = { ...settings.data, ...local };

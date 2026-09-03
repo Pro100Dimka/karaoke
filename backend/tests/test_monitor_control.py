@@ -55,7 +55,7 @@ def test_monitor_snapshot_preserves_saved_buffer(control, monkeypatch, driver):
     original = settings(audio_driver=driver, buffer_size=128, monitoring_enabled=True)
     snapshots = []
     done = threading.Event()
-    monkeypatch.setattr(audio_service, "configure_monitoring", lambda value: (snapshots.append(value), done.set()))
+    monkeypatch.setattr(audio_service, "configure_monitoring", lambda value, **_kwargs: (snapshots.append(value), done.set()))
     audio_service.request_monitoring(original)
     assert done.wait(2)
     assert snapshots[-1].buffer_size == 128
@@ -160,7 +160,7 @@ def test_http_accepts_start_and_settings_while_hardware_is_blocked(control, monk
     db.get.return_value = current
     monkeypatch.setattr(audio_service, "commit_refresh", lambda _db, item: item)
 
-    def configure(_settings):
+    def configure(_settings, **_kwargs):
         assert isinstance(_settings, SimpleNamespace)
         entered.set()
         assert release.wait(3)

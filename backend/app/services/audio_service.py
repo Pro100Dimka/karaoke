@@ -563,7 +563,9 @@ def set_monitoring_enabled(
         raise
 
 
-def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None) -> None:
+def request_monitoring(
+    settings, *, disabled_effects=None, wasapi_mode=None, adopt_driver_buffer: bool = False
+) -> None:
     global _monitor_wasapi_mode, _requested_effects_disabled
     if _hardware_suspended:
         _monitor_control.cancel()
@@ -585,7 +587,7 @@ def request_monitoring(settings, *, disabled_effects=None, wasapi_mode=None) -> 
         global _monitor_effects_disabled
         _monitor_effects_disabled = effects_disabled if snapshot.monitoring_enabled else False
         snapshot.wasapi_mode = mode
-        configure_monitoring(snapshot)
+        configure_monitoring(snapshot, adopt_driver_buffer=adopt_driver_buffer)
 
     _monitor_control.submit(
         apply, state="starting" if snapshot.monitoring_enabled else "stopping",
@@ -709,13 +711,14 @@ def _send_live_update(payload: dict) -> None:
         logger.warning("Could not push live update to audio monitor worker: %s", exc)
 
 
-def configure_monitoring(settings: models.AudioSettings) -> None:
+def configure_monitoring(settings: models.AudioSettings, *, adopt_driver_buffer: bool = False) -> None:
     return _monitor_control.run_sync(
-        lambda: _configure_monitoring(settings), enabled=settings.monitoring_enabled
+        lambda: _configure_monitoring(settings, adopt_driver_buffer=adopt_driver_buffer),
+        enabled=settings.monitoring_enabled,
     )
 
 
-def _configure_monitoring(settings) -> None:
+def _configure_monitoring(settings, *, adopt_driver_buffer: bool = False) -> None:
     _stop_monitoring_process()
     _monitor_control.check()
     from app.services import recording_service
@@ -730,7 +733,7 @@ def _configure_monitoring(settings) -> None:
         return
     if settings.audio_driver == "asio":
         try:
-            _start_asio_monitor(settings)
+            _start_asio_monitor(settings, adopt_driver_buffer=adopt_driver_buffer)
         except MonitorCancelled:
             raise
         except Exception as exc:
@@ -843,7 +846,26 @@ def _open_monitor_relay() -> AudioRelayServer:
     return relay
 
 
-def _start_asio_monitor(settings: models.AudioSettings) -> None:
+def _persist_negotiated_buffer_size(buffer_size: int) -> None:
+    """Writes the ASIO driver's own negotiated buffer size back into the
+    singleton AudioSettings row after a driver-initiated reset (see
+    _start_asio_monitor's adopt_driver_buffer path). Without this, changing
+    the buffer in the driver's own control panel (ASIO4ALL, an interface's
+    mixer app) would apply for the running session but silently revert to
+    this app's previous saved value on the next ordinary restart.
+    """
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        settings = _get_or_create_settings(db)
+        if settings.buffer_size != buffer_size:
+            settings.buffer_size = buffer_size
+            commit_refresh(db, settings)
+    finally:
+        db.close()
+
+
+def _start_asio_monitor(settings: models.AudioSettings, *, adopt_driver_buffer: bool = False) -> None:
     bridge = _asio_bridge_path()
     if not bridge.is_file():
         raise RuntimeError("Native ASIO bridge is not built")
@@ -855,7 +877,12 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         "--driver",
         settings.asio_driver_name,
         "--buffer-size",
-        str(settings.buffer_size),
+        # 0 is the bridge's sentinel for "use the driver's own preferred
+        # size" (see resolve_buffer_size in bridge_main.cpp) -- used only
+        # right after the driver itself requested a reset, so a control-panel
+        # buffer change actually takes effect instead of this app re-asserting
+        # its own last-saved value straight back at the driver.
+        "0" if adopt_driver_buffer else str(settings.buffer_size),
         "--sample-rate",
         str(config.RECORDING_SAMPLE_RATE),
         "--gain",
@@ -891,7 +918,10 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         for field in _MONITOR_RESTART_FIELDS | _LIVE_UPDATE_FIELDS | {"monitoring_enabled"}
     })
     _launch_monitor_process(
-        command, cwd=bridge.parent, on_driver_reset=lambda: request_monitoring(reset_snapshot)
+        command,
+        cwd=bridge.parent,
+        on_driver_reset=lambda: request_monitoring(reset_snapshot, adopt_driver_buffer=True),
+        on_buffer_negotiated=_persist_negotiated_buffer_size if adopt_driver_buffer else None,
     )
 
 
@@ -910,7 +940,7 @@ def _start_monitor_worker(worker_options: dict) -> None:
 
 
 def _launch_monitor_process(
-    command: list[str], *, cwd: Path, on_driver_reset=None
+    command: list[str], *, cwd: Path, on_driver_reset=None, on_buffer_negotiated=None
 ) -> None:
     global _monitor_process, _monitor_reader
     ready = threading.Event()
@@ -959,12 +989,24 @@ def _launch_monitor_process(
             if current:
                 _monitor_control.event(token, message)
             if event == "started":
+                # The ASIO bridge's "started" event uses driver/buffer_size/
+                # latency_source keys; the WASAPI worker's uses
+                # engine/blocksize/latency/exclusive. Fall back across both
+                # schemas so this line reports real values for either,
+                # instead of silently logging None for whichever one is not
+                # currently running.
                 logger.info(
-                    "Audio monitor started: blocksize=%s latency=%s exclusive=%s",
-                    message.get("blocksize"),
-                    message.get("latency"),
+                    "Audio monitor started: driver=%s buffer_size=%s sample_rate=%s latency=%s exclusive=%s",
+                    message.get("driver", message.get("engine")),
+                    message.get("buffer_size", message.get("blocksize")),
+                    message.get("sample_rate"),
+                    message.get("latency", message.get("latency_source")),
                     message.get("exclusive"),
                 )
+                if on_buffer_negotiated is not None:
+                    negotiated = message.get("buffer_size")
+                    if isinstance(negotiated, (int, float)) and not isinstance(negotiated, bool) and negotiated > 0:
+                        on_buffer_negotiated(int(negotiated))
                 ready.set()
             elif event == "fallback":
                 logger.warning(
