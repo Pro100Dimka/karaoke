@@ -28,6 +28,10 @@ namespace {
 constexpr long kMaxInputChannels = 8;
 constexpr long kMaxOutputChannels = 2;
 constexpr long kMaxBuffers = kMaxInputChannels + kMaxOutputChannels;
+// std::tanh is not constexpr; this still runs exactly once at static
+// initialization, not per sample like the inline std::tanh(1.12F) it
+// replaces in process_effects() below.
+const float kGateNormalizationTanh = std::tanh(1.12F);
 std::atomic_bool g_running{true};
 // Set only from kAsioResetRequest (asio_message), never from a host-initiated
 // stop (Ctrl+C, or the parent process terminating this one) -- lets the host
@@ -75,6 +79,13 @@ struct Engine {
   float noise_floor = 0.003F;
   float gate_gain = 1.0F;
   float sample_rate = 44100.0F;
+  // Depend only on sample_rate/octave/pitch_line size, all of which are fixed
+  // once at create_buffers() and never change afterward (this process is
+  // restarted, not live-reconfigured, when settings change -- see
+  // audio_service._start_asio_monitor). Precomputed there instead of being
+  // recomputed by process_effects()/process_pitch() on every single sample.
+  float highpass_coefficient = 0.0F;
+  double pitch_phase_increment = 0.0;
   std::vector<float> reverb_line_a;
   std::vector<float> reverb_line_b;
   std::vector<float> echo_line;
@@ -217,18 +228,16 @@ float process_pitch(float sample) {
   const float weight_a = static_cast<float>(
     0.5 - 0.5 * std::cos(2.0 * 3.141592653589793 * phase_a));
   const float shifted = read(phase_a) * weight_a + read(phase_b) * (1.0F - weight_a);
-  const double ratio = std::pow(2.0, static_cast<double>(g_engine.octave));
   g_engine.pitch_phase = std::fmod(
-    g_engine.pitch_phase + (1.0 - ratio) / static_cast<double>(length) + 1.0, 1.0);
+    g_engine.pitch_phase + g_engine.pitch_phase_increment + 1.0, 1.0);
   g_engine.pitch_cursor = (g_engine.pitch_cursor + 1) % length;
   return shifted;
 }
 
 float process_effects(float sample) {
   const float input = sample * g_engine.gain;
-  const float highpass_coefficient = std::exp(-2.0F * 3.14159265F * 70.0F / g_engine.sample_rate);
   const float highpass = input - g_engine.previous_input +
-                         highpass_coefficient * g_engine.highpass_state;
+                         g_engine.highpass_coefficient * g_engine.highpass_state;
   g_engine.previous_input = input;
   g_engine.highpass_state = highpass;
   const float level = std::abs(highpass);
@@ -244,7 +253,7 @@ float process_effects(float sample) {
   const float gate_speed = target_gate > g_engine.gate_gain ? 0.08F : 0.02F;
   g_engine.gate_gain += (target_gate - g_engine.gate_gain) * gate_speed;
   const float dry = process_pitch(
-    std::tanh(highpass * g_engine.gate_gain * 1.12F) / std::tanh(1.12F));
+    std::tanh(highpass * g_engine.gate_gain * 1.12F) / kGateNormalizationTanh);
   const size_t cursor = g_engine.effect_cursor % g_engine.reverb_line_a.size();
   const auto read_delay = [cursor](const std::vector<float>& line, size_t samples) {
     const size_t offset = std::min(samples, line.size() - 1);
@@ -414,6 +423,7 @@ bool create_buffers(const Options& options) {
   ASIOSampleRate rate = 44100.0;
   ASIOGetSampleRate(&rate);
   g_engine.sample_rate = static_cast<float>(std::max(1.0, rate));
+  g_engine.highpass_coefficient = std::exp(-2.0F * 3.14159265F * 70.0F / g_engine.sample_rate);
   const size_t effect_size = static_cast<size_t>(std::max(1.0, rate * 0.72));
   g_engine.reverb_line_a.assign(effect_size, 0.0F);
   g_engine.reverb_line_b.assign(effect_size, 0.0F);
@@ -422,6 +432,8 @@ bool create_buffers(const Options& options) {
   g_engine.monitor_scratch.assign(static_cast<size_t>(g_engine.buffer_size), 0.0F);
   g_engine.pitch_line.assign(
     static_cast<size_t>(std::max(1024.0, rate * 0.032)), 0.0F);
+  const double pitch_ratio = std::pow(2.0, static_cast<double>(g_engine.octave));
+  g_engine.pitch_phase_increment = (1.0 - pitch_ratio) / static_cast<double>(g_engine.pitch_line.size());
   g_engine.effect_cursor = 0;
   g_engine.pitch_cursor = 0;
   g_engine.pitch_phase = 0.0;

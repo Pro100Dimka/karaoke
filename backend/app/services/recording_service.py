@@ -825,41 +825,49 @@ def stop_recording(session_id: str) -> models.Recording:
 
     db = SessionLocal()
     try:
-        song = repositories.get_song(db, session.song_id)
-        if song is None: raise ValueError(f"Песня {session.song_id} не найдена")
-
-        out_dir = song_service.resolve_output_dir(song) / config.RECORDINGS_DIRNAME
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        filename = f"take-{uuid.uuid4().hex[:8]}.wav"
-        out_path = out_dir / filename
         try:
-            duration_sec, sample_rate = session.stop_and_save(out_path)
-            playback_segments = session.playback_segments
-            first_segment = playback_segments[0] if playback_segments else None
-            playback_offset = (
-                float(first_segment["start_playback_sec"])
-                - float(first_segment["start_recording_sec"])
-                if first_segment else session.playback_offset_sec
-            )
-            recording = models.Recording(
-                song_id=song.id,
-                filename=filename,
-                path=str(out_path),
-                duration_sec=duration_sec,
-                sample_rate=sample_rate,
-                playback_offset_sec=playback_offset,
-                playback_segments_json=(
-                    json.dumps(playback_segments, separators=(",", ":"))
-                    if playback_segments else None
-                ),
-            )
-            db.add(recording)
-            commit_refresh(db, recording)
-        except Exception:
-            db.rollback()
-            out_path.unlink(missing_ok=True)
-            raise
+            song = repositories.get_song(db, session.song_id)
+            if song is None: raise ValueError(f"Песня {session.song_id} не найдена")
+
+            out_dir = song_service.resolve_output_dir(song) / config.RECORDINGS_DIRNAME
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            filename = f"take-{uuid.uuid4().hex[:8]}.wav"
+            out_path = out_dir / filename
+            try:
+                duration_sec, sample_rate = session.stop_and_save(out_path)
+                playback_segments = session.playback_segments
+                first_segment = playback_segments[0] if playback_segments else None
+                playback_offset = (
+                    float(first_segment["start_playback_sec"])
+                    - float(first_segment["start_recording_sec"])
+                    if first_segment else session.playback_offset_sec
+                )
+                recording = models.Recording(
+                    song_id=song.id,
+                    filename=filename,
+                    path=str(out_path),
+                    duration_sec=duration_sec,
+                    sample_rate=sample_rate,
+                    playback_offset_sec=playback_offset,
+                    playback_segments_json=(
+                        json.dumps(playback_segments, separators=(",", ":"))
+                        if playback_segments else None
+                    ),
+                )
+                db.add(recording)
+                commit_refresh(db, recording)
+            except Exception:
+                db.rollback()
+                out_path.unlink(missing_ok=True)
+                raise
+        finally:
+            # The row is already committed by this point on the success path.
+            # Everything left below (the performance mix) is pure ffmpeg/
+            # filesystem work -- up to ~90s per output format, see
+            # _create_performance_mix's per-file timeout -- that must not
+            # hold the SQLite connection open for its duration.
+            db.close()
         _create_performance_mix_safely(
             recording,
             song,
@@ -878,7 +886,6 @@ def stop_recording(session_id: str) -> models.Recording:
         return recording
     finally:
         session.close()
-        db.close()
         with _sessions_lock:
             event = _finalizing_recordings.pop(session_id, None)
             if event is not None: event.set()

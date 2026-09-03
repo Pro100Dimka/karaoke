@@ -215,6 +215,47 @@ def test_one_enumeration_and_no_parent_format_probes(control, monkeypatch):
     assert (options["reverb"], options["echo"], options["delay"]) == (.3, .4, .2)
 
 
+def test_mme_buffer_is_floored_to_avoid_glitching_below_a_safe_minimum(control, monkeypatch):
+    devices = [
+        {"name": "MME mic", "hostapi": 0, "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 44100},
+        {"name": "MME speakers", "hostapi": 0, "max_input_channels": 0, "max_output_channels": 2, "default_samplerate": 44100},
+    ]
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    monkeypatch.setattr(audio_service.sd, "query_devices", Mock(return_value=devices))
+    monkeypatch.setattr(audio_service.sd, "query_hostapis", lambda _: {"name": "MME"})
+    monkeypatch.setattr(audio_service.sd, "default", SimpleNamespace(device=(0, 1)))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_start_monitor_worker", launch)
+
+    audio_service.configure_monitoring(settings(monitoring_enabled=True, buffer_size=16, audio_driver="mme"))
+
+    options = launch.call_args.args[0]
+    assert options["wasapi_mode"] == "plain"
+    assert options["blocksize"] == audio_service._PLAIN_HOST_MIN_BLOCKSIZE
+
+    # A buffer already at or above the floor passes through unchanged.
+    launch.reset_mock()
+    audio_service.configure_monitoring(settings(monitoring_enabled=True, buffer_size=2048, audio_driver="mme"))
+    assert launch.call_args.args[0]["blocksize"] == 2048
+
+
+def test_wasapi_buffer_is_never_floored_even_when_small(control, monkeypatch):
+    devices = [
+        {"name": "USB mic", "hostapi": 0, "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 48000},
+        {"name": "USB speakers", "hostapi": 0, "max_input_channels": 0, "max_output_channels": 2, "default_samplerate": 48000},
+    ]
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    monkeypatch.setattr(audio_service.sd, "query_devices", Mock(return_value=devices))
+    monkeypatch.setattr(audio_service.sd, "query_hostapis", lambda _: {"name": "Windows WASAPI"})
+    monkeypatch.setattr(audio_service.sd, "default", SimpleNamespace(device=(0, 1)))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_start_monitor_worker", launch)
+
+    audio_service.configure_monitoring(settings(monitoring_enabled=True, buffer_size=16))
+
+    assert launch.call_args.args[0]["blocksize"] == 16
+
+
 def test_live_changes_during_start_are_coalesced_without_restart(control, monkeypatch):
     entered, release, updated = threading.Event(), threading.Event(), threading.Event()
     def start():

@@ -270,15 +270,24 @@ def test_create_song_persists_bytes_and_cleans_commit_failure(monkeypatch, tmp_p
 
 
 def test_duplicate_identity_is_unicode_and_case_insensitive_but_artist_specific():
+    # _find_duplicate selects only (id, artist, title) instead of full Song
+    # rows, then fetches the matched row by id via db.get -- see its
+    # docstring comment for why (avoids hydrating every other column for
+    # songs that never match).
     database = Mock()
-    database.scalars.return_value = [SimpleNamespace(artist="Нервы", title="  МОЯ   ЛЕДИ ")]
+    matched = SimpleNamespace(artist="Нервы", title="  МОЯ   ЛЕДИ ")
+    database.execute.return_value = [("song-1", "Нервы", "  МОЯ   ЛЕДИ ")]
+    database.get.return_value = matched
     # Same artist+title (modulo unicode normalization/case/whitespace) matches.
-    assert song_service._find_duplicate(database, "Нервы", "Моя леди") is database.scalars.return_value[0]
+    assert song_service._find_duplicate(database, "Нервы", "Моя леди") is matched
+    database.get.assert_called_once_with(song_service.models.Song, "song-1")
     # Same title but a DIFFERENT artist must NOT be treated as the same song.
     assert song_service._find_duplicate(database, "Other Artist", "Моя леди") is None
     # Neither side has a known artist: falls back to matching on title alone.
-    database.scalars.return_value = [SimpleNamespace(artist=None, title="Home")]
-    assert song_service._find_duplicate(database, None, "Home") is database.scalars.return_value[0]
+    matched_by_title = SimpleNamespace(artist=None, title="Home")
+    database.execute.return_value = [("song-2", None, "Home")]
+    database.get.return_value = matched_by_title
+    assert song_service._find_duplicate(database, None, "Home") is matched_by_title
     # A known artist should not silently collide with an untagged same-title entry.
     assert song_service._find_duplicate(database, "Artist A", "Home") is None
 

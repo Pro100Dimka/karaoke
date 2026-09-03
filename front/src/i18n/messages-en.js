@@ -711,12 +711,12 @@ export const enMessages = {
   "settings.audio.monitor.queueUnderruns.label": "Empty queue blocks, including startup",
   "settings.audio.monitor.latency.label": "Driver latency (input + output)",
   "settings.audio.monitor.fallback": "Driver switched to fallback mode. Latency may increase.",
-  "settings.audio.wasapiMode.label": "WASAPI mode on next start",
+  "settings.audio.wasapiMode.label": "Exclusive WASAPI mode",
   "settings.audio.wasapiMode.options.shared": "Shared — other applications can play audio",
   "settings.audio.buffer_size.description":
     "Smaller buffers reduce latency but increase the risk of crackling. Changing the buffer restarts monitoring. This is not an end-to-end voice latency measurement.",
   "settings.audio.wasapiMode.warning":
-    "Exclusive mode can occupy the device and interfere with recording or rooms. Fully exclusive mode may also mute the backing track. Driver failure shows an error; the selected mode and buffer never change automatically.",
+    "Exclusive mode fully occupies the device: it can interfere with recording, rooms, and the backing track in other apps. If the driver refuses, the app automatically falls back to shared mode.",
   "settings.audio.monitor.retry.label": "Retry connection",
   "settings.audio.asioHelp.description":
     "Audio failures keep occurring. No ASIO drivers were found. You can install ASIO4ALL yourself; reduced latency is not guaranteed.",

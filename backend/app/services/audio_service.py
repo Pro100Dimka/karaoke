@@ -76,6 +76,13 @@ _ASIO_ONLY_RESTART_FIELDS = frozenset(
     {"reverb", "echo", "delay", "noise_suppression", "octave"}
 )
 _LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression", "octave"})
+# MME (and any other non-WASAPI host, e.g. DirectSound) cannot reliably
+# service the tiny per-callback buffers WASAPI/ASIO can. Unlike ASIO/native
+# WASAPI, which reject or clamp an out-of-range buffer up front, this plain
+# PortAudio path just opens the stream and glitches continuously -- heard as
+# static instead of voice, not a startup error. Floor the requested buffer
+# for that path instead of silently producing garbage audio.
+_PLAIN_HOST_MIN_BLOCKSIZE = 512
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 _monitor_effects_disabled = False
 _MONITOR_START_TIMEOUT_SECONDS = 12.0
@@ -303,9 +310,9 @@ def preferred_output_device(
         if output_device_id is not None:
             return output_device_id
         if input_device_id is not None:
-            devices = sd.query_devices()
-            if 0 <= input_device_id < len(devices):
-                device = devices[input_device_id]
+            available = sd.query_devices() if devices is None else devices
+            if 0 <= input_device_id < len(available):
+                device = available[input_device_id]
                 if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0:
                     return input_device_id
         return _matching_asio_device_index(asio_driver_name, "output")
@@ -582,14 +589,14 @@ def request_monitoring(
         _monitor_control.cancel()
         return
     if wasapi_mode is not None:
-        if wasapi_mode != "shared":
+        if wasapi_mode not in {"shared", "exclusive"}:
             raise RuntimeError("Unsupported WASAPI mode")
         _monitor_wasapi_mode = wasapi_mode
     snapshot = SimpleNamespace(**{
         field: getattr(settings, field, None)
         for field in _MONITOR_RESTART_FIELDS | _LIVE_UPDATE_FIELDS | {"monitoring_enabled"}
     })
-    mode = "shared"
+    mode = _monitor_wasapi_mode
     if disabled_effects is not None:
         _requested_effects_disabled = bool(disabled_effects)
     effects_disabled = _requested_effects_disabled
@@ -611,7 +618,7 @@ def monitoring_status() -> dict:
 
 
 def monitoring_mode() -> str:
-    return "shared"
+    return _monitor_wasapi_mode
 
 
 def recording_monitor_mode(device_id):
@@ -808,6 +815,16 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
         raise RuntimeError("No output device is available for microphone monitoring")
     gain = max(0.0, min(4.0, settings.volume))
     wasapi = "wasapi" in _host_api_name(input_info).casefold()
+    # settings.wasapi_mode is set only on the SimpleNamespace snapshot built by
+    # request_monitoring (see apply()'s `snapshot.wasapi_mode = mode`); callers
+    # that pass a real, DB-bound AudioSettings row here (recording.py starting
+    # a take, entering a room) have no such column -- it is intentionally not
+    # persisted (never a saved default, see the wasapiMode UI warning). Fall
+    # back to the last mode the user actually requested this run, so opting
+    # into exclusive from the Settings preview also applies to recording and
+    # rooms started afterwards, without surviving an app restart.
+    requested_mode = getattr(settings, "wasapi_mode", None) or _monitor_wasapi_mode
+    exclusive_requested = wasapi and requested_mode == "exclusive"
     wasapi_mode = "shared" if wasapi else "plain"
     _monitor_control.publish(
         input_device=str(input_info.get("name", "")), output_device=str(output_info.get("name", "")),
@@ -822,7 +839,7 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
         "output_device_id": resolved_output_id,
         "sample_rate": _monitor_sample_rate(resolved_input_id, resolved_output_id, devices),
         "output_channels": output_channels,
-        "blocksize": settings.buffer_size,
+        "blocksize": settings.buffer_size if wasapi else max(settings.buffer_size, _PLAIN_HOST_MIN_BLOCKSIZE),
         "gain": gain,
         **effects,
         "octave": 0.0 if _monitor_effects_disabled else max(
@@ -831,7 +848,7 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
         "noise_suppression": clamp01(
             settings.noise_suppression if settings.noise_suppression is not None else 0.35
         ),
-        "wasapi_exclusive": wasapi_mode == "exclusive",
+        "wasapi_exclusive": exclusive_requested,
         "wasapi_mode": wasapi_mode,
     }
     if wasapi:

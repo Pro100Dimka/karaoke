@@ -2,7 +2,7 @@ import json
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from app.services import metadata_enrichment_service as metadata
 from tests._shared import patch_attrs
@@ -342,9 +342,13 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
 
     assert song.genre == "Rock"
     assert song.video_url == metadata.LOCAL_VIDEO_URL
-    metadata.commit.assert_called_once_with(database)
-    invalidate.assert_called_once_with(song)
-    database.close.assert_called_once_with()
+    # Two short-lived sessions now, not one held open across the download:
+    # one commits the genre before the download starts, a second (fresh)
+    # one commits the video_url after it finishes -- see enrich_song's
+    # comment on why the download must not happen with a session open.
+    assert metadata.commit.call_args_list == [call(database), call(database)]
+    assert invalidate.call_args_list == [call(song), call(song)]
+    assert database.close.call_count == 2
     assert "song" not in metadata._active
 
 

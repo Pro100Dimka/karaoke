@@ -86,7 +86,16 @@ _AUDIO_COLUMN_MIGRATIONS = {
     "octave": "ALTER TABLE audio_settings ADD COLUMN octave FLOAT DEFAULT 0",
 }
 
-CURRENT_SCHEMA_VERSION = 1
+_INDEX_MIGRATIONS = {
+    "ix_songs_created_at": "CREATE INDEX IF NOT EXISTS ix_songs_created_at ON songs (created_at)",
+    "ix_songs_updated_at": "CREATE INDEX IF NOT EXISTS ix_songs_updated_at ON songs (updated_at)",
+    "ix_recordings_song_id": "CREATE INDEX IF NOT EXISTS ix_recordings_song_id ON recordings (song_id)",
+    "ix_recordings_created_at": (
+        "CREATE INDEX IF NOT EXISTS ix_recordings_created_at ON recordings (created_at)"
+    ),
+}
+
+CURRENT_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -123,6 +132,23 @@ def _apply_baseline_schema(connection) -> None:
         _apply_additive_migrations(connection, existing, migrations)
 
 
+def _apply_index_migrations(connection) -> None:
+    # GET /history (see application.py) is polled every few seconds and joins
+    # Recording<->Song by song_id, sorted by created_at/updated_at -- without
+    # these, SQLite has to scan and sort the whole table on every poll.
+    # CREATE INDEX IF NOT EXISTS is itself idempotent, but only run it against
+    # tables that actually exist (a from-scratch install already gets these
+    # indexes from Base.metadata.create_all via models.py's index=True).
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    for table in ("songs", "recordings"):
+        if table not in tables:
+            continue
+        for statement in _INDEX_MIGRATIONS.values():
+            if f" ON {table} " in statement:
+                connection.execute(text(statement))
+
+
 def _schema_migrations() -> tuple[SchemaMigration, ...]:
     statements = [
         statement
@@ -135,8 +161,13 @@ def _schema_migrations() -> tuple[SchemaMigration, ...]:
         for statement in migrations.values()
     ]
     name = "baseline-additive-columns"
+    index_name = "history-lookup-indexes"
+    index_statements = list(_INDEX_MIGRATIONS.values())
     return (
         SchemaMigration(1, name, _migration_checksum(name, statements), _apply_baseline_schema),
+        SchemaMigration(
+            2, index_name, _migration_checksum(index_name, index_statements), _apply_index_migrations
+        ),
     )
 
 

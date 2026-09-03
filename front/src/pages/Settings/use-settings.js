@@ -12,6 +12,7 @@ import { getLightingStatus } from "../../utils/platform";
 import { applyTheme } from "../../utils/theme";
 import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/utils/devices";
 
+const MME_SENTINEL = "mme";
 const emit = (detail) => dispatchEvent(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const useOpenPoll = (open, fn, interval, fallback) =>
@@ -109,6 +110,10 @@ function useAudio(open) {
   }, [monitorStatus.data?.blocksize]);
   const [local, setLocal] = useState({});
   const [busy, setBusy] = useState(false);
+  // Exclusive WASAPI mode is intentionally session-only, never a saved
+  // default (see settings.audio.wasapiMode.warning) -- it resets to shared
+  // on every app restart and is only ever requested explicitly by the user.
+  const [wasapiExclusive, setWasapiExclusive] = useState(false);
   const values = { ...settings.data, ...local };
   const asio = useOpenPoll(open, api.listAsioDrivers, POLL.devices, []);
   const fail = (key, error) => alert(tr(key, { 0: getErrorMessage(error) }));
@@ -135,7 +140,10 @@ function useAudio(open) {
       const enabled = !!values.monitoring_enabled && !retry;
       const saved = await (enabled
         ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({ disabledEffects: true, wasapiMode: "shared" }));
+        : api.startDirectMonitoring({
+            disabledEffects: true,
+            wasapiMode: wasapiExclusive ? "exclusive" : "shared"
+          }));
 
       merge({ monitoring_enabled: !enabled });
       emit(saved);
@@ -149,9 +157,16 @@ function useAudio(open) {
   const selectDriver = (name) =>
     queue("driver", async () => {
       try {
+        // The dropdown's visible value is bound to asio_driver_name (see
+        // audio.jsx), not audio_driver -- "auto" and "mme" would otherwise
+        // both display as "" and be indistinguishable in the UI. MME_SENTINEL
+        // is a reserved, non-empty stand-in stored in that field for "mme"
+        // mode; nothing on the backend reads asio_driver_name unless
+        // audio_driver is actually "asio", so this is safe there too.
+        const driver = name === MME_SENTINEL ? "mme" : name ? "asio" : "auto";
         const saved = await api.updateAudioSettings({
-          audio_driver: name ? "asio" : "auto",
-          asio_driver_name: name || ""
+          audio_driver: driver,
+          asio_driver_name: driver === "asio" ? name : driver === "mme" ? MME_SENTINEL : ""
         });
         merge(saved);
         emit(saved);
@@ -181,10 +196,16 @@ function useAudio(open) {
     monitorStatus: monitorStatus.data,
     monitorStatusError: monitorStatus.error,
     suggestAsio: false,
+    // Exclusive only ever applies through the WASAPI host (audio_driver
+    // "auto"); ASIO and MME have their own buffer paths and never see this.
+    wasapiExclusiveAvailable: !["asio", "mme"].includes(values.audio_driver),
+    wasapiExclusive,
+    setWasapiExclusive,
     level: values.monitoring_enabled ? signalLevel(signal.data) : 0,
     options: {
       drivers: [
         { value: "", label: tr("settings.audio.wasapiMode.options.shared") },
+        { value: MME_SENTINEL, label: "MME" },
         ...(asio.data ?? []).map(({ name }) => ({ value: name, label: `ASIO · ${name}` }))
       ],
       inputs: createInputDeviceOptions(inputs.data, values.input_device_id),

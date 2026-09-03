@@ -1,7 +1,7 @@
 import { Volume2 } from "lucide-react";
 import LiveSignalWaveform from "../../../components/LiveSignalWaveform";
 import { translateSaved } from "../../../i18n/runtime";
-import { Stack, Switch } from "../../../theme/ui";
+import { Stack, Switch, Typography } from "../../../theme/ui";
 
 export default function rows({ settings: { audio }, run, tr = translateSaved }) {
   const status = audio.monitorStatus;
@@ -73,6 +73,26 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
             level={audio.level}
             ariaLabel={tr("settings.audio.microphoneLevel")}
           />
+        </Stack>
+      )
+    },
+    {
+      md: 4,
+      showFor: audio.wasapiExclusiveAvailable,
+      render: () => (
+        <Stack>
+          <Switch
+            label={tr("settings.audio.wasapiMode.label")}
+            variant="plain"
+            checked={audio.wasapiExclusive}
+            disabled={audio.busy || !!audio.values?.monitoring_enabled}
+            onChange={() => audio.setWasapiExclusive((value) => !value)}
+          />
+          {audio.wasapiExclusive ? (
+            <Typography variant="caption" role="alert">
+              {tr("settings.audio.wasapiMode.warning")}
+            </Typography>
+          ) : null}
         </Stack>
       )
     },

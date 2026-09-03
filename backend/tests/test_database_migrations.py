@@ -203,10 +203,22 @@ def test_init_db_upgrades_a_real_pre_migration_database_in_place(monkeypatch):
         history = connection.execute(
             text("SELECT version, name FROM schema_migrations ORDER BY version")
         ).all()
-        assert history == [(1, "baseline-additive-columns")]
+        assert history == [(1, "baseline-additive-columns"), (2, "history-lookup-indexes")]
+        # GET /history's join/sort columns (see database._apply_index_migrations)
+        # must actually get indexed on an upgraded pre-existing database, not
+        # just on a fresh one created through Base.metadata.create_all.
+        index_names = {
+            row[1] for row in connection.execute(text("PRAGMA index_list(songs)"))
+        } | {row[1] for row in connection.execute(text("PRAGMA index_list(recordings)"))}
+        assert {
+            "ix_songs_created_at", "ix_songs_updated_at",
+            "ix_recordings_song_id", "ix_recordings_created_at",
+        } <= index_names
     status = database.schema_status()
     assert status["current"] == status["target"] == database.CURRENT_SCHEMA_VERSION
-    assert status["history"][0]["name"] == "baseline-additive-columns"
+    assert [row["name"] for row in status["history"]] == [
+        "baseline-additive-columns", "history-lookup-indexes"
+    ]
     engine.dispose()
 
 

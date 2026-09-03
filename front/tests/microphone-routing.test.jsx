@@ -57,6 +57,20 @@ describe("audio output device choices", () => {
       { value: 3, label: "Monitor" }
     ]);
   });
+
+  test("uses only MME outputs while MME mode is active", () => {
+    const devices = [
+      { index: 1, name: "Interface [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 2, name: "Interface [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 2 },
+      { index: 3, name: "Monitor [MME]", host_api: "MME", max_output_channels: 2 }
+    ];
+
+    expect(createOutputDeviceOptions(devices, 1, "mme", "System")).toEqual([
+      { value: "", label: "System" },
+      { value: 1, label: "Interface" },
+      { value: 3, label: "Monitor" }
+    ]);
+  });
 });
 describe("microphone settings", () => {
   test("normalizes backend settings and reacts to global changes", () => {

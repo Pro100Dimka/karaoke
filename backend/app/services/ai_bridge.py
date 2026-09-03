@@ -115,8 +115,8 @@ def get_karaoke_lyrics(output_dir: str | Path) -> dict[str, Any]:
         return {}
 
 
-def get_vocal_notes(output_dir: str | Path) -> list[dict[str, Any]]:
-    lyrics = get_karaoke_lyrics(output_dir)
+def get_vocal_notes(output_dir: str | Path, lyrics: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    if lyrics is None: lyrics = get_karaoke_lyrics(output_dir)
     return flatten_word_notes(lyrics) if lyrics else []
 
 
@@ -128,12 +128,12 @@ def get_syllables(_output_dir: str | Path) -> list[dict[str, Any]]:
     return []
 
 
-def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
-    lyrics = get_karaoke_lyrics(output_dir)
+def get_karaoke_timeline(output_dir: str | Path, lyrics: dict[str, Any] | None = None) -> dict[str, Any]:
+    if lyrics is None: lyrics = get_karaoke_lyrics(output_dir)
     return {
         "duration": lyrics.get("duration", 0.0),
         "words": lyrics.get("words", []),
-        "notes": get_vocal_notes(output_dir),
+        "notes": get_vocal_notes(output_dir, lyrics),
     }
 
 

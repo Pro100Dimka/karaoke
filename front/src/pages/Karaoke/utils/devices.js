@@ -111,7 +111,7 @@ export function createOutputDeviceOptions(
           .includes("wdm-ks")
     );
 
-  const requestedHost = driver === "asio" ? "asio" : "wasapi";
+  const requestedHost = driver === "asio" ? "asio" : driver === "mme" ? "mme" : "wasapi";
   const preferredHost = candidates.some((device) =>
     String(device?.host_api || "")
       .toLowerCase()

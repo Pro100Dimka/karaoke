@@ -85,6 +85,8 @@ def test_normalized_settings_patch_handles_defaults_devices_and_asio(monkeypatch
     assert (updates, changed) == ({'input_device_id': 3, 'input_device_name': 'New'}, {'input_device_id'})
 
     raises(RuntimeError, lambda: audio_service._normalized_settings_patch(current, {'audio_driver': 'invalid'}), match='Unsupported')
+    updates, changed = audio_service._normalized_settings_patch(current, {"audio_driver": "mme"})
+    assert (updates, changed) == ({"audio_driver": "mme"}, {"audio_driver"})
 
     monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(return_value=[]))
     raises(RuntimeError, lambda: audio_service._normalized_settings_patch(current, {'audio_driver': 'asio'}), match='no ASIO')

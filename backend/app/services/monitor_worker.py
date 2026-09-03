@@ -45,28 +45,47 @@ _live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0
 
 
 def _stream_candidates(options: dict) -> list[dict]:
-    """Exactly one requested configuration: no buffer, mode or rate fallback."""
+    """No buffer or rate fallback. The only fallback is mode: an explicitly
+    requested exclusive-mode attempt (PortAudio-negotiated, see WasapiSettings
+    below) is tried first and, on any failure to open it, main() falls back
+    to the same shared/plain configuration used when exclusive was never
+    requested at all -- never a hard error just because exclusive failed.
+    """
     rate = float(options["sample_rate"])
     blocksize = int(options["blocksize"])
     if blocksize <= 0:
         raise ValueError("A fixed positive monitoring buffer is required")
     mode = options.get("wasapi_mode", "shared")
-    if mode not in {"shared", "plain"} or options.get("wasapi_exclusive"):
+    if mode not in {"shared", "plain"}:
         raise ValueError("Unsupported WASAPI mode")
-    candidate = {
+    fallback = {
         "samplerate": rate, "blocksize": blocksize, "latency": blocksize / rate,
         "channels": (1, int(options["output_channels"])),
         "device": (int(options["input_device_id"]), int(options["output_device_id"])),
         "_mode": mode,
     }
     if mode != "plain":
-        candidate["extra_settings"] = (
+        fallback["extra_settings"] = (
             sd.WasapiSettings(exclusive=False, auto_convert=True),
             sd.WasapiSettings(exclusive=False, auto_convert=True),
         )
         if options.get("native_shared"):
-            candidate["_engine"] = "wasapi-native-shared"
-    return [candidate]
+            fallback["_engine"] = "wasapi-native-shared"
+    if mode != "shared" or not options.get("wasapi_exclusive"):
+        return [fallback]
+    # Exclusive mode seizes the device; it never goes through the native DLL
+    # (shared-mode only, see monitor.cpp), only through PortAudio's own
+    # WASAPI exclusive negotiation. Same requested buffer/rate as the
+    # fallback, so a failure here is purely about mode, not about a
+    # different buffer size being rejected.
+    exclusive = {
+        "samplerate": rate, "blocksize": blocksize, "latency": blocksize / rate,
+        "channels": (1, int(options["output_channels"])),
+        "device": (int(options["input_device_id"]), int(options["output_device_id"])),
+        "_mode": "exclusive",
+        "extra_settings": (sd.WasapiSettings(exclusive=True), sd.WasapiSettings(exclusive=True)),
+    }
+    return [exclusive, fallback]
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
 
@@ -167,22 +186,22 @@ def main() -> int:
     stream: Any = None
     relay: RelayLink | None = None
     try:
-        candidate = dict(_stream_candidates(options)[0])
-        mode = candidate.pop("_mode")
-        engine = candidate.pop("_engine", "duplex")
-        if engine == "wasapi-native-shared":
-            _stage("load native WASAPI and open shared endpoints")
-            from app.services.native_wasapi import NativeWasapiStream
-            stream = NativeWasapiStream(options, statistics)
+        candidates = _stream_candidates(options)
         _stage("initialize microphone DSP")
-        stream_sample_rate = stream.info.sample_rate if stream else float(options["sample_rate"])
         relay_port = options.get("audio_relay_port")
-        # Connecting is fully non-blocking (a background thread) specifically
-        # so an unavailable or slow relay server can never delay solo
-        # monitoring startup -- see monitor_relay_link.RelayLink.
-        if relay_port:
-            relay = RelayLink(int(relay_port), stream_sample_rate)
-        process = _audio_callback(gain, stream_sample_rate, statistics, relay)
+        process = None
+
+        def open_relay(sample_rate: float) -> None:
+            nonlocal relay, process
+            if relay is not None:
+                relay.close()
+            # Connecting is fully non-blocking (a background thread) specifically
+            # so an unavailable or slow relay server can never delay solo
+            # monitoring startup -- see monitor_relay_link.RelayLink.
+            relay = RelayLink(int(relay_port), sample_rate) if relay_port else None
+            process = _audio_callback(gain, sample_rate, statistics, relay)
+
+        open_relay(float(options["sample_rate"]))
 
         def callback(*args):
             try:
@@ -191,21 +210,44 @@ def main() -> int:
                 statistics["callback_error"] = str(error)
                 failed.set()
 
-        if engine == "wasapi-native-shared":
-            _stage("start native shared audio stream")
-            stream.start(process)
-            details = stream.diagnostics()
-        else:
-            _stage("open PortAudio stream")
-            stream = (WasapiMonitorStream(sd, candidate, callback, statistics, failed)
-                      if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
-            _stage("start PortAudio stream")
-            stream.start()
-            details = _stream_diagnostics(stream, candidate, options, mode)
+        chosen_engine, details = "duplex", None
+        for index, raw_candidate in enumerate(candidates):
+            candidate = dict(raw_candidate)
+            mode = candidate.pop("_mode")
+            engine = candidate.pop("_engine", "duplex")
+            last_attempt = index + 1 == len(candidates)
+            try:
+                if engine == "wasapi-native-shared":
+                    _stage("load native WASAPI and open shared endpoints")
+                    from app.services.native_wasapi import NativeWasapiStream
+                    stream = NativeWasapiStream(options, statistics)
+                    if stream.info.sample_rate != float(options["sample_rate"]):
+                        open_relay(stream.info.sample_rate)
+                    _stage("start native shared audio stream")
+                    stream.start(process)
+                    details = stream.diagnostics()
+                else:
+                    _stage("open PortAudio stream")
+                    stream = (WasapiMonitorStream(sd, candidate, callback, statistics, failed)
+                              if engine == "wasapi-split" else sd.Stream(**candidate, callback=callback))
+                    _stage("start PortAudio stream")
+                    stream.start()
+                    details = _stream_diagnostics(stream, candidate, options, mode)
+                chosen_engine = engine
+                break
+            except Exception as error:
+                if stream is not None:
+                    for method in ("abort", "close"):
+                        with contextlib.suppress(Exception):
+                            getattr(stream, method)()
+                    stream = None
+                if last_attempt:
+                    raise
+                _emit({"event": "fallback", "message": str(error)})
         _emit({"event": "started", **details})
         reported = time.monotonic()
         while _running and not failed.is_set():
-            if engine == "wasapi-native-shared":
+            if chosen_engine == "wasapi-native-shared":
                 stream.pump()
                 if time.monotonic() - reported < .1:
                     continue

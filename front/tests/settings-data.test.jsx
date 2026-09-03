@@ -1,9 +1,16 @@
 /* @vitest-environment jsdom */
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
-const state = vi.hoisted(() => ({ settings: { online_name: "Old", theme: "dark" }, update: vi.fn(), save: vi.fn() }));
+const state = vi.hoisted(() => ({
+  settings: { online_name: "Old", theme: "dark" },
+  update: vi.fn(),
+  save: vi.fn(),
+  updateAudio: vi.fn()
+}));
 vi.mock("../src/hooks/useAppSettings", () => ({ default: () => ({ settings: state.settings, updateSettings: state.update }) }));
-vi.mock("../src/api/client", () => ({ api: { updateAppSettings: state.save } }));
+vi.mock("../src/api/client", () => ({
+  api: { updateAppSettings: state.save, updateAudioSettings: state.updateAudio }
+}));
 vi.mock("../src/hooks/usePolling", () => ({ usePolling: () => ({ data: null, refresh: vi.fn() }) }));
 vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: vi.fn() }) }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => ({}) }));
@@ -62,4 +69,26 @@ test("queued writes ignore stale responses and recover after a rejected request"
   state.save.mockResolvedValueOnce({ online_name: "Four" });
   await act(async () => result.current.app.save("online_name", "Four"));
   expect(state.update.mock.lastCall[0]({}).online_name).toBe("Four");
+});
+
+test("selectDriver maps the dropdown's three modes to distinct backend values", async () => {
+  const { result } = renderHook(() => useSettings(false));
+
+  state.updateAudio.mockResolvedValueOnce({ audio_driver: "auto", asio_driver_name: "" });
+  await act(async () => result.current.audio.selectDriver(""));
+  expect(state.updateAudio).toHaveBeenLastCalledWith({ audio_driver: "auto", asio_driver_name: "" });
+
+  // The MME sentinel is a reserved, non-empty stand-in for asio_driver_name
+  // (see use-settings.js) so the dropdown can visually distinguish "mme"
+  // from "auto", which otherwise both bind to an empty asio_driver_name.
+  state.updateAudio.mockResolvedValueOnce({ audio_driver: "mme", asio_driver_name: "mme" });
+  await act(async () => result.current.audio.selectDriver("mme"));
+  expect(state.updateAudio).toHaveBeenLastCalledWith({ audio_driver: "mme", asio_driver_name: "mme" });
+
+  state.updateAudio.mockResolvedValueOnce({ audio_driver: "asio", asio_driver_name: "Focusrite USB ASIO" });
+  await act(async () => result.current.audio.selectDriver("Focusrite USB ASIO"));
+  expect(state.updateAudio).toHaveBeenLastCalledWith({
+    audio_driver: "asio",
+    asio_driver_name: "Focusrite USB ASIO"
+  });
 });

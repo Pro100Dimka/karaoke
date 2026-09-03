@@ -105,6 +105,25 @@ def test_low_latency_and_duplex_selection_match_physical_endpoint(monkeypatch):
     )
 
 
+def test_mme_driver_stays_on_mme_instead_of_upgrading_to_wasapi(monkeypatch):
+    devices = [
+        device("USB Studio Mic", 0, inputs=1),
+        device("USB Studio Mic", 1, inputs=1, input_latency=0.005),
+        device("USB Studio Speakers", 0, outputs=2),
+        device("USB Studio Speakers", 1, outputs=2, output_latency=0.006),
+    ]
+    install_devices(monkeypatch, devices, {0: "MME", 1: "Windows WASAPI"})
+
+    # "auto" upgrades an explicitly selected MME device to its same-named
+    # WASAPI equivalent (existing behavior).
+    assert audio_service.preferred_input_device(0, "auto") == 1
+    # "mme" must not -- otherwise there would be no way to actually monitor
+    # (and compare latency) on plain MME at all.
+    assert audio_service.preferred_input_device(0, "mme") == 0
+    assert audio_service._low_latency_equivalent(0, "input", preferred_host_api="mme") == 0
+    assert audio_service.preferred_output_device(0, "mme", None) == 2
+
+
 def test_auto_output_keeps_exact_interface_port_name(monkeypatch):
     devices = [
         device("Analogue 1/2 (6- Audient iD14)", 0, inputs=2),

@@ -58,9 +58,9 @@ class Song(Base):
     show_lyrics: Mapped[bool] = mapped_column(Boolean, default=True)
     show_notes: Mapped[bool] = mapped_column(Boolean, default=True)
     optimized: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, index=True
     )
 
     recordings: Mapped[list[Recording]] = relationship(
@@ -75,14 +75,14 @@ class Recording(Base):
     __tablename__ = "recordings"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
-    song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"))
+    song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"), index=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     duration_sec: Mapped[float | None] = mapped_column(Float)
     sample_rate: Mapped[int | None] = mapped_column(Integer)
     playback_offset_sec: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     playback_segments_json: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
 
     song: Mapped[Song] = relationship(back_populates="recordings")
     analysis: Mapped[AnalysisResult | None] = relationship(

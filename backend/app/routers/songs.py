@@ -184,7 +184,14 @@ async def add_song(
             resolved_title = resolved_title or detected_title
             if not (resolved_artist or "").strip():
                 resolved_artist = detected_artist
-        return song_service.create_song_from_path(
+        # create_song_from_path validates the upload through a blocking
+        # ffmpeg subprocess (see AI/audio.py:run_ffmpeg). Running it inline
+        # in this async handler would stall FastAPI's single event loop --
+        # and every other concurrent request/websocket with it -- for as
+        # long as ffmpeg takes, so it goes through the same threadpool
+        # pattern already used for kar/kfn preparation above.
+        return await run_in_threadpool(
+            song_service.create_song_from_path,
             db,
             resolved_title,
             filename,
@@ -440,7 +447,12 @@ async def import_song_package(
         )
         upload_reservation.release()
         upload_reservation = None
-        return song_package_service.import_package(db, temporary_path, expected_revision=expected_revision)
+        # import_package runs up to 3 blocking ffprobe subprocesses
+        # (_validate_archive_audio); same event-loop-stall concern as
+        # create_song_from_path above.
+        return await run_in_threadpool(
+            song_package_service.import_package, db, temporary_path, expected_revision=expected_revision
+        )
     except HTTPException:
         raise
     except InsufficientStorageError as exc:

@@ -371,10 +371,18 @@ def _find_duplicate(db: Session, artist: str | None, title: str) -> models.Song 
     # that also has no artist.
     expected = _identity_key(artist, title)
     if not expected: return None
-    songs = db.scalars(select(models.Song))
-    if not hasattr(songs, "__iter__"): return None
-    for song in songs:
-        if _identity_key(song.artist, song.title) == expected: return song
+    # Identity comparison is Unicode-normalization-aware (NFKC + casefold),
+    # which SQLite has no built-in equivalent for, so the match itself still
+    # has to happen in Python across every song. But the row itself isn't
+    # needed until a match is found -- selecting only (id, artist, title)
+    # instead of full Song rows (db.scalars(select(models.Song)) below)
+    # avoids hydrating every other column (source_path, output_dir,
+    # error_message, ...) for songs that never match.
+    rows = db.execute(select(models.Song.id, models.Song.artist, models.Song.title))
+    if not hasattr(rows, "__iter__"): return None
+    for song_id, song_artist, song_title in rows:
+        if _identity_key(song_artist, song_title) == expected:
+            return db.get(models.Song, song_id)
     return None
 
 
