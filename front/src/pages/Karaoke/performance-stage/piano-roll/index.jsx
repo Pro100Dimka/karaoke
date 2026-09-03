@@ -6,7 +6,6 @@ import { normalizePianoNotes, PIANO_ROLL_VIEW, pianoPitchRange, pianoRollFrame }
 
 const PixiPianoRoll = lazy(() => import("./pixi-scene"));
 const USE_PIXI = typeof globalThis.WebGLRenderingContext === "function";
-
 const COLORS = {
   highlight: ["--color-highlight", "#fff"],
   hover: ["--color-primary-hover", "#ff6b86"],
@@ -14,25 +13,69 @@ const COLORS = {
   success: ["--color-success", "#32e9a0"],
   text: ["--color-text", "#fff"]
 };
-
-const paletteOf = (element) => {
-  const style = getComputedStyle(element);
-
-  return Object.fromEntries(
-    Object.entries(COLORS).map(([key, [name, fallback]]) => [
-      key,
-      style.getPropertyValue(name).trim() || fallback
-    ])
-  );
-};
-
-const timeOf = (ref, value) => Number(ref?.current ?? value) || 0;
-
+const FALLBACK_PALETTE = Object.fromEntries(
+  Object.entries(COLORS).map(([key, [, fallback]]) => [key, fallback])
+);
+const timeOf = (ref, value = 0) => Number(ref?.current ?? value) || 0;
 const midiOf = (value) => {
   if (value == null || value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  const midi = Number(value);
+  return Number.isFinite(midi) ? midi : null;
 };
+
+function usePianoView(root) {
+  const [view, setView] = useState({ size: PIANO_ROLL_VIEW, palette: FALLBACK_PALETTE });
+
+  useLayoutEffect(() => {
+    const element = root.current;
+    if (!element) return;
+
+    const updatePalette = () => {
+      const style = globalThis.getComputedStyle?.(element);
+      if (!style) return;
+      setView((view) => ({
+        ...view,
+        palette: Object.fromEntries(
+          Object.entries(COLORS).map(([key, [name, fallback]]) => [
+            key,
+            style.getPropertyValue(name).trim() || fallback
+          ])
+        )
+      }));
+    };
+    const updateSize = ({ width, height }) => {
+      if (!width || !height) return;
+      setView((view) =>
+        view.size.width === width && view.size.height === height
+          ? view
+          : { ...view, size: { width, height } }
+      );
+    };
+
+    updatePalette();
+    updateSize(element.getBoundingClientRect());
+
+    const resize = globalThis.ResizeObserver
+      ? new ResizeObserver(([entry]) => updateSize(entry.contentRect))
+      : null;
+    const theme = globalThis.MutationObserver ? new MutationObserver(updatePalette) : null;
+
+    resize?.observe(element);
+    if (theme && globalThis.document?.documentElement) {
+      theme.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme", "class", "style"]
+      });
+    }
+
+    return () => {
+      resize?.disconnect();
+      theme?.disconnect();
+    };
+  }, [root]);
+
+  return view;
+}
 
 function PianoRoll({
   notes = [],
@@ -45,67 +88,14 @@ function PianoRoll({
 }) {
   const root = useRef(null);
   const canvas = useRef(null);
-
-  const [view, setView] = useState({
-    size: PIANO_ROLL_VIEW,
-    palette: Object.fromEntries(
-      Object.entries(COLORS).map(([key, [, fallback]]) => [key, fallback])
-    )
-  });
-
-  const normalized = useMemo(
-    () => normalizePianoNotes(notes, Number(keyShift) || 0),
-    [notes, keyShift]
-  );
-
+  const view = usePianoView(root);
+  const normalized = useMemo(() => normalizePianoNotes(notes, keyShift), [notes, keyShift]);
   const sung = midiOf(sungMidi);
-
-  const pitchRange = useMemo(() => pianoPitchRange(normalized, sung), [normalized, sung]);
-
+  const range = useMemo(() => pianoPitchRange(normalized, sung), [normalized, sung]);
   const frame = useMemo(
-    () => pianoRollFrame(normalized, timeOf(currentTimeRef, currentTime), view.size, pitchRange),
-    [normalized, currentTime, currentTimeRef, view.size, pitchRange]
+    () => pianoRollFrame(normalized, timeOf(currentTimeRef, currentTime), view.size, range),
+    [normalized, currentTime, currentTimeRef, view.size, range]
   );
-
-  useLayoutEffect(() => {
-    const element = root.current;
-    if (!element) return;
-
-    const updatePalette = () =>
-      setView((view) => ({
-        ...view,
-        palette: paletteOf(element)
-      }));
-
-    const resize =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(([entry]) => {
-            const { width, height } = entry.contentRect;
-            if (!width || !height) return;
-
-            setView((view) =>
-              view.size.width === width && view.size.height === height
-                ? view
-                : { ...view, size: { width, height } }
-            );
-          });
-
-    const theme = new MutationObserver(updatePalette);
-
-    updatePalette();
-    resize?.observe(element);
-
-    theme.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme", "class", "style"]
-    });
-
-    return () => {
-      resize?.disconnect();
-      theme.disconnect();
-    };
-  }, []);
 
   useLayoutEffect(() => {
     if (USE_PIXI) return;
@@ -115,7 +105,7 @@ function PianoRoll({
     if (!context) return;
 
     const draw = (time) => {
-      const ratio = devicePixelRatio || 1;
+      const ratio = globalThis.devicePixelRatio || 1;
       const width = Math.round(view.size.width * ratio);
       const height = Math.round(view.size.height * ratio);
 
@@ -125,30 +115,26 @@ function PianoRoll({
       }
 
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
-
       drawPianoRoll(
         context,
-        pianoRollFrame(normalized, time, view.size, pitchRange),
+        pianoRollFrame(normalized, time, view.size, range),
         view.palette,
         { detected: isPitchDetected, midi: sung }
       );
     };
 
     draw(timeOf(currentTimeRef, currentTime));
-
-    if (!isPlaying || !currentTimeRef) return;
+    if (!isPlaying || !currentTimeRef || !globalThis.requestAnimationFrame) return;
 
     let animation;
-
     const render = () => {
       draw(timeOf(currentTimeRef));
       animation = requestAnimationFrame(render);
     };
 
     animation = requestAnimationFrame(render);
-
     return () => cancelAnimationFrame(animation);
-  }, [normalized, pitchRange, view, sung, isPitchDetected, isPlaying, currentTime, currentTimeRef]);
+  }, [normalized, range, view, sung, isPitchDetected, isPlaying, currentTime, currentTimeRef]);
 
   return (
     <Box
@@ -188,11 +174,7 @@ function PianoRoll({
           <Box
             as="canvas"
             ref={canvas}
-            sx={{
-              display: "block",
-              inlineSize: "100%",
-              blockSize: "100%"
-            }}
+            sx={{ display: "block", inlineSize: "100%", blockSize: "100%" }}
           />
         )}
       </Box>

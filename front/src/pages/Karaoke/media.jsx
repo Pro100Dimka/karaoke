@@ -1,10 +1,11 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { memo, useContext, useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { AppSettingsContext } from "../../contexts/app-settings";
 import { observeLightingMedia } from "../../services/keyboardLighting";
 import { Box } from "../../theme/ui";
 import * as platform from "../../utils/platform";
 import { playbackGain } from "./utils/data";
+import { normalizePlaybackRate } from "./utils/transport";
 
 const noop = () => {};
 
@@ -86,7 +87,7 @@ function AudioTrack({ audioRef, songId, track, volume }) {
   );
 }
 
-export default function KaraokeMedia({
+function KaraokeMedia({
   instrumentalRef,
   isPlaying,
   musicVolume,
@@ -110,11 +111,11 @@ export default function KaraokeMedia({
   const activateClip = (event) => {
     const video = event.currentTarget;
 
-    video.playbackRate = Number(speed) || 1;
+    video.playbackRate = normalizePlaybackRate(speed);
     syncSecondaryMedia?.(instrumentalRef.current?.currentTime || 0, true);
     onClipAvailabilityChange(true);
 
-    if (isPlaying) video.play().catch(noop);
+    if (isPlaying) Promise.resolve(video.play()).catch(noop);
   };
 
   return (
@@ -160,3 +161,5 @@ export default function KaraokeMedia({
     </>
   );
 }
+
+export default memo(KaraokeMedia);

@@ -7,17 +7,8 @@ import {
   normalizePlaybackRate
 } from "../utils/transport";
 
-const YOUTUBE_NO_COOKIE_ORIGIN = "https://www.youtube-nocookie.com";
-// The rAF loop below runs at ~60fps to keep currentTimeRef and the melody
-// guide frame-accurate, but nothing on screen needs React state updated that
-// often: the lyrics/piano-roll overlays already read currentTimeRef directly
-// in their own rAF loops (and are memoized against the currentTime prop
-// while playing), and the timeline/timecode in the console is just a number
-// and a progress bar -- both look identical to a viewer whether they update
-// 60 times a second or 10. Throttling setCurrentTime this way keeps the
-// whole Karaoke page from re-rendering (and reallocating its many derived
-// prop objects/callbacks) on every single animation frame.
-const REACT_SYNC_INTERVAL_MS = 100;
+const REACT_SYNC_MS = 100;
+const SECONDARY_SYNC_MS = 450;
 
 export default function useKaraokeMediaSync({
   currentTimeRef,
@@ -37,134 +28,99 @@ export default function useKaraokeMediaSync({
   updateMelodyGuide,
   videoRef,
   vocalVolume,
-  vocalsRef,
-  youTubeClipRef
+  vocalsRef
 }) {
-  const lastSecondarySyncRef = useRef(0);
-  const lastReactSyncRef = useRef(0);
-
-  // Retained as a compatibility no-op for transport/tests. The application
-  // no longer renders a YouTube iframe, so there is no frame in production.
-  const sendYouTubeCommand = useCallback(
-    (func, args = []) => {
-      const frame = youTubeClipRef?.current;
-      const target = frame?.contentWindow;
-      if (!target || typeof func !== "string" || !func.trim()) return false;
-      let targetOrigin = "https://www.youtube.com";
-      try {
-        const { origin } = new URL(frame.src, globalThis.location.href);
-        if (origin === YOUTUBE_NO_COOKIE_ORIGIN) targetOrigin = origin;
-      } catch {
-        // Keep the trusted default origin for malformed test fixtures.
-      }
-      target.postMessage(
-        JSON.stringify({ event: "command", func: func.trim(), args }),
-        targetOrigin
-      );
-      return true;
-    },
-    [youTubeClipRef]
-  );
+  const lastSecondarySync = useRef(0);
+  const lastReactSync = useRef(0);
 
   const syncSecondaryMedia = useCallback(
     (position, force = false) => {
       const baseRate = normalizePlaybackRate(speed);
+
       [vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
         if (!Number.isFinite(media.duration) || media.duration <= 0) return;
+
         const target = getSecondaryMediaPosition(position, media.duration);
-        const classification = force ? "hard" : classifyDrift(media.currentTime - target);
+        const drift = media.currentTime - target;
+        const correction = force ? "hard" : classifyDrift(drift);
+
         try {
-          if (classification === "hard") {
-            media.currentTime = target;
-            media.playbackRate = baseRate;
-          } else if (classification === "none") {
-            media.playbackRate = baseRate;
-          } else {
-            const drift = media.currentTime - target;
-            media.playbackRate = driftCorrectedRate(baseRate, drift, classification);
-          }
+          if (correction === "hard") media.currentTime = target;
+          media.playbackRate =
+            correction === "soft" || correction === "strong"
+              ? driftCorrectedRate(baseRate, drift, correction)
+              : baseRate;
         } catch {
-          // Media may become unavailable while sources are being replaced.
+          // source may be replaced while syncing
         }
       });
-      if (force) sendYouTubeCommand("seekTo", [position, true]);
     },
-    [sendYouTubeCommand, speed, videoRef, vocalsRef]
+    [speed, videoRef, vocalsRef]
   );
 
   useEffect(() => {
-    // Karaoke/index.jsx renders a loading placeholder instead of <KaraokeMedia>
-    // until the song result finishes fetching, which can land in a render
-    // *after* this effect's songId dependency already changed -- so on the
-    // commit where songId first resolves, instrumentalRef.current is still
-    // null, this effect bails out, and songId never changes again to trigger
-    // a retry. That permanently starved duration/timeupdate listeners while
-    // the unrelated rAF-driven currentTime loop kept working (it re-reads
-    // instrumentalRef.current live every frame instead of capturing it once),
-    // which is why the timecode text ticked up but the timeline never moved
-    // or became seekable. Poll for the element instead of giving up once.
-    let detachListeners;
+    let detach;
     let cancelRetry = () => {};
 
     const attach = () => {
       const instrumental = instrumentalRef.current;
-      const vocals = vocalsRef.current;
       if (!instrumental) {
-        if (typeof globalThis.requestAnimationFrame === "function") {
-          const frame = globalThis.requestAnimationFrame(attach);
-          cancelRetry = () => globalThis.cancelAnimationFrame(frame);
+        if (globalThis.requestAnimationFrame) {
+          const frame = requestAnimationFrame(attach);
+          cancelRetry = () => cancelAnimationFrame(frame);
         } else {
-          const timer = globalThis.setTimeout(attach, 16);
-          cancelRetry = () => globalThis.clearTimeout(timer);
+          const timer = setTimeout(attach, 16);
+          cancelRetry = () => clearTimeout(timer);
         }
         return;
       }
 
-      const handleMetadata = () => {
-        const nextDuration = Number(instrumental.duration);
-        setDuration(Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0);
+      const metadata = () => {
+        const value = Number(instrumental.duration);
+        setDuration(Number.isFinite(value) ? Math.max(0, value) : 0);
       };
-      const handleTimeUpdate = () => {
-        const position = Number(instrumental.currentTime);
-        if (!Number.isFinite(position) || position < 0) return;
-        currentTimeRef.current = position;
-        setCurrentTime(position);
+      const timeUpdate = () => {
+        const value = Number(instrumental.currentTime);
+        if (!Number.isFinite(value) || value < 0) return;
+        currentTimeRef.current = value;
+        setCurrentTime(value);
       };
-      const handleEnded = () => {
+      const ended = () => {
         if (onPlaybackEndedRef.current) {
           Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
           return;
         }
-        vocals?.pause();
+        vocalsRef.current?.pause();
         videoRef.current?.pause();
-        sendYouTubeCommand("pauseVideo");
         silenceMelodyGuide();
         setIsPlaying(false);
       };
 
-      const metadataEvents = ["loadedmetadata", "durationchange"];
-      metadataEvents.forEach((event) => instrumental.addEventListener(event, handleMetadata));
-      instrumental.addEventListener("ended", handleEnded);
-      instrumental.addEventListener("timeupdate", handleTimeUpdate);
-      // The element may already have metadata before this effect subscribes.
-      handleMetadata();
-      detachListeners = () => {
-        metadataEvents.forEach((event) => instrumental.removeEventListener(event, handleMetadata));
-        instrumental.removeEventListener("ended", handleEnded);
-        instrumental.removeEventListener("timeupdate", handleTimeUpdate);
+      ["loadedmetadata", "durationchange"].forEach((event) =>
+        instrumental.addEventListener(event, metadata)
+      );
+      instrumental.addEventListener("ended", ended);
+      instrumental.addEventListener("timeupdate", timeUpdate);
+      metadata();
+
+      detach = () => {
+        ["loadedmetadata", "durationchange"].forEach((event) =>
+          instrumental.removeEventListener(event, metadata)
+        );
+        instrumental.removeEventListener("ended", ended);
+        instrumental.removeEventListener("timeupdate", timeUpdate);
       };
     };
 
     attach();
     return () => {
       cancelRetry();
-      detachListeners?.();
+      detach?.();
     };
   }, [
     currentTimeRef,
     instrumentalRef,
     onPlaybackEndedRef,
-    sendYouTubeCommand,
     setCurrentTime,
     setDuration,
     setIsPlaying,
@@ -175,63 +131,54 @@ export default function useKaraokeMediaSync({
   ]);
 
   useEffect(() => {
-    if (!isPlaying) return undefined;
+    if (!isPlaying || !globalThis.requestAnimationFrame) return;
 
-    let animationFrameId;
+    let frame;
     let active = true;
-    const updatePosition = () => {
+    const update = () => {
       if (!active) return;
-      const position = instrumentalRef.current?.currentTime;
-      const numericPosition = Number(position);
-      if (Number.isFinite(numericPosition) && numericPosition >= 0) {
-        currentTimeRef.current = numericPosition;
-        updateMelodyGuide(numericPosition);
+
+      const position = Number(instrumentalRef.current?.currentTime);
+      if (Number.isFinite(position) && position >= 0) {
+        currentTimeRef.current = position;
+        updateMelodyGuide(position);
+
         const now = globalThis.performance?.now?.() ?? Date.now();
-        if (now - lastReactSyncRef.current >= REACT_SYNC_INTERVAL_MS) {
-          setCurrentTime(numericPosition);
-          lastReactSyncRef.current = now;
+        if (now - lastReactSync.current >= REACT_SYNC_MS) {
+          setCurrentTime(position);
+          lastReactSync.current = now;
         }
-        if (now - lastSecondarySyncRef.current > 450) {
-          syncSecondaryMedia(numericPosition);
-          lastSecondarySyncRef.current = now;
+        if (now - lastSecondarySync.current >= SECONDARY_SYNC_MS) {
+          syncSecondaryMedia(position);
+          lastSecondarySync.current = now;
         }
       }
-      animationFrameId = globalThis.requestAnimationFrame(updatePosition);
+
+      frame = requestAnimationFrame(update);
     };
 
-    if (typeof globalThis.requestAnimationFrame !== "function") return undefined;
-    // Backgrounded/minimized tabs throttle rAF (sometimes to ~1fps or less),
-    // so the vocals/video followers can drift well past the instrumental
-    // master clock while hidden -- the master itself keeps accurate time
-    // since browsers don't throttle audio playback the same way. Force an
-    // immediate resync the moment the tab is visible again instead of
-    // waiting for the next (possibly still-throttled) natural tick.
-    const handleVisibilityChange = () => {
+    const resync = () => {
       if (globalThis.document?.visibilityState !== "visible") return;
-      const position = instrumentalRef.current?.currentTime;
-      const numericPosition = Number(position);
-      if (!Number.isFinite(numericPosition) || numericPosition < 0) return;
-      currentTimeRef.current = numericPosition;
-      setCurrentTime(numericPosition);
-      lastReactSyncRef.current = globalThis.performance?.now?.() ?? Date.now();
-      syncSecondaryMedia(numericPosition, true);
-      lastSecondarySyncRef.current = lastReactSyncRef.current;
+      const position = Number(instrumentalRef.current?.currentTime);
+      if (!Number.isFinite(position) || position < 0) return;
+
+      currentTimeRef.current = position;
+      setCurrentTime(position);
+      const now = globalThis.performance?.now?.() ?? Date.now();
+      lastReactSync.current = now;
+      lastSecondarySync.current = now;
+      syncSecondaryMedia(position, true);
     };
-    globalThis.document?.addEventListener?.("visibilitychange", handleVisibilityChange);
-    updatePosition();
+
+    globalThis.document?.addEventListener?.("visibilitychange", resync);
+    frame = requestAnimationFrame(update);
+
     return () => {
       active = false;
-      if (animationFrameId != null) globalThis.cancelAnimationFrame(animationFrameId);
-      globalThis.document?.removeEventListener?.("visibilitychange", handleVisibilityChange);
+      cancelAnimationFrame(frame);
+      globalThis.document?.removeEventListener?.("visibilitychange", resync);
     };
-  }, [
-    currentTimeRef,
-    instrumentalRef,
-    isPlaying,
-    setCurrentTime,
-    syncSecondaryMedia,
-    updateMelodyGuide
-  ]);
+  }, [currentTimeRef, instrumentalRef, isPlaying, setCurrentTime, syncSecondaryMedia, updateMelodyGuide]);
 
   useEffect(() => {
     if (instrumentalRef.current) instrumentalRef.current.volume = playbackGain(musicVolume);
@@ -242,30 +189,20 @@ export default function useKaraokeMediaSync({
   }, [vocalVolume, vocalsRef]);
 
   useEffect(() => {
-    if (isPlaying && melodyVolume > 0) startMelodyGuide().catch(() => {});
+    if (isPlaying && melodyVolume > 0) Promise.resolve(startMelodyGuide()).catch(() => {});
     else silenceMelodyGuide();
   }, [isPlaying, keyShift, melodyVolume, silenceMelodyGuide, startMelodyGuide]);
 
   useEffect(() => {
-    const normalizedSpeed = Number(speed);
-    const playbackRate =
-      Number.isFinite(normalizedSpeed) && normalizedSpeed > 0
-        ? Math.max(0.25, Math.min(4, normalizedSpeed))
-        : 1;
-    // Without this filter, the guarded setter's catch preserves identical
-    // behavior for null media.
-    // Stryker disable next-line MethodExpression
-    [instrumentalRef.current, vocalsRef.current, videoRef.current]
-      .filter(Boolean)
-      .forEach((media) => {
-        try {
-          media.playbackRate = playbackRate;
-        } catch {
-          // A detached media element can reject rate changes.
-        }
-      });
-    sendYouTubeCommand("setPlaybackRate", [playbackRate]);
-  }, [instrumentalRef, sendYouTubeCommand, speed, videoRef, vocalsRef]);
+    const rate = normalizePlaybackRate(speed);
+    [instrumentalRef.current, vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
+      try {
+        media.playbackRate = rate;
+      } catch {
+        // detached media can reject rate changes
+      }
+    });
+  }, [instrumentalRef, speed, videoRef, vocalsRef]);
 
-  return { sendYouTubeCommand, syncSecondaryMedia };
+  return { syncSecondaryMedia };
 }

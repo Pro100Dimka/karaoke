@@ -1,75 +1,53 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const CONTROLS_VISIBLE_MS = 2200;
-const VISIBILITY_CHECK_MS = 250;
+const VISIBLE_MS = 2200;
 
 export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
-  const lastActivityRef = useRef(Date.now());
-  const lastPointerRef = useRef(null);
-  const manuallyHiddenRef = useRef(false);
-  const effectiveAutoHide = autoHideEnabled;
+  const lastActivity = useRef(Date.now());
+  const lastPointer = useRef([NaN, NaN]);
+  const manuallyHidden = useRef(false);
 
-  const showControls = useCallback(
-    (manual = false) => {
-      if (manual) manuallyHiddenRef.current = false;
-      if (manuallyHiddenRef.current) return;
-      lastActivityRef.current = Date.now();
-      setControlsVisible(true);
-    },
-    // Stryker disable next-line ArrayDeclaration: stable ref and React setter.
-    []
-  );
+  const showControls = useCallback((manual = false) => {
+    if (manual) manuallyHidden.current = false;
+    if (manuallyHidden.current) return;
+    lastActivity.current = Date.now();
+    setControlsVisible(true);
+  }, []);
 
-  const hideControls = useCallback(
-    (manual = false) => {
-      if (manual) manuallyHiddenRef.current = true;
-      setControlsVisible(false);
-    },
-    // Stryker disable next-line ArrayDeclaration: React state setter is stable.
-    []
-  );
+  const hideControls = useCallback((manual = false) => {
+    if (manual) manuallyHidden.current = true;
+    setControlsVisible(false);
+  }, []);
 
   useEffect(() => {
-    if (!effectiveAutoHide) return undefined;
-
-    const watcher = window.setInterval(() => {
-      if (manuallyHiddenRef.current) return;
-      setControlsVisible(Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS);
-    }, VISIBILITY_CHECK_MS);
-
-    return () => window.clearInterval(watcher);
-  }, [effectiveAutoHide]);
-
-  useEffect(
-    () => {
-      document.addEventListener("fullscreenchange", showControls);
-      return () => document.removeEventListener("fullscreenchange", showControls);
-    },
-    // Stryker disable next-line ArrayDeclaration: showControls has stable identity.
-    [showControls]
-  );
+    if (!autoHideEnabled) return;
+    const timer = setInterval(() => {
+      if (!manuallyHidden.current) {
+        setControlsVisible(Date.now() - lastActivity.current < VISIBLE_MS);
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, [autoHideEnabled]);
 
   useEffect(() => {
-    showControls();
-  }, [effectiveAutoHide, showControls]);
+    const reveal = () => showControls(true);
+    globalThis.document?.addEventListener?.("fullscreenchange", reveal);
+    return () => globalThis.document?.removeEventListener?.("fullscreenchange", reveal);
+  }, [showControls]);
+
+  useEffect(() => showControls(true), [autoHideEnabled, showControls]);
 
   const revealControls = useCallback(
     (event) => {
-      if (manuallyHiddenRef.current) return false;
-      // Scene transitions call hideControls() unconditionally (to black out the
-      // UI during the intro/outro animation) regardless of this preference, so
-      // reveal-on-activity must be equally unconditional. Gating it on
-      // autoHideEnabled used to mean: once autoHideConsole was turned off, any
-      // hideControls() call (every song start/stop) permanently hid the entire
-      // console -- moving the mouse could never bring it back, since neither
-      // this handler nor the (also disabled) auto-hide watcher would ever call
-      // showControls() again.
-      if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-        const position = `${event.clientX}:${event.clientY}`;
-        if (lastPointerRef.current === position) return false;
-        lastPointerRef.current = position;
+      if (manuallyHidden.current) return false;
+
+      if (Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)) {
+        const [x, y] = lastPointer.current;
+        if (x === event.clientX && y === event.clientY) return false;
+        lastPointer.current = [event.clientX, event.clientY];
       }
+
       showControls();
       return true;
     },

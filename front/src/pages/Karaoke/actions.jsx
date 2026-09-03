@@ -1,8 +1,9 @@
+import { memo } from "react";
 import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
 import { translateSaved as t } from "../../i18n/runtime";
 import { IconButton, Stack } from "../../theme/ui";
 
-export default function KaraokeStageActions({
+function KaraokeStageActions({
   controlsVisible,
   hideControls,
   isPlaying,
@@ -14,7 +15,7 @@ export default function KaraokeStageActions({
   toggleRadio
 }) {
   const actions = [
-    ["back", ArrowLeft, t("karaoke.backToTheLibrary"), false, returnToLibrary, true],
+    ["back", ArrowLeft, t("karaoke.backToTheLibrary"), null, returnToLibrary, true],
     [
       "console",
       SlidersHorizontal,
@@ -58,7 +59,7 @@ export default function KaraokeStageActions({
               icon={icon}
               label={label}
               title={label}
-              aria-pressed={active}
+              aria-pressed={typeof active === "boolean" ? active : undefined}
               variant={active ? "contained" : "outline"}
               iconSize={50}
               onClick={onClick}
@@ -68,3 +69,5 @@ export default function KaraokeStageActions({
     </Stack>
   );
 }
+
+export default memo(KaraokeStageActions);

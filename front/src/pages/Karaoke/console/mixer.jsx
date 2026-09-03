@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Mic } from "lucide-react";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { Grid, RotaryKnob, Slider, Stack, Switch, Typography } from "../../../theme/ui";
@@ -35,31 +36,30 @@ export default function MixerPanel({
         />
       </Stack>
 
-      <Grid columns={9} gap="var(--space-2)" align="end">
+      <Grid columns={EFFECT_FIELDS.length + MIXER_FIELDS.length} gap="var(--space-2)" align="end">
         {EFFECT_FIELDS.map(
-          ([effect, effectLabel, effectAccent, min = 0, max = 1, step, displayFactor], index) => {
+          ([effect, label, accent, min = 0, max = 1, step, displayFactor], index) => {
             const mixer = MIXER_FIELDS[index];
+
             return (
-              <>
+              <Fragment key={effect}>
                 <RotaryKnob
-                  key={effect}
-                  label={effectLabel}
+                  label={label}
                   min={min}
                   max={max}
                   step={step}
                   value={microphoneEffects[effect] ?? 0}
                   displayFactor={displayFactor}
-                  accent={effectAccent}
+                  accent={accent}
                   onChange={(value) => onEffectChange?.(effect, value)}
                   onCommit={(value) => onEffectCommit?.(effect, value)}
                 />
 
                 {mixer && (
-                  <Stack key={mixer[0]} align="center" gap="var(--space-1)">
+                  <Stack align="center" gap="var(--space-1)">
                     <Typography variant="caption" noWrap style={{ color: mixer[2] }}>
                       {mixer[1]}
                     </Typography>
-
                     <Slider
                       size="sm"
                       orientation="vertical"
@@ -73,13 +73,12 @@ export default function MixerPanel({
                       onChange={onVolumeChange[mixer[0]]}
                       onCommit={onVolumeCommit[mixer[0]]}
                     />
-
                     <Typography variant="caption" style={{ color: mixer[2] }}>
                       {percent(volumes[mixer[0]])}%
                     </Typography>
                   </Stack>
                 )}
-              </>
+              </Fragment>
             );
           }
         )}

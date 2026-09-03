@@ -13,8 +13,8 @@ const fillSx = {
   willChange: "clip-path"
 };
 
-const Fill = ({ children, dataRole }) => (
-  <Box as="span" aria-hidden data-role={dataRole} sx={fillSx}>
+const Fill = ({ children, role }) => (
+  <Box as="span" aria-hidden data-role={role} sx={fillSx}>
     {children}
   </Box>
 );
@@ -45,7 +45,7 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
   useLayoutEffect(() => update(time), [time, update]);
 
   useEffect(() => {
-    if (!isPlaying || !currentTimeRef) return;
+    if (!isPlaying || !currentTimeRef || !globalThis.requestAnimationFrame) return;
 
     let frame;
 
@@ -121,12 +121,12 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
                 <Box
                   as="span"
                   key={`${word.index}-${wordIndex}`}
-                  ref={bind(`${line}:${wordIndex}`, word, lyricWordFill)}
+                  ref={syllables ? undefined : bind(`${line}:${wordIndex}`, word, lyricWordFill)}
                   data-role="lyric-word"
                   data-text={word.text}
                   data-start={word.start}
                   data-end={word.end}
-                  style={{ "--character-fill": lyricWordFill(word, time) }}
+                  style={syllables ? undefined : { "--character-fill": lyricWordFill(word, time) }}
                   sx={{
                     position: "relative",
                     display: "inline-block",
@@ -155,13 +155,13 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
                         sx={{ position: "relative", display: "inline-block" }}
                       >
                         {syllable.text}
-                        <Fill>{syllable.text}</Fill>
+                        <Fill role="lyric-syllable-fill">{syllable.text}</Fill>
                       </Box>
                     ))
                   ) : (
                     <>
                       {word.text}
-                      <Fill>{word.text}</Fill>
+                      <Fill role="lyric-word-fill">{word.text}</Fill>
                     </>
                   )}
                 </Box>

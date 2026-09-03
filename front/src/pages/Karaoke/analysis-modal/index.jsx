@@ -117,8 +117,8 @@ export default function PerformanceAnalysisModal({
           subtitle={`${t("karaoke.recordingOf", { 0: index + 1, 1: list.length })}${active ? ` · ${t("karaoke.beingAnalyzed")}` : ""}`}
           previousLabel={t("karaoke.previousRecording")}
           nextLabel={t("karaoke.nextRecording")}
-          onPrevious={() => setViewedId(list[index - 1].id)}
-          onNext={() => setViewedId(list[index + 1].id)}
+          onPrevious={index > 0 ? () => setViewedId(list[index - 1].id) : undefined}
+          onNext={index < list.length - 1 ? () => setViewedId(list[index + 1].id) : undefined}
         />
         {!active && (
           <>

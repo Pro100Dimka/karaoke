@@ -3,162 +3,195 @@ import { api } from "../../../api/client";
 import useAsyncQueue from "../../../hooks/useAsyncQueue";
 import useMountedRef from "../../../hooks/useMountedRef";
 import { usePolling } from "../../../hooks/usePolling";
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as t } from "../../../i18n/runtime";
 import { getAudioPreferences } from "../../../utils/audio-preferences";
 import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../../utils/errors";
 import { normalizeAudioEffects, normalizeAudioRuntimeSettings } from "../utils/audio-settings";
 
+const EFFECT_KEYS = ["reverb", "echo", "delay", "noise_suppression", "octave"];
+const DEFAULT_EFFECTS = normalizeAudioEffects({});
+const DEFAULT_RUNTIME = {
+  volume: 1,
+  audioDriver: "auto",
+  outputDeviceId: "",
+  monitoringEnabled: false
+};
+const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
 export default function useMicrophoneSettings({ audioSettings, onError }) {
-  const [microphoneVolume, setMicrophoneVolume] = useState(1);
-  const [microphoneEffects, setMicrophoneEffects] = useState(() => ({
-    reverb: 0,
-    echo: 0,
-    delay: 0,
-    noise_suppression: 0.35,
-    octave: 0
-  }));
-  const [audioDriver, setAudioDriver] = useState("auto");
-  const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
-  const [monitoringEnabled, setMonitoringEnabled] = useState(false);
-  const reportedMonitorError = useRef(null);
-  const directMonitor = usePolling(
-    () => (monitoringEnabled ? api.getDirectMonitorStatus() : Promise.resolve(null)),
-    monitoringEnabled ? 1000 : 0,
-    [monitoringEnabled]
+  const [runtime, setRuntime] = useState(DEFAULT_RUNTIME);
+  const [microphoneEffects, setMicrophoneEffects] = useState(DEFAULT_EFFECTS);
+  const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
+    () => getAudioPreferences().monitorInputDeviceId || "default"
   );
+  const confirmedEffects = useRef(DEFAULT_EFFECTS);
+  const effectSequence = useRef(0);
+  const pendingEffects = useRef(0);
+  const reportedMonitorError = useRef(null);
+  const mounted = useMountedRef();
+  const { run: enqueue } = useAsyncQueue();
+
+  const directMonitor = usePolling(
+    () => (runtime.monitoringEnabled ? api.getDirectMonitorStatus() : Promise.resolve(null)),
+    runtime.monitoringEnabled ? 1000 : 0,
+    [runtime.monitoringEnabled]
+  );
+
+  const reportError = useCallback(
+    (error) =>
+      onError?.(
+        t("karaoke.failedToSaveMicrophoneSettings", {
+          0: getErrorMessage(error, t("room.transfer.unknownError"))
+        })
+      ),
+    [onError]
+  );
+
+  const applyRuntime = useCallback((settings, partial = false) => {
+    if (!settings) return;
+    const next = normalizeAudioRuntimeSettings(settings);
+
+    setRuntime((current) =>
+      partial
+        ? {
+            volume: has(settings, "volume") ? next.volume : current.volume,
+            audioDriver: has(settings, "audio_driver") ? next.audioDriver : current.audioDriver,
+            outputDeviceId: has(settings, "output_device_id")
+              ? next.outputDeviceId
+              : current.outputDeviceId,
+            monitoringEnabled: has(settings, "monitoring_enabled")
+              ? next.monitoringEnabled
+              : current.monitoringEnabled
+          }
+        : {
+            volume: next.volume,
+            audioDriver: next.audioDriver,
+            outputDeviceId: next.outputDeviceId,
+            monitoringEnabled: next.monitoringEnabled
+          }
+    );
+  }, []);
+
   useEffect(() => {
     const status = directMonitor.data;
-    if (status?.state !== "error" || reportedMonitorError.current === status.request_id) return;
-    reportedMonitorError.current = status.request_id;
-    onError(translateSaved("karaoke.couldNotEnableMonitoring", { 0: status.error }));
+    if (status?.state !== "error") return;
+
+    const key = status.request_id ?? status.error;
+    if (reportedMonitorError.current === key) return;
+    reportedMonitorError.current = key;
+    onError?.(t("karaoke.couldNotEnableMonitoring", { 0: status.error }));
   }, [directMonitor.data, onError]);
-  const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
-    () => getAudioPreferences().monitorInputDeviceId
-  );
-  const effectsInitializedRef = useRef(false);
-  const confirmedEffectsRef = useRef(microphoneEffects);
-  const effectMutationRef = useRef(0);
-  const mountedRef = useMountedRef();
-  const { run: enqueueUpdate } = useAsyncQueue();
-  useEffect(
-    () => {
-      const syncAudioPreferences = (event) => {
-        const next = event.detail || getAudioPreferences();
-        setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
-      };
-      window.addEventListener("audio-preferences-changed", syncAudioPreferences);
-      return () => window.removeEventListener("audio-preferences-changed", syncAudioPreferences);
-    },
-    // Stryker disable next-line ArrayDeclaration: globals and setter are stable.
-    []
-  );
-  useEffect(
-    () => {
-      const syncAudioSettings = (event) => {
-        if (!event.detail) return;
-        const normalized = normalizeAudioRuntimeSettings(event.detail);
-        setMicrophoneVolume(normalized.volume);
-        setAudioDriver(normalized.audioDriver);
-        setMonitoringEnabled(normalized.monitoringEnabled);
-        setDirectOutputDeviceId(normalized.outputDeviceId);
-        const normalizedEffects = normalizeAudioEffects({
-          ...confirmedEffectsRef.current,
-          ...event.detail
-        });
-        confirmedEffectsRef.current = normalizedEffects;
-        const mutationSequence = Number(event.detail.__microphoneEffectSequence) || 0;
-        if (!mutationSequence || mutationSequence === effectMutationRef.current) {
-          setMicrophoneEffects(normalizedEffects);
-        }
-      };
-      globalThis.addEventListener(AUDIO_SETTINGS_CHANGED_EVENT, syncAudioSettings);
-      return () => globalThis.removeEventListener(AUDIO_SETTINGS_CHANGED_EVENT, syncAudioSettings);
-    },
-    // Stryker disable next-line ArrayDeclaration: globals and setters are stable.
-    []
-  );
+
+  useEffect(() => {
+    const sync = (event) => {
+      const next = event.detail || getAudioPreferences();
+      setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
+    };
+    globalThis.addEventListener?.("audio-preferences-changed", sync);
+    return () => globalThis.removeEventListener?.("audio-preferences-changed", sync);
+  }, []);
+
+  useEffect(() => {
+    const sync = (event) => {
+      const detail = event.detail;
+      if (!detail) return;
+
+      applyRuntime(detail, true);
+      if (!EFFECT_KEYS.some((key) => has(detail, key))) return;
+
+      const effects = normalizeAudioEffects({ ...confirmedEffects.current, ...detail });
+      confirmedEffects.current = effects;
+      const sequence = Number(detail.__microphoneEffectSequence) || 0;
+      if (!sequence || sequence === effectSequence.current) setMicrophoneEffects(effects);
+    };
+
+    globalThis.addEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, sync);
+    return () => globalThis.removeEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, sync);
+  }, [applyRuntime]);
+
   useEffect(() => {
     if (!audioSettings) return;
-    const normalized = normalizeAudioRuntimeSettings(audioSettings);
-    setMicrophoneVolume(normalized.volume);
-    setAudioDriver(normalized.audioDriver);
-    setMonitoringEnabled(normalized.monitoringEnabled);
-    setDirectOutputDeviceId(normalized.outputDeviceId);
-    if (!effectsInitializedRef.current) {
-      effectsInitializedRef.current = true;
-      const normalizedEffects = normalizeAudioEffects(audioSettings);
-      confirmedEffectsRef.current = normalizedEffects;
-      setMicrophoneEffects(normalizedEffects);
+    applyRuntime(audioSettings);
+
+    if (!pendingEffects.current) {
+      const effects = normalizeAudioEffects(audioSettings);
+      confirmedEffects.current = effects;
+      setMicrophoneEffects(effects);
     }
-  }, [audioSettings]);
+  }, [applyRuntime, audioSettings]);
+
   const updateMicrophone = useCallback(
     (patch) =>
-      enqueueUpdate(async () => {
+      enqueue(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          globalThis.dispatchEvent(
+          globalThis.dispatchEvent?.(
             new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
           );
           return updated;
         } catch (error) {
-          if (mountedRef.current) {
-            onError(
-              translateSaved("karaoke.failedToSaveMicrophoneSettings", {
-                0: getErrorMessage(error, translateSaved("room.transfer.unknownError"))
-              })
-            );
-          }
+          if (mounted.current) reportError(error);
           return null;
         }
       }),
-    [enqueueUpdate, mountedRef, onError]
+    [enqueue, mounted, reportError]
   );
+
+  const setMicrophoneVolume = useCallback(
+    (volume) => setRuntime((state) => ({ ...state, volume })),
+    []
+  );
+  const setDirectOutputDeviceId = useCallback(
+    (outputDeviceId) => setRuntime((state) => ({ ...state, outputDeviceId })),
+    []
+  );
+  const setMonitoringEnabled = useCallback(
+    (monitoringEnabled) =>
+      setRuntime((state) => ({ ...state, monitoringEnabled: !!monitoringEnabled })),
+    []
+  );
+
   const updateMicrophoneEffects = useCallback(
     (patch) => {
-      const mutationSequence = effectMutationRef.current + 1;
-      effectMutationRef.current = mutationSequence;
-      setMicrophoneEffects((current) => normalizeAudioEffects({ ...current, ...patch }));
-      return enqueueUpdate(async () => {
+      const sequence = ++effectSequence.current;
+      pendingEffects.current += 1;
+      setMicrophoneEffects((effects) => normalizeAudioEffects({ ...effects, ...patch }));
+
+      return enqueue(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          const normalizedEffects = normalizeAudioEffects({
-            ...confirmedEffectsRef.current,
-            ...updated
-          });
-          confirmedEffectsRef.current = normalizedEffects;
-          globalThis.dispatchEvent(
+          const effects = normalizeAudioEffects({ ...confirmedEffects.current, ...updated });
+          confirmedEffects.current = effects;
+          globalThis.dispatchEvent?.(
             new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, {
-              detail: { ...updated, __microphoneEffectSequence: mutationSequence }
+              detail: { ...updated, __microphoneEffectSequence: sequence }
             })
           );
           return updated;
         } catch (error) {
-          if (mountedRef.current && mutationSequence === effectMutationRef.current) {
-            setMicrophoneEffects(confirmedEffectsRef.current);
+          if (mounted.current && sequence === effectSequence.current) {
+            setMicrophoneEffects(confirmedEffects.current);
           }
-          if (mountedRef.current) {
-            onError(
-              translateSaved("karaoke.failedToSaveMicrophoneSettings", {
-                0: getErrorMessage(error, translateSaved("room.transfer.unknownError"))
-              })
-            );
-          }
+          if (mounted.current) reportError(error);
           return null;
+        } finally {
+          pendingEffects.current = Math.max(0, pendingEffects.current - 1);
         }
       });
     },
-    [enqueueUpdate, mountedRef, onError]
+    [enqueue, mounted, reportError]
   );
+
   return {
-    microphoneVolume,
+    microphoneVolume: runtime.volume,
     setMicrophoneVolume,
     microphoneEffects,
     setMicrophoneEffects,
-    audioDriver,
-    directOutputDeviceId,
+    audioDriver: runtime.audioDriver,
+    directOutputDeviceId: runtime.outputDeviceId,
     setDirectOutputDeviceId,
-    monitoringEnabled,
+    monitoringEnabled: runtime.monitoringEnabled,
     setMonitoringEnabled,
     monitorInputDeviceId,
     updateMicrophone,

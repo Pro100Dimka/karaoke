@@ -8,7 +8,7 @@ const options = {
   antialias: true,
   backgroundAlpha: 0,
   autoDensity: true,
-  resolution: Math.min(devicePixelRatio || 1, 2)
+  resolution: Math.min(globalThis.devicePixelRatio || 1, 2)
 };
 
 const style = {
@@ -49,8 +49,8 @@ function RollGraphics({
           .lineTo(line.toX, line.toY);
       }
 
+      const noteHeight = clamp(rowHeight * 0.72, 5, 15);
       for (const note of frame.notes) {
-        const height = clamp(rowHeight * 0.72, 5, 15);
         const opacity =
           note.state === "past" ? clamp(0.58 * (1 - (frame.time - note.end) / 2.8), 0.08, 0.58) : 1;
 
@@ -58,10 +58,10 @@ function RollGraphics({
           .beginFill(note.state === "current" ? palette.hover : palette.primary, opacity)
           .drawRoundedRect(
             note.left,
-            frame.y(note.note) + (rowHeight - height) / 2,
+            frame.y(note.note) + (rowHeight - noteHeight) / 2,
             Math.max(1.5, note.right - note.left),
-            height,
-            height / 2
+            noteHeight,
+            noteHeight / 2
           )
           .endFill();
       }

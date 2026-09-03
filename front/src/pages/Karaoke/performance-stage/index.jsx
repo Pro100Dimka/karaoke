@@ -17,7 +17,6 @@ export default function KaraokePerformanceStage({
   isPlaying,
   keyShift,
   monitorInputDeviceId,
-  monitoringEnabled,
   getLocalVoiceStream,
   hasSongClip = false,
   showLyrics,
@@ -25,9 +24,8 @@ export default function KaraokePerformanceStage({
   notes = []
 }) {
   const pitch = usePitchDetection({
-    isPlaying,
+    isPlaying: isPlaying && showNotes && notes.length > 0,
     monitorInputDeviceId,
-    monitoringEnabled,
     getLocalVoiceStream
   });
 

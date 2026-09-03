@@ -266,9 +266,25 @@ def _is_asio_device(device: dict) -> bool:
     return "asio" in _host_api_name(device).lower()
 
 
+def _is_wdm_ks_device(device: dict) -> bool:
+    # PortAudio enumerates a "Windows WDM-KS" host API entry for most
+    # capture devices, but nothing in this app opens a stream against it
+    # deliberately (it is filtered out of every device picker) and it was
+    # never wired up or tested -- on some devices/drivers its pin doesn't
+    # support a basic property query PortAudio needs just to open a stream
+    # ("Unanticipated host error" / WdmSyncIoctl DeviceIoControl failure on
+    # KSPROPERTY_PIN_PHYSICALCONNECTION), which aborts the stream outright.
+    # A saved or auto-resolved device id must never be allowed to land on
+    # this host API, only fall through to one the app actually supports.
+    return "wdm-ks" in _host_api_name(device).casefold()
+
+
 def _resolved_device_index(device_id: int | None, kind: str, devices=None) -> int:
     devices = sd.query_devices() if devices is None else devices
-    if device_id is not None and 0 <= device_id < len(devices):
+    if (
+        device_id is not None and 0 <= device_id < len(devices)
+        and not _is_wdm_ks_device(devices[device_id])
+    ):
         return device_id
     default_input, default_output = sd.default.device
     raw_default = default_input if kind == "input" else default_output
@@ -276,17 +292,21 @@ def _resolved_device_index(device_id: int | None, kind: str, devices=None) -> in
         default_id = int(raw_default)
     except (TypeError, ValueError):
         default_id = -1
-    if 0 <= default_id < len(devices) and int(devices[default_id].get(f"max_{kind}_channels", 0)) > 0:
+    if (
+        0 <= default_id < len(devices)
+        and int(devices[default_id].get(f"max_{kind}_channels", 0)) > 0
+        and not _is_wdm_ks_device(devices[default_id])
+    ):
         return default_id
     capability = f"max_{kind}_channels"
     candidates = [
         (index, device)
         for index, device in enumerate(devices)
-        if int(device.get(capability, 0)) > 0
+        if int(device.get(capability, 0)) > 0 and not _is_wdm_ks_device(device)
     ]
     if not candidates:
         raise RuntimeError(f"No {kind} audio device is available")
-    host_priority = {"wasapi": 0, "mme": 1, "directsound": 2, "wdm-ks": 3}
+    host_priority = {"wasapi": 0, "mme": 1, "directsound": 2}
 
     def rank(item: tuple[int, dict]) -> tuple[int, float]:
         _index, device = item

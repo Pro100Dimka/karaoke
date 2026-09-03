@@ -4,166 +4,170 @@ import { acquireMicrophone } from "../../../services/microphoneCapture";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
-export default function usePitchDetection({
-  isPlaying,
-  monitorInputDeviceId,
-  getLocalVoiceStream
-}) {
-  const hardwareSuspended = useHardwareSuspended();
-  const [sungMidi, setSungMidi] = useState(null);
-  const [isPitchDetected, setIsPitchDetected] = useState(false);
-  const [isPitchAttacking, setIsPitchAttacking] = useState(false);
-  const [pitchRestProgress, setPitchRestProgress] = useState(1);
+const IDLE = {
+  sungMidi: null,
+  isPitchDetected: false,
+  isPitchAttacking: false,
+  pitchRestProgress: 1
+};
+
+export default function usePitchDetection({ isPlaying, monitorInputDeviceId, getLocalVoiceStream }) {
+  const suspended = useHardwareSuspended();
+  const [pitch, setPitch] = useState(IDLE);
+
   useEffect(() => {
-    if (!isPlaying || hardwareSuspended || !navigator.mediaDevices?.getUserMedia) {
-      setSungMidi(null);
-      setIsPitchDetected(false);
-      setIsPitchAttacking(false);
-      setPitchRestProgress(1);
-      return undefined;
+    const canCapture = getLocalVoiceStream || globalThis.navigator?.mediaDevices?.getUserMedia;
+    if (!isPlaying || suspended || !canCapture) {
+      setPitch(IDLE);
+      return;
     }
+
     let cancelled = false;
-    let animationFrameId = 0;
-    let ownsContext = false;
-    let microphoneLease;
-    let stream;
+    let frame = 0;
+    let lease;
     let context;
-    let sourceNode;
-    let lastMeasurementAt = 0;
-    let lastAnimationAt = 0;
-    let lastRenderAt = 0;
-    let lastVoicedAt = 0;
-    let targetMidi = null;
-    let displayedMidi = null;
-    let restStartedAt = 0;
+    let source;
+    let target = null;
+    let displayed = null;
+    let measuredAt = 0;
+    let animatedAt = 0;
+    let renderedAt = 0;
+    let voicedAt = 0;
+    let restAt = 0;
     let attackUntil = 0;
-    const recentMidi = [];
-    const resetPitch = () => {
-      setSungMidi(null);
-      setIsPitchDetected(false);
-      setIsPitchAttacking(false);
-      setPitchRestProgress(1);
-    };
-    resetPitch();
+    const recent = [];
+
+    setPitch(IDLE);
+
     const start = async () => {
       try {
-        if (getLocalVoiceStream) {
-          stream = await getLocalVoiceStream();
-          if (!stream) return;
-        } else {
-          microphoneLease = await acquireMicrophone(monitorInputDeviceId, {
-            disabledEffects: true
-          });
-          stream = microphoneLease.stream;
-        }
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        context = new AudioContextClass({ latencyHint: "interactive" });
-        ownsContext = true;
-        if (cancelled) {
-          // Cancellation can only interleave with the awaited capture above,
-          // so this stream is necessarily owned by this effect.
-          await microphoneLease?.release();
-          if (ownsContext) await closeAudioContext(context);
+        const stream = getLocalVoiceStream
+          ? await getLocalVoiceStream()
+          : (lease = await acquireMicrophone(monitorInputDeviceId, { disabledEffects: true })).stream;
+        if (!stream || cancelled) {
+          await lease?.release?.();
           return;
         }
+
+        const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+        if (!AudioContext) {
+          await lease?.release?.();
+          return;
+        }
+
+        context = new AudioContext({ latencyHint: "interactive" });
         if (context.state === "suspended") await context.resume();
-        if (cancelled) return;
+        if (cancelled) {
+          await lease?.release?.();
+          await closeAudioContext(context);
+          return;
+        }
+
         const analyser = context.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.2;
-        sourceNode = context.createMediaStreamSource(stream);
-        sourceNode.connect(analyser);
+        source = context.createMediaStreamSource(stream);
+        source.connect(analyser);
         const buffer = new Float32Array(analyser.fftSize);
-        const updatePitch = (timestamp) => {
+
+        const update = (now) => {
           if (cancelled) return;
-          if (timestamp - lastMeasurementAt >= 35) {
-            lastMeasurementAt = timestamp;
-            const detectedMidi = detectMidiFromAnalyser(analyser, buffer, context.sampleRate);
-            if (Number.isFinite(detectedMidi)) {
-              recentMidi.push(detectedMidi);
-              if (recentMidi.length > 3) recentMidi.shift();
-              const sortedMidi = [...recentMidi].sort((left, right) => left - right);
-              const medianMidi = sortedMidi[Math.floor(sortedMidi.length / 2)];
-              targetMidi = Number.isFinite(targetMidi)
-                ? targetMidi + (medianMidi - targetMidi) * 0.42
-                : medianMidi;
-              const wasResting = restStartedAt > 0 || !Number.isFinite(displayedMidi);
-              lastVoicedAt = timestamp;
-              restStartedAt = 0;
-              if (wasResting) {
-                displayedMidi = targetMidi;
-                setSungMidi(targetMidi);
-                attackUntil = timestamp + 130;
-                setIsPitchAttacking(true);
+
+          if (now - measuredAt >= 35) {
+            measuredAt = now;
+            const midi = detectMidiFromAnalyser(analyser, buffer, context.sampleRate);
+
+            if (Number.isFinite(midi)) {
+              recent.push(midi);
+              if (recent.length > 3) recent.shift();
+              const sorted = [...recent].sort((a, b) => a - b);
+              const median = sorted[Math.floor(sorted.length / 2)];
+              target = Number.isFinite(target) ? target + (median - target) * 0.42 : median;
+              const attacking = restAt > 0 || !Number.isFinite(displayed);
+
+              voicedAt = now;
+              restAt = 0;
+
+              if (attacking) {
+                displayed = target;
+                attackUntil = now + 130;
               }
-              setIsPitchDetected(true);
-              setPitchRestProgress(0);
+
+              setPitch((state) => ({
+                ...state,
+                ...(attacking ? { sungMidi: target, isPitchAttacking: true } : {}),
+                isPitchDetected: true,
+                pitchRestProgress: 0
+              }));
             }
           }
-          if (timestamp - lastVoicedAt > 110) {
-            targetMidi = null;
-            if (!restStartedAt && Number.isFinite(displayedMidi)) {
-              restStartedAt = timestamp;
-              setIsPitchDetected(false);
-              setIsPitchAttacking(false);
+
+          if (now - voicedAt > 110) {
+            target = null;
+            if (!restAt && Number.isFinite(displayed)) {
+              restAt = now;
+              setPitch((state) => ({
+                ...state,
+                isPitchDetected: false,
+                isPitchAttacking: false
+              }));
             }
           }
-          if (attackUntil && timestamp >= attackUntil) {
+
+          if (attackUntil && now >= attackUntil) {
             attackUntil = 0;
-            setIsPitchAttacking(false);
+            setPitch((state) => ({ ...state, isPitchAttacking: false }));
           }
-          if (Number.isFinite(targetMidi)) {
-            const elapsedSeconds = Math.min(
-              0.05,
-              Math.max(0.001, (timestamp - lastAnimationAt) / 1000)
-            );
-            const maxStep = 22 * elapsedSeconds;
-            const difference = targetMidi - displayedMidi;
-            displayedMidi += Math.max(-maxStep, Math.min(maxStep, difference));
-            if (timestamp - lastRenderAt >= 15) {
-              setSungMidi(displayedMidi);
-              lastRenderAt = timestamp;
+
+          if (Number.isFinite(target)) {
+            const seconds = Math.min(0.05, Math.max(0.001, (now - animatedAt) / 1000));
+            displayed += Math.max(-22 * seconds, Math.min(22 * seconds, target - displayed));
+
+            if (now - renderedAt >= 15) {
+              renderedAt = now;
+              setPitch((state) => ({ ...state, sungMidi: displayed }));
             }
-          } else {
-            // A zero rest start only repeats the already-rendered reset state.
-            // Stryker disable next-line ConditionalExpression
-            if (restStartedAt) {
-              const restProgress = Math.min(1, (timestamp - restStartedAt) / 380);
-              if (timestamp - lastRenderAt >= 32) {
-                setPitchRestProgress(restProgress);
-                lastRenderAt = timestamp;
-              }
-              if (restProgress >= 1) {
-                displayedMidi = null;
-                recentMidi.length = 0;
-                setSungMidi(null);
-                restStartedAt = 0;
-              }
+          } else if (restAt) {
+            const progress = Math.min(1, (now - restAt) / 380);
+
+            if (now - renderedAt >= 32) {
+              renderedAt = now;
+              setPitch((state) => ({ ...state, pitchRestProgress: progress }));
+            }
+
+            if (progress >= 1) {
+              displayed = null;
+              recent.length = 0;
+              restAt = 0;
+              setPitch((state) => ({ ...state, sungMidi: null, pitchRestProgress: 1 }));
             }
           }
-          lastAnimationAt = timestamp;
-          animationFrameId = requestAnimationFrame(updatePitch);
+
+          animatedAt = now;
+          frame = globalThis.requestAnimationFrame(update);
         };
-        animationFrameId = requestAnimationFrame(updatePitch);
+
+        frame = globalThis.requestAnimationFrame(update);
       } catch {
-        microphoneLease?.release();
-        if (ownsContext) closeAudioContextQuietly(context);
-        ownsContext = false;
-        // Pitch feedback is optional; the state was reset before startup.
+        lease?.release?.();
+        closeAudioContextQuietly(context);
       }
     };
+
     start();
+
     return () => {
       cancelled = true;
-      cancelAnimationFrame(animationFrameId);
+      globalThis.cancelAnimationFrame?.(frame);
       try {
-        sourceNode.disconnect();
+        source?.disconnect();
       } catch {
-        // The graph may be absent or already disconnected by the browser.
+        // already disconnected
       }
-      microphoneLease?.release();
-      if (ownsContext) closeAudioContextQuietly(context);
+      lease?.release?.();
+      closeAudioContextQuietly(context);
     };
-  }, [isPlaying, hardwareSuspended, monitorInputDeviceId, getLocalVoiceStream]);
-  return { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress };
+  }, [getLocalVoiceStream, isPlaying, monitorInputDeviceId, suspended]);
+
+  return pitch;
 }

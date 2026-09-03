@@ -1,68 +1,76 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
-import { useShallow } from "zustand/react/shallow";
 import { createStore } from "zustand/vanilla";
 import { api } from "../../../api/client";
+import useMountedRef from "../../../hooks/useMountedRef";
 import { getErrorMessage } from "../../../utils/errors";
-import { loadKaraokePreferences, saveKaraokePreferences } from "../utils/preferences";
+import useKaraokeRoomPreferences from "./useKaraokeRoomPreferences";
+import {
+  loadKaraokePreferences,
+  normalizeKaraokePreferences,
+  saveKaraokePreferences
+} from "../utils/preferences";
 
-const defaults = {
-  musicVolume: 1,
-  vocalVolume: 1,
-  melodyVolume: 0,
-  speed: 1,
-  keyShift: 0,
-  showLyrics: true,
-  showNotes: true,
-  autoHideConsole: true,
-  effectPreset: "studio",
-  timingOffsets: {}
-};
+const defaults = normalizeKaraokePreferences({});
 const keys = Object.keys(defaults);
 const setterName = (key) => `set${key[0].toUpperCase()}${key.slice(1)}`;
+const valuesOf = (state) => Object.fromEntries(keys.map((key) => [key, state[key]]));
 
 export const createKaraokePreferencesStore = (saved = loadKaraokePreferences()) =>
   createStore((set) => ({
     ...defaults,
-    ...saved,
-    ...Object.fromEntries(keys.map((key) => [setterName(key), (value) => set({ [key]: value })]))
+    ...normalizeKaraokePreferences(saved),
+    ...Object.fromEntries(
+      keys.map((key) => [
+        setterName(key),
+        (value) =>
+          set((state) => ({
+            [key]: typeof value === "function" ? value(state[key]) : value
+          }))
+      ])
+    )
   }));
 
-const preferencesOf = (state) => Object.fromEntries(keys.map((key) => [key, state[key]]));
-
-export default function useKaraokePreferences() {
+export default function useKaraokePreferences(roomSync = {}) {
   const [store] = useState(createKaraokePreferencesStore);
   const [persistenceError, setPersistenceError] = useState(null);
-  const skipNextPersistence = useRef(false);
-  const state = useStore(
-    store,
-    useShallow((value) => value)
-  );
+  const skipPersistence = useRef(false);
+  const saveQueue = useRef(Promise.resolve());
+  const mounted = useMountedRef();
+  const state = useStore(store);
+
+  useKaraokeRoomPreferences({ ...roomSync, preferences: state });
 
   useEffect(
     () =>
       store.subscribe((value) => {
-        if (skipNextPersistence.current) {
-          skipNextPersistence.current = false;
+        if (skipPersistence.current) {
+          skipPersistence.current = false;
           return;
         }
-        const preferences = preferencesOf(value);
-        if (saveKaraokePreferences(preferences)) {
-          api.updateUiPreferences("karaoke", preferences).then(
-            () => setPersistenceError(null),
-            (error) => setPersistenceError(getErrorMessage(error))
-          );
-        }
+
+        const preferences = valuesOf(value);
+        if (!saveKaraokePreferences(preferences)) return;
+
+        const save = () => api.updateUiPreferences("karaoke", preferences);
+        const request = saveQueue.current.then(save, save);
+        saveQueue.current = request.catch(() => {});
+        request.then(
+          () => mounted.current && setPersistenceError(null),
+          (error) => mounted.current && setPersistenceError(getErrorMessage(error))
+        );
       }),
-    [store]
+    [mounted, store]
   );
 
   const previewPreference = useCallback(
     (key, value) => {
-      skipNextPersistence.current = true;
+      if (!keys.includes(key)) return;
+      skipPersistence.current = true;
       store.setState({ [key]: value });
     },
     [store]
   );
+
   return { ...state, persistenceError, previewPreference };
 }

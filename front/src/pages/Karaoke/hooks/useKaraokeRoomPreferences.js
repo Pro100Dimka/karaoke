@@ -16,37 +16,32 @@ const valuesOf = (preferences) =>
   });
 
 export default function useKaraokeRoomPreferences({ preferences, room, roomUi, syncUi }) {
-  const connected = Boolean(room),
-    roomId = room?.id,
-    selfId = room?.selfId,
-    host = room?.host;
   const channel = useRef(createRoomSyncChannel());
   const local = useMemo(() => valuesOf(preferences), [preferences]);
-  const localSignature = JSON.stringify(local);
-  const currentLocal = useRef(local);
-  const currentPreferences = useRef(preferences);
-  currentLocal.current = local;
-  currentPreferences.current = preferences;
+  const localRef = useRef(local);
+  const preferencesRef = useRef(preferences);
+  localRef.current = local;
+  preferencesRef.current = preferences;
 
   useEffect(() => {
-    channel.current = createRoomSyncChannel(connected && !host ? currentLocal.current : undefined);
-  }, [connected, host, roomId, selfId]);
+    channel.current = createRoomSyncChannel(room && !room.host ? localRef.current : undefined);
+  }, [room?.host, room?.id, room?.selfId]);
 
   useEffect(() => {
-    if (!connected || !roomUi?.karaoke) return;
+    if (!room || !roomUi?.karaoke) return;
+
     const remote = valuesOf(roomUi.karaoke);
-    const { current } = currentLocal;
-    if (!channel.current.receiveState(remote, current)) return;
+    if (!channel.current.receiveState(remote, localRef.current)) return;
+
     Object.entries(remote).forEach(([key, value]) => {
-      if (current[key] === value) return;
+      if (localRef.current[key] === value) return;
       const setter = `set${key[0].toUpperCase()}${key.slice(1)}`;
-      currentPreferences.current[setter]?.(value);
+      preferencesRef.current[setter]?.(value);
     });
-  }, [connected, roomId, roomUi?.__eventId, roomUi?.karaoke]);
+  }, [room?.host, room?.id, roomUi?.__eventId, roomUi?.karaoke]);
 
   useEffect(() => {
-    if (!room) return;
-    if (!channel.current.shouldSend(local)) return;
-    syncUi({ karaoke: local });
-  }, [local, localSignature, room, syncUi]);
+    if (!room || typeof syncUi !== "function" || !channel.current.shouldSend(local)) return;
+    Promise.resolve(syncUi({ karaoke: local })).catch(() => {});
+  }, [local, room, syncUi]);
 }

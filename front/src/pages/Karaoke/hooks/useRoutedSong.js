@@ -1,26 +1,32 @@
 import { useEffect, useState } from "react";
 import { api } from "../../../api/client";
 
+const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+
 export default function useRoutedSong(songs, songId) {
-  const listedSong = songId
-    ? (songs || []).find((song) => song.id === songId)
-    : (songs || []).find((song) => song.status === "done");
-  const [routedSong, setRoutedSong] = useState(null);
+  const hasList = Array.isArray(songs);
+  const list = hasList ? songs : [];
+  const listed =
+    songId != null
+      ? list.find((song) => sameId(song?.id, songId))
+      : list.find((song) => song?.status === "done");
+  const [loaded, setLoaded] = useState(null);
 
   useEffect(() => {
-    if (!songId || !songs || listedSong) {
-      setRoutedSong(null);
-      return undefined;
+    if (songId == null || !hasList || listed) {
+      setLoaded(null);
+      return;
     }
+
     let active = true;
     api.getSong(songId).then(
-      (loaded) => active && setRoutedSong(loaded),
-      () => active && setRoutedSong(null)
+      (song) => active && setLoaded(song),
+      () => active && setLoaded(null)
     );
     return () => {
       active = false;
     };
-  }, [listedSong, songId, songs]);
+  }, [hasList, listed?.id, songId]);
 
-  return listedSong || (routedSong?.id === songId ? routedSong : null);
+  return listed || (sameId(loaded?.id, songId) ? loaded : null);
 }

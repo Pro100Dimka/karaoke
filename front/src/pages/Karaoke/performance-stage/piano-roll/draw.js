@@ -1,4 +1,3 @@
-/* eslint-disable no-multi-assign */
 import { clamp } from "../../../../utils/math";
 
 const rect = (ctx, x, y, w, h) => {
@@ -31,7 +30,8 @@ export function drawPianoRoll(ctx, frame, palette, pitch = {}) {
   ctx.beginPath();
   ctx.rect(keyboard, 0, lane, height);
   ctx.clip();
-  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   ctx.shadowBlur = 0;
   ctx.strokeStyle = palette.hover;
   ctx.lineWidth = clamp(rowHeight * 0.24, 2, 5);
@@ -85,7 +85,8 @@ export function drawPianoRoll(ctx, frame, palette, pitch = {}) {
     ctx.beginPath();
     ctx.arc(playhead, y(pitch.midi) + center, Math.max(3, rowHeight * 0.2), 0, Math.PI * 2);
     ctx.fillStyle = palette.text;
-    ctx.strokeStyle = ctx.shadowColor = palette.success;
+    ctx.strokeStyle = palette.success;
+    ctx.shadowColor = palette.success;
     ctx.lineWidth = 2;
     ctx.fill();
     ctx.stroke();

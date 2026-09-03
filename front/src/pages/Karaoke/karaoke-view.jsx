@@ -1,31 +1,92 @@
 import { AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRadio } from "../../contexts/radio";
 import { Box, Card, Stack, Typography } from "../../theme/ui";
 import KaraokeStageActions from "./actions";
 import PerformanceAnalysisModal from "./analysis-modal";
 import KaraokeConsole from "./console";
+import useKaraokeControls from "./hooks/useKaraokeControls";
+import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
+import useKaraokeSceneFlow from "./hooks/useKaraokeSceneFlow";
+import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
 import KaraokeMedia from "./media";
 import KaraokePerformanceStage from "./performance-stage";
 
 export default function KaraokeView({
-  containerRef,
-  onMouseMove,
-  mediaProps,
+  autoHideEnabled,
+  currentTime,
+  duration,
+  isPlaying,
+  recordingSessionId,
   recordingError,
   analysisRecordingId,
-  onAnalysisClose,
-  stageActionProps,
+  clearAnalysis,
+  sceneOptions,
+  transport,
+  mediaProps,
   performanceProps,
-  consoleProps,
-  controlsVisible,
-  isPlaying
+  consoleProps
 }) {
+  const containerRef = useRef(null);
+  const [clipAvailable, setClipAvailable] = useState(false);
+  const {
+    isPlaying: isRadioPlaying,
+    setRecordingActive,
+    toggle: toggleRadio,
+    turnOff: turnOffRadio,
+    turnOn: turnOnRadio
+  } = useRadio();
+  const controls = useKaraokeControls({ autoHideEnabled });
+  const { playbackEndedRef, ...flowOptions } = sceneOptions;
+  const scene = useKaraokeSceneFlow({
+    ...flowOptions,
+    hideControls: controls.hideControls,
+    isPlaying,
+    isRadioPlaying,
+    returnToLibrary: transport.returnToLibrary,
+    setRecordingActive,
+    showControls: controls.showControls,
+    stop: transport.stop,
+    togglePlay: transport.togglePlay,
+    turnOffRadio,
+    turnOnRadio
+  });
+
+  playbackEndedRef.current = scene.handleStop;
+
+  useEffect(() => {
+    setRecordingActive(Boolean(recordingSessionId) && isPlaying);
+  }, [isPlaying, recordingSessionId, setRecordingActive]);
+
+  useEffect(() => () => setRecordingActive(false), [setRecordingActive]);
+
+  useKaraokeHotkeys({
+    scopeRef: containerRef,
+    currentTime,
+    duration,
+    onTogglePlay: scene.handleTogglePlay,
+    onSeek: transport.seekTo,
+    onStop: scene.handleStop
+  });
+  useKaraokeStageLayout(containerRef);
+
+  const closeAnalysis = () => {
+    clearAnalysis();
+    scene.navigateToLibraryFromBlackout();
+  };
+  const controlsVisible = controls.controlsVisible && !scene.sceneTransitioning;
+
   return (
     <Box
       as="main"
       ref={containerRef}
       data-role="karaoke"
       data-playing={isPlaying || undefined}
-      onMouseMove={onMouseMove}
+      onMouseMove={(event) => {
+        if (!scene.sceneTransitioning && controls.revealControls(event)) {
+          scene.revealStageActions();
+        }
+      }}
       sx={{
         position: "fixed",
         inset: 0,
@@ -34,9 +95,25 @@ export default function KaraokeView({
         background: "var(--color-bg-deep)"
       }}
     >
-      <KaraokeMedia {...mediaProps} />
-      <KaraokePerformanceStage {...performanceProps} />
-      <KaraokeStageActions {...stageActionProps} />
+      <KaraokeMedia {...mediaProps} onClipAvailabilityChange={setClipAvailable} />
+      <KaraokePerformanceStage
+        {...performanceProps}
+        hasSongClip={clipAvailable}
+        sceneBlackout={scene.sceneBlackout}
+        sceneIntroVisible={scene.sceneIntroVisible}
+      />
+      <KaraokeStageActions
+        controlsVisible={controls.controlsVisible}
+        hideControls={controls.hideControls}
+        isPlaying={isPlaying}
+        isRadioPlaying={isRadioPlaying}
+        returnToLibrary={transport.returnToLibrary}
+        sceneTransitioning={scene.sceneTransitioning}
+        showControls={controls.showControls}
+        stageActionsVisible={scene.stageActionsVisible}
+        toggleRadio={toggleRadio}
+      />
+
       {recordingError && (
         <Stack
           align="center"
@@ -53,7 +130,7 @@ export default function KaraokeView({
             cardContent={{ style: { padding: "var(--space-3) var(--space-5)" } }}
           >
             <Stack direction="row" align="center" gap="var(--space-2)">
-              <AlertCircle aria-hidden="true" />
+              <AlertCircle aria-hidden />
               <Typography role="alert" tone="danger">
                 {recordingError}
               </Typography>
@@ -61,13 +138,22 @@ export default function KaraokeView({
           </Card>
         </Stack>
       )}
-      <KaraokeConsole {...consoleProps} visible={controlsVisible} />
+
+      <KaraokeConsole
+        {...consoleProps}
+        autoHideEnabled={autoHideEnabled}
+        visible={controlsVisible}
+        onClose={controls.hideControls}
+        onStop={scene.handleStop}
+        onTogglePlay={scene.handleTogglePlay}
+      />
+
       {analysisRecordingId && (
         <PerformanceAnalysisModal
           recordingId={analysisRecordingId}
-          onClose={onAnalysisClose}
-          onDone={onAnalysisClose}
-          onDeleted={onAnalysisClose}
+          onClose={closeAnalysis}
+          onDone={closeAnalysis}
+          onDeleted={closeAnalysis}
         />
       )}
     </Box>

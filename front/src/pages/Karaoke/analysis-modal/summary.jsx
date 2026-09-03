@@ -55,7 +55,7 @@ export default ({ result }) => {
             {feedback.grade}
           </Typography>
           <Typography data-role="analysis-score" variant="h3">
-            {feedback.accuracy ?? "—"}%
+            {feedback.accuracy == null ? "—" : `${feedback.accuracy}%`}
           </Typography>
           <Typography tone="muted">{t("karaoke.overallPerformanceScore")}</Typography>
           <Typography variant="caption" tone="muted" textAlign="center">

@@ -1,29 +1,43 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Box } from "../../../theme/ui";
 
-export default memo(({ src, isPlaying }) => {
-  const video = useRef(null);
-  const timer = useRef();
+export default memo(function SceneVideo({ src, isPlaying }) {
+  const ref = useRef(null);
+  const timer = useRef(null);
   const [switching, setSwitching] = useState(false);
+
   const transition = useCallback(() => {
-    if (!video.current?.duration) return;
-    setSwitching(true);
+    const video = ref.current;
     clearTimeout(timer.current);
+
+    if (!video || !isPlaying) {
+      video?.pause();
+      setSwitching(false);
+      return;
+    }
+
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+
+    setSwitching(true);
     timer.current = setTimeout(() => {
-      const { current } = video;
+      const current = ref.current;
+      if (!current || !isPlaying) return setSwitching(false);
+
       current.currentTime = Math.random() * Math.max(0.1, current.duration - 0.5);
       Promise.resolve(current.play()).catch(() => {});
       setSwitching(false);
     }, 180);
-  }, []);
+  }, [isPlaying]);
+
   useEffect(() => {
     transition();
     return () => clearTimeout(timer.current);
-  }, [src, isPlaying, transition]);
+  }, [src, transition]);
+
   return (
     <Box
       as="video"
-      ref={video}
+      ref={ref}
       src={src}
       muted
       loop

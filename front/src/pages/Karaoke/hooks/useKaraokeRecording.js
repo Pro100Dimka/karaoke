@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { api } from "../../../api/client";
+import useMountedRef from "../../../hooks/useMountedRef";
 import { translateSaved } from "../../../i18n/runtime";
 import { playbackGain } from "../utils/data";
 import {
@@ -27,6 +28,7 @@ export default function useKaraokeRecording({
   beginOperation,
   roomCaptureRef
 }) {
+  const mounted = useMountedRef();
   const sessionRef = useRef(recordingSessionId);
   const pendingRecordingStartRef = useRef(null);
   const previousSpeedRef = useRef(speed);
@@ -109,29 +111,36 @@ export default function useKaraokeRecording({
   ]);
 
   useEffect(() => {
+    let active = true;
     beginOperation();
     pendingRecordingIds().forEach((id) => {
-      finalizeRecording(id).then(({ recording }) => {
-        if (recording?.id) setAnalysisRecordingId(recording.id);
-      });
+      finalizeRecording(id)
+        .then(({ recording }) => {
+          if (active && mounted.current && recording?.id) setAnalysisRecordingId(recording.id);
+        })
+        .catch(() => {});
     });
     return () => {
+      active = false;
       beginOperation();
       const roomCapture = roomCaptureRef.current;
       roomCaptureRef.current = null;
-      roomCapture?.stop?.().catch?.(() => {});
+      Promise.resolve()
+        .then(() => roomCapture?.stop?.())
+        .catch(() => {});
       const pendingStart = pendingRecordingStartRef.current;
       if (pendingStart && pendingStart.songId === song?.id) pendingStart.settle = "stop";
       const id = sessionRef.current;
       sessionRef.current = null;
       if (id) {
-        setRecordingSessionId(null);
-        finalizeAfterControls(id);
+        if (mounted.current) setRecordingSessionId(null);
+        Promise.resolve(finalizeAfterControls(id)).catch(() => {});
       }
     };
   }, [
     beginOperation,
     finalizeAfterControls,
+    mounted,
     roomCaptureRef,
     setAnalysisRecordingId,
     setRecordingSessionId,
@@ -142,7 +151,7 @@ export default function useKaraokeRecording({
     if (sessionRef.current !== id) return;
     sessionRef.current = null;
     if (forget) forgetPending(id);
-    setRecordingSessionId(null);
+    if (mounted.current) setRecordingSessionId(null);
   };
 
   const discardSession = async (id) => {
@@ -209,16 +218,18 @@ export default function useKaraokeRecording({
         if (pendingStart?.settle === "pause") {
           await queueRecordingRequest(() => api.pauseRecording(id)).catch(() => {});
           sessionRef.current = id;
-          setRecordingSessionId(id);
+          if (mounted.current) setRecordingSessionId(id);
           return null;
         }
         await discardSession(id);
-        if (pendingStart?.settle === "stop") setRecordingSessionId(null);
+        if (pendingStart?.settle === "stop" && mounted.current) setRecordingSessionId(null);
         return null;
       }
       sessionRef.current = id;
-      setRecordingSessionId(id);
-      setRecordingError(null);
+      if (mounted.current) {
+        setRecordingSessionId(id);
+        setRecordingError(null);
+      }
       return id;
     } catch (error) {
       if (operation !== operationRef.current) return null;
@@ -226,9 +237,11 @@ export default function useKaraokeRecording({
         const { error: finalizeError } = await finalizeRecording(id);
         if (!finalizeError) clearSession(id);
       }
-      setRecordingError(
-        formatError("karaoke.recordingIsNotAvailableKaraokeWillContinueToWork", error)
-      );
+      if (mounted.current) {
+        setRecordingError(
+          formatError("karaoke.recordingIsNotAvailableKaraokeWillContinueToWork", error)
+        );
+      }
       return null;
     }
   };

@@ -90,6 +90,42 @@ def test_resolved_device_prefers_default_then_low_latency_host(monkeypatch):
     )
 
 
+def test_resolved_device_never_lands_on_wdm_ks(monkeypatch):
+    # A stream opened against a WDM-KS-hosted device can fail outright on some
+    # drivers ("Unanticipated host error" / DeviceIoControl on
+    # KSPROPERTY_PIN_PHYSICALCONNECTION) -- an explicitly saved device id, the
+    # system default, and the ranked fallback must all skip it, never trust
+    # it just because its index/capability check would otherwise pass.
+    devices = [
+        device("Mic (WDM-KS)", 0, inputs=1, input_latency=0.001),
+        device("Mic (MME)", 1, inputs=1, input_latency=0.2),
+    ]
+    install_devices(monkeypatch, devices, {0: "Windows WDM-KS", 1: "MME"})
+
+    # An explicit, otherwise-valid saved id pointing at the WDM-KS entry.
+    monkeypatch.setattr(audio_service.sd.default, "device", (-1, -1))
+    assert audio_service._resolved_device_index(0, "input") == 1
+
+    # The system default itself resolves to the WDM-KS entry.
+    monkeypatch.setattr(audio_service.sd.default, "device", (0, -1))
+    assert audio_service._resolved_device_index(None, "input") == 1
+
+    # No explicit id, no usable default: the ranked-candidate fallback must
+    # still exclude WDM-KS rather than pick it as a last resort.
+    monkeypatch.setattr(audio_service.sd.default, "device", (-1, -1))
+    assert audio_service._resolved_device_index(None, "input") == 1
+
+    # If literally every capable device is WDM-KS-hosted, fail clearly
+    # instead of silently opening a stream that will crash.
+    only_wdm_ks = [device("Mic (WDM-KS)", 0, inputs=1)]
+    install_devices(monkeypatch, only_wdm_ks, {0: "Windows WDM-KS"})
+    raises(
+        RuntimeError,
+        lambda: audio_service._resolved_device_index(0, "input"),
+        match="No input",
+    )
+
+
 def test_low_latency_and_duplex_selection_match_physical_endpoint(monkeypatch):
     devices = [
         device("USB Studio Mic", 0, inputs=1),
