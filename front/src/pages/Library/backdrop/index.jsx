@@ -110,10 +110,13 @@ export default function QuantumFieldBackdrop() {
     window.addEventListener("blur", () => movePointer(0, 0), { signal });
 
     const bands = Array(18).fill(0);
+    // getComputedStyle returns a live CSSStyleDeclaration that reflects
+    // current values on read, so it only needs to be created once per
+    // effect instead of on every 33ms tick.
+    const rootCss = getComputedStyle(root);
 
     const sendAudio = () => {
-      const css = getComputedStyle(root);
-      const level = (name) => parseFloat(css.getPropertyValue(name)) || 0;
+      const level = (name) => parseFloat(rootCss.getPropertyValue(name)) || 0;
 
       for (let i = 0; i < bands.length; i++) {
         bands[i] = level(`--radio-band-${i}`);

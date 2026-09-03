@@ -1,13 +1,12 @@
 import { Music2, Piano, Save } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../../api/client";
-import { genreOptions } from "../../../constants/music-genres";
-import { useAppDialog } from "../../../contexts/AppDialog";
-import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
-import { usePolling } from "../../../hooks/usePolling";
-import { translateSaved as tr } from "../../../i18n/runtime";
-import { POLLING_INTERVALS } from "../../../runtime-config";
+import { api } from "../../../../api/client";
+import { useAppDialog } from "../../../../contexts/AppDialog";
+import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
+import { usePolling } from "../../../../hooks/usePolling";
+import { translateSaved as tr } from "../../../../i18n/runtime";
+import { POLLING_INTERVALS } from "../../../../runtime-config";
 import {
   Button,
   Modal,
@@ -15,9 +14,9 @@ import {
   Stack,
   Typography,
   useGetForm
-} from "../../../theme/ui";
-import Field from "../../../theme/ui/_internal/Field";
-import { getErrorMessage } from "../../../utils/errors";
+} from "../../../../theme/ui";
+import { getErrorMessage } from "../../../../utils/errors";
+import getRows from "./rows";
 
 export const HALF = 6;
 export const THIRD = 4;
@@ -31,62 +30,6 @@ export const difficultyOptions = () =>
     tr("library.expert")
   ].map((label, index) => ({ value: index ? label : "", label }));
 const nullableNumber = (value) => (value === "" || value == null ? null : Number(value));
-const field = (tag, type, label, md = HALF, extra = {}) => ({
-  tag,
-  type,
-  label,
-  xs: FULL,
-  md,
-  ...extra
-});
-
-export const createSongFields = () => [
-  field("artist", "text", tr("library.sort.artist"), HALF, { placeholder: "Muse" }),
-  field("title", "text", tr("library.songTitle"), HALF, {
-    placeholder: tr("library.songTitle"),
-    required: true
-  }),
-  field("tempo_override", "number", tr("karaoke.pace"), THIRD, {
-    min: 1,
-    valueType: "nullable-number"
-  }),
-  field("key_override", "text", tr("karaoke.key"), THIRD, { placeholder: tr("library.egCM") }),
-  field("genre", "select", tr("library.genre"), THIRD, { options: genreOptions() }),
-  field("difficulty_override", "select", tr("library.complexity"), HALF, {
-    options: difficultyOptions()
-  }),
-  {
-    tag: "note_range",
-    type: "custom",
-    label: tr("library.noteRange"),
-    xs: FULL,
-    md: HALF,
-    render: ({ formik }) => (
-      <Field label={tr("library.noteRange")}>
-        {({ id }) => (
-          <RenderFormikFields
-            formik={formik}
-            items={["min", "max"].map((edge) => ({
-              tag: `note_range_${edge}`,
-              type: "NumberField",
-              xs: HALF,
-              id: `${id}-${edge}`,
-              min: 0,
-              max: 127,
-              valueType: "nullable-number",
-              placeholder: tr(edge === "min" ? "library.from" : "library.to"),
-              "aria-label": tr(edge === "min" ? "library.bottomNote" : "library.topNote")
-            }))}
-          />
-        )}
-      </Field>
-    )
-  },
-  field("video_url", "text", tr("library.linkToClip"), FULL, {
-    placeholder: "https://example.com/video.mp4",
-    tooltip: tr("library.youtubeLinksAndDirectLinksToMp4WebmAre")
-  })
-];
 
 export const getSelectedSong = (songs, id) => {
   const list = Array.isArray(songs) ? songs.filter(Boolean) : [];
@@ -152,6 +95,7 @@ export default function SongSettings({ songId, onClose }) {
         await alert(tr("library.failedToSave", { 0: getErrorMessage(error) }));
       }
     });
+  const items = getRows();
   const content = query.error ? (
     <Stack gap={0.75}>
       <Typography role="alert" tone="danger">
@@ -172,14 +116,7 @@ export default function SongSettings({ songId, onClose }) {
   ) : (
     <Stack gap={1}>
       <form data-testid="form" onSubmit={formik.handleSubmit} noValidate>
-        <RenderFormikFields
-          items={createSongFields().map((definition) =>
-            definition.tag === "genre"
-              ? { ...definition, options: genreOptions(form.genre) }
-              : definition
-          )}
-          formik={formik}
-        />
+        <RenderFormikFields items={items} formik={formik} />
       </form>
       {song.status === "done" && (
         <CardEditor

@@ -57,7 +57,16 @@ const fill = (interval, currentTime) => {
   if (![from, to, now].every(Number.isFinite) || to <= from || now <= from) return 0;
   return now >= to ? 100 : ((now - from) / (to - from)) * 100;
 };
-export function mergeAdjacentLyricsNotes(word) {
+// The result depends only on word.start/end/notes, not on currentTime, but
+// callers invoke this once per visible word on every animation frame (up to
+// ~60 times a second) to compute a fill percentage. Word objects are stable
+// references from the parsed lyrics sync data between renders, so caching by
+// identity avoids re-running the map/filter/sort/reduce chain every frame
+// for a word whose timing hasn't changed; a WeakMap lets stale entries be
+// collected automatically once a word is no longer referenced.
+const mergedNotesCache = new WeakMap();
+
+function computeMergedLyricsNotes(word) {
   const [start, end] = [word?.start, word?.end].map(Number);
   if (!finite(start) || !finite(end) || end <= start) return [];
   return (Array.isArray(word?.notes) ? word.notes : [])
@@ -84,6 +93,15 @@ export function mergeAdjacentLyricsNotes(word) {
       else previous.end = Math.max(previous.end, note.end);
       return merged;
     }, []);
+}
+
+export function mergeAdjacentLyricsNotes(word) {
+  if (!word || typeof word !== "object") return computeMergedLyricsNotes(word);
+  const cached = mergedNotesCache.get(word);
+  if (cached) return cached;
+  const result = computeMergedLyricsNotes(word);
+  mergedNotesCache.set(word, result);
+  return result;
 }
 export function lyricsNoteFillPercent(word, currentTime) {
   const notes = mergeAdjacentLyricsNotes(word);

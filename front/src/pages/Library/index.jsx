@@ -8,7 +8,7 @@ import useLibrary from "./use-library";
 
 const SongSettings = lazy(() => import("./modals/song-settings"));
 const AddSongModal = lazy(() => import("./modals/add-song"));
-const ProcessingModal = lazy(() => import("./modals/processing"));
+const ProcessingModal = lazy(() => import("./modals/processing/index.jsx"));
 const RecordingsModal = lazy(() => import("./modals/recordings"));
 const OnlineRoomModal = lazy(() => import("./modals/online-room/index.jsx"));
 
