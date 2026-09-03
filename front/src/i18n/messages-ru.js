@@ -636,7 +636,7 @@ export const ruMessages = {
   "library.failedToLoadList": "Не удалось загрузить список:",
   "library.thereAreNoSongsYetAddTheFirstOne": "Пока нет ни одной песни — добавьте первую",
   "library.songDropZone": "Зона добавления песен",
-  "library.awaitingProcessing": "Ожидает обработки",
+  "status.awaitingProcessing": "Ожидает обработки",
   "library.openInKaraoke": "Открыть {0} в караоке",
   "library.transferInterruptedClickToRetry": "Передача прервана — нажмите, чтобы повторить",
   "library.waitingForOtherParticipantsToReceiveTheSong":

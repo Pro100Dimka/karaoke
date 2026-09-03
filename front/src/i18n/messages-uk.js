@@ -633,7 +633,7 @@ export const ukMessages = {
   "library.failedToLoadList": "Неможливо завантажити список:",
   "library.thereAreNoSongsYetAddTheFirstOne": "Поки що немає жодної пісні — додайте першу",
   "library.songDropZone": "Зона додавання пісень",
-  "library.awaitingProcessing": "Очікує обробки",
+  "status.awaitingProcessing": "Очікує обробки",
   "library.openInKaraoke": "Відкрити {0} у караоке",
   "library.transferInterruptedClickToRetry": "Передавання перервано — натисніть, щоб повторити",
   "library.waitingForOtherParticipantsToReceiveTheSong":

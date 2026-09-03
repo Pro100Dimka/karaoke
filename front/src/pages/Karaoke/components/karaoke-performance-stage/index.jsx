@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SongCoverArt } from "../../../../components/SongCoverArt";
+import SongCoverArt from "../../../../components/SongCoverArt";
 import { translateSaved as t } from "../../../../i18n/runtime";
 import { Box, Card, Chip, Stack, Typography } from "../../../../theme/ui";
 import * as platform from "../../../../utils/platform";

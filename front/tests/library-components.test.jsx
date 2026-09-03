@@ -2,12 +2,13 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
+import SongCoverArt from "../src/components/SongCoverArt.jsx";
 import LibraryActions from "../src/pages/Library/hero/actions.jsx";
 import LibraryHero from "../src/pages/Library/hero/index.jsx";
 import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
 import LibrarySongsGrid, { selectSongTransferStatus } from "../src/pages/Library/songs-grid/index.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
+import ProcessingSignal from "../src/theme/features/ProcessingSignal";
 import { called, same, verify } from "./helpers/assertions.mjs";
 
 const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: false }));

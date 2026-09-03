@@ -8,7 +8,7 @@ const EQUALIZER_BARS = Array.from({ length: 16 }, (_, index) => ({
   speed: 720 + ((index * 113 + 47) % 620)
 }));
 
-export function SongCoverArt({ cardIndex = 0, children, song, sx }) {
+export default function SongCoverArt({ cardIndex = 0, children, song, sx }) {
   const version = `${song?.updated_at ?? ""}:${song?.status ?? ""}:${song?.__roomLocal ?? ""}`;
   const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, version);
   return (

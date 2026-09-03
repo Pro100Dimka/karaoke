@@ -632,7 +632,7 @@ export const enMessages = {
   "library.failedToLoadList": "Failed to load list:",
   "library.thereAreNoSongsYetAddTheFirstOne": "There are no songs yet - add the first one",
   "library.songDropZone": "Song drop zone",
-  "library.awaitingProcessing": "Awaiting processing",
+  "status.awaitingProcessing": "Awaiting processing",
   "library.openInKaraoke": "Open {0} in karaoke",
   "library.transferInterruptedClickToRetry": "Transfer interrupted — click to retry",
   "library.waitingForOtherParticipantsToReceiveTheSong":

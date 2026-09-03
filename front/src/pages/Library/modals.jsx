@@ -17,6 +17,7 @@ import { AudioPlayer } from "../../components/AudioPlayer";
 import { toggleAudioPlayback } from "../../components/audio-player-utils";
 import useSongCover from "../../hooks/useSongCover";
 import { translateSaved as tr } from "../../i18n/runtime";
+import ProcessingSignal from "../../theme/features/ProcessingSignal";
 import {
   Box,
   Button,
@@ -25,12 +26,11 @@ import {
   IconButton,
   Modal,
   RenderFormikFields,
-  useGetForm,
   Stack,
-  Typography
+  Typography,
+  useGetForm
 } from "../../theme/ui";
 import * as platform from "../../utils/platform";
-import { ProcessingSignal } from "./components";
 import { getProcessingModeOptions } from "./processing-modes";
 import { formatEta, getProcessingProgress, isProcessingActive } from "./utils";
 

@@ -1,56 +1,42 @@
 import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
 import { Box, Card, Grid, Stack, Typography } from "../../../theme/ui";
-import LibrarySongCard from "./song-card";
+import LibrarySongCard from "./card";
 
-export function selectSongTransferStatus(statuses, songId) {
-  const matching = statuses.filter((status) => status?.songId === songId);
-  const error = matching.find((status) => status.stage === "error");
-  if (error) return error;
-
-  // The host keeps a synthetic `room` status for the ready-participant count,
-  // while every actual file transfer has its own participant status. During a
-  // transfer the synthetic entry remains at 0 until the recipient is fully
-  // ready, so choosing the first matching Map value made the card look frozen
-  // even though the participant row showed real progress. Completed recipients
-  // are removed from the Map, therefore the slowest remaining real transfer is
-  // the useful room-wide progress to show on the song card.
-  const participantStatuses = matching.filter(
-    (status) => status.participantId && status.participantId !== "room"
+export const selectSongTransferStatus = (statuses, id) => {
+  const all = statuses.filter((s) => s?.songId === id);
+  return (
+    all.find((s) => s.stage === "error") ||
+    all
+      .filter((s) => s.participantId && s.participantId !== "room")
+      .sort((a, b) => a.percent - b.percent)[0] ||
+    all.at(-1)
   );
-  if (participantStatuses.length)
-    return participantStatuses.reduce((slowest, status) =>
-      Number(status.percent) < Number(slowest.percent) ? status : slowest
-    );
-  return matching.at(-1);
-}
+};
 
-export default function LibrarySongsGrid({ state: s, fileImport: f, processing, recordings }) {
-  const { filteredSongs: songs, songsError: error, songActions: a } = s;
-  const statuses = [...(s.transferStatuses?.values?.() || [])];
-  const card = {
-    canManageLibrary: s.canManageLibrary,
-    onOpenKaraoke: s.openKaraoke,
-    onOpenProcessing: processing.track,
-    onOpenRecordings: recordings.setSong,
-    onOpenSettings: s.setSettingsSongId,
-    onDelete: a.deleteSong,
-    onOpenFolder: a.openSongFolder,
-    onProcess: a.processSong,
-    onReprocess: a.reprocessSong
-  };
-  const drop = useDropzone({
+export default function LibrarySongsGrid({ state, fileImport, processing, recordings }) {
+  const {
+    filteredSongs: songs,
+    songsError: error,
+    transferStatuses,
+    canManageLibrary,
+    openKaraoke,
+    setSettingsSongId,
+    songActions
+  } = state;
+  const statuses = [...(transferStatuses?.values?.() || [])];
+  const { getRootProps, isDragActive } = useDropzone({
     accept: {
       "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"],
       "application/octet-stream": [".kar", ".mid", ".kfn"]
     },
-    disabled: f.importing || !s.canManageLibrary,
+    disabled: fileImport.importing || !canManageLibrary,
+    onDropAccepted: fileImport.importFile,
     multiple: true,
     noClick: true,
-    noKeyboard: true,
-    onDropAccepted: f.importFile
+    noKeyboard: true
   });
-  if (!songs.length || error)
+  if (error || !songs.length)
     return (
       <Stack align="center" justify="center" sx={{ minHeight: "30vw" }}>
         <Card
@@ -58,10 +44,7 @@ export default function LibrarySongsGrid({ state: s, fileImport: f, processing, 
           sx={{ textAlign: "center" }}
           cardContent={{ style: { padding: "var(--space-16)" } }}
         >
-          <Typography
-            variant="h4"
-            {...(error ? { role: "alert", tone: "danger" } : { tone: "muted" })}
-          >
+          <Typography variant="h4" tone={error ? "danger" : "muted"} role={error && "alert"}>
             {error
               ? `${tr("library.failedToLoadList")} ${error.message || error}`
               : tr("library.thereAreNoSongsYetAddTheFirstOne")}
@@ -71,17 +54,24 @@ export default function LibrarySongsGrid({ state: s, fileImport: f, processing, 
     );
   return (
     <Box
-      {...drop.getRootProps()}
+      {...getRootProps()}
       aria-label={tr("library.songDropZone")}
-      data-drop-active={drop.isDragActive || undefined}
+      data-drop-active={isDragActive || undefined}
     >
       <Grid columns={3} gap="var(--space-6)" align="start">
         {songs.map((song, cardIndex) => (
           <LibrarySongCard
             key={song.id}
-            {...card}
-            {...{ song, cardIndex }}
+            {...{ song, cardIndex, canManageLibrary }}
             transferStatus={selectSongTransferStatus(statuses, song.id)}
+            onOpenKaraoke={openKaraoke}
+            onOpenProcessing={processing.track}
+            onOpenRecordings={recordings.setSong}
+            onOpenSettings={setSettingsSongId}
+            onDelete={songActions.deleteSong}
+            onOpenFolder={songActions.openSongFolder}
+            onProcess={songActions.processSong}
+            onReprocess={songActions.reprocessSong}
           />
         ))}
       </Grid>
