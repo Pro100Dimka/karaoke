@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Box } from "../../../../theme/ui";
+import { Box } from "../../../theme/ui";
 
 export default memo(({ src, isPlaying }) => {
   const video = useRef(null);

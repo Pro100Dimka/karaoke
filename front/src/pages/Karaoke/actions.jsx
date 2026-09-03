@@ -1,6 +1,6 @@
 import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
-import { translateSaved as t } from "../../../i18n/runtime";
-import { IconButton, Stack } from "../../../theme/ui";
+import { translateSaved as t } from "../../i18n/runtime";
+import { IconButton, Stack } from "../../theme/ui";
 
 export default function KaraokeStageActions({
   controlsVisible,

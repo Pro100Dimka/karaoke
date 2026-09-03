@@ -36,16 +36,21 @@
 
     background:
       radial-gradient(circle, var(--color-bg-deep) 0 52%, transparent 54%),
-      conic-gradient(
-        from 225deg,
+      conic-gradient(from 225deg,
         var(--dial-color) 0 var(--dial-progress),
         color-mix(in srgb, var(--ui-border) 74%, transparent) var(--dial-progress) 75%,
-        transparent 75% 100%
-      );
+        transparent 75% 100%);
 
     box-shadow:
       inset 0vw 0vw var(--space-2) color-mix(in srgb, var(--color-bg-deep) 70%, transparent),
       0vw 0vw var(--space-3) color-mix(in srgb, var(--dial-color) 30%, transparent);
+  }
+
+  .karaoke-effect-dial__control::before {
+    content: "";
+    position: absolute;
+    inset: calc(var(--space-4) * -1);
+    border-radius: inherit;
   }
 
   .karaoke-effect-dial__control::after {
@@ -54,14 +59,11 @@
     inset: var(--space-2);
 
     border: 0.052083vw solid color-mix(in srgb, var(--ui-text) 14%, transparent);
-
     border-radius: inherit;
 
-    background: radial-gradient(
-      circle at 35% 25%,
-      color-mix(in srgb, var(--ui-text) 18%, transparent),
-      transparent 36%
-    );
+    background: radial-gradient(circle at 35% 25%,
+        color-mix(in srgb, var(--ui-text) 18%, transparent),
+        transparent 36%);
   }
 
   .karaoke-effect-dial__knob {

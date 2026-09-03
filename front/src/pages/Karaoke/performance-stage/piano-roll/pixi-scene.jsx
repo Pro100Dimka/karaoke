@@ -1,0 +1,97 @@
+import { Graphics, Stage, useTick } from "@pixi/react";
+import "@pixi/unsafe-eval";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { clamp } from "../../../../utils/math";
+import { pianoPitchRange, pianoRollFrame } from "./geometry";
+
+const options = {
+  antialias: true,
+  backgroundAlpha: 0,
+  autoDensity: true,
+  resolution: Math.min(devicePixelRatio || 1, 2)
+};
+
+const style = {
+  display: "block",
+  width: "100%",
+  height: "100%"
+};
+
+function RollGraphics({
+  currentTime,
+  currentTimeRef,
+  isPitchDetected,
+  notes,
+  palette,
+  size,
+  sung
+}) {
+  const graphics = useRef();
+  const range = useMemo(() => pianoPitchRange(notes, sung), [notes, sung]);
+
+  const draw = useCallback(
+    (time) => {
+      const g = graphics.current;
+      if (!g) return;
+
+      const frame = pianoRollFrame(notes, time, size, range);
+      const { rowHeight, playhead } = frame;
+
+      g.clear();
+
+      for (const line of frame.connections ?? []) {
+        g.lineStyle(
+          clamp(rowHeight * 0.24, 2, 5),
+          palette.hover,
+          line.state === "past" ? 0.3 : 0.72
+        )
+          .moveTo(line.fromX, line.fromY)
+          .lineTo(line.toX, line.toY);
+      }
+
+      for (const note of frame.notes) {
+        const height = clamp(rowHeight * 0.72, 5, 15);
+        const opacity =
+          note.state === "past" ? clamp(0.58 * (1 - (frame.time - note.end) / 2.8), 0.08, 0.58) : 1;
+
+        g.lineStyle(note.state === "current" ? 1.8 : 1.1, palette.highlight, opacity)
+          .beginFill(note.state === "current" ? palette.hover : palette.primary, opacity)
+          .drawRoundedRect(
+            note.left,
+            frame.y(note.note) + (rowHeight - height) / 2,
+            Math.max(1.5, note.right - note.left),
+            height,
+            height / 2
+          )
+          .endFill();
+      }
+
+      g.lineStyle(2.2, palette.hover).moveTo(playhead, 0).lineTo(playhead, frame.height);
+
+      if (isPitchDetected && Number.isFinite(sung) && sung >= frame.min && sung <= frame.max) {
+        g.lineStyle(2, palette.success)
+          .beginFill(palette.text)
+          .drawCircle(playhead, frame.y(sung) + rowHeight / 2, Math.max(3, rowHeight * 0.2))
+          .endFill();
+      }
+    },
+    [notes, size, range, palette, sung, isPitchDetected]
+  );
+
+  useLayoutEffect(
+    () => draw(Number(currentTimeRef?.current ?? currentTime) || 0),
+    [currentTime, currentTimeRef, draw]
+  );
+
+  useTick(() => draw(Number(currentTimeRef?.current) || 0), Boolean(currentTimeRef));
+
+  return <Graphics ref={graphics} />;
+}
+
+export default function PixiPianoRoll({ size, ...props }) {
+  return (
+    <Stage width={size.width} height={size.height} options={options} style={style}>
+      <RollGraphics {...props} size={size} />
+    </Stage>
+  );
+}

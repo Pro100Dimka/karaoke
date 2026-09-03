@@ -1,15 +1,23 @@
 import { Mic } from "lucide-react";
-import useSongCover from "../../../../hooks/useSongCover";
-import { translateSaved as t } from "../../../../i18n/runtime";
-import { Box, Stack, Typography } from "../../../../theme/ui";
-import { formatTime } from "../../utils/format";
-import WaveformTimeline from "../waveform-timeline";
+import { useMemo } from "react";
+import { api } from "../../../api/client";
+import useSongCover from "../../../hooks/useSongCover";
+import { translateSaved as t } from "../../../i18n/runtime";
+import { Box, Stack, Typography, Waveform } from "../../../theme/ui";
+import * as platform from "../../../utils/platform";
+import { formatTime } from "../utils/format";
 
 export default function SongStrip({ song, currentTime, duration, onSeek, disablelabel }) {
-  const { coverUrl, hasCover, handleCoverError } = useSongCover(
-    song?.id,
-    `${song?.updated_at ?? ""}:${song?.status ?? ""}`
+  const cover = useSongCover(song?.id, `${song?.updated_at ?? ""}:${song?.status ?? ""}`);
+  const token = platform.apiToken();
+
+  const fetchParams = useMemo(
+    () => (token ? { headers: { "X-ADVoice-Token": token } } : undefined),
+    [token]
   );
+
+  if (!song) return null;
+
   return (
     <Stack
       direction="row"
@@ -24,32 +32,32 @@ export default function SongStrip({ song, currentTime, duration, onSeek, disable
       {!disablelabel && (
         <>
           <Box
-            aria-hidden="true"
+            aria-hidden
             sx={{
               position: "relative",
-              aspectRatio: 1,
-              padding: "var(--space-4)",
               flex: "none",
               display: "grid",
               placeItems: "center",
+              aspectRatio: 1,
+              padding: "var(--space-4)",
               overflow: "hidden",
               borderRadius: "var(--shape-md)",
               color: "var(--color-primary)",
               background: "var(--ui-gradient-surface)"
             }}
           >
-            {hasCover ? (
+            {cover.hasCover ? (
               <Box
                 as="img"
-                src={coverUrl}
+                src={cover.coverUrl}
                 alt=""
                 decoding="async"
-                onError={handleCoverError}
+                onError={cover.handleCoverError}
                 sx={{
                   position: "absolute",
                   inset: 0,
-                  inlineSize: "100%",
-                  blockSize: "100%",
+                  width: "100%",
+                  height: "100%",
                   objectFit: "cover"
                 }}
               />
@@ -57,6 +65,7 @@ export default function SongStrip({ song, currentTime, duration, onSeek, disable
               <Mic />
             )}
           </Box>
+
           <Stack gap="var(--space-1)" sx={{ flex: "0 1 12rem", minInlineSize: 0 }}>
             <Typography as="strong" variant="body2" noWrap>
               {song.title}
@@ -67,13 +76,18 @@ export default function SongStrip({ song, currentTime, duration, onSeek, disable
           </Stack>
         </>
       )}
+
       <Typography variant="caption">{formatTime(currentTime)}</Typography>
-      <WaveformTimeline
-        songId={song.id}
+
+      <Waveform
+        label={t("karaoke.songPosition")}
         value={currentTime}
         duration={duration}
         onChange={onSeek}
+        url={song.id ? api.getAudioTrackUrl(song.id, "instrumental") : ""}
+        fetchParams={fetchParams}
       />
+
       <Typography variant="caption">{formatTime(duration)}</Typography>
     </Stack>
   );

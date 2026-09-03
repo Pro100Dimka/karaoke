@@ -1,6 +1,6 @@
-import { Box } from "../../../../theme/ui";
-import * as platform from "../../../../utils/platform";
-import usePitchDetection from "../../hooks/usePitchDetection";
+import { Box } from "../../../theme/ui";
+import * as platform from "../../../utils/platform";
+import usePitchDetection from "../hooks/usePitchDetection";
 import SceneIntro from "./intro";
 import KaraokeLyrics from "./karaoke-lyrics";
 import PianoRoll from "./piano-roll";

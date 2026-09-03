@@ -1,9 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { clamp } from "../../../utils/math";
-import { getRotaryDragValue, getRotaryPointerValue, getRotaryWheelValue } from "./utils";
 import "./rotary-knob.css";
-
-const normalizeId = (id) => id.replace(/:/g, "");
+import { getRotaryDragValue, getRotaryPointerValue, getRotaryWheelValue } from "./utils";
 
 export default function RotaryKnob({
   label,
@@ -11,7 +9,7 @@ export default function RotaryKnob({
   min = 0,
   max = 1,
   step = 0.05,
-  defaultValue = min,
+  defaultValue,
   onChange,
   onCommit,
   accent = "primary",
@@ -19,64 +17,90 @@ export default function RotaryKnob({
   disabled = false,
   displayFactor
 }) {
-  const inputId = `rotary-knob-${normalizeId(useId())}`;
-  const dragRef = useRef(null);
-  const editorRef = useRef(null);
-  const [editing, setEditing] = useState(false);
-  const [draftPercent, setDraftPercent] = useState("");
-  const normalized = clamp(Number(value) || 0, min, max);
-  const valueRef = useRef(normalized);
-  useEffect(() => {
-    if (!dragRef.current) valueRef.current = normalized;
-  }, [normalized]);
-  useEffect(() => {
-    if (!editing) return;
-    editorRef.current?.focus();
-    editorRef.current?.select();
-  }, [editing]);
+  const id = `rotary-knob-${useId().replace(/:/g, "")}`;
+  const root = useRef(null);
+  const drag = useRef(null);
+  const valueRef = useRef(0);
+  const [draft, setDraft] = useState(null);
+
+  const current = clamp(Number(value) || 0, min, max);
   const range = max - min || 1;
-  const ratio = (normalized - min) / range;
+  const ratio = (current - min) / range;
   const percent = Math.round(ratio * 100);
-  const displayValue = Number.isFinite(displayFactor)
-    ? Math.round(normalized * displayFactor)
-    : percent;
-  const setValue = (nextValue) => {
-    if (disabled) return valueRef.current;
-    const next = clamp(nextValue, min, max);
+  const factor = Number.isFinite(displayFactor) && displayFactor !== 0 ? displayFactor : null;
+  const display = factor ? Math.round(current * factor) : percent;
+  const resetValue = defaultValue ?? clamp(0, min, max);
+
+  useEffect(() => {
+    if (!drag.current) valueRef.current = current;
+  }, [current]);
+
+  const change = (value) => {
+    const number = Number(value);
+    if (disabled || !Number.isFinite(number)) return valueRef.current;
+
+    const next = clamp(number, min, max);
     valueRef.current = next;
     onChange?.(next);
     return next;
   };
-  const stopDrag = (event) => {
-    const drag = dragRef.current;
-    dragRef.current = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    if (drag) onCommit?.(drag.value);
+
+  const commit = (value) => {
+    if (disabled) return;
+
+    const next = change(value);
+    onCommit?.(next);
+    return next;
   };
-  const commitPercent = () => {
-    if (disabled) {
-      setEditing(false);
-      return;
-    }
-    const number = Number(draftPercent);
-    if (Number.isFinite(number)) {
-      const next = setValue(
-        Number.isFinite(displayFactor)
-          ? clamp(number / displayFactor, min, max)
-          : min + (clamp(number, 0, 100) / 100) * range
+
+  useEffect(() => {
+    const node = root.current;
+    if (!node) return;
+
+    const onWheel = (event) => {
+      if (disabled) return;
+
+      event.preventDefault();
+
+      commit(
+        getRotaryWheelValue({
+          value: valueRef.current,
+          deltaY: event.deltaY,
+          step,
+          min,
+          max,
+          fine: event.shiftKey
+        })
       );
-      onCommit?.(next);
+    };
+
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, [disabled, min, max, step, onChange, onCommit]);
+
+  const stopDrag = () => {
+    if (drag.current) onCommit?.(drag.current.value);
+    drag.current = null;
+  };
+
+  const saveDraft = () => {
+    const number = draft?.trim() === "" ? NaN : Number(draft);
+
+    if (Number.isFinite(number)) {
+      commit(factor ? number / factor : min + (clamp(number, 0, 100) / 100) * range);
     }
-    setEditing(false);
+
+    setDraft(null);
   };
 
   return (
     <label
+      ref={root}
+      htmlFor={id}
       className={`karaoke-effect-dial karaoke-effect-dial--${accent} ui-control`}
       data-size={size}
       data-disabled={disabled || undefined}
       aria-disabled={disabled || undefined}
-      htmlFor={inputId}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -84,15 +108,23 @@ export default function RotaryKnob({
         userSelect: "none",
         "--dial-value": `${percent}%`,
         "--dial-progress": `${ratio * 75}%`,
-        "--dial-angle": `${-135 + ratio * 270}deg`
+        "--dial-angle": `${ratio * 270 - 135}deg`
       }}
       onPointerDown={(event) => {
-        if (disabled || event.button !== 0 || event.target.closest("input")) return;
+        if (
+          disabled ||
+          event.button !== 0 ||
+          event.target.closest("input, .karaoke-effect-dial__value")
+        ) {
+          return;
+        }
+
         event.preventDefault();
         event.currentTarget.setPointerCapture?.(event.pointerId);
+
         const control = event.target.closest(".karaoke-effect-dial__control");
         const next = control
-          ? setValue(
+          ? change(
               getRotaryPointerValue({
                 clientX: event.clientX,
                 clientY: event.clientY,
@@ -102,114 +134,97 @@ export default function RotaryKnob({
               })
             )
           : valueRef.current;
-        dragRef.current = { lastY: event.clientY, value: next };
+
+        drag.current = {
+          value: next,
+          lastY: event.clientY
+        };
       }}
       onPointerMove={(event) => {
-        const drag = dragRef.current;
-        if (!drag) return;
-        drag.value = setValue(
+        if (!drag.current) return;
+
+        drag.current.value = change(
           getRotaryDragValue({
-            value: drag.value,
-            lastY: drag.lastY,
+            value: drag.current.value,
+            lastY: drag.current.lastY,
             clientY: event.clientY,
             min,
             max,
             fine: event.shiftKey
           })
         );
-        drag.lastY = event.clientY;
+
+        drag.current.lastY = event.clientY;
       }}
       onPointerUp={stopDrag}
       onPointerCancel={stopDrag}
       onLostPointerCapture={stopDrag}
-      onWheel={(event) => {
-        if (disabled) return;
-        event.preventDefault();
-        const next = setValue(
-          getRotaryWheelValue({
-            value: valueRef.current,
-            deltaY: event.deltaY,
-            step,
-            min,
-            max,
-            fine: event.shiftKey
-          })
-        );
-        onCommit?.(next);
-      }}
     >
       <span className="karaoke-effect-dial__label">{label}</span>
+
       <span
         className="karaoke-effect-dial__control"
-        aria-hidden="true"
+        aria-hidden
         onDoubleClick={(event) => {
-          if (disabled) return;
           event.preventDefault();
           event.stopPropagation();
-          const next = setValue(defaultValue);
-          onCommit?.(next);
+
+          if (!disabled) commit(resetValue);
         }}
       >
         <span className="karaoke-effect-dial__knob" />
       </span>
-      {editing ? (
-        <span className="karaoke-effect-dial__value-editor">
+
+      <span className="karaoke-effect-dial__value">
+        {draft !== null ? (
           <input
+            autoFocus
             className="ui-control"
             data-size="xs"
-            ref={editorRef}
-            aria-label={`${label}, ${displayValue}%`}
+            type="text"
             inputMode="decimal"
-            min="0"
-            max={Number.isFinite(displayFactor) ? max * displayFactor : 100}
-            type="number"
-            value={draftPercent}
-            onBlur={commitPercent}
-            onChange={(event) => setDraftPercent(event.target.value)}
+            value={draft}
+            aria-label={label}
+            onFocus={(event) => event.target.select()}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={saveDraft}
             onKeyDown={(event) => {
-              if (event.key === "Enter") commitPercent();
-              if (event.key === "Escape") setEditing(false);
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") setDraft(null);
             }}
           />
-          <span>%</span>
-        </span>
-      ) : (
-        <strong
-          onDoubleClick={(event) => {
-            if (disabled) return;
-            event.preventDefault();
-            event.stopPropagation();
-            setDraftPercent(String(displayValue));
-            setEditing(true);
-          }}
-        >
-          {displayValue}%
-        </strong>
-      )}
+        ) : (
+          <strong
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+
+              if (!disabled) setDraft(String(display));
+            }}
+          >
+            {display}%
+          </strong>
+        )}
+      </span>
+
       <input
-        style={{
-          clip: "rect(0 0 0 0)",
-          clipPath: "inset(50%)",
-          height: 1,
-          overflow: "hidden",
-          pointerEvents: "none",
-          position: "absolute",
-          whiteSpace: "nowrap",
-          width: 1
-        }}
+        id={id}
         type="range"
-        id={inputId}
         min={min}
         max={max}
         step={step}
-        value={normalized}
+        value={current}
         disabled={disabled}
         aria-label={label}
-        aria-valuetext={`${displayValue}%`}
-        onChange={(event) => {
-          if (disabled) return;
-          const next = setValue(Number(event.target.value));
-          onCommit?.(next);
+        aria-valuetext={`${display}%`}
+        onChange={(event) => commit(event.target.value)}
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          clipPath: "inset(50%)",
+          pointerEvents: "none"
         }}
       />
     </label>

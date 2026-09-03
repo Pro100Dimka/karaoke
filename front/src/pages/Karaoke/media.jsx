@@ -9,63 +9,79 @@ import { playbackGain } from "../utils/data";
 const noop = () => {};
 
 function useTrack(songId, track) {
-  const direct = api.getAudioTrackUrl(songId, track);
   const desktop = platform.isElectron();
-  const [source, setSource] = useState(desktop ? direct : "");
+  const [blobUrl, setBlobUrl] = useState("");
+
   useEffect(() => {
-    if (desktop) return setSource(direct);
+    if (desktop || !songId) {
+      setBlobUrl("");
+      return;
+    }
+
     let active = true;
-    let url = "";
+    let url;
     let file;
+
+    setBlobUrl("");
+
     api
       .getAudioTrackBlob(songId, track)
-      .then((next) => {
-        file = next;
+      .then((blob) => {
+        file = blob;
         if (!active) return file?.cleanup?.();
-        url = URL.createObjectURL(file);
-        setSource(url);
+
+        url = URL.createObjectURL(blob);
+        setBlobUrl(url);
       })
-      .catch(() => active && setSource(""));
+      .catch(() => active && setBlobUrl(""));
+
     return () => {
       active = false;
       if (url) URL.revokeObjectURL(url);
       file?.cleanup?.();
     };
-  }, [desktop, direct, songId, track]);
-  return source;
+  }, [desktop, songId, track]);
+
+  return desktop && songId ? api.getAudioTrackUrl(songId, track) : blobUrl;
 }
 
 function AudioTrack({ audioRef, songId, track, volume }) {
-  const { settings } = useContext(AppSettingsContext) ?? {};
-  const source = useTrack(songId, track);
-  const element = useRef(null);
+  const settings = useContext(AppSettingsContext)?.settings;
+  const src = useTrack(songId, track);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.volume = playbackGain(volume);
+  }, [volume]);
+
   useEffect(() => {
     if (
       track === "instrumental" &&
       settings?.keyboard_lighting_enabled &&
       settings?.keyboard_lighting_mode === "music"
-    )
-      return observeLightingMedia(element.current);
-    return undefined;
-  }, [source, track, settings?.keyboard_lighting_enabled, settings?.keyboard_lighting_mode]);
-  useEffect(() => {
-    const audio = element.current;
-    return () => audio?.pause();
-  }, []);
+    ) {
+      return observeLightingMedia(ref.current);
+    }
+  }, [src, track, settings?.keyboard_lighting_enabled, settings?.keyboard_lighting_mode]);
+
+  useEffect(
+    () => () => {
+      ref.current?.pause();
+    },
+    []
+  );
+
   return (
     <Box
       as="audio"
       ref={(node) => {
-        if (node) element.current = node;
-        audioRef.current = node;
+        ref.current = node;
+        if (audioRef) audioRef.current = node;
       }}
-      src={source || undefined}
+      src={src || undefined}
       crossOrigin="anonymous"
       preload="auto"
       sx={{ display: "none" }}
-      onLoadedMetadata={(event) => {
-        event.currentTarget.volume = playbackGain(volume);
-      }}
     />
   );
 }
@@ -83,34 +99,41 @@ export default function KaraokeMedia({
   onClipAvailabilityChange = noop
 }) {
   const [clipFailed, setClipFailed] = useState(false);
-  const clipSource = song.video_url === "local:clip" ? api.getSongVideoUrl(song.id) : "";
+  const songId = song?.id;
+  const clipSource = songId && song?.video_url === "local:clip" ? api.getSongVideoUrl(songId) : "";
+
   useEffect(() => {
     setClipFailed(false);
     onClipAvailabilityChange(false);
-  }, [clipSource, onClipAvailabilityChange, song.id]);
+  }, [clipSource, onClipAvailabilityChange]);
+
   const activateClip = (event) => {
-    event.currentTarget.playbackRate = speed;
-    syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
+    const video = event.currentTarget;
+
+    video.playbackRate = Number(speed) || 1;
+    syncSecondaryMedia?.(instrumentalRef.current?.currentTime || 0, true);
     onClipAvailabilityChange(true);
-    if (isPlaying) Promise.resolve(event.currentTarget.play()).catch(() => {});
+
+    if (isPlaying) video.play().catch(noop);
   };
+
   return (
     <>
-      <AudioTrack
-        key={`${song.id}:instrumental`}
-        audioRef={instrumentalRef}
-        songId={song.id}
-        track="instrumental"
-        volume={musicVolume}
-      />
-      <AudioTrack
-        key={`${song.id}:vocals`}
-        audioRef={vocalsRef}
-        songId={song.id}
-        track="vocals"
-        volume={vocalVolume}
-      />
-      {clipSource && !clipFailed ? (
+      {songId &&
+        [
+          ["instrumental", instrumentalRef, musicVolume],
+          ["vocals", vocalsRef, vocalVolume]
+        ].map(([track, audioRef, volume]) => (
+          <AudioTrack
+            key={`${songId}:${track}`}
+            audioRef={audioRef}
+            songId={songId}
+            track={track}
+            volume={volume}
+          />
+        ))}
+
+      {clipSource && !clipFailed && (
         <Box
           as="video"
           ref={videoRef}
@@ -126,15 +149,14 @@ export default function KaraokeMedia({
           sx={{
             position: "absolute",
             inset: 0,
-            inlineSize: "100%",
-            blockSize: "100%",
+            width: "100%",
+            height: "100%",
             objectFit: "cover",
             zIndex: 0,
-            opacity: 1,
             pointerEvents: "none"
           }}
         />
-      ) : null}
+      )}
     </>
   );
 }

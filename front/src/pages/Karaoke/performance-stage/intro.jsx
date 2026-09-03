@@ -1,7 +1,7 @@
 import { memo } from "react";
-import SongCoverArt from "../../../../components/SongCoverArt";
-import { translateSaved as t } from "../../../../i18n/runtime";
-import { Card, Chip, Stack, Typography } from "../../../../theme/ui";
+import SongCoverArt from "../../../components/SongCoverArt";
+import { translateSaved as t } from "../../../i18n/runtime";
+import { Card, Chip, Stack, Typography } from "../../../theme/ui";
 
 export default memo(({ visible, songId, scene }) => {
   const chips = [
