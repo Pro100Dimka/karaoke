@@ -45,6 +45,11 @@ const { readThemeBackgrounds } = require("./theme-backgrounds.cjs");
 const { createThemeIcons } = require("./theme-icons.cjs");
 const { clampWindowBounds, readWindowState, writeWindowState } = require("./window-state.cjs");
 
+// On hybrid-graphics laptops Chromium's GPU process otherwise defaults to
+// the power-saving integrated GPU; this asks the driver for the discrete one
+// (matters for the WebGL karaoke stage rendered with three.js/pixi.js).
+app.commandLine.appendSwitch("force_high_performance_gpu");
+
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 // Chromium otherwise chooses a conservative Windows render buffer on many
