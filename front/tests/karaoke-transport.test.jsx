@@ -179,7 +179,7 @@ describe("karaoke transport", () => {
     expect(props.startMelodyGuide).toHaveBeenCalledOnce();
     expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1.25);
     expect(api.startRecording).toHaveBeenCalledWith(
-      "song", 4, 0.6400000000000001, 0.6, 0.1, 0.2, 0.3, true, undefined, 1.25
+      "song", 4, 0.6400000000000001, 0.6, 0.1, 0.2, 0.3, true, undefined, 1.25, false
     );
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(1, 4, true);
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(2, 4, true);

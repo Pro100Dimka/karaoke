@@ -251,6 +251,11 @@ class RecordingStartRequest(BaseModel):
     octave: float = Field(default=0, ge=-1, le=1)
     playback_rate: float = Field(default=1, ge=0.5, le=1.5)
     room_mode: bool = False
+    # Set when the frontend successfully connected to the Python monitor's
+    # audio relay (see app/routers/audio_relay.py) and intends to use it as
+    # the room's DSP source instead of its own local Web Audio graph. Only
+    # meaningful when room_mode is also True.
+    voice_relay: bool = False
 
 
 class RecordingControlsRequest(BaseModel):

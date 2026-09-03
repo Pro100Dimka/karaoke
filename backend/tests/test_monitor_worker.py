@@ -3,6 +3,7 @@ import json
 import runpy
 import sys
 import threading
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
@@ -141,6 +142,55 @@ def test_main_seeds_live_params_from_config_and_starts_reader_thread(monkeypatch
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
 
     assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7, 'noise_suppression': 0.35, 'octave': 0.0}) and (thread_started.is_set())
+    capsys.readouterr()
+
+
+def test_audio_callback_pushes_dry_and_wet_to_the_relay_when_configured(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0, "echo": 0, "delay": 0, "octave": 0, "noise_suppression": 0})
+    pushed = []
+    relay = SimpleNamespace(push=lambda stream_id, sample_rate, samples: pushed.append((stream_id, sample_rate, len(samples))))
+    callback = monitor_worker._audio_callback(1.0, 48000, {}, relay)
+    callback(np.zeros((32, 1), dtype=np.float32), np.empty((32, 2), dtype=np.float32), 32, None, None)
+    assert pushed == [
+        (monitor_worker.STREAM_DRY, 48000, 32),
+        (monitor_worker.STREAM_WET, 48000, 32),
+    ]
+
+
+def test_audio_callback_never_touches_a_relay_when_none_is_configured(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0, "echo": 0, "delay": 0, "octave": 0, "noise_suppression": 0})
+    callback = monitor_worker._audio_callback(1.0, 48000, {})
+    # Must not raise even though relay defaults to None -- this is the
+    # regression case: plain solo monitoring is unaffected by the relay code.
+    callback(np.zeros((32, 1), dtype=np.float32), np.empty((32, 2), dtype=np.float32), 32, None, None)
+
+
+def test_main_constructs_a_relay_link_only_when_a_relay_port_is_configured(monkeypatch, capsys):
+    configure_argv(monkeypatch, {**options(), "audio_relay_port": 54321})
+    monkeypatch.setattr(monitor_worker, "_running", False)
+    stream = Mock()
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
+    constructed = {}
+    class FakeRelayLink:
+        def __init__(self, port, sample_rate):
+            constructed["port"], constructed["sample_rate"] = port, sample_rate
+        def close(self):
+            constructed["closed"] = True
+    monkeypatch.setattr(monitor_worker, "RelayLink", FakeRelayLink)
+
+    assert monitor_worker.main() == 0
+    assert constructed == {"port": 54321, "sample_rate": 48000, "closed": True}
+    capsys.readouterr()
+
+
+def test_main_skips_the_relay_link_when_no_relay_port_is_configured(monkeypatch, capsys):
+    configure_argv(monkeypatch)
+    monkeypatch.setattr(monitor_worker, "_running", False)
+    stream = Mock()
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
+    monkeypatch.setattr(monitor_worker, "RelayLink", Mock(side_effect=AssertionError("must not construct a relay without a port")))
+
+    assert monitor_worker.main() == 0
     capsys.readouterr()
 
 

@@ -553,7 +553,8 @@ export function OnlineRoomProvider({ children }) {
     transferStatuses,
     estimateRemoteVoiceLatency,
     getRemoteVoiceStreams,
-    voiceError
+    voiceError,
+    voiceRef
   });
   const speakingValue = useMemo(
     () => ({ localSpeakingLevel, speakingLevels }),

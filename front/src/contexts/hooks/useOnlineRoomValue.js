@@ -33,11 +33,13 @@ export default function useOnlineRoomValue(state) {
     togglePersonMuted,
     transferStatus,
     transferStatuses,
-    voiceError
+    voiceError,
+    voiceRef
   } = state;
   return useMemo(
     () => ({
       room,
+      voiceRef,
       participants,
       participantVolumes,
       mutedPeople,
@@ -102,7 +104,8 @@ export default function useOnlineRoomValue(state) {
       togglePersonMuted,
       transferStatus,
       transferStatuses,
-      voiceError
+      voiceError,
+      voiceRef
     ]
   );
 }

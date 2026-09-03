@@ -1,0 +1,63 @@
+import socket
+import time
+
+import numpy as np
+
+from app.services.audio_relay_protocol import STREAM_DRY, FrameReader
+from app.services.monitor_relay_link import RelayLink
+
+
+def wait_until(predicate, timeout=2.0, interval=0.01):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return False
+
+
+def make_server():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    return server, server.getsockname()[1]
+
+
+def test_push_accumulates_and_flushes_a_full_chunk_once_the_threshold_is_reached():
+    server, port = make_server()
+    link = None
+    client = None
+    try:
+        server.settimeout(2.0)
+        link = RelayLink(port, sample_rate=1000.0)  # chunk = round(1000 * 0.015) = 15 samples
+        client, _ = server.accept()
+        client.settimeout(2.0)
+        assert wait_until(lambda: link.connected)
+
+        link.push(STREAM_DRY, 1000.0, np.ones(20, dtype=np.float32))
+
+        reader = FrameReader()
+        frames: list = []
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline and not frames:
+            reader.feed(client.recv(4096))
+            frames = reader.pop_frames()
+        assert frames
+        stream_id, sample_rate, decoded = frames[0]
+        assert stream_id == STREAM_DRY
+        assert sample_rate == 1000.0
+        assert len(decoded) == 15
+    finally:
+        if link is not None:
+            link.close()
+        if client is not None:
+            client.close()
+        server.close()
+
+
+def test_push_is_a_silent_no_op_before_the_connection_completes():
+    link = RelayLink(port=1, sample_rate=1000.0, connect_timeout=0.05)
+    try:
+        link.push(STREAM_DRY, 1000.0, np.ones(4, dtype=np.float32))
+    finally:
+        link.close()

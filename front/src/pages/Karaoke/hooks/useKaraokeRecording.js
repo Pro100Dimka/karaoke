@@ -165,7 +165,8 @@ export default function useKaraokeRecording({
         microphoneEffects.delay,
         Boolean(onlineRoom?.room),
         microphoneEffects.octave,
-        speed
+        speed,
+        Boolean(onlineRoom?.voiceRef?.current?.usingRelay)
       )) || {};
     if (!id) throw new Error(translateSaved(MISSING_RECORDING_ID));
     rememberPending(id);

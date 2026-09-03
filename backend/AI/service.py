@@ -4,6 +4,7 @@ import threading
 
 from .audio_pipeline_v2 import AudioPipelineV2, AudioPipelineV2Request
 from .config import CoreConfig
+from .engines.autocorrelation_pitch import AutocorrelationPitchEstimator
 from .errors import ConfigurationError
 from .pipeline import KaraokePipeline, PipelineResult
 from .pitch_post import stabilize_pitch
@@ -19,6 +20,11 @@ class AICoreService:
         # process_song().
         self.pipeline = AudioPipelineV2(self.config)
         self._reprocessor: KaraokePipeline | None = None
+        # Deliberately separate from self.pipeline.engines.pitch (FCPE): that
+        # instance also builds every song's reference melody, a much larger
+        # blast radius than scoring one user's recording. Only analyze_pitch
+        # uses this lightweight estimator, matching the live JS UI meter.
+        self._recording_pitch = AutocorrelationPitchEstimator(sr=self.config.pitch_sample_rate)
         # A plain lock capped concurrent AI work at exactly one job, even
         # across unrelated songs (and users) that had nothing to serialize
         # for -- a GPU-bound stage on one song blocked a purely CPU-bound
@@ -42,7 +48,7 @@ class AICoreService:
 
     def analyze_pitch(self, audio_path):
         with self._lock:
-            return stabilize_pitch(self.pipeline.engines.pitch.estimate(audio_path))
+            return stabilize_pitch(self._recording_pitch.estimate(audio_path))
 
     def separate_stems(
         self,
@@ -78,7 +84,15 @@ class AICoreService:
 
     def health(self) -> dict:
         engines = self.pipeline.engines
-        return {"version": self.pipeline.VERSION, "separator": engines.separator.name, "pitch": engines.pitch.name, "transcriber": engines.transcriber.name, "aligner": engines.aligner.name, "runtime": get_runtime_plan().describe()}
+        return {
+            "version": self.pipeline.VERSION,
+            "separator": engines.separator.name,
+            "pitch": engines.pitch.name,
+            "recording_pitch": self._recording_pitch.name,
+            "transcriber": engines.transcriber.name,
+            "aligner": engines.aligner.name,
+            "runtime": get_runtime_plan().describe(),
+        }
 
 
 _service = None

@@ -312,11 +312,6 @@ UPLOAD_CHUNK_SIZE = _env_int("SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4
 MAX_SONG_DURATION_SECONDS = _env_int("SONGAPP_MAX_SONG_DURATION_SECONDS", 20 * 60, minimum=1)
 MAX_RECORDING_DURATION_SECONDS = _env_int("SONGAPP_MAX_RECORDING_DURATION_SECONDS", 15 * 60, minimum=1)
 
-# Стандартный формат аудио, который backend гарантирует на выходе
-# (используется при оптимизации/конвертации файлов песни, см. cache_service).
-STANDARD_SAMPLE_RATE = 44100
-STANDARD_BIT_DEPTH = 24
-
 # --------------------------------------------------------------------
 # Запись голоса
 # --------------------------------------------------------------------

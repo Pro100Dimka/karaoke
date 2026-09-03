@@ -438,3 +438,72 @@ def test_native_latency_breakdown_is_logged_once_per_connection(control, caplog)
     assert "capture_ms=43.2" in records[0]
     assert "input_period=480@48000" in records[0]
     assert "output_period=144@48000" in records[0]
+
+
+def test_start_shared_monitor_opens_a_relay_and_passes_its_port_to_the_worker(control, monkeypatch):
+    monkeypatch.setattr(audio_service, "_monitor_relay", None)
+    devices = [
+        {"name": "USB mic", "hostapi": 0, "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 48000},
+        {"name": "USB speakers", "hostapi": 0, "max_input_channels": 0, "max_output_channels": 2, "default_samplerate": 48000},
+    ]
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    monkeypatch.setattr(audio_service.sd, "query_devices", Mock(return_value=devices))
+    monkeypatch.setattr(audio_service.sd, "query_hostapis", lambda _: {"name": "Windows WASAPI"})
+    monkeypatch.setattr(audio_service.sd, "default", SimpleNamespace(device=(0, 1)))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_start_monitor_worker", launch)
+
+    audio_service.configure_monitoring(settings(monitoring_enabled=True))
+
+    options = launch.call_args.args[0]
+    relay = audio_service._monitor_relay
+    assert relay is not None
+    assert options["audio_relay_port"] == relay.port
+    relay.close()
+
+
+def test_start_shared_monitor_replaces_a_stale_relay_that_stop_did_not_clear(control, monkeypatch):
+    from app.services.audio_relay import AudioRelayServer
+
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    stale = AudioRelayServer()
+    monkeypatch.setattr(audio_service, "_monitor_relay", stale)
+    try:
+        opened = audio_service._open_monitor_relay()
+        assert opened is not stale
+        assert audio_service._monitor_relay is opened
+    finally:
+        opened.close()
+
+
+def test_stop_monitoring_closes_and_clears_the_relay(control, monkeypatch):
+    from app.services.audio_relay import AudioRelayServer
+
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    relay = AudioRelayServer()
+    monkeypatch.setattr(audio_service, "_monitor_relay", relay)
+    audio_service.stop_monitoring()
+    assert audio_service._monitor_relay is None
+    # A closed AudioRelayServer's accept loop has exited; opening a new
+    # connection to it must fail rather than hang.
+    import socket
+    with pytest.raises(OSError):
+        socket.create_connection(("127.0.0.1", relay.port), timeout=1.0)
+
+
+def test_subscribe_monitor_relay_reflects_whether_a_relay_is_currently_running(control, monkeypatch):
+    from app.services.audio_relay import AudioRelayServer
+
+    monkeypatch.setattr(audio_service, "_monitor_relay", None)
+    assert audio_service.subscribe_monitor_relay() is None
+
+    relay = AudioRelayServer()
+    monkeypatch.setattr(audio_service, "_monitor_relay", relay)
+    try:
+        result = audio_service.subscribe_monitor_relay()
+        assert result is not None
+        subscribed_relay, subscriber_queue = result
+        assert subscribed_relay is relay
+        assert subscriber_queue.empty()
+    finally:
+        relay.close()

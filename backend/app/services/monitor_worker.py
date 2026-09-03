@@ -29,11 +29,13 @@ except Exception:  # PortAudio may be unavailable in CI/diagnostics.
 
 if __name__ == "__main__":
     _stage("import microphone DSP")
+from app.services.audio_relay_protocol import STREAM_DRY, STREAM_WET  # noqa: E402
 from app.services.microphone_quality import (  # noqa: E402 - staged worker startup
     MonitorEffectsChain,
     RealtimePitchShifter,
     StudioMicrophoneProcessor,
 )
+from app.services.monitor_relay_link import RelayLink  # noqa: E402
 from app.services.wasapi_monitor_stream import WasapiMonitorStream  # noqa: E402
 
 _running = True
@@ -107,7 +109,7 @@ def _read_live_updates() -> None:
         return
 
 
-def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None):
+def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, relay: RelayLink | None = None):
     statistics = {} if statistics is None else statistics
     quality = StudioMicrophoneProcessor(sample_rate, 1)
     pitch = RealtimePitchShifter(sample_rate)
@@ -127,8 +129,11 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None):
                 _live_params.get("octave", 0.0),
             )
         processed = quality.process(indata[:, :1], gain, noise_suppression)[:, 0]
-        processed = pitch.process(processed, octave)
-        processed = effects.process(processed, reverb, echo, delay)
+        dry = pitch.process(processed, octave)
+        processed = effects.process(dry, reverb, echo, delay)
+        if relay is not None:
+            relay.push(STREAM_DRY, sample_rate, dry)
+            relay.push(STREAM_WET, sample_rate, processed)
         outdata.fill(0)
         for channel in range(outdata.shape[1]): outdata[:, channel] = processed
         rms, peak = float(np.sqrt(np.mean(np.square(processed)))) if len(processed) else 0.0, float(np.max(np.abs(processed))) if len(processed) else 0.0
@@ -160,6 +165,7 @@ def main() -> int:
     failed = threading.Event()
     statistics = {"glitch_count": 0}
     stream: Any = None
+    relay: RelayLink | None = None
     try:
         candidate = dict(_stream_candidates(options)[0])
         mode = candidate.pop("_mode")
@@ -169,7 +175,14 @@ def main() -> int:
             from app.services.native_wasapi import NativeWasapiStream
             stream = NativeWasapiStream(options, statistics)
         _stage("initialize microphone DSP")
-        process = _audio_callback(gain, stream.info.sample_rate if stream else float(options["sample_rate"]), statistics)
+        stream_sample_rate = stream.info.sample_rate if stream else float(options["sample_rate"])
+        relay_port = options.get("audio_relay_port")
+        # Connecting is fully non-blocking (a background thread) specifically
+        # so an unavailable or slow relay server can never delay solo
+        # monitoring startup -- see monitor_relay_link.RelayLink.
+        if relay_port:
+            relay = RelayLink(int(relay_port), stream_sample_rate)
+        process = _audio_callback(gain, stream_sample_rate, statistics, relay)
 
         def callback(*args):
             try:
@@ -206,6 +219,9 @@ def main() -> int:
         _emit({"event": "error", "message": str(exc)})
         return 1
     finally:
+        if relay is not None:
+            with contextlib.suppress(Exception):
+                relay.close()
         if stream is not None:
             for method in ("abort", "close"):
                 with contextlib.suppress(Exception):

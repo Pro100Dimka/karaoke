@@ -6,6 +6,7 @@ import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-cons
 import { resolveMicrophoneDevice } from "./microphoneDevice";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 import { suspendVoiceMicrophone } from "./onlineVoiceHardwareLifecycle";
+import { createRelayVoiceGraph } from "./pythonVoiceRelay";
 import { updatePeerIceServers } from "./onlineVoicePeerConfiguration";
 import OnlineVoicePeerRecovery from "./onlineVoicePeerRecovery";
 // Audio is peer-to-peer; the signaling Worker never stores microphone data.
@@ -83,6 +84,11 @@ export default class OnlineVoiceMesh {
     this.effectsStream = null;
     this.peerEffectsEnabled = new Map();
     this.microphoneGraph = null;
+    // True when microphoneGraph came from the Python monitor's audio relay
+    // (see pythonVoiceRelay.js) instead of the local getUserMedia + Web
+    // Audio DSP graph -- read by callers that need to tell the backend
+    // which DSP source is live (see body.voice_relay in /recording/start).
+    this.usingRelay = false;
     this.outputDeviceId = "";
     this.startPromise = null;
     this.lifecycleVersion = 0;
@@ -120,17 +126,76 @@ export default class OnlineVoiceMesh {
       this.stream = null;
     }
     const { lifecycleVersion } = this;
-    let capturedStream;
+    const cancelled = () => lifecycleVersion !== this.lifecycleVersion;
+    let capturedStream = null;
+    let ownedGraph = null;
     let persistedSettings;
+    const syncPeersAndInvite = async () => {
+      for (const [participantId, peer] of this.peers) {
+        await this.syncPeerAudioTrack(participantId, peer);
+        await this.optimizeAudioSenders(peer);
+        this.pendingInvites.add(participantId);
+      }
+      const pending = [...this.pendingInvites];
+      this.pendingInvites.clear();
+      await Promise.allSettled(pending.map((participantId) => this.invite(participantId)));
+    };
+    // Shared by both DSP sources (Python relay and local Web Audio graph):
+    // wires up the graph's outgoing streams and re-syncs any already-
+    // connected peers to it. Committing microphoneGraph here (rather than
+    // before this point) lets setSinkId below act on the graph that is
+    // actually about to be used.
+    const finishGraph = async (graph) => {
+      ownedGraph = graph;
+      this.microphoneGraph = graph;
+      if (cancelled()) throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+      await this.setSinkId(this.outputDeviceId);
+      if (cancelled()) throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+      const outgoingStream = graph.stream;
+      this.stream = outgoingStream;
+      this.effectsStream = graph.effectsStream || outgoingStream;
+      outgoingStream.getAudioTracks().forEach((track) => {
+        track.contentHint = "music";
+      });
+      this.effectsStream.getAudioTracks().forEach((track) => {
+        track.contentHint = "music";
+      });
+      await syncPeersAndInvite();
+      return outgoingStream;
+    };
+    // Tries the Python monitor's audio relay first, so the room reuses the
+    // same DSP the solo monitor already runs instead of a second JS
+    // implementation of it. Returns null (never throws, except on
+    // cancellation) so the caller falls back to the local Web Audio graph
+    // when the relay isn't available -- an unsupported/failed ASIO driver,
+    // no backend monitor running, or a connection timeout.
+    const tryRelay = async (settings) => {
+      if (settings?.audio_driver === "asio") return null;
+      let graph;
+      try {
+        graph = await createRelayVoiceGraph({ connectTimeoutMs: 1500 });
+      } catch {
+        return null;
+      }
+      if (cancelled()) {
+        await graph.close();
+        throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+      }
+      this.usingRelay = true;
+      graph.onUnavailable(() => this.handleRelayDropped());
+      return finishGraph(graph);
+    };
     const startPromise = api
       .getAudioSettings()
       .catch(() => null)
       .then(async (settings) => {
         persistedSettings = settings;
+        const relayStream = await tryRelay(settings);
+        if (relayStream) return relayStream;
+        this.usingRelay = false;
         const deviceId = await resolveMicrophoneDevice(settings);
-        if (lifecycleVersion !== this.lifecycleVersion)
-          throw new Error(translateSaved("room.microphoneLaunchCanceled"));
-        return navigator.mediaDevices.getUserMedia({
+        if (cancelled()) throw new Error(translateSaved("room.microphoneLaunchCanceled"));
+        const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             ...MICROPHONE_CAPTURE_CONSTRAINTS,
             // Browser AEC adds a capture look-ahead/buffer that is audible in
@@ -144,10 +209,8 @@ export default class OnlineVoiceMesh {
             ...(deviceId && { deviceId: { exact: deviceId } })
           }
         });
-      })
-      .then(async (stream) => {
         capturedStream = stream;
-        if (lifecycleVersion !== this.lifecycleVersion) {
+        if (cancelled()) {
           stream.getTracks().forEach((track) => track.stop());
           throw new Error(translateSaved("room.microphoneLaunchCanceled"));
         }
@@ -155,7 +218,7 @@ export default class OnlineVoiceMesh {
         // level until some settings save happens to dispatch
         // AUDIO_SETTINGS_CHANGED_EVENT -- read the persisted value up front so a
         // room call actually starts with whatever the user last saved.
-        this.microphoneGraph = createStudioMicrophoneGraph(stream, {
+        const graph = createStudioMicrophoneGraph(stream, {
           noiseSuppression: persistedSettings?.noise_suppression,
           octave: persistedSettings?.octave,
           volume: persistedSettings?.volume,
@@ -163,31 +226,10 @@ export default class OnlineVoiceMesh {
           echo: persistedSettings?.echo,
           delay: persistedSettings?.delay
         });
-        await this.setSinkId(this.outputDeviceId);
-        if (lifecycleVersion !== this.lifecycleVersion) {
-          throw new Error(translateSaved("room.microphoneLaunchCanceled"));
-        }
-        const outgoingStream = this.microphoneGraph.stream || stream;
-        this.stream = outgoingStream;
-        this.effectsStream = this.microphoneGraph.effectsStream || outgoingStream;
-        outgoingStream.getAudioTracks().forEach((track) => {
-          track.contentHint = "music";
-        });
-        this.effectsStream.getAudioTracks().forEach((track) => {
-          track.contentHint = "music";
-        });
-        for (const [participantId, peer] of this.peers) {
-          await this.syncPeerAudioTrack(participantId, peer);
-          await this.optimizeAudioSenders(peer);
-          this.pendingInvites.add(participantId);
-        }
-        const pending = [...this.pendingInvites];
-        this.pendingInvites.clear();
-        await Promise.allSettled(pending.map((participantId) => this.invite(participantId)));
-        return outgoingStream;
+        return finishGraph(graph);
       })
       .catch(async (error) => {
-        if (this.microphoneGraph?.rawStream === capturedStream) {
+        if (ownedGraph && this.microphoneGraph === ownedGraph) {
           await closeAudioContext(this.microphoneGraph);
           this.microphoneGraph = null;
           this.stream = null;
@@ -199,6 +241,27 @@ export default class OnlineVoiceMesh {
       });
     this.startPromise = startPromise;
     return startPromise;
+  }
+
+  // Called when the relay WebSocket drops mid-call (network blip, or the
+  // backend monitor stopped) -- rebuilds the local Web Audio DSP graph and
+  // re-syncs already-connected peers to it, rather than leaving them with a
+  // dead track. Guarded by usingRelay so onclose/onerror firing together
+  // cannot trigger this twice.
+  async handleRelayDropped() {
+    if (!this.usingRelay) return;
+    this.usingRelay = false;
+    const previousGraph = this.microphoneGraph;
+    this.microphoneGraph = null;
+    this.stream = null;
+    this.effectsStream = null;
+    try {
+      await this.start();
+    } catch (error) {
+      console.error("Could not rebuild the voice graph after the microphone relay dropped", error);
+    } finally {
+      if (previousGraph) await previousGraph.close().catch(() => {});
+    }
   }
 
   getMeterStream() { return this.microphoneGraph?.rawStream || this.stream; }
@@ -642,6 +705,7 @@ export default class OnlineVoiceMesh {
       closeAudioContextQuietly(this.microphoneGraph);
       this.microphoneGraph = null;
     } else this.stream?.getTracks().forEach((track) => track.stop());
+    this.usingRelay = false;
     this.stream = null;
     this.effectsStream = null;
     this.startPromise = null;

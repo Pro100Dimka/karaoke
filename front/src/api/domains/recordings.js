@@ -13,7 +13,8 @@ export const recordingsApi = {
     delay = 0,
     roomMode = false,
     octave = 0,
-    playbackRate = 1
+    playbackRate = 1,
+    voiceRelay = false
   ) =>
     request("/recording/start", {
       method: "POST",
@@ -27,7 +28,8 @@ export const recordingsApi = {
         delay,
         octave,
         playback_rate: playbackRate,
-        room_mode: roomMode
+        room_mode: roomMode,
+        voice_relay: voiceRelay
       })
     }),
   pauseRecording: (sessionId) =>

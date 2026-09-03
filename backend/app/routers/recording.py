@@ -29,6 +29,30 @@ def _restore_monitoring(db: Session) -> None:
         audio_service.stop_monitoring()
 
 
+def _configure_room_relay_monitor(settings) -> bool:
+    """Keeps the shared Python monitor running for a room-mode recording
+    when the frontend is using its audio relay (body.voice_relay) instead
+    of its own local Web Audio DSP graph.
+
+    Unlike the JS-graph room path below, the monitor here is now the source
+    of BOTH local self-monitoring in the singer's headphones AND the audio
+    relayed to the browser for the WebRTC peer (see app/routers/
+    audio_relay.py) -- stopping it would silence what the room hears, not
+    just local playback. No second hardware output path is opened: the
+    monitor already owns the one real output device, exactly as it does
+    outside of room mode.
+    """
+    if not settings.monitoring_enabled:
+        audio_service.stop_monitoring()
+        return False
+    try:
+        audio_service.configure_monitoring(settings)
+    except RuntimeError:
+        audio_service.stop_monitoring()
+        return False
+    return True
+
+
 def _configure_recording_monitor(settings, body: schemas.RecordingStartRequest) -> bool:
     keep_native_monitor = settings.audio_driver == "asio"
     if not keep_native_monitor:
@@ -75,10 +99,16 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
         raise HTTPException(status_code=409, detail="A microphone recording is already active")
     settings = audio_service.get_settings(db)
     try:
-        if body.room_mode:
-            # The WebRTC room owns live self-monitoring. Opening a second
-            # PortAudio output path here makes consumer USB/WASAPI devices
-            # buffer twice and creates the delayed doubled voice users hear.
+        if body.room_mode and body.voice_relay:
+            keep_native_monitor = _configure_room_relay_monitor(settings)
+        elif body.room_mode:
+            # Fallback path: the browser's own local Web Audio graph owns
+            # live self-monitoring for the room here (voice_relay is false --
+            # the frontend could not use the Python monitor's relay, e.g. an
+            # ASIO driver or an unavailable/failed relay connection). Opening
+            # a second PortAudio output path here makes consumer USB/WASAPI
+            # devices buffer twice and creates the delayed doubled voice
+            # users hear.
             audio_service.stop_monitoring()
             keep_native_monitor = False
         else:
@@ -120,7 +150,12 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
                 if getattr(settings, "noise_suppression", None) is None
                 else settings.noise_suppression
             ),
-            monitor_owner="room" if body.room_mode else "asio" if keep_native_monitor else "recording",
+            monitor_owner=(
+                "room-relay" if body.room_mode and body.voice_relay
+                else "room" if body.room_mode
+                else "asio" if keep_native_monitor
+                else "recording"
+            ),
             monitor_mode=None if body.room_mode or keep_native_monitor else audio_service.recording_monitor_mode(input_device_id),
         )
     except RuntimeError as exc:

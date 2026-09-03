@@ -1,6 +1,32 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { FakeChannel, FakePeer, stream, track } from "./helpers/webrtc.mjs";
 
+const relayMocks = vi.hoisted(() => ({ createRelayVoiceGraph: vi.fn() }));
+vi.mock("../src/services/pythonVoiceRelay.js", () => ({
+  createRelayVoiceGraph: relayMocks.createRelayVoiceGraph
+}));
+
+function fakeRelayGraph({ dryStream = stream([track("relay-dry")]), wetStream = stream([track("relay-wet")]) } = {}) {
+  let unavailableCallback = null;
+  return {
+    stream: dryStream,
+    effectsStream: wetStream,
+    rawStream: dryStream,
+    context: {},
+    setNoiseSuppression: vi.fn(),
+    setPitchShift: vi.fn(),
+    setEffects: vi.fn(() => false),
+    setMonitoring: vi.fn(() => false),
+    getStream: () => dryStream,
+    getEffectsStream: () => wetStream,
+    onUnavailable: vi.fn((callback) => {
+      unavailableCallback = callback;
+    }),
+    close: vi.fn().mockResolvedValue(undefined),
+    triggerUnavailable: () => unavailableCallback?.()
+  };
+}
+
 let OnlineVoiceMesh;
 let OnlineVoiceTransferSession;
 let preferLowLatencyOpus;
@@ -13,6 +39,7 @@ const setupChannel = (peer = "guest") => {
 };
 beforeEach(async () => {
   vi.resetModules();
+  relayMocks.createRelayVoiceGraph.mockReset().mockRejectedValue(new Error("relay not available in tests by default"));
   ({ default: OnlineVoiceMesh, preferLowLatencyOpus } = await import("../src/services/onlineVoiceMesh.js"));
   ({ default: OnlineVoiceTransferSession } = await import("../src/services/onlineVoiceTransferSession.js"));
   FakePeer.instances = [];
@@ -3056,4 +3083,84 @@ test("logs data channel open, close and error transitions for diagnostics", () =
     "WebRTC data channel error",
     expect.objectContaining({ participantId: "guest", label: "karaoke-library" })
   );
+});
+
+test("uses the Python monitor relay instead of local capture when it is available", async () => {
+  const capture = vi.fn();
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { mediaDevices: { getUserMedia: capture } }
+  });
+  const graph = fakeRelayGraph();
+  relayMocks.createRelayVoiceGraph.mockReset().mockResolvedValue(graph);
+
+  const mesh = makeMesh();
+  const outgoing = await mesh.start();
+
+  expect(relayMocks.createRelayVoiceGraph).toHaveBeenCalledWith({ connectTimeoutMs: 1500 });
+  expect(capture).not.toHaveBeenCalled();
+  expect(mesh.usingRelay).toBe(true);
+  expect(mesh.microphoneGraph).toBe(graph);
+  expect(outgoing).toBe(graph.stream);
+  expect(mesh.stream).toBe(graph.stream);
+  expect(mesh.effectsStream).toBe(graph.effectsStream);
+  expect(graph.onUnavailable).toHaveBeenCalledWith(expect.any(Function));
+});
+
+test("skips the relay entirely for an ASIO driver and falls back to local capture", async () => {
+  const capture = vi.fn().mockResolvedValue(stream([track("mic")]));
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { mediaDevices: { getUserMedia: capture } }
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ audio_driver: "asio" })
+    })
+  );
+
+  const mesh = makeMesh();
+  try {
+    await mesh.start();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+
+  expect(relayMocks.createRelayVoiceGraph).not.toHaveBeenCalled();
+  expect(capture).toHaveBeenCalled();
+  expect(mesh.usingRelay).toBe(false);
+});
+
+test("falls back to local capture and re-syncs peers when the relay drops mid-call", async () => {
+  const localStream = stream([track("mic")]);
+  const capture = vi.fn().mockResolvedValue(localStream);
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { mediaDevices: { getUserMedia: capture } }
+  });
+  const graph = fakeRelayGraph();
+  relayMocks.createRelayVoiceGraph
+    .mockReset()
+    .mockResolvedValueOnce(graph)
+    .mockRejectedValue(new Error("relay gone after dropping"));
+
+  const mesh = makeMesh();
+  await mesh.start();
+  expect(mesh.usingRelay).toBe(true);
+
+  const peer = mesh.createPeer("guest");
+  const sender = peer.getSenders()[0];
+  sender.replaceTrack = vi.fn(async (nextTrack) => {
+    sender.track = nextTrack;
+  });
+
+  await graph.triggerUnavailable();
+
+  expect(mesh.usingRelay).toBe(false);
+  expect(capture).toHaveBeenCalled();
+  expect(graph.close).toHaveBeenCalled();
+  expect(sender.replaceTrack).toHaveBeenCalledWith(localStream.getAudioTracks()[0]);
 });

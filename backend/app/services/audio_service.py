@@ -2,6 +2,7 @@ import contextlib
 import json
 import logging
 import os
+import queue
 import re
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 import config
 import models
 from AI.utils.numeric import clamp01
+from app.services.audio_relay import AudioRelayServer
 from app.services.audio_runtime import hardware_lock, run_on_audio_thread
 from app.services.db_utils import commit_refresh
 from app.services.monitor_control import MonitorCancelled, MonitorControl
@@ -49,6 +51,11 @@ except Exception:
 
 _monitor_process: subprocess.Popen[str] | None = None
 _monitor_reader: threading.Thread | None = None
+# Owns the loopback socket monitor_worker.py's RelayLink connects to, and
+# fans processed monitor audio out to WebSocket subscribers (see
+# app.routers.audio_relay). Lives and dies with _monitor_process -- see
+# _start_shared_monitor / _stop_monitoring_process.
+_monitor_relay: AudioRelayServer | None = None
 _monitor_lock = threading.Lock()
 _EMPTY_MONITOR_SIGNAL = {"rms_db": -120.0, "clipping": False, "silent": True}
 _MONITOR_RESTART_FIELDS = frozenset(
@@ -630,15 +637,19 @@ def resume_monitoring(settings) -> None:
 
 
 def _stop_monitoring_process(expected_process=None) -> None:
-    global _monitor_process, _monitor_reader
+    global _monitor_process, _monitor_reader, _monitor_relay
     with _monitor_lock:
         if expected_process is not None and _monitor_process is not expected_process:
             return
         process = _monitor_process
         reader = _monitor_reader
+        relay = _monitor_relay
         _monitor_process = None
         _monitor_reader = None
+        _monitor_relay = None
         _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
+    if relay is not None:
+        relay.close()
     if process is None or process.poll() is not None:
         return
     try:
@@ -660,6 +671,23 @@ def _stop_monitoring_process(expected_process=None) -> None:
         if process.stdin is not None:
             with contextlib.suppress(OSError):
                 process.stdin.close()
+
+
+def subscribe_monitor_relay() -> tuple[AudioRelayServer, queue.Queue] | None:
+    """Subscribes to the currently active Python monitor's relay of
+    processed dry/wet audio, or returns None if no relay is running right
+    now (monitoring is off, or the active driver is ASIO -- see
+    _open_monitor_relay, which only the WASAPI worker path opens).
+
+    Used by the WebSocket route in app.routers.audio_relay. Callers must
+    hold onto the returned AudioRelayServer and call
+    relay.unsubscribe(subscriber) on it directly during cleanup, rather than
+    re-resolving "the current relay" later -- the monitor (and its relay)
+    can be restarted mid-subscription by an unrelated settings change.
+    """
+    with _monitor_lock:
+        relay = _monitor_relay
+    return (relay, relay.subscribe()) if relay is not None else None
 
 
 def _send_live_update(payload: dict) -> None:
@@ -795,7 +823,24 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
     if wasapi:
         worker_options.update(native_shared=True, input_device_name=str(input_info["name"]),
                               output_device_name=str(output_info["name"]))
+    worker_options["audio_relay_port"] = _open_monitor_relay().port
     _start_monitor_worker(worker_options)
+
+
+def _open_monitor_relay() -> AudioRelayServer:
+    """(Re)opens the loopback relay server for the monitor worker about to
+    start. Only used by the Python worker path (_start_shared_monitor) --
+    the ASIO bridge (_start_asio_monitor) is a separate native binary with no
+    relay support, so ASIO users keep the JS-graph room path (see A3).
+    """
+    global _monitor_relay
+    with _monitor_lock:
+        previous = _monitor_relay
+        relay = AudioRelayServer()
+        _monitor_relay = relay
+    if previous is not None:
+        previous.close()
+    return relay
 
 
 def _start_asio_monitor(settings: models.AudioSettings) -> None:

@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import config
 from AI import service as ai_service
 from app.api.correlation import get_current, new_id, set_current
-from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
+from app.routers import analysis, application, audio, audio_relay, cache, diagnostics, player, recording, songs
 from app.services import (
     audio_runtime,
     audio_service,
@@ -162,6 +162,7 @@ app.include_router(analysis.router)
 app.include_router(cache.router)
 app.include_router(diagnostics.router)
 app.include_router(audio.router)
+app.include_router(audio_relay.router)
 app.include_router(application.router)
 
 
