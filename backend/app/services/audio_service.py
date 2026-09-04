@@ -56,6 +56,10 @@ _monitor_reader: threading.Thread | None = None
 # app.routers.audio_relay). Lives and dies with _monitor_process -- see
 # _start_shared_monitor / _stop_monitoring_process.
 _monitor_relay: AudioRelayServer | None = None
+# Sticky across live-setting-triggered reconfigures (see configure_monitoring's
+# relay_needed=None case) -- only an explicit True/False caller (room-relay
+# start, or _restore_monitoring on the way out) ever changes this.
+_monitor_relay_needed = False
 _monitor_lock = threading.Lock()
 _EMPTY_MONITOR_SIGNAL = {"rms_db": -120.0, "clipping": False, "silent": True}
 _MONITOR_RESTART_FIELDS = frozenset(
@@ -815,7 +819,17 @@ def set_monitor_dry_bypass(db: Session, enabled: bool) -> dict:
     return {"dry_monitor": _monitor_dry_bypass, "supported": supported}
 
 
-def configure_monitoring(settings: models.AudioSettings, *, adopt_driver_buffer: bool = False) -> None:
+def configure_monitoring(
+    settings: models.AudioSettings, *, adopt_driver_buffer: bool = False, relay_needed: bool | None = None
+) -> None:
+    global _monitor_relay_needed
+    # None means "leave it as whatever the last explicit caller asked for" --
+    # settings changes that arrive mid-room-session (e.g. a live buffer_size
+    # edit) reconfigure monitoring through this same function without knowing
+    # anything about the room, and must not silently drop the relay a room
+    # peer is still listening on.
+    if relay_needed is not None:
+        _monitor_relay_needed = relay_needed
     return _monitor_control.run_sync(
         lambda: _configure_monitoring(settings, adopt_driver_buffer=adopt_driver_buffer),
         enabled=settings.monitoring_enabled,
@@ -855,12 +869,12 @@ def _configure_monitoring(settings, *, adopt_driver_buffer: bool = False) -> Non
                     "fallback_driver": settings.asio_driver_name,
                 },
             )
-            _start_shared_monitor(settings, driver="auto")
+            _start_shared_monitor(settings, driver="auto", relay_needed=_monitor_relay_needed)
         return
-    _start_shared_monitor(settings, driver=settings.audio_driver)
+    _start_shared_monitor(settings, driver=settings.audio_driver, relay_needed=_monitor_relay_needed)
 
 
-def _start_shared_monitor(settings, *, driver: str) -> None:
+def _start_shared_monitor(settings, *, driver: str, relay_needed: bool = False) -> None:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Audio backend is unavailable")
 
@@ -933,7 +947,16 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
     if wasapi:
         worker_options.update(native_shared=True, input_device_name=str(input_info["name"]),
                               output_device_name=str(output_info["name"]))
-    worker_options["audio_relay_port"] = _open_monitor_relay().port
+    # The relay is a room-broadcast feature (see _open_monitor_relay) -- opening
+    # it and keeping a live loopback connection running costs a numpy copy plus
+    # a frame-encode on every single audio block, for the whole lifetime of the
+    # stream. Only pay that for the one caller that can actually have a
+    # subscriber (room mode with the Python relay); solo monitoring and plain
+    # recording never do, and skip it entirely rather than opening a socket
+    # nothing will ever read from. (_stop_monitoring_process() above already
+    # closed any previous relay, so simply not reopening one is enough here.)
+    if relay_needed:
+        worker_options["audio_relay_port"] = _open_monitor_relay().port
     _start_monitor_worker(worker_options)
 
 

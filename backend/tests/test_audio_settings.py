@@ -224,9 +224,10 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     worker.reset_mock()
     audio_service.configure_monitoring(settings(monitoring_enabled=True, volume=8, buffer_size=128))
     worker_options = dict(worker.call_args.args[0])
-    relay_port = worker_options.pop("audio_relay_port")
-    assert relay_port == audio_service._monitor_relay.port
-    audio_service._monitor_relay.close()
+    # Plain monitoring never asks for a relay (relay_needed defaults to
+    # False/unset here) -- no port key, no relay opened at all.
+    assert "audio_relay_port" not in worker_options
+    assert audio_service._monitor_relay is None
     assert worker_options == {
         "input_device_id": 1,
         "output_device_id": 2,

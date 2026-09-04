@@ -696,6 +696,8 @@ export const ruMessages = {
   "settings.audio.monitor.compact.estimate": "Задержка (оценка): {0} мс · вход {1} · выход {2}",
   "settings.audio.monitor.compact.unavailable": "Задержка: нет данных",
   "settings.audio.monitor.compact.sharedTiming": "Задержка потока (оценка): {0} мс",
+  "settings.audio.monitor.compact.measured": "Реальная задержка (микрофон → наушники): {0} мс",
+  "settings.audio.monitor.compact.negotiatedPeriod": "Реальный период устройства: вход {0}, выход {1} сэмплов @ {2} Гц",
   "settings.audio.monitor.compact.sharedTooltip":
     "Оценка пути от захвата до воспроизведения по временным меткам WASAPI и позиции аудиочасов; включает очередь программы. Зависит от точности меток драйвера и не заменяет физический loopback-замер.",
   "settings.audio.monitor.compact.driverTooltip":

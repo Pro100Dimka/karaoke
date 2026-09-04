@@ -149,7 +149,7 @@ export const enMessages = {
   "settings.audio.audio_driver.tooltip": "Automatic mode is suitable for most users",
   "settings.audio.asio_driver_name.label": "ASIO driver",
   "settings.audio.asio_driver_name.tooltip": "Only used in manual ASIO mode",
-  "settings.audio.buffer_size.label": "Audio buffer",
+  "settings.audio.buffer_size.label": "Buffer",
   "settings.audio.buffer_size.tooltip": "Smaller means lower latency but a higher click risk",
   "settings.audio.monitorInputDeviceId.label": "Test microphone",
   "settings.audio.monitorInputDeviceId.tooltip": "Microphone used by the browser level meter",
@@ -692,6 +692,8 @@ export const enMessages = {
   "settings.audio.monitor.compact.estimate": "Latency (estimate): {0} ms · input {1} · output {2}",
   "settings.audio.monitor.compact.unavailable": "Latency: unavailable",
   "settings.audio.monitor.compact.sharedTiming": "Stream latency (estimate): {0} ms",
+  "settings.audio.monitor.compact.measured": "Measured latency (mic → headphones): {0} ms",
+  "settings.audio.monitor.compact.negotiatedPeriod": "Actual device period: input {0}, output {1} samples @ {2} Hz",
   "settings.audio.monitor.compact.sharedTooltip":
     "Capture-to-playback estimate from WASAPI timestamps and audio-clock position, including the application's queue. Depends on driver timestamp accuracy; not a physical loopback measurement.",
   "settings.audio.monitor.compact.driverTooltip":

@@ -424,7 +424,7 @@ def test_unusable_asio_driver_falls_back_to_shared_monitor(control, monkeypatch)
 
     audio_service.configure_monitoring(current)
 
-    shared.assert_called_once_with(current, driver="auto")
+    shared.assert_called_once_with(current, driver="auto", relay_needed=False)
     status = control.snapshot()
     assert status["fallback_count"] == 1
     assert status["fallback_driver"] == "Realtek ASIO"
@@ -491,7 +491,9 @@ def test_start_shared_monitor_opens_a_relay_and_passes_its_port_to_the_worker(co
     launch = Mock()
     monkeypatch.setattr(audio_service, "_start_monitor_worker", launch)
 
-    audio_service.configure_monitoring(settings(monitoring_enabled=True))
+    # A relay is only ever opened for a caller that actually asks for one
+    # (room mode) -- plain monitoring must not pay for it, see relay_needed.
+    audio_service.configure_monitoring(settings(monitoring_enabled=True), relay_needed=True)
 
     options = launch.call_args.args[0]
     relay = audio_service._monitor_relay

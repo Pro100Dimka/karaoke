@@ -24,7 +24,10 @@ def _change_session_state(session_id: str, action, status: str) -> dict[str, str
 
 def _restore_monitoring(db: Session) -> None:
     try:
-        audio_service.configure_monitoring(audio_service.get_settings(db))
+        # Always clears any room-relay session's sticky relay_needed=True --
+        # this runs on every recording stop (and start failure), so ordinary
+        # monitoring afterward never keeps a room-only relay open by mistake.
+        audio_service.configure_monitoring(audio_service.get_settings(db), relay_needed=False)
     except RuntimeError:
         audio_service.stop_monitoring()
 
@@ -46,7 +49,7 @@ def _configure_room_relay_monitor(settings) -> bool:
         audio_service.stop_monitoring()
         return False
     try:
-        audio_service.configure_monitoring(settings)
+        audio_service.configure_monitoring(settings, relay_needed=True)
     except RuntimeError:
         audio_service.stop_monitoring()
         return False

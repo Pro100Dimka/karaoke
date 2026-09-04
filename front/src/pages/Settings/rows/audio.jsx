@@ -10,19 +10,36 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
   const output = status?.output_latency_ms;
   const known = [input, output].every((value) => Number.isFinite(value) && value >= 0);
   const source = status?.latency_source === "asio-driver-report" ? "driver" : "estimate";
+  // Priority: an actually-measured mic-to-speaker round trip (driver ADC/DAC
+  // timestamps, covers the whole DSP path) beats the WASAPI stream's own
+  // requested-buffer-size figure, which in turn beats the driver-reported
+  // input+output estimate -- each is a coarser fallback for hosts/engines
+  // that don't report the one above it.
+  const measured = Number.isFinite(status?.real_latency_ms) && status.real_latency_ms > 0;
   const timed =
+    !measured &&
     status?.latency_source === "wasapi-stream-report" &&
     Number.isFinite(status?.stream_latency_ms) &&
     status.stream_latency_ms > 0;
-  const latency = timed
-    ? tr("settings.audio.monitor.compact.sharedTiming", { 0: status.stream_latency_ms.toFixed(3) })
-    : known
-      ? tr(`settings.audio.monitor.compact.${source}`, {
-          0: (input + output).toFixed(3),
-          1: input.toFixed(3),
-          2: output.toFixed(3)
+  const latency = measured
+    ? tr("settings.audio.monitor.compact.measured", { 0: status.real_latency_ms.toFixed(3) })
+    : timed
+      ? tr("settings.audio.monitor.compact.sharedTiming", { 0: status.stream_latency_ms.toFixed(3) })
+      : known
+        ? tr(`settings.audio.monitor.compact.${source}`, {
+            0: (input + output).toFixed(3),
+            1: input.toFixed(3),
+            2: output.toFixed(3)
+          })
+        : tr("settings.audio.monitor.compact.unavailable");
+  const negotiatedPeriod =
+    Number.isFinite(status?.input_period_frames) && Number.isFinite(status?.output_period_frames)
+      ? tr("settings.audio.monitor.compact.negotiatedPeriod", {
+          0: status.input_period_frames,
+          1: status.output_period_frames,
+          2: status?.sample_rate ?? "—"
         })
-      : tr("settings.audio.monitor.compact.unavailable");
+      : null;
   return [
     ...[
       ["output_device_id", "settings.audio.output_device_id.label", "outputs"],
@@ -44,10 +61,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       disabled: audio.busy,
       onClick: () => run(audio.speaker)
     },
-    ...[
-      ["volume", "settings.audio.volume.label", 2],
-      ["noise_suppression", "settings.audio.noise_suppression.label", 1]
-    ].map(([name, label, max]) => ({
+    ...[["volume", "settings.audio.volume.label", 2]].map(([name, label, max]) => ({
       type: "Slider",
       md: 4,
       tag: `audio.${name}`,
@@ -60,7 +74,12 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
     {
       md: 4,
       render: () => (
-        <Stack>
+        <Stack direction="row" align="center" gap={1}>
+          <LiveSignalWaveform
+            active={status?.state === "running"}
+            level={audio.level}
+            ariaLabel={tr("settings.audio.microphoneLevel")}
+          />
           <Switch
             label={tr("settings.audio.monitoringEnabled.label")}
             variant="plain"
@@ -68,29 +87,8 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
             disabled={audio.busy}
             onChange={() => run(() => audio.monitor())}
           />
-          {audio.values?.monitoring_enabled && (
-            <Switch
-              label={tr("settings.audio.dryMonitor.label")}
-              variant="plain"
-              checked={!!audio.dryMonitor}
-              onChange={() => run(() => audio.setDryMonitor(!audio.dryMonitor))}
-            />
-          )}
-          <LiveSignalWaveform
-            active={status?.state === "running"}
-            level={audio.level}
-            ariaLabel={tr("settings.audio.microphoneLevel")}
-          />
         </Stack>
       )
-    },
-    {
-      md: 4,
-      type: "SelectField",
-      tag: "audio.asio_driver_name",
-      label: tr("settings.audio.audio_driver.label"),
-      onSave: audio.selectDriver,
-      options: audio.options?.drivers ?? []
     },
     {
       md: 4,
@@ -103,6 +101,14 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
         value,
         label: value
       }))
+    },
+    {
+      md: 12,
+      type: "SelectField",
+      tag: "audio.asio_driver_name",
+      label: tr("settings.audio.audio_driver.label"),
+      onSave: audio.selectDriver,
+      options: audio.options?.drivers ?? []
     },
     {
       type: "Label",
@@ -146,6 +152,16 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
         `settings.audio.monitor.compact.${status?.latency_source === "wasapi-stream-report" ? "shared" : source}Tooltip`
       ),
       text: latency
+    },
+    {
+      md: 12,
+      type: "Label",
+      variant: "caption",
+      tone: "muted",
+      // buffer_size above is only what was requested; Windows/the driver can
+      // negotiate a different period, and that's what actually applies.
+      showFor: running && !!negotiatedPeriod,
+      text: negotiatedPeriod
     },
     {
       type: "ButtonField",

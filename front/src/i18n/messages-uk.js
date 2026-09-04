@@ -694,6 +694,8 @@ export const ukMessages = {
   "settings.audio.monitor.compact.estimate": "Затримка (оцінка): {0} мс · вхід {1} · вихід {2}",
   "settings.audio.monitor.compact.unavailable": "Затримка: немає даних",
   "settings.audio.monitor.compact.sharedTiming": "Затримка потоку (оцінка): {0} мс",
+  "settings.audio.monitor.compact.measured": "Реальна затримка (мікрофон → навушники): {0} мс",
+  "settings.audio.monitor.compact.negotiatedPeriod": "Реальний період пристрою: вхід {0}, вихід {1} семплів @ {2} Гц",
   "settings.audio.monitor.compact.sharedTooltip":
     "Оцінка шляху від захоплення до відтворення за часовими мітками WASAPI та позицією аудіогодинника, включно з чергою програми. Залежить від точності драйвера та не замінює фізичний loopback-вимір.",
   "settings.audio.monitor.compact.driverTooltip":

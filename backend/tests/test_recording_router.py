@@ -43,7 +43,7 @@ def test_session_state_and_monitor_restore_translate_failures(monkeypatch):
     configure, stop = Mock(), Mock()
     patch_attrs(monkeypatch, recording.audio_service, configure_monitoring=configure, stop_monitoring=stop)
     recording._restore_monitoring(database)
-    configure.assert_called_once_with(current)
+    configure.assert_called_once_with(current, relay_needed=False)
     configure.side_effect = RuntimeError("device unavailable")
     recording._restore_monitoring(database)
     stop.assert_called_once_with()
@@ -149,7 +149,7 @@ def test_room_relay_recording_keeps_the_shared_monitor_running(monkeypatch):
 
     recording.start_recording(body, database)
 
-    configure.assert_called_once_with(settings)
+    configure.assert_called_once_with(settings, relay_needed=True)
     stop_monitoring.assert_not_called()
     assert start.call_args.kwargs["monitoring_enabled"] is False
     assert start.call_args.kwargs["monitor_owner"] == "room-relay"
@@ -211,7 +211,7 @@ def test_room_relay_recording_falls_back_to_stopping_when_the_monitor_fails_to_s
 
     recording.start_recording(body, database)
 
-    configure.assert_called_once_with(settings)
+    configure.assert_called_once_with(settings, relay_needed=True)
     stop_monitoring.assert_called_once_with()
     assert start.call_args.kwargs["monitoring_enabled"] is False
 
