@@ -42,14 +42,15 @@ _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
 _live_lock = threading.Lock()
 _live_params = {
-    "reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0,
+    "volume": 1.0, "reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0,
     "dry_monitor": 0.0,
 }
-# Populated by main() once the stream is chosen; read by _read_live_updates()
-# whenever dry_monitor changes. "eligible" is only ever true for the native
-# WASAPI engine with no relay attached -- see main()'s raw_eligible comment
-# for why a room-relay session must never arm this.
-_native_raw_target: dict[str, Any] = {"stream": None, "eligible": False}
+# Populated by main() once the stream is chosen; read by _read_live_updates().
+# "stream" is set for the native WASAPI engine regardless of relay (a live
+# volume change must reach it either way); "raw_eligible" is only ever true
+# with no relay attached -- see main()'s raw_eligible comment for why a
+# room-relay session must never arm the raw pass-through.
+_native_stream_target: dict[str, Any] = {"stream": None, "raw_eligible": False}
 
 
 def _stream_candidates(options: dict) -> list[dict]:
@@ -115,13 +116,18 @@ def _read_live_updates() -> None:
             except json.JSONDecodeError:
                 continue
             with _live_lock:
-                for key in ("reverb", "echo", "delay", "noise_suppression", "octave", "dry_monitor"):
+                for key in ("volume", "reverb", "echo", "delay", "noise_suppression", "octave", "dry_monitor"):
                     if key in update: _live_params[key] = float(update[key])
-                dry_monitor = _live_params.get("dry_monitor", 0.0) >= 0.5
-            target = _native_raw_target
-            if "dry_monitor" in update and target["eligible"] and target["stream"] is not None:
-                with contextlib.suppress(Exception):
-                    target["stream"].set_raw(dry_monitor)
+                volume, dry_monitor = _live_params.get("volume", 1.0), _live_params.get("dry_monitor", 0.0) >= 0.5
+            target = _native_stream_target
+            stream = target["stream"]
+            if stream is not None:
+                if "volume" in update:
+                    with contextlib.suppress(Exception):
+                        stream.set_gain(volume)
+                if "dry_monitor" in update and target["raw_eligible"]:
+                    with contextlib.suppress(Exception):
+                        stream.set_raw(dry_monitor)
     except Exception:
         return
 
@@ -145,7 +151,8 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
         if status:
             statistics["glitch_count"] = statistics.get("glitch_count", 0) + 1
         with _live_lock:
-            reverb, echo, delay, noise_suppression, octave, dry_monitor = (
+            live_gain, reverb, echo, delay, noise_suppression, octave, dry_monitor = (
+                _live_params.get("volume", gain),
                 _live_params["reverb"],
                 _live_params["echo"],
                 _live_params["delay"],
@@ -153,7 +160,7 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
                 _live_params.get("octave", 0.0),
                 _live_params.get("dry_monitor", 0.0) >= 0.5,
             )
-        processed = quality.process(indata[:, :1], gain, noise_suppression)[:, 0]
+        processed = quality.process(indata[:, :1], live_gain, noise_suppression)[:, 0]
         dry = pitch.process(processed, octave)
         processed = effects.process(dry, reverb, echo, delay)
         if relay is not None:
@@ -165,7 +172,7 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
         # hears locally -- the relay above still carries the normally
         # processed audio, so a room call in progress is unaffected.
         monitor_output = (
-            np.clip(indata[:, 0] * gain, -1.0, 1.0).astype(np.float32) if dry_monitor else processed
+            np.clip(indata[:, 0] * live_gain, -1.0, 1.0).astype(np.float32) if dry_monitor else processed
         )
         for channel in range(outdata.shape[1]): outdata[:, channel] = monitor_output
         if compute_started - level_state["reported_at"] >= _LEVEL_INTERVAL_SEC:
@@ -203,6 +210,7 @@ def main() -> int:
     options = json.loads(parser.parse_args().config)
     gain = float(options["gain"])
     with _live_lock:
+        _live_params["volume"] = gain
         _live_params["reverb"] = float(options.get("reverb", 0.0))
         _live_params["echo"] = float(options.get("echo", 0.0))
         _live_params["delay"] = float(options.get("delay", 0.0))
@@ -278,9 +286,11 @@ def main() -> int:
         # relay.push() calls -- arming it while a room relay is attached
         # would silently starve whichever peer is listening. Only ever
         # eligible for the one engine that actually has the C++-side support.
-        raw_eligible = chosen_engine == "wasapi-native-shared" and relay is None
-        _native_raw_target["stream"] = stream if raw_eligible else None
-        _native_raw_target["eligible"] = raw_eligible
+        # The stream reference itself is still kept with a relay attached, so
+        # a live volume change (unrelated to raw mode) still reaches it.
+        is_native = chosen_engine == "wasapi-native-shared"
+        _native_stream_target["stream"] = stream if is_native else None
+        _native_stream_target["raw_eligible"] = is_native and relay is None
         _emit({"event": "started", **details})
         reported = time.monotonic()
         while _running and not failed.is_set():

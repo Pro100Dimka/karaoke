@@ -52,6 +52,7 @@ def load_library():
     dll.wm_start.argtypes, dll.wm_start.restype = [ct.c_void_p, Process, ct.c_char_p, ct.c_uint32], ct.c_int
     dll.wm_pump.argtypes, dll.wm_pump.restype = [ct.c_void_p, ct.c_uint32, ct.POINTER(Statistics), ct.c_char_p, ct.c_uint32], ct.c_int
     dll.wm_set_raw.argtypes, dll.wm_set_raw.restype = [ct.c_void_p, ct.c_int], None
+    dll.wm_set_gain.argtypes, dll.wm_set_gain.restype = [ct.c_void_p, ct.c_float], None
     dll.wm_close.argtypes, dll.wm_close.restype = [ct.c_void_p], None
     return dll
 
@@ -80,6 +81,13 @@ class NativeWasapiStream:
         # raw_eligible.
         if self.handle:
             self.dll.wm_set_raw(self.handle, 1 if raw else 0)
+
+    def set_gain(self, gain: float) -> None:
+        # Keeps the native raw pass-through's gain in sync with a live
+        # volume-slider change -- otherwise it would stay pinned to whatever
+        # was requested when the stream first opened.
+        if self.handle:
+            self.dll.wm_set_gain(self.handle, float(gain))
 
     def _check(self, success):
         if not success:

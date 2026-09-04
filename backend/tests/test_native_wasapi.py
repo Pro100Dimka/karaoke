@@ -273,8 +273,8 @@ def test_native_raw_mode_is_armed_only_without_a_relay(monkeypatch, dll, capsys)
         return 1
     dll.wm_pump.side_effect = pump
     assert monitor_worker.main() == 0
-    assert monitor_worker._native_raw_target["eligible"] is True
-    assert isinstance(monitor_worker._native_raw_target["stream"], native_wasapi.NativeWasapiStream)
+    assert monitor_worker._native_stream_target["raw_eligible"] is True
+    assert isinstance(monitor_worker._native_stream_target["stream"], native_wasapi.NativeWasapiStream)
     capsys.readouterr()
 
 
@@ -298,6 +298,9 @@ def test_native_raw_mode_is_never_armed_when_a_relay_is_attached(monkeypatch, dl
     assert monitor_worker.main() == 0
     # A room peer may still be listening through the relay -- native raw mode
     # must never be armed here, or that peer would go silent whenever the
-    # singer flips on the local "listen to raw voice" check.
-    assert monitor_worker._native_raw_target == {"stream": None, "eligible": False}
+    # singer flips on the local "listen to raw voice" check. The stream
+    # reference itself is still kept (a live volume change must still reach
+    # it), only raw_eligible is false.
+    assert monitor_worker._native_stream_target["raw_eligible"] is False
+    assert isinstance(monitor_worker._native_stream_target["stream"], native_wasapi.NativeWasapiStream)
     capsys.readouterr()

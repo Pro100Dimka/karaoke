@@ -66,20 +66,19 @@ _MONITOR_RESTART_FIELDS = frozenset(
     {
         "input_device_id",
         "output_device_id",
-        "volume",
         "audio_driver",
         "asio_driver_name",
         "buffer_size",
     }
 )
-# The out-of-process worker for the "auto" driver takes reverb/echo/delay
-# updates live over stdin (see _send_live_update) instead of a full stream
-# restart. The ASIO bridge is a separate native binary with no live-update
-# channel, so it still needs a restart to pick up new effect values.
+# The out-of-process worker for the "auto" driver takes volume/reverb/echo/
+# delay updates live over stdin (see _send_live_update) instead of a full
+# stream restart. The ASIO bridge is a separate native binary with no
+# live-update channel, so it still needs a restart to pick up new values.
 _ASIO_ONLY_RESTART_FIELDS = frozenset(
-    {"reverb", "echo", "delay", "noise_suppression", "octave"}
+    {"volume", "reverb", "echo", "delay", "noise_suppression", "octave"}
 )
-_LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression", "octave"})
+_LIVE_UPDATE_FIELDS = frozenset({"volume", "reverb", "echo", "delay", "noise_suppression", "octave"})
 # MME (and any other non-WASAPI host, e.g. DirectSound) cannot reliably
 # service the tiny per-callback buffers WASAPI/ASIO can. Unlike ASIO/native
 # WASAPI, which reject or clamp an out-of-range buffer up front, this plain
@@ -90,6 +89,10 @@ _PLAIN_HOST_MIN_BLOCKSIZE = 512
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 _monitor_effects_disabled = False
 _monitor_dry_bypass = False
+# See check_signal_quality: throttles the ad-hoc sd.rec() probe it falls
+# back to whenever nothing is actively monitoring/recording yet.
+_SIGNAL_PROBE_INTERVAL_SEC = 1.5
+_signal_probe_cache: dict = {"at": 0.0, "device": object(), "result": None}
 _MONITOR_START_TIMEOUT_SECONDS = 12.0
 logger = logging.getLogger(__name__)
 _monitor_control = MonitorControl(execution_lock=hardware_lock)
@@ -1262,6 +1265,22 @@ def check_signal_quality(
     if stopping:
         return dict(_monitor_signal)
 
+    # Settings polls this every 80ms (see runtime-config's realtimeSignal)
+    # purely for a pre-monitoring level preview; a fresh sd.rec()+sd.wait()
+    # actually opens and closes the input device for real, every single poll,
+    # for as long as the page stays open with monitoring off. That competed
+    # for the device with whatever the user does next (pressing "Monitoring"
+    # itself, or ASIO opening exclusively) and kept the device busy almost
+    # continuously. A cached result between real probes keeps the preview
+    # responsive without hammering the device the whole time the page is open.
+    now = time.monotonic()
+    if (
+        now - _signal_probe_cache["at"] < _SIGNAL_PROBE_INTERVAL_SEC
+        and _signal_probe_cache["device"] == device_id
+        and _signal_probe_cache["result"] is not None
+    ):
+        return dict(_signal_probe_cache["result"])
+
     resolved_device = device_id
     rates: list[int] = []
     try:
@@ -1305,8 +1324,10 @@ def check_signal_quality(
         float(np.max(np.abs(samples))) if len(samples) else 0.0,
     )
 
-    return {
+    result = {
         "rms_db": round(rms_db, 1),
         "clipping": peak >= 0.99,
         "silent": rms_db < -50.0,
     }
+    _signal_probe_cache.update(at=now, device=device_id, result=result)
+    return result

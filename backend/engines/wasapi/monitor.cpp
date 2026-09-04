@@ -217,7 +217,10 @@ struct Engine {
     Process process = nullptr;
     HANDLE scheduling = nullptr;
     double pump_finished = 0;
-    float gain = 1.0f;
+    // Live-updatable (wm_set_gain) so a volume-slider change applies to the
+    // native raw pass-through the same way it already does to the Python DSP
+    // path -- relaxed ordering for the same reason as raw_active below.
+    std::atomic<float> gain{1.0f};
     // Set by wm_set_raw, read from pump(). A momentary "listen to the raw
     // voice" check: skip the Python callback entirely and just apply gain
     // in native code, so the round trip never crosses into the interpreter
@@ -288,8 +291,9 @@ struct Engine {
                     // Native-only pass-through: no Python callback this
                     // block at all, just gain and a hard clip, matching the
                     // same clamp the Python "dry_monitor" bypass applies.
+                    const float current_gain = gain.load(std::memory_order_relaxed);
                     for (uint32_t index = 0; index < count; ++index)
-                        processed[index] = std::clamp(source[index] * gain, -1.0f, 1.0f);
+                        processed[index] = std::clamp(source[index] * current_gain, -1.0f, 1.0f);
                 } else if (!process(source.data(), processed.data(), count)) {
                     ok = false;
                     break;
@@ -399,5 +403,10 @@ API int __cdecl wm_pump(void* handle, uint32_t timeout, Statistics* stats, char*
 // error path: setting a bool on a live engine cannot fail.
 API void __cdecl wm_set_raw(void* handle, int raw) {
     if (handle) static_cast<Engine*>(handle)->raw_active.store(raw != 0, std::memory_order_relaxed);
+}
+// Mirrors wm_set_raw -- a live volume-slider change must reach the native
+// raw pass-through the same way it already reaches the Python DSP path.
+API void __cdecl wm_set_gain(void* handle, float gain) {
+    if (handle) static_cast<Engine*>(handle)->gain.store(gain, std::memory_order_relaxed);
 }
 API void __cdecl wm_close(void* handle) { delete static_cast<Engine*>(handle); }

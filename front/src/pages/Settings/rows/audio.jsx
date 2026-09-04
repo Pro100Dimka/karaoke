@@ -24,7 +24,9 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
   const latency = measured
     ? tr("settings.audio.monitor.compact.measured", { 0: status.real_latency_ms.toFixed(3) })
     : timed
-      ? tr("settings.audio.monitor.compact.sharedTiming", { 0: status.stream_latency_ms.toFixed(3) })
+      ? tr("settings.audio.monitor.compact.sharedTiming", {
+          0: status.stream_latency_ms.toFixed(3)
+        })
       : known
         ? tr(`settings.audio.monitor.compact.${source}`, {
             0: (input + output).toFixed(3),
@@ -131,28 +133,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       showFor: ["starting", "stopping"].includes(status?.state),
       text: tr(`settings.audio.monitor.status.${status?.state ?? "checking"}`)
     },
-    {
-      md: 12,
-      type: "Label",
-      variant: "caption",
-      showFor: running,
-      text: tr("settings.audio.monitor.compact.driverName", {
-        0:
-          status?.mode === "ASIO"
-            ? status?.driver || "ASIO"
-            : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
-      })
-    },
-    {
-      md: 12,
-      type: "Label",
-      variant: "caption",
-      showFor: running,
-      title: tr(
-        `settings.audio.monitor.compact.${status?.latency_source === "wasapi-stream-report" ? "shared" : source}Tooltip`
-      ),
-      text: latency
-    },
+
     {
       md: 12,
       type: "Label",
@@ -164,11 +145,26 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       text: negotiatedPeriod
     },
     {
-      type: "ButtonField",
-      label: tr("settings.audio.monitor.retry.label"),
-      showFor: !!audio.values?.monitoring_enabled,
-      disabled: audio.busy || ["starting", "stopping"].includes(status?.state),
-      onClick: () => run(() => audio.monitor(true))
+      md: 6,
+      type: "Label",
+      variant: "caption",
+      showFor: running,
+      text: tr("settings.audio.monitor.compact.driverName", {
+        0:
+          status?.mode === "ASIO"
+            ? status?.driver || "ASIO"
+            : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
+      })
+    },
+    {
+      md: 6,
+      type: "Label",
+      variant: "caption",
+      showFor: running,
+      title: tr(
+        `settings.audio.monitor.compact.${status?.latency_source === "wasapi-stream-report" ? "shared" : source}Tooltip`
+      ),
+      text: latency
     }
   ];
 }
