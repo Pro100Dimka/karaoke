@@ -1,9 +1,9 @@
 import { Box } from "../../../theme/ui";
 import * as platform from "../../../utils/platform";
-import usePitchDetection from "./usePitchDetection";
 import SceneIntro from "./intro";
 import KaraokeLyrics from "./karaoke-lyrics";
 import PianoRoll from "./piano-roll";
+import usePitchDetection from "./usePitchDetection";
 import SceneVideo from "./video";
 
 export default function KaraokePerformanceStage({
@@ -39,8 +39,8 @@ export default function KaraokePerformanceStage({
       sx={{
         position: "absolute",
         inset: 0,
-        overflow: "hidden",
-        background: hasSongClip ? "transparent" : "var(--color-bg-deep)"
+        overflow: "hidden"
+        // background: hasSongClip ? "transparent" : "var(--color-bg-deep)"
       }}
     >
       {sceneVideo && <SceneVideo src={sceneVideo} isPlaying={isPlaying} />}

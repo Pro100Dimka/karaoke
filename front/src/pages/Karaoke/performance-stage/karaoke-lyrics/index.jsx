@@ -14,8 +14,8 @@ const fillSx = {
   willChange: "clip-path"
 };
 
-const Fill = ({ children, role }) => (
-  <Box as="span" aria-hidden data-role={role} sx={fillSx}>
+const Fill = ({ children, dataRole }) => (
+  <Box as="span" aria-hidden data-role={dataRole} sx={fillSx}>
     {children}
   </Box>
 );
@@ -116,6 +116,7 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
             variant="h2"
             align="center"
             sx={{
+              zIndex: 99999,
               position: "absolute",
               insetBlockStart: "50%",
               insetInlineStart: "50%",
@@ -187,13 +188,13 @@ function KaraokeLyrics({ lyricsSync, currentTime = 0, currentTimeRef, isPlaying 
                         }}
                       >
                         {syllable.text}
-                        <Fill role="lyric-syllable-fill">{syllable.text}</Fill>
+                        <Fill dataRole="lyric-syllable-fill">{syllable.text}</Fill>
                       </Box>
                     ))
                   ) : (
                     <>
                       {word.text}
-                      <Fill role="lyric-word-fill">{word.text}</Fill>
+                      <Fill dataRole="lyric-word-fill">{word.text}</Fill>
                     </>
                   )}
                 </Box>
