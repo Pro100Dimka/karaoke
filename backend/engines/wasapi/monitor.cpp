@@ -8,6 +8,7 @@
 #include <avrt.h>
 #include <wrl/client.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -216,8 +217,20 @@ struct Engine {
     Process process = nullptr;
     HANDLE scheduling = nullptr;
     double pump_finished = 0;
+    float gain = 1.0f;
+    // Set by wm_set_raw, read from pump(). A momentary "listen to the raw
+    // voice" check: skip the Python callback entirely and just apply gain
+    // in native code, so the round trip never crosses into the interpreter
+    // at all for that block. Only ever armed by monitor_worker.py when it
+    // knows nothing downstream (the relay) depends on that callback running
+    // -- see set_raw's caller. relaxed ordering is enough: this is read once
+    // per block on the audio thread and only ever toggled by a single writer
+    // thread, with no other state that must be seen consistently with it.
+    std::atomic<bool> raw_active{false};
     ~Engine() { if (scheduling) AvRevertMmThreadCharacteristics(scheduling); }
-    void open(const wchar_t* input_name, const wchar_t* output_name, uint32_t blocksize, Info& info, bool initialize) {
+    void open(const wchar_t* input_name, const wchar_t* output_name, uint32_t blocksize, float requested_gain,
+              Info& info, bool initialize) {
+        gain = requested_gain;
         if (!blocksize || blocksize > 8192) throw std::runtime_error("Invalid fixed processing buffer");
         ComPtr<IMMDeviceEnumerator> enumerator;
         check(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator)), "Create enumerator");
@@ -266,11 +279,21 @@ struct Engine {
             const double received_at = monotonic_seconds();
             if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) ++stats.discontinuities;
             bool ok = true;
+            const bool raw = raw_active.load(std::memory_order_relaxed);
             for (uint32_t offset = 0; offset < frames; ) {
                 const uint32_t count = std::min<uint32_t>(frames - offset, uint32_t(source.size()));
                 for (uint32_t index = 0; index < count; ++index)
                     source[index] = flags & AUDCLNT_BUFFERFLAGS_SILENT ? 0 : input.read(data + (offset + index) * input.format->nBlockAlign);
-                if (!process(source.data(), processed.data(), count)) { ok = false; break; }
+                if (raw) {
+                    // Native-only pass-through: no Python callback this
+                    // block at all, just gain and a hard clip, matching the
+                    // same clamp the Python "dry_monitor" bypass applies.
+                    for (uint32_t index = 0; index < count; ++index)
+                        processed[index] = std::clamp(source[index] * gain, -1.0f, 1.0f);
+                } else if (!process(source.data(), processed.data(), count)) {
+                    ok = false;
+                    break;
+                }
                 const double timestamp = flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR ? 0 : captured_qpc * 1e-7;
                 queue->push(processed.data(), count, timestamp > 0 ? timestamp + double(offset) / input.format->nSamplesPerSec : 0,
                             1.0 / input.format->nSamplesPerSec, received_at, monotonic_seconds());
@@ -351,16 +374,16 @@ struct Engine {
 
 #define API extern "C" __declspec(dllexport)
 // Bump when exported structures change; prevent mixed DLL/Python layouts.
-API uint32_t __cdecl wm_abi_version() { return 2; }
-API void* __cdecl wm_open(const wchar_t* input, const wchar_t* output, uint32_t blocksize, Info* info, char* error, uint32_t size) {
+API uint32_t __cdecl wm_abi_version() { return 3; }
+API void* __cdecl wm_open(const wchar_t* input, const wchar_t* output, uint32_t blocksize, float gain, Info* info, char* error, uint32_t size) {
     try {
         auto engine = std::make_unique<Engine>();
-        engine->open(input, output, blocksize, *info, true);
+        engine->open(input, output, blocksize, gain, *info, true);
         return engine.release();
     } catch (const std::exception& failure) { error_text(error, size, failure); return nullptr; }
 }
-API int __cdecl wm_probe(const wchar_t* input, const wchar_t* output, uint32_t blocksize, Info* info, char* error, uint32_t size) {
-    try { Engine engine; engine.open(input, output, blocksize, *info, false); return 1; }
+API int __cdecl wm_probe(const wchar_t* input, const wchar_t* output, uint32_t blocksize, float gain, Info* info, char* error, uint32_t size) {
+    try { Engine engine; engine.open(input, output, blocksize, gain, *info, false); return 1; }
     catch (const std::exception& failure) { error_text(error, size, failure); return 0; }
 }
 API int __cdecl wm_start(void* handle, Process callback, char* error, uint32_t size) {
@@ -370,5 +393,11 @@ API int __cdecl wm_start(void* handle, Process callback, char* error, uint32_t s
 API int __cdecl wm_pump(void* handle, uint32_t timeout, Statistics* stats, char* error, uint32_t size) {
     try { auto* engine = static_cast<Engine*>(handle); engine->pump(timeout); *stats = engine->stats; return 1; }
     catch (const std::exception& failure) { error_text(error, size, failure); return 0; }
+}
+// Toggled from monitor_worker.py's stdin live-update reader thread, read on
+// the realtime audio thread inside pump() -- see Engine::raw_active. No
+// error path: setting a bool on a live engine cannot fail.
+API void __cdecl wm_set_raw(void* handle, int raw) {
+    if (handle) static_cast<Engine*>(handle)->raw_active.store(raw != 0, std::memory_order_relaxed);
 }
 API void __cdecl wm_close(void* handle) { delete static_cast<Engine*>(handle); }

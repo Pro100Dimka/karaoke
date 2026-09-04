@@ -44,13 +44,14 @@ def load_library():
     except AttributeError as error:
         raise RuntimeError("Native WASAPI library is outdated; rebuild the native audio components") from error
     version.argtypes, version.restype = [], ct.c_uint32
-    if version() != 2:
+    if version() != 3:
         raise RuntimeError("Native WASAPI library version mismatch; rebuild the native audio components")
-    opening = [ct.c_wchar_p, ct.c_wchar_p, ct.c_uint32, ct.POINTER(Info), ct.c_char_p, ct.c_uint32]
+    opening = [ct.c_wchar_p, ct.c_wchar_p, ct.c_uint32, ct.c_float, ct.POINTER(Info), ct.c_char_p, ct.c_uint32]
     dll.wm_open.argtypes, dll.wm_open.restype = opening, ct.c_void_p
     dll.wm_probe.argtypes, dll.wm_probe.restype = opening, ct.c_int
     dll.wm_start.argtypes, dll.wm_start.restype = [ct.c_void_p, Process, ct.c_char_p, ct.c_uint32], ct.c_int
     dll.wm_pump.argtypes, dll.wm_pump.restype = [ct.c_void_p, ct.c_uint32, ct.POINTER(Statistics), ct.c_char_p, ct.c_uint32], ct.c_int
+    dll.wm_set_raw.argtypes, dll.wm_set_raw.restype = [ct.c_void_p, ct.c_int], None
     dll.wm_close.argtypes, dll.wm_close.restype = [ct.c_void_p], None
     return dll
 
@@ -63,9 +64,22 @@ class NativeWasapiStream:
         self.statistics, self.callback = statistics, None
         # Empty names are allowed only for an explicitly requested system default.
         # Production supplies both resolved names; the DLL rejects ambiguity.
-        self.handle = self.dll.wm_open(options["input_device_name"], options["output_device_name"],
-                                       options["blocksize"], ct.byref(self.info), self.error, len(self.error))
+        self.handle = self.dll.wm_open(
+            options["input_device_name"], options["output_device_name"], options["blocksize"],
+            float(options.get("gain", 1.0)), ct.byref(self.info), self.error, len(self.error),
+        )
         self._check(self.handle)
+
+    def set_raw(self, raw: bool) -> None:
+        # A momentary "listen to the raw voice" check: the native engine
+        # skips calling back into Python at all for this block (see
+        # Engine::raw_active in monitor.cpp) instead of running the full DSP
+        # chain just to discard its result. Only monitor_worker.py calls this,
+        # and only when it knows nothing (e.g. the room relay) still depends
+        # on that Python callback running every block -- see main()'s
+        # raw_eligible.
+        if self.handle:
+            self.dll.wm_set_raw(self.handle, 1 if raw else 0)
 
     def _check(self, success):
         if not success:

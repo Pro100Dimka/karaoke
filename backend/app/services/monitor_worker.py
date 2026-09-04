@@ -45,6 +45,11 @@ _live_params = {
     "reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0,
     "dry_monitor": 0.0,
 }
+# Populated by main() once the stream is chosen; read by _read_live_updates()
+# whenever dry_monitor changes. "eligible" is only ever true for the native
+# WASAPI engine with no relay attached -- see main()'s raw_eligible comment
+# for why a room-relay session must never arm this.
+_native_raw_target: dict[str, Any] = {"stream": None, "eligible": False}
 
 
 def _stream_candidates(options: dict) -> list[dict]:
@@ -112,6 +117,11 @@ def _read_live_updates() -> None:
             with _live_lock:
                 for key in ("reverb", "echo", "delay", "noise_suppression", "octave", "dry_monitor"):
                     if key in update: _live_params[key] = float(update[key])
+                dry_monitor = _live_params.get("dry_monitor", 0.0) >= 0.5
+            target = _native_raw_target
+            if "dry_monitor" in update and target["eligible"] and target["stream"] is not None:
+                with contextlib.suppress(Exception):
+                    target["stream"].set_raw(dry_monitor)
     except Exception:
         return
 
@@ -263,6 +273,14 @@ def main() -> int:
                 if last_attempt:
                     raise
                 _emit({"event": "fallback", "message": str(error)})
+        # The native-only raw pass-through (Engine::raw_active) skips the
+        # Python callback entirely, which also skips this module's own
+        # relay.push() calls -- arming it while a room relay is attached
+        # would silently starve whichever peer is listening. Only ever
+        # eligible for the one engine that actually has the C++-side support.
+        raw_eligible = chosen_engine == "wasapi-native-shared" and relay is None
+        _native_raw_target["stream"] = stream if raw_eligible else None
+        _native_raw_target["eligible"] = raw_eligible
         _emit({"event": "started", **details})
         reported = time.monotonic()
         while _running and not failed.is_set():

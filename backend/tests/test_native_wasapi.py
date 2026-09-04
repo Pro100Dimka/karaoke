@@ -34,8 +34,10 @@ def test_packaged_library_stays_beside_worker(monkeypatch, tmp_path):
 
 @pytest.fixture
 def dll(monkeypatch):
-    library = SimpleNamespace(wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1))
-    def open_stream(input_name, output_name, blocksize, info, _error, _size):
+    library = SimpleNamespace(
+        wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1), wm_set_raw=Mock()
+    )
+    def open_stream(input_name, output_name, blocksize, _gain, info, _error, _size):
         assert (input_name, output_name, blocksize) == ("Chosen microphone", "Chosen speakers", 64)
         for name, value in {"sample_rate": 44100, "output_sample_rate": 48000, "blocksize": 64,
                             "input_period": 441, "output_period": 144,
@@ -58,6 +60,22 @@ def test_native_stream_reports_real_format_and_periods_without_changing_settings
     stream.close()
     stream.close()
     dll.wm_close.assert_called_once_with(42)
+
+
+def test_native_stream_threads_gain_and_toggles_raw_mode(dll):
+    stream = native_wasapi.NativeWasapiStream({**options(), "gain": 2.5}, {})
+    dll.wm_open.assert_called_once()
+    assert dll.wm_open.call_args.args[3] == pytest.approx(2.5)
+
+    stream.set_raw(True)
+    dll.wm_set_raw.assert_called_once_with(42, 1)
+    stream.set_raw(False)
+    dll.wm_set_raw.assert_called_with(42, 0)
+    stream.close()
+
+    dll.wm_set_raw.reset_mock()
+    stream.set_raw(True)  # No handle after close(): must not call into a freed engine.
+    dll.wm_set_raw.assert_not_called()
 
 
 def test_native_callback_reuses_existing_dsp_and_supports_partial_engine_packets(dll):
@@ -135,7 +153,7 @@ def test_invalid_stage_timings_are_unavailable(dll, value):
         stream.close()
 
 
-@pytest.mark.parametrize("version", [None, 1, 3])
+@pytest.mark.parametrize("version", [None, 1, 2])
 def test_mismatched_native_binary_rejected_before_writing_statistics(monkeypatch, version):
     library = SimpleNamespace() if version is None else SimpleNamespace(wm_abi_version=Mock(return_value=version))
     monkeypatch.setattr(native_wasapi, "library_path", lambda: SimpleNamespace(is_file=lambda: True))
@@ -237,3 +255,49 @@ def test_worker_uses_native_event_pump_and_native_rate(monkeypatch, dll, capsys)
     started = next(event for event in map(json.loads, capsys.readouterr().out.splitlines()) if event["event"] == "started")
     assert started["engine"] == "wasapi-native-shared"
     assert started["input_period_frames"] == 441
+
+
+def test_native_raw_mode_is_armed_only_without_a_relay(monkeypatch, dll, capsys):
+    import json
+    import sys
+    config = {**options(), "sample_rate": 48000, "input_device_id": 1, "output_device_id": 2,
+              "output_channels": 2, "gain": 1, "wasapi_mode": "shared", "native_shared": True}
+    monkeypatch.setattr(sys, "argv", ["monitor_worker", "--config", json.dumps(config)])
+    monkeypatch.setattr(monitor_worker, "_running", True)
+    monkeypatch.setattr(monitor_worker.threading, "Thread", Mock())
+    monkeypatch.setattr(monitor_worker, "_audio_callback", Mock(return_value=Mock()))
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(side_effect=AssertionError("must not fall back")))
+
+    def pump(*args):
+        monitor_worker._running = False
+        return 1
+    dll.wm_pump.side_effect = pump
+    assert monitor_worker.main() == 0
+    assert monitor_worker._native_raw_target["eligible"] is True
+    assert isinstance(monitor_worker._native_raw_target["stream"], native_wasapi.NativeWasapiStream)
+    capsys.readouterr()
+
+
+def test_native_raw_mode_is_never_armed_when_a_relay_is_attached(monkeypatch, dll, capsys):
+    import json
+    import sys
+    config = {**options(), "sample_rate": 48000, "input_device_id": 1, "output_device_id": 2,
+              "output_channels": 2, "gain": 1, "wasapi_mode": "shared", "native_shared": True,
+              "audio_relay_port": 54321}
+    monkeypatch.setattr(sys, "argv", ["monitor_worker", "--config", json.dumps(config)])
+    monkeypatch.setattr(monitor_worker, "_running", True)
+    monkeypatch.setattr(monitor_worker.threading, "Thread", Mock())
+    monkeypatch.setattr(monitor_worker, "_audio_callback", Mock(return_value=Mock()))
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(side_effect=AssertionError("must not fall back")))
+    monkeypatch.setattr(monitor_worker, "RelayLink", Mock())
+
+    def pump(*args):
+        monitor_worker._running = False
+        return 1
+    dll.wm_pump.side_effect = pump
+    assert monitor_worker.main() == 0
+    # A room peer may still be listening through the relay -- native raw mode
+    # must never be armed here, or that peer would go silent whenever the
+    # singer flips on the local "listen to raw voice" check.
+    assert monitor_worker._native_raw_target == {"stream": None, "eligible": False}
+    capsys.readouterr()
