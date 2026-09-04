@@ -63,6 +63,11 @@ def suspend_direct_monitoring(db: Session = Depends(get_db)):
     return settings
 
 
+@router.post("/direct-monitor/dry")
+def set_direct_monitor_dry(enabled: bool = True, db: Session = Depends(get_db)):
+    return audio_service.set_monitor_dry_bypass(db, enabled)
+
+
 @router.post("/direct-monitor/resume", response_model=schemas.AudioSettingsOut, status_code=202)
 def resume_direct_monitoring(db: Session = Depends(get_db)):
     settings = audio_service.get_settings(db)
@@ -90,7 +95,10 @@ def signal_quality(db: Session = Depends(get_db)):
         # WASAPI/MME device (check_signal_quality's own fallback, which has
         # no notion of the selected driver at all).
         resolved_device_id = audio_service.preferred_input_device(
-            settings.input_device_id, settings.audio_driver, settings.asio_driver_name
+            settings.input_device_id,
+            settings.audio_driver,
+            settings.asio_driver_name,
+            device_name=getattr(settings, "input_device_name", None),
         )
         return audio_service.check_signal_quality(
             resolved_device_id,

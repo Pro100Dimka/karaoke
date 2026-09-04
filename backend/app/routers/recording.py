@@ -117,6 +117,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
             settings.input_device_id,
             settings.audio_driver,
             settings.asio_driver_name,
+            device_name=getattr(settings, "input_device_name", None),
         )
         session_id = recording_service.start_recording(
             song_id=song.id,

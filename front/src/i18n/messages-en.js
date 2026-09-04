@@ -388,6 +388,8 @@ export const enMessages = {
   "karaoke.noise": "Noise",
   "karaoke.mixer": "Mixer",
   "karaoke.iHearMyself": "I hear myself",
+  "karaoke.listenDryVoice": "Dry voice",
+  "karaoke.dryMonitorNotSupportedOnAsio": "Dry voice is not available yet for the ASIO driver",
   "karaoke.voiceOctave": "Voice octave",
   "karaoke.karaoke": "Karaoke",
   "karaoke.sheetMusic": "Sheet music",

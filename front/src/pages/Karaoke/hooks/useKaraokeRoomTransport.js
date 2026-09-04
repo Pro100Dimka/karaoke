@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 import useLatestRef from "../../../hooks/useLatestRef";
 import { createRoomSyncChannel } from "../../../services/roomSyncChannel";
+import { formatError } from "../utils/recordingSession";
 import {
   classifyDrift,
   createPlayerSyncCommand,
   driftCorrectedRate,
   normalizePlaybackRate
 } from "../utils/transport";
-import { formatError } from "../utils/recordingSession";
 
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
 const number = (value) => (value == null || value === "" ? NaN : Number(value));
@@ -19,6 +19,7 @@ export default function useKaraokeRoomTransport({
   isPlaying,
   navigate,
   seekTo,
+  speed,
   stop,
   togglePlay,
   setRecordingError
@@ -81,8 +82,30 @@ export default function useKaraokeRoomTransport({
         : delivery;
     const target = position + late;
 
-    if (Number.isFinite(target) && (command.action !== "sync" || Math.abs(audio.currentTime - target) > 0.04)) {
-      seekRef.current?.(target, { broadcast: false });
+    if (Number.isFinite(target)) {
+      if (command.action === "sync") {
+        // Ordinary WebSocket jitter on one "sync" tick (arriving every
+        // 500ms) routinely swings the estimated delivery delay by tens of
+        // milliseconds. A flat hard-seek threshold turned that jitter into
+        // an audible seek glitch roughly twice a second on every guest.
+        // Reuse the same soft/strong/hard drift classification already used
+        // to keep vocals/video aligned to this same instrumental -- small
+        // drift nudges playbackRate instead of seeking, so ordinary jitter
+        // is absorbed silently and only genuine, sustained drift seeks.
+        const drift = audio.currentTime - target;
+        const classification = classifyDrift(drift);
+        const baseRate = normalizePlaybackRate(speed);
+        if (classification === "hard") {
+          seekRef.current?.(target, { broadcast: false });
+          audio.playbackRate = baseRate;
+        } else if (classification === "none") {
+          audio.playbackRate = baseRate;
+        } else {
+          audio.playbackRate = driftCorrectedRate(baseRate, drift, classification);
+        }
+      } else {
+        seekRef.current?.(target, { broadcast: false });
+      }
     }
 
     const actions = {
@@ -116,7 +139,19 @@ export default function useKaraokeRoomTransport({
       clearTimeout(timer);
       if (!executed) channel.current.cancelCommand(command.commandId);
     };
-  }, [command, instrumentalRef, navigate, room?.host, roomClockNow, seekRef, setRecordingError, songId, stopRef, toggleRef]);
+  }, [
+    command,
+    instrumentalRef,
+    navigate,
+    room?.host,
+    roomClockNow,
+    seekRef,
+    setRecordingError,
+    songId,
+    speed,
+    stopRef,
+    toggleRef
+  ]);
 
   return broadcast;
 }

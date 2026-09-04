@@ -93,6 +93,21 @@ def test_audio_callbacks_save_raw_copies_and_process_only_monitor_output(monkeyp
     assert not output.any()
 
 
+def test_dry_monitor_bypass_skips_all_dsp_and_outputs_the_raw_gained_signal(monkeypatch):
+    session, _stream = make_session(monkeypatch, gain=2)
+    session._monitoring_enabled = True
+    session._monitor_dry_bypass = True
+    session._quality.process = Mock(side_effect=AssertionError("quality DSP must not run in dry bypass"))
+    input_data = np.array([[0.25], [-0.25]], dtype=np.float32)
+    output = np.empty((2, 2), dtype=np.float32)
+
+    session._monitoring_callback(input_data, output, 2, None, None)
+
+    assert session._capture_error is None
+    assert np.allclose(output[:, 0], [0.5, -0.5])
+    assert np.allclose(output[:, 1], output[:, 0])
+
+
 def test_recording_keeps_raw_microphone_frames_when_monitor_dsp_changes_length(monkeypatch):
     """Monitor DSP must never shorten, resample, or otherwise rewrite the saved take."""
     patch_attrs(

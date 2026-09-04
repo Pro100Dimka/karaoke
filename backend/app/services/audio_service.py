@@ -85,6 +85,7 @@ _LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression",
 _PLAIN_HOST_MIN_BLOCKSIZE = 512
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 _monitor_effects_disabled = False
+_monitor_dry_bypass = False
 _MONITOR_START_TIMEOUT_SECONDS = 12.0
 logger = logging.getLogger(__name__)
 _monitor_control = MonitorControl(execution_lock=hardware_lock)
@@ -140,10 +141,15 @@ def _device_latency(device: dict, kind: str) -> float:
 
 
 def _low_latency_equivalent(
-    device_id: int | None, kind: str, devices=None, *, preferred_host_api: str = "wasapi"
+    device_id: int | None,
+    kind: str,
+    devices=None,
+    *,
+    preferred_host_api: str = "wasapi",
+    preferred_name: str | None = None,
 ) -> int:
     devices = sd.query_devices() if devices is None else devices
-    source_id = _resolved_device_index(device_id, kind, devices)
+    source_id = _resolved_device_index(device_id, kind, devices, preferred_name=preferred_name)
     source, capability = devices[source_id], f"max_{kind}_channels"
     source_name = str(source.get("name", "")).casefold().strip()
     source_tokens = _device_tokens(str(source.get("name", "")))
@@ -248,6 +254,8 @@ def preferred_input_device(
     driver: str = "auto",
     asio_driver_name: str | None = None,
     devices=None,
+    *,
+    device_name: str | None = None,
 ) -> int | None:
     if driver == "asio":
         if (
@@ -269,7 +277,11 @@ def preferred_input_device(
     # WASAPI device, making it impossible to actually monitor (and compare
     # latency) on plain MME.
     return _low_latency_equivalent(
-        device_id, "input", devices, preferred_host_api="mme" if driver == "mme" else "wasapi"
+        device_id,
+        "input",
+        devices,
+        preferred_host_api="mme" if driver == "mme" else "wasapi",
+        preferred_name=device_name,
     )
 
 
@@ -294,13 +306,36 @@ def _is_wdm_ks_device(device: dict) -> bool:
     return "wdm-ks" in _host_api_name(device).casefold()
 
 
-def _resolved_device_index(device_id: int | None, kind: str, devices=None) -> int:
+def _resolved_device_index(
+    device_id: int | None, kind: str, devices=None, *, preferred_name: str | None = None
+) -> int:
     devices = sd.query_devices() if devices is None else devices
     if (
         device_id is not None and 0 <= device_id < len(devices)
         and not _is_wdm_ks_device(devices[device_id])
     ):
         return device_id
+    # The saved index no longer resolves -- most commonly a USB interface
+    # that got re-enumerated at a different index after being unplugged and
+    # reconnected (or the app restarted after Windows renumbered devices).
+    # Re-find it by its saved name before falling through to the system
+    # default, so a USB card the user picked keeps being used across
+    # reconnects instead of silently reverting to onboard audio.
+    if preferred_name:
+        target = preferred_name.casefold().strip()
+        capability = f"max_{kind}_channels"
+        named_match = next(
+            (
+                index
+                for index, device in enumerate(devices)
+                if int(device.get(capability, 0)) > 0
+                and not _is_wdm_ks_device(device)
+                and str(device.get("name", "")).casefold().strip() == target
+            ),
+            None,
+        )
+        if named_match is not None:
+            return named_match
     default_input, default_output = sd.default.device
     raw_default = default_input if kind == "input" else default_output
     try:
@@ -772,6 +807,25 @@ def _send_live_update(payload: dict) -> None:
         logger.warning("Could not push live update to audio monitor worker: %s", exc)
 
 
+def set_monitor_dry_bypass(db: Session, enabled: bool) -> dict:
+    """A momentary "listen to the raw voice" toggle: bypasses the whole
+    gate/compressor/tone-shaping/effects chain for local monitoring, without
+    touching any saved setting. Only the Python-driven engines (WASAPI
+    monitor_worker.py, and the in-process recording-session callback) have a
+    live-update channel for this; the native ASIO bridge has none (see
+    _MONITOR_RESTART_FIELDS) and does not implement a dry bypass at all, so
+    this is a deliberate no-op there rather than a restart with no audible
+    effect.
+    """
+    global _monitor_dry_bypass
+    _monitor_dry_bypass = bool(enabled)
+    settings = get_settings(db)
+    supported = settings.audio_driver != "asio"
+    if supported and settings.monitoring_enabled:
+        _send_live_update({"dry_monitor": 1.0 if _monitor_dry_bypass else 0.0})
+    return {"dry_monitor": _monitor_dry_bypass, "supported": supported}
+
+
 def configure_monitoring(settings: models.AudioSettings, *, adopt_driver_buffer: bool = False) -> None:
     return _monitor_control.run_sync(
         lambda: _configure_monitoring(settings, adopt_driver_buffer=adopt_driver_buffer),
@@ -824,7 +878,11 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
     devices = sd.query_devices()
     _monitor_control.check()
     input_device_id = preferred_input_device(
-        settings.input_device_id, driver, settings.asio_driver_name, devices=devices
+        settings.input_device_id,
+        driver,
+        settings.asio_driver_name,
+        devices=devices,
+        device_name=getattr(settings, "input_device_name", None),
     )
     output_device_id, resolved_input_id = (
         preferred_output_device(

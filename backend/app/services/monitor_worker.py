@@ -41,7 +41,10 @@ from app.services.wasapi_monitor_stream import WasapiMonitorStream  # noqa: E402
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
 _live_lock = threading.Lock()
-_live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0}
+_live_params = {
+    "reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0,
+    "dry_monitor": 0.0,
+}
 
 
 def _stream_candidates(options: dict) -> list[dict]:
@@ -122,7 +125,7 @@ def _read_live_updates() -> None:
             except json.JSONDecodeError:
                 continue
             with _live_lock:
-                for key in ("reverb", "echo", "delay", "noise_suppression", "octave"):
+                for key in ("reverb", "echo", "delay", "noise_suppression", "octave", "dry_monitor"):
                     if key in update: _live_params[key] = float(update[key])
     except Exception:
         return
@@ -140,12 +143,13 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
         if status:
             statistics["glitch_count"] = statistics.get("glitch_count", 0) + 1
         with _live_lock:
-            reverb, echo, delay, noise_suppression, octave = (
+            reverb, echo, delay, noise_suppression, octave, dry_monitor = (
                 _live_params["reverb"],
                 _live_params["echo"],
                 _live_params["delay"],
                 _live_params.get("noise_suppression", 0.35),
                 _live_params.get("octave", 0.0),
+                _live_params.get("dry_monitor", 0.0) >= 0.5,
             )
         processed = quality.process(indata[:, :1], gain, noise_suppression)[:, 0]
         dry = pitch.process(processed, octave)
@@ -154,7 +158,14 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
             relay.push(STREAM_DRY, sample_rate, dry)
             relay.push(STREAM_WET, sample_rate, processed)
         outdata.fill(0)
-        for channel in range(outdata.shape[1]): outdata[:, channel] = processed
+        # A momentary "listen to the raw voice" check bypasses the whole
+        # gate/compressor/tone-shaping/effects chain for what the singer
+        # hears locally -- the relay above still carries the normally
+        # processed audio, so a room call in progress is unaffected.
+        monitor_output = (
+            np.clip(indata[:, 0] * gain, -1.0, 1.0).astype(np.float32) if dry_monitor else processed
+        )
+        for channel in range(outdata.shape[1]): outdata[:, channel] = monitor_output
         rms, peak = float(np.sqrt(np.mean(np.square(processed)))) if len(processed) else 0.0, float(np.max(np.abs(processed))) if len(processed) else 0.0
         _level.update(
             {

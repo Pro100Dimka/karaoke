@@ -47,7 +47,7 @@ def test_signal_quality_uses_persisted_gain_and_monitor_state(monkeypatch):
     check = Mock(return_value={"rms_db": -10})
     monkeypatch.setattr(audio.audio_service, "check_signal_quality", check)
     assert audio.signal_quality(database) == {"rms_db": -10}
-    resolve.assert_called_once_with(2, "auto", None)
+    resolve.assert_called_once_with(2, "auto", None, device_name=None)
     check.assert_called_once_with(2, gain=1.5, monitoring_expected=True)
     check.side_effect = RuntimeError("unavailable")
     assert_http_status(503, lambda: audio.signal_quality(database))
@@ -70,7 +70,7 @@ def test_signal_quality_resolves_the_matching_asio_input_not_the_saved_raw_id(mo
 
     assert audio.signal_quality(database) == {"rms_db": -30}
 
-    resolve.assert_called_once_with(None, "asio", "Focusrite USB ASIO")
+    resolve.assert_called_once_with(None, "asio", "Focusrite USB ASIO", device_name=None)
     check.assert_called_once_with(7, gain=1.0, monitoring_expected=False)
 
 

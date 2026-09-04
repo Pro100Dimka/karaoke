@@ -388,6 +388,8 @@ export const ukMessages = {
   "karaoke.noise": "Шум",
   "karaoke.mixer": "Мікшер",
   "karaoke.iHearMyself": "Чую себе",
+  "karaoke.listenDryVoice": "Чистий голос",
+  "karaoke.dryMonitorNotSupportedOnAsio": "Чистий голос поки що недоступний для драйвера ASIO",
   "karaoke.voiceOctave": "Октава голосу",
   "karaoke.karaoke": "Караоке",
   "karaoke.sheetMusic": "Переклад",

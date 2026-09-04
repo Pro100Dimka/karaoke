@@ -54,6 +54,15 @@ export default function MixerPanel({ audio, preferences }) {
           checked={!!audio.monitoringEnabled}
           onChange={audio.onMonitoringChange}
         />
+        {audio.monitoringEnabled && (
+          <Switch
+            size="sm"
+            variant="plain"
+            label={t("karaoke.listenDryVoice")}
+            checked={!!audio.dryMonitor}
+            onChange={audio.onDryMonitorChange}
+          />
+        )}
       </Stack>
 
       <Grid columns={EFFECT_FIELDS.length + MIXER_FIELDS.length} gap="var(--space-2)" align="end">

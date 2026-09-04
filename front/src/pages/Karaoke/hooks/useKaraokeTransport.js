@@ -363,6 +363,7 @@ export default function useKaraokeTransport({
     isPlaying,
     navigate,
     seekTo,
+    speed,
     stop,
     togglePlay,
     setRecordingError

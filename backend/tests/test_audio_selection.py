@@ -90,6 +90,38 @@ def test_resolved_device_prefers_default_then_low_latency_host(monkeypatch):
     )
 
 
+def test_stale_saved_device_id_is_recovered_by_its_saved_name(monkeypatch):
+    # A USB interface reconnecting (or the app restarting after Windows
+    # renumbered devices) commonly lands the same physical device at a
+    # different PortAudio index. Once the raw saved index no longer resolves
+    # to it, the saved name must be tried before falling through to whatever
+    # the system default happens to be -- otherwise the app silently drops
+    # back to onboard audio instead of keeping the USB card selected.
+    devices = [
+        device("USB Interface Mic", 0, inputs=2, input_latency=0.01),
+        device("Onboard Mic", 1, inputs=1, input_latency=0.01),
+    ]
+    install_devices(monkeypatch, devices, {0: "Windows WASAPI", 1: "Windows WASAPI"})
+    monkeypatch.setattr(audio_service.sd.default, "device", (1, -1))
+
+    # Stale index 5 does not exist; without a saved name this must fall back
+    # to the system default (existing behavior, unchanged).
+    assert audio_service._resolved_device_index(5, "input") == 1
+    # With the saved name, the USB interface is found again by name instead.
+    assert (
+        audio_service._resolved_device_index(5, "input", preferred_name="USB Interface Mic") == 0
+    )
+    # A saved name that matches nothing currently connected still falls back
+    # to the system default rather than raising.
+    assert (
+        audio_service._resolved_device_index(5, "input", preferred_name="Missing Device") == 1
+    )
+    # preferred_input_device threads device_name through the same path.
+    assert (
+        audio_service.preferred_input_device(5, "auto", device_name="USB Interface Mic") == 0
+    )
+
+
 def test_resolved_device_never_lands_on_wdm_ks(monkeypatch):
     # A stream opened against a WDM-KS-hosted device can fail outright on some
     # drivers ("Unanticipated host error" / DeviceIoControl on

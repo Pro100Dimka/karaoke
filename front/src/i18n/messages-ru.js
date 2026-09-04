@@ -389,6 +389,8 @@ export const ruMessages = {
   "karaoke.noise": "Шум",
   "karaoke.mixer": "Микшер",
   "karaoke.iHearMyself": "Слышу себя",
+  "karaoke.listenDryVoice": "Чистый голос",
+  "karaoke.dryMonitorNotSupportedOnAsio": "Чистый голос пока недоступен для драйвера ASIO",
   "karaoke.voiceOctave": "Октава голоса",
   "karaoke.karaoke": "Караоке",
   "karaoke.sheetMusic": "Ноты",

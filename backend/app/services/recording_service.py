@@ -131,6 +131,7 @@ class RecordingSession:
         self._monitor_owner = monitor_owner
         self._monitor_mode = monitor_mode
         self._monitor_effects_disabled = False
+        self._monitor_dry_bypass = False
         self._capture_stopped = False
         self._capture_error = None
         self._storage_reservations = storage_reservations or []
@@ -269,13 +270,23 @@ class RecordingSession:
             # mix applies the chosen settings offline to this lossless source.
             if not self._paused: self._enqueue(indata.copy(), time_info)
             if self._monitoring_enabled:
-                processed = self._quality.process(indata, self.gain, self.noise_suppression)
-                effects = {} if self._monitor_effects_disabled else self.effects
-                monitored = self._pitch.process(processed[:, 0], effects.get("octave", 0))
-                monitored = self._effects_chain.process(
-                    monitored,
-                    *(effects.get(key, 0) for key in ("reverb", "echo", "delay")),
-                )
+                if self._monitor_dry_bypass:
+                    # A momentary "listen to the raw voice" check -- skip the
+                    # gate/compressor/tone-shaping chain entirely (not just
+                    # the reverb/echo/delay effects, which _monitor_effects_
+                    # disabled already zeroes) so what reaches the singer's
+                    # headphones is the unprocessed microphone signal.
+                    import numpy as np
+
+                    monitored = np.clip(indata[:, 0] * self.gain, -1.0, 1.0).astype(np.float32)
+                else:
+                    processed = self._quality.process(indata, self.gain, self.noise_suppression)
+                    effects = {} if self._monitor_effects_disabled else self.effects
+                    monitored = self._pitch.process(processed[:, 0], effects.get("octave", 0))
+                    monitored = self._effects_chain.process(
+                        monitored,
+                        *(effects.get(key, 0) for key in ("reverb", "echo", "delay")),
+                    )
                 for channel in range(outdata.shape[1]):
                     outdata[:, channel] = monitored
         except BaseException as exc:
@@ -551,6 +562,8 @@ def update_capture_controls(patch):
                 session.gain = max(0, min(4, float(patch["volume"])))
             if patch.get("noise_suppression") is not None:
                 session.noise_suppression = clamp01(patch["noise_suppression"])
+            if "dry_monitor" in patch:
+                session._monitor_dry_bypass = bool(patch["dry_monitor"])
             session.effects = {**session.effects, **{key: patch[key] for key in ("reverb", "echo", "delay", "octave") if patch.get(key) is not None}}
 
 

@@ -30,6 +30,7 @@ export default function useKaraokeAudio({
   const mounted = useMountedRef();
   const { run: queue } = useAsyncQueue();
   const [error, setError] = useState(null);
+  const [dryMonitor, setDryMonitor] = useState(false);
   const [roomMonitoring, setRoomMonitoringState] = useState(false);
   const roomMonitoringRef = useRef(false);
   const effectMutation = useRef(0);
@@ -183,6 +184,30 @@ export default function useKaraokeAudio({
     [microphoneEffects, microphoneVolume, mounted, queue, room, setLocalMonitoring, setNativeMonitoring, setRoomMonitoring]
   );
 
+  // Dry monitor is a momentary, unsaved check -- never carry a stale "on"
+  // across a stop/restart of monitoring itself.
+  useEffect(() => {
+    if (!monitoringEnabled && mounted.current) setDryMonitor(false);
+  }, [monitoringEnabled, mounted]);
+
+  const onDryMonitorChange = useCallback(
+    (enabled) =>
+      queue(async () => {
+        try {
+          const result = await api.setDirectMonitorDry(Boolean(enabled));
+          if (mounted.current) setDryMonitor(Boolean(result?.dry_monitor));
+          if (enabled && result && !result.supported) {
+            setError(t("karaoke.dryMonitorNotSupportedOnAsio"));
+          }
+        } catch (cause) {
+          if (mounted.current) {
+            setError(t("karaoke.failedToChangeMicrophoneListening", { 0: getErrorMessage(cause) }));
+          }
+        }
+      }),
+    [mounted, queue]
+  );
+
   const saveEffects = useCallback(
     async (preset, patch) => {
       const id = ++effectMutation.current;
@@ -199,6 +224,8 @@ export default function useKaraokeAudio({
     monitoringEnabled: room ? roomMonitoring : monitoringEnabled,
     releaseMonitoring,
     onMonitoringChange,
+    dryMonitor,
+    onDryMonitorChange,
     onEffectChange: (key, value) =>
       setMicrophoneEffects((effects) => ({ ...effects, [key]: value })),
     onEffectCommit: (key, value) => saveEffects("custom", { [key]: value }),
