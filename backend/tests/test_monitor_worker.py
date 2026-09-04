@@ -182,7 +182,7 @@ def test_main_seeds_live_params_from_config_and_starts_reader_thread(monkeypatch
     stream = Mock()
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
 
-    assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7, 'noise_suppression': 0.35, 'octave': 0.0}) and (thread_started.is_set())
+    assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7, 'noise_suppression': 0.35, 'octave': 0.0, 'volume': 2.0}) and (thread_started.is_set())
     capsys.readouterr()
 
 

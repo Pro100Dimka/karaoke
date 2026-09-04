@@ -105,8 +105,8 @@ def test_update_settings_reconfigures_monitor_and_rolls_back(monkeypatch):
     configure = Mock()
     monkeypatch.setattr(audio_service, "configure_monitoring", configure)
 
-    result = audio_service.update_settings(database, {"volume": 2.0})
-    assert result is current and current.volume == 2
+    result = audio_service.update_settings(database, {"buffer_size": 128})
+    assert result is current and current.buffer_size == 128
     configure.assert_called_once_with(current)
     database.commit.assert_called_once_with()
     database.refresh.assert_called_once_with(current)
@@ -114,12 +114,12 @@ def test_update_settings_reconfigures_monitor_and_rolls_back(monkeypatch):
     database.reset_mock()
     configure.reset_mock()
     database.commit.side_effect = RuntimeError("database locked")
-    raises(RuntimeError, lambda: audio_service.update_settings(database, {'volume': 3.0}), match='locked')
-    assert (current.volume, configure.call_count) == (2, 2)
+    raises(RuntimeError, lambda: audio_service.update_settings(database, {'buffer_size': 256}), match='locked')
+    assert (current.buffer_size, configure.call_count) == (128, 2)
     database.rollback.assert_called_once_with()
 
     configure.side_effect = [None, RuntimeError("restore device failed")]
-    raises(RuntimeError, lambda: audio_service.update_settings(database, {'volume': 3.0}), match='locked')
+    raises(RuntimeError, lambda: audio_service.update_settings(database, {'buffer_size': 256}), match='locked')
 
 
 def test_update_settings_sends_live_effect_update_instead_of_restarting(monkeypatch):

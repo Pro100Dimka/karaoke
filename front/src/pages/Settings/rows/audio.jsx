@@ -149,22 +149,22 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       type: "Label",
       variant: "caption",
       showFor: running,
-      text: tr("settings.audio.monitor.compact.driverName", {
-        0:
-          status?.mode === "ASIO"
-            ? status?.driver || "ASIO"
-            : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
-      })
+      title: tr(
+        `settings.audio.monitor.compact.${status?.latency_source === "wasapi-stream-report" ? "shared" : source}Tooltip`
+      ),
+      text: latency
     },
     {
       md: 6,
       type: "Label",
       variant: "caption",
       showFor: running,
-      title: tr(
-        `settings.audio.monitor.compact.${status?.latency_source === "wasapi-stream-report" ? "shared" : source}Tooltip`
-      ),
-      text: latency
+      text: tr("settings.audio.monitor.compact.driverName", {
+        0:
+          status?.mode === "ASIO"
+            ? status?.driver || "ASIO"
+            : [status?.host_api, status?.mode].filter(Boolean).join(" · ") || "—"
+      })
     }
   ];
 }
