@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -24,6 +25,9 @@ struct Info {
     uint32_t sample_rate, output_sample_rate, blocksize, input_period, output_period;
     uint32_t input_buffer, output_buffer;
     double input_latency_ms, output_latency_ms;
+    // 1 if that side actually negotiated AUDCLNT_SHAREMODE_EXCLUSIVE, 0 if it
+    // fell back to (or was never asked for anything but) shared mode.
+    uint32_t input_exclusive, output_exclusive;
 };
 struct Statistics {
     uint64_t captured_frames = 0, rendered_frames = 0, dropped_frames = 0;
@@ -47,6 +51,28 @@ static void check(HRESULT hr, const char* operation) {
 }
 static void error_text(char* target, uint32_t size, const std::exception& error) {
     if (target && size) { strncpy_s(target, size, error.what(), _TRUNCATE); }
+}
+// Every negotiation step (shared candidate probes, the exclusive attempt and
+// its fallback) appends a short note here, win or lose. wm_open/wm_probe copy
+// the whole thing out to the caller regardless of outcome -- this is the only
+// window into *why* a given device landed on a given mode/period, since none
+// of this runs where a debugger is attached.
+struct Trace {
+    std::ostringstream out;
+    bool empty = true;
+    void add(const std::string& note) {
+        if (!empty) out << " | ";
+        out << note;
+        empty = false;
+    }
+    void hr(const std::string& step, HRESULT result) {
+        std::ostringstream note;
+        note << step << "=0x" << std::hex << std::uppercase << static_cast<uint32_t>(result);
+        add(note.str());
+    }
+};
+static void trace_text(char* target, uint32_t size, const Trace& trace) {
+    if (target && size) { strncpy_s(target, size, trace.out.str().c_str(), _TRUNCATE); }
 }
 struct Apartment {
     bool initialized = false;
@@ -97,15 +123,108 @@ struct Endpoint {
     WAVEFORMATEX* format = nullptr;
     Handle event;
     UINT32 period = 0, buffer = 0;
-    bool started = false, floating = false;
+    bool started = false, floating = false, exclusive_active = false;
     ~Endpoint() {
         if (started) client->Stop();
         client.Reset();
         if (format) CoTaskMemFree(format);
     }
-    void open(IMMDeviceEnumerator* enumerator, EDataFlow flow, const wchar_t* name, uint32_t requested, bool initialize) {
+    // AUDCLNT_SHAREMODE_EXCLUSIVE seizes the device -- no other app (and no
+    // other stream in this app) can use it while active. The Windows shared
+    // audio engine (audiodg.exe) is what shared mode's extra latency margin
+    // buys safety from; exclusive mode talks to the driver directly, at the
+    // cost of that exclusivity. A single best-effort attempt: no retry across
+    // AudioClientProperties/category combinations like the shared path below,
+    // since exclusive mode has no such per-category negotiation.
+    bool open_exclusive(IMMDevice* device, uint32_t requested, bool initialize,
+                         const std::function<bool(WAVEFORMATEX*, bool&)>& valid_format, Trace& trace) {
+        ComPtr<IAudioClient3> candidate;
+        HRESULT hr = device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
+                                       reinterpret_cast<void**>(candidate.GetAddressOf()));
+        if (FAILED(hr)) { trace.hr("exclusive:activate", hr); return false; }
+        WAVEFORMATEX* candidate_format = nullptr;
+        hr = candidate->GetMixFormat(&candidate_format);
+        if (FAILED(hr)) { trace.hr("exclusive:mixformat", hr); return false; }
+        bool candidate_floating = false;
+        if (!valid_format(candidate_format, candidate_floating)) {
+            trace.add("exclusive:mixformat=unsupported-encoding");
+            CoTaskMemFree(candidate_format);
+            return false;
+        }
+        hr = candidate->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE, candidate_format, nullptr);
+        if (FAILED(hr)) {
+            trace.hr("exclusive:is_format_supported", hr);
+            CoTaskMemFree(candidate_format);
+            return false;
+        }
+        if (!initialize) { CoTaskMemFree(candidate_format); return false; /* probe only confirms availability */ }
+        REFERENCE_TIME default_period = 0, minimum_period = 0;
+        hr = candidate->GetDevicePeriod(&default_period, &minimum_period);
+        if (FAILED(hr)) {
+            trace.hr("exclusive:device_period", hr);
+            CoTaskMemFree(candidate_format);
+            return false;
+        }
+        REFERENCE_TIME wanted = static_cast<REFERENCE_TIME>(
+            std::llround(10'000'000.0 * requested / candidate_format->nSamplesPerSec));
+        REFERENCE_TIME period_hns = std::max(wanted, minimum_period);
+        {
+            std::ostringstream note;
+            note << "exclusive:period_hns=" << period_hns << " (min=" << minimum_period
+                 << " default=" << default_period << " requested_frames=" << requested << ")";
+            trace.add(note.str());
+        }
+        hr = candidate->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                                    period_hns, period_hns, candidate_format, nullptr);
+        if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED) {
+            // Documented dance: read the driver-aligned frame count off the
+            // failed client, then retry on a *fresh* activation with that
+            // exact duration -- a client that failed Initialize cannot be
+            // Initialize()'d again itself.
+            UINT32 aligned_frames = 0;
+            HRESULT align_hr = candidate->GetBufferSize(&aligned_frames);
+            trace.hr("exclusive:init_unaligned", hr);
+            if (FAILED(align_hr) || !aligned_frames) {
+                trace.hr("exclusive:get_aligned_size", align_hr);
+                CoTaskMemFree(candidate_format);
+                return false;
+            }
+            candidate.Reset();
+            hr = device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
+                                   reinterpret_cast<void**>(candidate.GetAddressOf()));
+            if (FAILED(hr)) {
+                trace.hr("exclusive:reactivate", hr);
+                CoTaskMemFree(candidate_format);
+                return false;
+            }
+            period_hns = static_cast<REFERENCE_TIME>(
+                std::llround(10'000'000.0 * aligned_frames / candidate_format->nSamplesPerSec));
+            {
+                std::ostringstream note;
+                note << "exclusive:retry_period_hns=" << period_hns << " (aligned_frames=" << aligned_frames << ")";
+                trace.add(note.str());
+            }
+            hr = candidate->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                                        period_hns, period_hns, candidate_format, nullptr);
+        }
+        if (FAILED(hr)) {
+            trace.hr("exclusive:init", hr);
+            CoTaskMemFree(candidate_format);
+            return false;
+        }
+        trace.add("exclusive:init=ok");
+        if (format) CoTaskMemFree(format);
+        client = candidate;
+        format = candidate_format;
+        floating = candidate_floating;
+        period = static_cast<UINT32>(period_hns * candidate_format->nSamplesPerSec / 10'000'000);
+        exclusive_active = true;
+        return true;
+    }
+    void open(IMMDeviceEnumerator* enumerator, EDataFlow flow, const wchar_t* name, uint32_t requested,
+              bool initialize, bool want_exclusive, Trace& trace) {
         auto device = find_device(enumerator, flow, name);
-        auto valid_format = [](WAVEFORMATEX* value, bool& is_float) {
+        std::function<bool(WAVEFORMATEX*, bool&)> valid_format = [](WAVEFORMATEX* value, bool& is_float) {
             WORD tag = value->wFormatTag;
             if (tag == WAVE_FORMAT_EXTENSIBLE && value->cbSize >= 22) {
                 auto* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(value);
@@ -118,32 +237,47 @@ struct Endpoint {
             return (is_float || pcm) && value->nChannels && value->nSamplesPerSec &&
                 value->nBlockAlign == value->nChannels * (value->wBitsPerSample / 8);
         };
+        if (want_exclusive) {
+            if (open_exclusive(device.Get(), requested, initialize, valid_format, trace)) {
+                if (!initialize) return;
+            } else {
+                trace.add("exclusive:unavailable, falling back to shared");
+            }
+        }
+        if (!client) {
         auto try_candidate = [&](AUDIO_STREAM_CATEGORY category, AUDCLNT_STREAMOPTIONS options) {
             ComPtr<IAudioClient3> candidate;
-            if (FAILED(device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
-                                        reinterpret_cast<void**>(candidate.GetAddressOf())))) return false;
+            HRESULT hr = device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr,
+                                        reinterpret_cast<void**>(candidate.GetAddressOf()));
+            if (FAILED(hr)) { trace.hr("shared:activate", hr); return false; }
             AudioClientProperties properties{};
             properties.cbSize = sizeof(properties);
             properties.eCategory = category;
             properties.Options = options;
-            if (FAILED(candidate->SetClientProperties(&properties))) return false;
+            hr = candidate->SetClientProperties(&properties);
+            if (FAILED(hr)) { trace.hr("shared:set_properties", hr); return false; }
             WAVEFORMATEX* candidate_format = nullptr;
-            if (FAILED(candidate->GetMixFormat(&candidate_format))) return false;
+            hr = candidate->GetMixFormat(&candidate_format);
+            if (FAILED(hr)) { trace.hr("shared:mixformat", hr); return false; }
             bool candidate_floating = false;
             if (!valid_format(candidate_format, candidate_floating)) {
+                trace.add("shared:mixformat=unsupported-encoding");
                 CoTaskMemFree(candidate_format);
                 return false;
             }
             UINT32 normal = 0, fundamental = 0, minimum = 0, maximum = 0;
-            if (FAILED(candidate->GetSharedModeEnginePeriod(
-                    candidate_format, &normal, &fundamental, &minimum, &maximum))) {
+            hr = candidate->GetSharedModeEnginePeriod(
+                    candidate_format, &normal, &fundamental, &minimum, &maximum);
+            if (FAILED(hr)) {
+                trace.hr("shared:engine_period", hr);
                 CoTaskMemFree(candidate_format);
                 return false;
             }
             UINT32 candidate_period = 0;
             try {
                 candidate_period = shared_audio::engine_period(requested, minimum, maximum, fundamental);
-            } catch (const std::exception&) {
+            } catch (const std::exception& error) {
+                trace.add(std::string("shared:period_rounding=") + error.what());
                 CoTaskMemFree(candidate_format);
                 return false;
             }
@@ -156,6 +290,11 @@ struct Endpoint {
             format = candidate_format;
             floating = candidate_floating;
             period = candidate_period;
+            {
+                std::ostringstream note;
+                note << "shared:candidate=ok period=" << period << " min=" << minimum << " max=" << maximum;
+                trace.add(note.str());
+            }
             return true;
         };
         // Windows permits different AUDIO_STREAM_CATEGORY sets for capture
@@ -181,9 +320,14 @@ struct Endpoint {
             if (!client)
                 try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0));
         }
-        if (!client) throw std::runtime_error("No supported low-latency shared WASAPI configuration");
+        }
+        if (!client) throw std::runtime_error("No supported low-latency WASAPI configuration (shared or exclusive)");
         if (!initialize) return;
-        check(client->InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, period, format, nullptr), "InitializeSharedAudioStream");
+        // The exclusive path above already called client->Initialize(...)
+        // itself (exclusive mode has no InitializeSharedAudioStream
+        // equivalent) -- only the shared path still needs it here.
+        if (!exclusive_active)
+            check(client->InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, period, format, nullptr), "InitializeSharedAudioStream");
         event.value = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         if (!event.value) throw std::runtime_error("CreateEvent failed");
         check(client->SetEventHandle(event.value), "SetEventHandle");
@@ -217,14 +361,18 @@ struct Engine {
     HANDLE scheduling = nullptr;
     double pump_finished = 0;
     ~Engine() { if (scheduling) AvRevertMmThreadCharacteristics(scheduling); }
-    void open(const wchar_t* input_name, const wchar_t* output_name, uint32_t blocksize, Info& info, bool initialize) {
+    void open(const wchar_t* input_name, const wchar_t* output_name, uint32_t blocksize, Info& info,
+              bool initialize, bool want_exclusive, Trace& trace) {
         if (!blocksize || blocksize > 8192) throw std::runtime_error("Invalid fixed processing buffer");
         ComPtr<IMMDeviceEnumerator> enumerator;
         check(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator)), "Create enumerator");
-        input.open(enumerator.Get(), eCapture, input_name, blocksize, initialize);
-        output.open(enumerator.Get(), eRender, output_name, blocksize, initialize);
+        trace.add("input:begin");
+        input.open(enumerator.Get(), eCapture, input_name, blocksize, initialize, want_exclusive, trace);
+        trace.add("output:begin");
+        output.open(enumerator.Get(), eRender, output_name, blocksize, initialize, want_exclusive, trace);
         info = {input.format->nSamplesPerSec, output.format->nSamplesPerSec, blocksize, input.period, output.period,
-                input.buffer, output.buffer, initialize ? input.latency() : -1, initialize ? output.latency() : -1};
+                input.buffer, output.buffer, initialize ? input.latency() : -1, initialize ? output.latency() : -1,
+                input.exclusive_active ? 1u : 0u, output.exclusive_active ? 1u : 0u};
         if (!initialize) return;
         check(input.client->GetService(IID_PPV_ARGS(&capture)), "Get capture service");
         check(output.client->GetService(IID_PPV_ARGS(&render)), "Get render service");
@@ -351,17 +499,34 @@ struct Engine {
 
 #define API extern "C" __declspec(dllexport)
 // Bump when exported structures change; prevent mixed DLL/Python layouts.
-API uint32_t __cdecl wm_abi_version() { return 2; }
-API void* __cdecl wm_open(const wchar_t* input, const wchar_t* output, uint32_t blocksize, Info* info, char* error, uint32_t size) {
+API uint32_t __cdecl wm_abi_version() { return 3; }
+API void* __cdecl wm_open(const wchar_t* input, const wchar_t* output, uint32_t blocksize, int exclusive, Info* info,
+                          char* error, uint32_t error_size, char* trace_out, uint32_t trace_size) {
+    Trace trace;
     try {
         auto engine = std::make_unique<Engine>();
-        engine->open(input, output, blocksize, *info, true);
+        engine->open(input, output, blocksize, *info, true, exclusive != 0, trace);
+        trace_text(trace_out, trace_size, trace);
         return engine.release();
-    } catch (const std::exception& failure) { error_text(error, size, failure); return nullptr; }
+    } catch (const std::exception& failure) {
+        trace_text(trace_out, trace_size, trace);
+        error_text(error, error_size, failure);
+        return nullptr;
+    }
 }
-API int __cdecl wm_probe(const wchar_t* input, const wchar_t* output, uint32_t blocksize, Info* info, char* error, uint32_t size) {
-    try { Engine engine; engine.open(input, output, blocksize, *info, false); return 1; }
-    catch (const std::exception& failure) { error_text(error, size, failure); return 0; }
+API int __cdecl wm_probe(const wchar_t* input, const wchar_t* output, uint32_t blocksize, int exclusive, Info* info,
+                         char* error, uint32_t error_size, char* trace_out, uint32_t trace_size) {
+    Trace trace;
+    try {
+        Engine engine;
+        engine.open(input, output, blocksize, *info, false, exclusive != 0, trace);
+        trace_text(trace_out, trace_size, trace);
+        return 1;
+    } catch (const std::exception& failure) {
+        trace_text(trace_out, trace_size, trace);
+        error_text(error, error_size, failure);
+        return 0;
+    }
 }
 API int __cdecl wm_start(void* handle, Process callback, char* error, uint32_t size) {
     try { static_cast<Engine*>(handle)->start(callback); return 1; }

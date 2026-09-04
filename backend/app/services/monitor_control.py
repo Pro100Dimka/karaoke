@@ -28,7 +28,7 @@ class MonitorControl:
         self.pending = None
         self.live = None
         self.thread = None
-        self.latency_breakdown_logged = False
+        self.latency_breakdown_logged_at = 0.0
         self.status = {"state": "idle", "fallback_count": 0, "glitch_fallback_count": 0}
 
     def _begin(self, state, details):
@@ -96,20 +96,28 @@ class MonitorControl:
                     if key in message:
                         self.status[key] = message[key]
                 stream_latency = message.get("stream_latency_ms")
-                if (self.status.get("engine") == "wasapi-native-shared" and
+                now = time.monotonic()
+                # Logged periodically (not just once) so a latency chase has an
+                # ongoing trail to compare against, not a single early sample
+                # that may not reflect steady-state behavior. Both the shared
+                # and the exclusive native engine report through this same
+                # "level" event -- match either, not just the shared name.
+                if (str(self.status.get("engine", "")).startswith("wasapi-native") and
                         isinstance(stream_latency, (int, float)) and math.isfinite(stream_latency) and
-                        stream_latency > 0 and not self.latency_breakdown_logged):
+                        stream_latency > 0 and now - self.latency_breakdown_logged_at >= 5.0):
                     logger.info(
-                        "WASAPI latency breakdown: stream_ms=%s capture_ms=%s program_ms=%s "
-                        "queue_ms=%s output_lead_ms=%s padding_ms=%s dsp_ms=%s "
-                        "input_period=%s@%s output_period=%s@%s",
+                        "WASAPI latency breakdown: engine=%s exclusive=%s stream_ms=%s capture_ms=%s "
+                        "program_ms=%s queue_ms=%s output_lead_ms=%s padding_ms=%s dsp_ms=%s "
+                        "input_period=%s@%s output_period=%s@%s underruns=%s discontinuities=%s",
+                        self.status.get("engine"), self.status.get("exclusive"),
                         stream_latency, message.get("capture_delivery_ms"), message.get("program_residence_ms"),
                         message.get("queue_residence_ms"), message.get("output_clock_lead_ms"),
                         message.get("render_padding_ms"), message.get("dsp_compute_ms"),
                         self.status.get("input_period_frames"), self.status.get("sample_rate"),
                         self.status.get("output_period_frames"), self.status.get("output_sample_rate"),
+                        message.get("queue_underruns"), message.get("glitch_count"),
                     )
-                    self.latency_breakdown_logged = True
+                    self.latency_breakdown_logged_at = now
             if event == "started" and "buffer_size" in message:
                 # Normalize the existing ASIO bridge protocol without changing
                 # its command, callback, buffer selection or effects.
@@ -123,11 +131,12 @@ class MonitorControl:
                             message[f"{kind}_latency_ms"] = samples * 1000 / rate
             if event in {"started", "fallback"}:
                 for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "fallback_driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms",
-                            "output_sample_rate", "input_period_frames", "output_period_frames"):
+                            "output_sample_rate", "input_period_frames", "output_period_frames",
+                            "exclusive", "input_exclusive", "output_exclusive"):
                     if key in message:
                         self.status[key] = message[key]
                 if event == "started":
-                    self.latency_breakdown_logged = False
+                    self.latency_breakdown_logged_at = 0.0
                     for key in _STREAM_STATISTICS:
                         self.status.pop(key, None)
                     self.status["state"] = "running"

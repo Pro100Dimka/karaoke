@@ -1,5 +1,6 @@
 """Event-driven shared I/O. All COM calls stay on the monitor worker's thread."""
 import ctypes as ct
+import json
 import math
 import sys
 from pathlib import Path
@@ -7,10 +8,19 @@ from pathlib import Path
 import numpy as np
 
 
+def _log_trace(trace_text: str) -> None:
+    # Mirrors monitor_worker.py's own "stage" event so this reaches the same
+    # logger.info("Audio monitor startup: stage=...") line the rest of the
+    # worker's startup already logs through -- no separate log plumbing needed.
+    print(json.dumps({"event": "stage", "stage": f"WASAPI open trace: {trace_text}"}), flush=True)
+
+
 class Info(ct.Structure):
     _fields_ = [(name, ct.c_uint32) for name in (
         "sample_rate", "output_sample_rate", "blocksize", "input_period", "output_period", "input_buffer", "output_buffer"
-    )] + [(name, ct.c_double) for name in ("input_latency_ms", "output_latency_ms")]
+    )] + [(name, ct.c_double) for name in ("input_latency_ms", "output_latency_ms")] + [
+        (name, ct.c_uint32) for name in ("input_exclusive", "output_exclusive")
+    ]
 
 
 TIMING_FIELDS = ("capture_delivery_ms", "program_residence_ms", "queue_residence_ms", "output_clock_lead_ms",
@@ -44,9 +54,12 @@ def load_library():
     except AttributeError as error:
         raise RuntimeError("Native WASAPI library is outdated; rebuild the native audio components") from error
     version.argtypes, version.restype = [], ct.c_uint32
-    if version() != 2:
+    if version() != 3:
         raise RuntimeError("Native WASAPI library version mismatch; rebuild the native audio components")
-    opening = [ct.c_wchar_p, ct.c_wchar_p, ct.c_uint32, ct.POINTER(Info), ct.c_char_p, ct.c_uint32]
+    opening = [
+        ct.c_wchar_p, ct.c_wchar_p, ct.c_uint32, ct.c_int, ct.POINTER(Info),
+        ct.c_char_p, ct.c_uint32, ct.c_char_p, ct.c_uint32,
+    ]
     dll.wm_open.argtypes, dll.wm_open.restype = opening, ct.c_void_p
     dll.wm_probe.argtypes, dll.wm_probe.restype = opening, ct.c_int
     dll.wm_start.argtypes, dll.wm_start.restype = [ct.c_void_p, Process, ct.c_char_p, ct.c_uint32], ct.c_int
@@ -60,11 +73,21 @@ class NativeWasapiStream:
         self.dll = load_library()
         self.info, self.stats = Info(), Statistics()
         self.error = ct.create_string_buffer(1024)
+        self.trace = ct.create_string_buffer(4096)
         self.statistics, self.callback = statistics, None
         # Empty names are allowed only for an explicitly requested system default.
         # Production supplies both resolved names; the DLL rejects ambiguity.
-        self.handle = self.dll.wm_open(options["input_device_name"], options["output_device_name"],
-                                       options["blocksize"], ct.byref(self.info), self.error, len(self.error))
+        self.handle = self.dll.wm_open(
+            options["input_device_name"], options["output_device_name"], options["blocksize"],
+            1 if options.get("wasapi_exclusive") else 0, ct.byref(self.info),
+            self.error, len(self.error), self.trace, len(self.trace),
+        )
+        # Every negotiation step (each shared-mode candidate probed, the
+        # exclusive-mode attempt and its alignment retry, whichever side fell
+        # back and why) -- printed unconditionally, success or failure, since
+        # this is the only visibility into *why* a device landed on a given
+        # mode/period without a debugger attached to this worker process.
+        _log_trace(self.trace.value.decode("utf-8", errors="replace"))
         self._check(self.handle)
 
     def _check(self, success):
@@ -97,8 +120,11 @@ class NativeWasapiStream:
                                 for name in TIMING_FIELDS for value in (getattr(self.stats, name),)})
 
     def diagnostics(self):
+        exclusive = bool(self.info.input_exclusive) and bool(self.info.output_exclusive)
         return {
-            "engine": "wasapi-native-shared", "host_api": "Windows WASAPI", "mode": "shared", "exclusive": False,
+            "engine": "wasapi-native-exclusive" if exclusive else "wasapi-native-shared",
+            "host_api": "Windows WASAPI", "mode": "exclusive" if exclusive else "shared", "exclusive": exclusive,
+            "input_exclusive": bool(self.info.input_exclusive), "output_exclusive": bool(self.info.output_exclusive),
             "blocksize": self.info.blocksize, "sample_rate": self.info.sample_rate,
             "output_sample_rate": self.info.output_sample_rate,
             "input_period_frames": self.info.input_period, "output_period_frames": self.info.output_period,

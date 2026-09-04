@@ -35,11 +35,14 @@ def test_packaged_library_stays_beside_worker(monkeypatch, tmp_path):
 @pytest.fixture
 def dll(monkeypatch):
     library = SimpleNamespace(wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1))
-    def open_stream(input_name, output_name, blocksize, info, _error, _size):
+    def open_stream(input_name, output_name, blocksize, exclusive, info, _error, _error_size, trace, _trace_size):
         assert (input_name, output_name, blocksize) == ("Chosen microphone", "Chosen speakers", 64)
+        assert exclusive == 0  # options() below never requests exclusive mode
+        trace.value = b"input:begin | shared:candidate=ok period=441 | output:begin | shared:candidate=ok period=144"
         for name, value in {"sample_rate": 44100, "output_sample_rate": 48000, "blocksize": 64,
                             "input_period": 441, "output_period": 144,
-                            "input_latency_ms": 10, "output_latency_ms": 3}.items():
+                            "input_latency_ms": 10, "output_latency_ms": 3,
+                            "input_exclusive": 0, "output_exclusive": 0}.items():
             setattr(info._obj, name, value)
         return 42
     library.wm_open = Mock(side_effect=open_stream)
@@ -58,6 +61,51 @@ def test_native_stream_reports_real_format_and_periods_without_changing_settings
     stream.close()
     stream.close()
     dll.wm_close.assert_called_once_with(42)
+
+
+def test_native_stream_requests_and_reports_exclusive_mode(monkeypatch):
+    library = SimpleNamespace(wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1))
+    def open_stream(input_name, output_name, blocksize, exclusive, info, _error, _error_size, trace, _trace_size):
+        assert exclusive == 1  # options()'s wasapi_exclusive=True must reach the DLL call
+        trace.value = b"input:begin | exclusive:init=ok | output:begin | exclusive:init=ok"
+        for name, value in {"sample_rate": 44100, "output_sample_rate": 48000, "blocksize": 64,
+                            "input_period": 240, "output_period": 240,
+                            "input_latency_ms": 5, "output_latency_ms": 5,
+                            "input_exclusive": 1, "output_exclusive": 1}.items():
+            setattr(info._obj, name, value)
+        return 42
+    library.wm_open = Mock(side_effect=open_stream)
+    monkeypatch.setattr(native_wasapi, "load_library", lambda: library)
+
+    stream = native_wasapi.NativeWasapiStream({**options(), "wasapi_exclusive": True}, {})
+    info = stream.diagnostics()
+    assert info["exclusive"] is True and info["input_exclusive"] and info["output_exclusive"]
+    assert info["engine"] == "wasapi-native-exclusive" and info["mode"] == "exclusive"
+    stream.close()
+
+
+def test_native_stream_falls_back_to_shared_when_only_one_side_gets_exclusive(monkeypatch):
+    # One side (commonly the output, since a headphone endpoint often has
+    # different exclusive-mode support than the input) can fail exclusive
+    # negotiation while the other succeeds -- the mix is only meaningfully
+    # "exclusive" when both sides actually got it.
+    library = SimpleNamespace(wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1))
+    def open_stream(input_name, output_name, blocksize, exclusive, info, _error, _error_size, trace, _trace_size):
+        trace.value = b"input:begin | exclusive:init=ok | output:begin | exclusive:unavailable, falling back to shared"
+        for name, value in {"sample_rate": 44100, "output_sample_rate": 48000, "blocksize": 64,
+                            "input_period": 240, "output_period": 441,
+                            "input_latency_ms": 5, "output_latency_ms": 10,
+                            "input_exclusive": 1, "output_exclusive": 0}.items():
+            setattr(info._obj, name, value)
+        return 42
+    library.wm_open = Mock(side_effect=open_stream)
+    monkeypatch.setattr(native_wasapi, "load_library", lambda: library)
+
+    stream = native_wasapi.NativeWasapiStream({**options(), "wasapi_exclusive": True}, {})
+    info = stream.diagnostics()
+    assert info["exclusive"] is False and info["engine"] == "wasapi-native-shared"
+    assert info["input_exclusive"] and not info["output_exclusive"]
+    stream.close()
 
 
 def test_native_callback_reuses_existing_dsp_and_supports_partial_engine_packets(dll):
@@ -135,7 +183,7 @@ def test_invalid_stage_timings_are_unavailable(dll, value):
         stream.close()
 
 
-@pytest.mark.parametrize("version", [None, 1, 3])
+@pytest.mark.parametrize("version", [None, 1, 2])
 def test_mismatched_native_binary_rejected_before_writing_statistics(monkeypatch, version):
     library = SimpleNamespace() if version is None else SimpleNamespace(wm_abi_version=Mock(return_value=version))
     monkeypatch.setattr(native_wasapi, "library_path", lambda: SimpleNamespace(is_file=lambda: True))
@@ -210,7 +258,17 @@ def test_native_shared_probes_only_categories_valid_for_capture_and_render():
     assert "try_candidate(AudioCategory_Media, static_cast<AUDCLNT_STREAMOPTIONS>(0))" in source
     assert "AudioCategory_GameMedia" not in source
     assert "AUDCLNT_STREAMOPTIONS_RAW" in source
-    assert "AUDCLNT_SHAREMODE_EXCLUSIVE" not in source
+    # Exclusive mode is attempted first (when requested) and only falls
+    # through to the shared candidate loop above if it is unavailable --
+    # never the other way around, and never silently skipping the fallback.
+    exclusive_attempt = source.index("open_exclusive(device.Get()")
+    assert exclusive_attempt < probe
+    assert "AUDCLNT_SHAREMODE_EXCLUSIVE" in source
+    assert "AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED" in source
+    is_format_supported = source.index("IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE")
+    device_period = source.index("GetDevicePeriod")
+    exclusive_initialize = source.index("Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE")
+    assert is_format_supported < device_period < exclusive_initialize
 
 
 def test_worker_uses_native_event_pump_and_native_rate(monkeypatch, dll, capsys):
