@@ -987,9 +987,21 @@ def _performance_mix_command(
             label = f"music{index}"
             audible_start = max(0.0, playback_start)
             delay_ms = round((recording_start + max(0.0, -playback_start)) * 1000)
+            # adelay must run BEFORE atempo here, not after. With a non-zero
+            # delay on a chain that feeds amix, this ffmpeg build silently
+            # corrupts the filter graph's PTS bookkeeping when adelay follows
+            # atempo -- the muxed output gets truncated to roughly the delay's
+            # own length (a few KB instead of the whole track) with
+            # "Application provided invalid, non monotonically increasing
+            # dts" on stderr, despite exiting 0. Reproduced directly against a
+            # real recording+instrumental. Swapping the order avoids it; since
+            # atempo compresses/stretches everything downstream of it, a delay
+            # applied before it is pre-scaled by `rate` so its audible
+            # duration after the tempo change still equals delay_ms.
+            pre_tempo_delay_ms = round(delay_ms * rate)
             filters.append(
                 f"[0:a]atrim=start={audible_start:.6f}:duration={duration * rate:.6f},"
-                f"asetpts=PTS-STARTPTS,atempo={rate:.6f},adelay={delay_ms}:all=1,"
+                f"asetpts=PTS-STARTPTS,adelay={pre_tempo_delay_ms}:all=1,atempo={rate:.6f},"
                 f"volume={music_gain:.6f}[{label}]"
             )
             music_labels.append(label)

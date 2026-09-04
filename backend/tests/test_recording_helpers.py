@@ -221,6 +221,12 @@ def test_performance_mix_command_contains_raw_timing_and_lossy_output(tmp_path):
     assert "atrim=start=4.500000:duration=4.875000" in synchronized_filters
     assert "adelay=125:all=1" in synchronized_filters
     assert "amix=inputs=2:duration=longest" in synchronized_filters
+    # adelay must run before atempo, not after -- see the comment at its call
+    # site: this exact ffmpeg build corrupts the filter graph's PTS
+    # bookkeeping (and silently truncates the muxed output to a few KB) when
+    # a non-zero adelay follows atempo on a chain that feeds amix.
+    music0_chain = next(part for part in synchronized_filters.split(";") if "[music0]" in part)
+    assert music0_chain.index("adelay=") < music0_chain.index("atempo=")
 
     compensated = recording_service._performance_mix_command(
         "ffmpeg", current, tmp_path / "instrumental.mp3", tmp_path / "latency.wav",
@@ -277,6 +283,58 @@ def test_performance_mix_uses_the_karaoke_playback_rate_for_each_timeline_segmen
     filters = command[command.index("-filter_complex") + 1]
     assert "atrim=start=4.500000:duration=6.093750" in filters
     assert "atempo=1.250000" in filters
+    # delay_ms = round((0.25 + max(0, -4.5)) * 1000) = 250, pre-scaled by the
+    # 1.25 rate (applied before atempo, not after -- see the comment at its
+    # call site) so its audible duration after the tempo change still equals
+    # the intended 250ms: round(250 * 1.25) = round(312.5) = 312 (Python's
+    # banker's rounding rounds a tie to the nearest even integer).
+    assert "adelay=312:all=1" in filters
+    assert filters.index("adelay=") < filters.index("atempo=")
+
+
+def test_performance_mix_with_a_delay_produces_the_full_track_via_real_ffmpeg(tmp_path):
+    # Regression test for a real ffmpeg bug reproduced against an actual user
+    # recording: with adelay AFTER atempo on a chain feeding amix, this
+    # ffmpeg build corrupts its own PTS bookkeeping for ANY non-zero delay
+    # (independent of track length -- reproduced down to 1-second clips) and
+    # silently truncates the muxed output to roughly the delay's own length
+    # (a few KB) while still exiting 0 and logging "Application provided
+    # invalid, non monotonically increasing dts". None of the existing
+    # string-matching tests above ever actually ran ffmpeg, so they could not
+    # have caught this -- ffmpeg's own behavior is the only thing that can.
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    import soundfile as sf
+
+    from tests._shared import write_audio
+
+    ffmpeg = str(recording_service.config.FFMPEG_EXE)
+    if not Path(ffmpeg).is_file() and not shutil.which(ffmpeg):
+        pytest.skip("real ffmpeg is not available in this environment")
+
+    instrumental = tmp_path / "instrumental.flac"
+    write_audio(instrumental, seconds=2.0, sample_rate=44_100, format="FLAC")
+    take_path = tmp_path / "take.wav"
+    write_audio(take_path, seconds=1.0, sample_rate=44_100, format="WAV")
+
+    current = recording(take_path, duration=1.0)
+    destination = tmp_path / "mix.mp3"
+    command = recording_service._performance_mix_command(
+        ffmpeg, current, instrumental, destination,
+        0, 1.0, {}, [{
+            "start_recording_sec": 0.2,
+            "start_playback_sec": 0.0,
+            "end_recording_sec": 1.0,
+        }],
+    )
+    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+
+    assert result.returncode == 0
+    assert "non monotonically" not in result.stderr
+    info = sf.info(str(destination))
+    assert info.duration > 0.9  # a regression here truncates to ~0.2s or less
 
 
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):
