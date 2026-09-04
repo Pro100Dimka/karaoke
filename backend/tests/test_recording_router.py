@@ -19,6 +19,7 @@ def audio_settings(**changes):
         "audio_driver": "auto",
         "asio_driver_name": None,
         "buffer_size": 64,
+        "latency_ms": 50,
         "monitoring_enabled": False,
         "reverb": 0.1,
         "echo": 0.2,
@@ -65,11 +66,12 @@ def test_recording_monitor_configuration_handles_auto_and_temporary_asio(monkeyp
     assert vars(current) == original
 
 
-def test_start_recording_builds_device_specific_session(monkeypatch):
+def test_start_recording_builds_session_without_driver_latency_adjustment(monkeypatch):
     database, body, song, settings = Mock(), start_body(), SimpleNamespace(id='song'), audio_settings(monitoring_enabled=True)
     patch_many(monkeypatch, (recording.repositories, "get_song", Mock(return_value=song)), (recording.audio_service, "get_settings", Mock(return_value=settings)), (recording, "_configure_recording_monitor", Mock(return_value=False)))
     patch_attrs(monkeypatch, recording.audio_service, preferred_input_device=Mock(return_value=3), preferred_output_device=Mock(return_value=4), preferred_sample_rate=Mock(return_value=48000))
     start = Mock(return_value="session")
+    monkeypatch.setattr(recording.audio_service, "recording_monitor_mode", Mock(return_value="shared"))
     monkeypatch.setattr(recording.recording_service, "start_recording", start)
 
     result = recording.start_recording(body, database)
@@ -83,11 +85,135 @@ def test_start_recording_builds_device_specific_session(monkeypatch):
         gain=1.5,
         monitoring_enabled=True,
         playback_offset_sec=2,
+        playback_rate=1,
         blocksize=64,
         music_gain=0.8,
-            effects={"reverb": 0.4, "echo": 0.5, "delay": 0.6},
+            effects={"reverb": 0.4, "echo": 0.5, "delay": 0.6, "octave": 0},
             noise_suppression=0.35,
+            monitor_owner="recording",
+            monitor_mode="shared",
         )
+
+
+def test_room_recording_does_not_open_a_second_live_monitor(monkeypatch):
+    database, body, song, settings = Mock(), start_body(), SimpleNamespace(id="song"), audio_settings(monitoring_enabled=True)
+    body.room_mode = True
+    stop_monitoring = Mock()
+    configure = Mock()
+    start = Mock(return_value="session")
+    patch_many(
+        monkeypatch,
+        (recording.repositories, "get_song", Mock(return_value=song)),
+        (recording.audio_service, "get_settings", Mock(return_value=settings)),
+        (recording.audio_service, "stop_monitoring", stop_monitoring),
+        (recording, "_configure_recording_monitor", configure),
+        (recording.recording_service, "start_recording", start),
+    )
+    patch_attrs(
+        monkeypatch,
+        recording.audio_service,
+        preferred_input_device=Mock(return_value=3),
+        preferred_output_device=Mock(return_value=4),
+        preferred_sample_rate=Mock(return_value=44_100),
+    )
+
+    recording.start_recording(body, database)
+
+    stop_monitoring.assert_called_once_with()
+    configure.assert_not_called()
+    assert start.call_args.kwargs["monitoring_enabled"] is False
+
+
+def test_room_relay_recording_keeps_the_shared_monitor_running(monkeypatch):
+    database, body, song, settings = Mock(), start_body(), SimpleNamespace(id="song"), audio_settings(monitoring_enabled=True)
+    body.room_mode = True
+    body.voice_relay = True
+    stop_monitoring = Mock()
+    configure = Mock()
+    start = Mock(return_value="session")
+    patch_many(
+        monkeypatch,
+        (recording.repositories, "get_song", Mock(return_value=song)),
+        (recording.audio_service, "get_settings", Mock(return_value=settings)),
+        (recording.audio_service, "stop_monitoring", stop_monitoring),
+        (recording.audio_service, "configure_monitoring", configure),
+        (recording.recording_service, "start_recording", start),
+    )
+    patch_attrs(
+        monkeypatch,
+        recording.audio_service,
+        preferred_input_device=Mock(return_value=3),
+        preferred_output_device=Mock(return_value=4),
+        preferred_sample_rate=Mock(return_value=44_100),
+    )
+
+    recording.start_recording(body, database)
+
+    configure.assert_called_once_with(settings)
+    stop_monitoring.assert_not_called()
+    assert start.call_args.kwargs["monitoring_enabled"] is False
+    assert start.call_args.kwargs["monitor_owner"] == "room-relay"
+    assert start.call_args.kwargs["monitor_mode"] is None
+
+
+def test_room_relay_recording_falls_back_to_stopping_when_monitoring_is_disabled(monkeypatch):
+    database, body, song, settings = Mock(), start_body(), SimpleNamespace(id="song"), audio_settings(monitoring_enabled=False)
+    body.room_mode = True
+    body.voice_relay = True
+    stop_monitoring = Mock()
+    configure = Mock()
+    start = Mock(return_value="session")
+    patch_many(
+        monkeypatch,
+        (recording.repositories, "get_song", Mock(return_value=song)),
+        (recording.audio_service, "get_settings", Mock(return_value=settings)),
+        (recording.audio_service, "stop_monitoring", stop_monitoring),
+        (recording.audio_service, "configure_monitoring", configure),
+        (recording.recording_service, "start_recording", start),
+    )
+    patch_attrs(
+        monkeypatch,
+        recording.audio_service,
+        preferred_input_device=Mock(return_value=3),
+        preferred_output_device=Mock(return_value=4),
+        preferred_sample_rate=Mock(return_value=44_100),
+    )
+
+    recording.start_recording(body, database)
+
+    stop_monitoring.assert_called_once_with()
+    configure.assert_not_called()
+    assert start.call_args.kwargs["monitor_owner"] == "room-relay"
+
+
+def test_room_relay_recording_falls_back_to_stopping_when_the_monitor_fails_to_start(monkeypatch):
+    database, body, song, settings = Mock(), start_body(), SimpleNamespace(id="song"), audio_settings(monitoring_enabled=True)
+    body.room_mode = True
+    body.voice_relay = True
+    stop_monitoring = Mock()
+    configure = Mock(side_effect=RuntimeError("device busy"))
+    start = Mock(return_value="session")
+    patch_many(
+        monkeypatch,
+        (recording.repositories, "get_song", Mock(return_value=song)),
+        (recording.audio_service, "get_settings", Mock(return_value=settings)),
+        (recording.audio_service, "stop_monitoring", stop_monitoring),
+        (recording.audio_service, "configure_monitoring", configure),
+        (recording.recording_service, "start_recording", start),
+    )
+    patch_attrs(
+        monkeypatch,
+        recording.audio_service,
+        preferred_input_device=Mock(return_value=3),
+        preferred_output_device=Mock(return_value=4),
+        preferred_sample_rate=Mock(return_value=44_100),
+    )
+
+    recording.start_recording(body, database)
+
+    configure.assert_called_once_with(settings)
+    stop_monitoring.assert_called_once_with()
+    assert start.call_args.kwargs["monitoring_enabled"] is False
 
 
 def test_start_recording_translates_missing_song_and_audio_failure(monkeypatch):
@@ -105,8 +231,13 @@ def test_start_recording_translates_missing_song_and_audio_failure(monkeypatch):
 
 
 def test_recording_actions_and_stop_error_mapping(monkeypatch):
-    patch_attrs(monkeypatch, recording.recording_service, pause_recording=Mock(), resume_recording=Mock())
+    patch_attrs(monkeypatch, recording.recording_service, pause_recording=Mock(), resume_recording=Mock(), sync_recording=Mock())
     assert (recording.pause_recording('session') == {'status': 'paused'}) and (recording.resume_recording('session') == {'status': 'recording'})
+    assert recording.sync_recording("session", 3.25) == {"status": "synchronized"}
+    recording.recording_service.sync_recording.assert_called_once_with("session", 3.25, 1)
+
+    for kwargs in ({"position_sec": -0.01}, {"position_sec": 1, "playback_rate": 0.49}, {"position_sec": 1, "playback_rate": 1.51}):
+        assert_http_status(422, lambda kwargs=kwargs: recording.sync_recording("session", **kwargs))
 
     database, saved = Mock(), object()
     stop = Mock(return_value=saved)
@@ -115,14 +246,42 @@ def test_recording_actions_and_stop_error_mapping(monkeypatch):
     monkeypatch.setattr(recording, "_restore_monitoring", restore)
     assert recording.stop_recording("session", database) is saved
     restore.assert_called_once_with(database)
+    # TASK 4.2: monitoring must be restored on EVERY outcome, including a
+    # RuntimeError — which is exactly what a writer/stream failure raises
+    # (recording_service.stop_and_save) and was previously left uncaught here.
     for error, status in (
         (KeyError("missing"), 404),
         (ValueError("bad"), 400),
         (OSError("disk"), 500),
+        (RuntimeError("writer crashed"), 500),
     ):
+        restore.reset_mock()
         stop.side_effect = error
         with pytest.raises(HTTPException) as mapped: recording.stop_recording("session", database)
         assert mapped.value.status_code == status
+        assert str(error) in str(mapped.value.detail)
+        restore.assert_called_once_with(database)
+
+
+def test_recording_controls_are_applied_to_the_named_active_session(monkeypatch):
+    update = Mock()
+    monkeypatch.setattr(recording.recording_service, "update_recording_controls", update)
+    body = schemas.RecordingControlsRequest(
+        music_volume=0.25,
+        microphone_volume=1.75,
+        reverb=0.4,
+        echo=0.3,
+        delay=0.2,
+        octave=-0.5,
+    )
+
+    assert recording.update_recording_controls("session", body) == {"status": "updated"}
+    update.assert_called_once_with(
+        "session",
+        music_gain=0.25,
+        gain=1.75,
+        effects={"reverb": 0.4, "echo": 0.3, "delay": 0.2, "octave": -0.5},
+    )
 
 
 def persisted_recording(path): return models.Recording(id='recording', song_id='song', filename='take.wav', path=str(path), duration_sec=2, sample_rate=48000, created_at=datetime(2026, 1, 1, tzinfo=UTC))

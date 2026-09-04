@@ -1,104 +1,88 @@
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDropzone } from "react-dropzone";
 import { translateSaved as tr } from "../../../i18n/runtime";
-import { Box, Grid } from "../../../theme/ui";
-import LibraryResults from "./results";
-import LibrarySongCard from "./song-card";
+import { Box, Card, Grid, Stack, Typography } from "../../../theme/ui";
+import { sameId } from "../utils";
+import LibrarySongCard from "./card";
 
-function SongGrid({ songs, transferStatuses, ...handlers }) {
-  if (songs.length > 45)
-    return (
-      <VirtualSongGrid songs={songs} transferStatuses={transferStatuses} handlers={handlers} />
-    );
+export const selectSongTransferStatus = (statuses, id) => {
+  const all = statuses.filter((status) => sameId(status?.songId, id));
   return (
-    <Grid columns={3} gap="var(--space-6)" align="start">
-      {songs.map((song, cardIndex) => (
-        <LibrarySongCard
-          key={song.id}
-          cardIndex={cardIndex}
-          song={song}
-          transferStatus={[...(transferStatuses?.values?.() || [])].find(
-            ({ songId }) => songId === song.id
-          )}
-          {...handlers}
-        />
-      ))}
-    </Grid>
+    all.find(({ stage }) => stage === "error") ||
+    all
+      .filter(({ participantId }) => participantId && participantId !== "room")
+      .sort((a, b) => a.percent - b.percent)[0] ||
+    all.at(-1)
   );
-}
+};
 
-export default function LibrarySongsGrid({ state, fileImport, processing, recordings }) {
-  return (
-    <LibraryResults
-      error={state.songsError}
-      onFileChosen={fileImport.importFile}
-      importing={fileImport.importing}
-      canManageLibrary={state.canManageLibrary}
-      songs={state.filteredSongs}
-      errorText={`${tr("Не удалось загрузить список:")} ${state.songsError?.message || state.songsError || ""}`}
-    >
-      <SongGrid
-        songs={state.filteredSongs}
-        canManageLibrary={state.canManageLibrary}
-        transferStatuses={state.transferStatuses}
-        onOpenKaraoke={state.openKaraoke}
-        onOpenProcessing={processing.track}
-        onOpenRecordings={recordings.setSong}
-        onOpenSettings={state.setSettingsSongId}
-        onDelete={state.songActions.deleteSong}
-        onOpenFolder={state.songActions.openSongFolder}
-        onProcess={state.songActions.processSong}
-        onReprocess={state.songActions.reprocessSong}
-      />
-    </LibraryResults>
-  );
-}
-function VirtualSongGrid({ songs, transferStatuses, handlers }) {
-  const host = useRef(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  const rows = useMemo(
-    () =>
-      Array.from({ length: Math.ceil(songs.length / 3) }, (_, index) =>
-        songs.slice(index * 3, index * 3 + 3)
-      ),
-    [songs]
-  );
-  useLayoutEffect(() => setScrollMargin(host.current?.offsetTop ?? 0), []);
-  const virtualizer = useWindowVirtualizer({
-    count: rows.length,
-    estimateSize: () => 220,
-    overscan: 2,
-    scrollMargin
+export default function LibrarySongsGrid({
+  songs,
+  error,
+  transferStatuses,
+  canManageLibrary,
+  fileImport,
+  processing,
+  recordings,
+  openKaraoke,
+  onOpenSettings,
+  songActions
+}) {
+  const statuses = [...(transferStatuses?.values?.() || [])];
+  const { getRootProps, isDragActive } = useDropzone({
+    accept: {
+      "audio/*": [".mp3", ".wav", ".flac", ".m4a", ".ogg"],
+      "application/octet-stream": [".kar", ".mid", ".kfn"]
+    },
+    disabled: fileImport.importing || !canManageLibrary,
+    onDropAccepted: fileImport.importFile,
+    multiple: true,
+    noClick: true,
+    noKeyboard: true
   });
-  return (
-    <Box ref={host} sx={{ position: "relative", blockSize: `${virtualizer.getTotalSize()}px` }}>
-      {virtualizer.getVirtualItems().map((virtualRow) => (
-        <Box
-          ref={virtualizer.measureElement}
-          data-index={virtualRow.index}
-          key={virtualRow.key}
-          sx={{
-            position: "absolute",
-            insetBlockStart: 0,
-            insetInline: 0,
-            transform: `translateY(${virtualRow.start - scrollMargin}px)`
-          }}
+
+  if (error || !songs.length) {
+    return (
+      <Stack align="center" justify="center" sx={{ minHeight: "30vw" }}>
+        <Card
+          variant="laser"
+          sx={{ textAlign: "center" }}
+          cardContent={{ style: { padding: "var(--space-16)" } }}
         >
-          <Grid columns={3} gap="var(--space-6)" align="start">
-            {rows[virtualRow.index].map((song, index) => (
-              <LibrarySongCard
-                key={song.id}
-                cardIndex={virtualRow.index * 3 + index}
-                song={song}
-                transferStatus={[...(transferStatuses?.values?.() || [])].find(
-                  ({ songId }) => songId === song.id
-                )}
-                {...handlers}
-              />
-            ))}
-          </Grid>
-        </Box>
-      ))}
+          <Typography variant="h4" tone={error ? "danger" : "muted"} role={error ? "alert" : undefined}>
+            {error
+              ? `${tr("library.failedToLoadList")} ${error.message || error}`
+              : tr("library.thereAreNoSongsYetAddTheFirstOne")}
+          </Typography>
+        </Card>
+      </Stack>
+    );
+  }
+
+  return (
+    <Box
+      {...getRootProps()}
+      aria-label={tr("library.songDropZone")}
+      data-drop-active={isDragActive || undefined}
+    >
+      <Grid columns={3} gap="var(--space-6)" align="start">
+        {songs.map((song, cardIndex) => (
+          <LibrarySongCard
+            key={song.id}
+            song={song}
+            cardIndex={cardIndex}
+            canManageLibrary={canManageLibrary}
+            transferStatus={selectSongTransferStatus(statuses, song.id)}
+            onOpenKaraoke={openKaraoke}
+            onOpenProcessing={processing.track}
+            onOpenRecordings={recordings.setSong}
+            onOpenSettings={onOpenSettings}
+            onDelete={songActions.deleteSong}
+            onOpenFolder={songActions.openSongFolder}
+            onProcess={songActions.processSong}
+            onReprocess={songActions.reprocessSong}
+          />
+        ))}
+      </Grid>
     </Box>
   );
 }

@@ -31,15 +31,16 @@ export default class ErrorBoundary extends Component {
         isOpen
         ariaLabel={t("error.screen.title")}
         titleProps={{
-          eyebrow: "A&amp;D Voice",
+          eyebrow: "A&D Voice",
           title: t("error.screen.title"),
-          description: getErrorMessage(this.state.error, t("error.screen.body"))
+          description: getErrorMessage(this.state.error, t("error.screen.body")),
+          actions: (
+            <Button variant="contained" onClick={() => window.location.reload()} size="lg">
+              {t("error.screen.restart")}
+            </Button>
+          )
         }}
-      >
-        <Button variant="contained" onClick={() => window.location.reload()}>
-          {t("error.screen.restart")}
-        </Button>
-      </Modal>
+      />
     );
   }
 }

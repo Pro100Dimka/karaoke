@@ -7,7 +7,8 @@ const apiMocks = vi.hoisted(() => ({ getAudioTrackBlob: vi.fn() }));
 vi.mock("../src/api/client", () => ({
   api: {
     getAudioTrackUrl: (id, track) => `${id}/${track}`,
-    getAudioTrackBlob: apiMocks.getAudioTrackBlob
+    getAudioTrackBlob: apiMocks.getAudioTrackBlob,
+    getSongVideoUrl: (id) => `/songs/${id}/video`
   }
 }));
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
@@ -47,9 +48,7 @@ test("karaoke media preserves direct Electron URLs through StrictMode cleanup", 
       <KaraokeMedia {...props} song={song} />
     </StrictMode>
   );
-  const { container, rerender, unmount } = render(
-    view({ id: "electron-song", title: "Title" })
-  );
+  const { container, rerender, unmount } = render(view({ id: "electron-song", title: "Title" }));
   expect([...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))).toEqual([
     "electron-song/instrumental",
     "electron-song/vocals"
@@ -120,11 +119,12 @@ test("karaoke media leaves failed browser tracks unloaded", async () => {
   await waitFor(() => expect(apiMocks.getAudioTrackBlob).toHaveBeenCalledTimes(2));
   expect([...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))).toBe(true);
 });
-test("karaoke media loads authenticated audio blobs and initializes YouTube playback", async () => {
+test("karaoke media loads authenticated audio blobs and activates a verified local clip", async () => {
   const createObjectURL = vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => `blob:${blob.size}`);
   const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-  const send = vi.fn();
   const sync = vi.fn();
+  const availability = vi.fn();
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
   const instrumentalRef = createRef();
   const { container, rerender } = render(
     <KaraokeMedia
@@ -136,59 +136,61 @@ test("karaoke media loads authenticated audio blobs and initializes YouTube play
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1.25}
-      song={{ id: "song", title: "Title", video_url: "video.mp4" }}
-      youTubeVideoId="video-id"
-      sendYouTubeCommand={send}
+      song={{ id: "song", title: "Title", video_url: "local:clip" }}
       syncSecondaryMedia={sync}
+      onClipAvailabilityChange={availability}
     />
   );
   expect([...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))).toBe(true);
   await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(2));
-  send.mockClear();
   const audio = container.querySelector("audio");
   expect(audio.getAttribute("src")).toBe("blob:12");
   Object.defineProperty(audio, "volume", { configurable: true, writable: true, value: 0 });
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
-  fireEvent.load(container.querySelector("iframe"));
-  verify([send.mock.calls.map(([command]) => command), "toEqual", ["mute", "setPlaybackRate", "playVideo"]]);
+  const video = container.querySelector("video");
+  verify([video.getAttribute("src"), "toBe", "/songs/song/video"]);
+  expect(container.querySelector("iframe")).toBeNull();
+  fireEvent.loadedData(video);
   expect(sync).toHaveBeenCalled();
+  expect(availability).toHaveBeenLastCalledWith(true);
+  expect(video.play).toHaveBeenCalled();
   rerender(
     <KaraokeMedia
       instrumentalRef={instrumentalRef}
       vocalsRef={createRef()}
       videoRef={createRef()}
-      youTubeClipRef={createRef()}
       isPlaying={false}
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1}
       song={{ id: "song", title: "Title" }}
-      youTubeVideoId="video-id"
-      sendYouTubeCommand={send}
       syncSecondaryMedia={sync}
     />
   );
-  fireEvent.load(container.querySelector("iframe"));
-  rerender(
+  expect(container.querySelector("video")).toBeNull();
+  cleanup();
+  expect(revokeObjectURL).toHaveBeenCalledTimes(2);
+});
+test("karaoke media ignores legacy YouTube URLs and keeps the default video fallback", async () => {
+  const availability = vi.fn();
+  const { container } = render(
     <KaraokeMedia
-      instrumentalRef={instrumentalRef}
+      instrumentalRef={createRef()}
       vocalsRef={createRef()}
       videoRef={createRef()}
-      youTubeClipRef={createRef()}
       isPlaying={false}
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1}
-      song={{ id: "song", title: "Title", video_url: "video.mp4" }}
-      youTubeVideoId=""
-      sendYouTubeCommand={send}
-      syncSecondaryMedia={sync}
+      song={{ id: "blocked-song", title: "Title", video_url: "https://youtube.com/watch?v=abcdefghijk" }}
+      syncSecondaryMedia={vi.fn()}
+      onClipAvailabilityChange={availability}
     />
   );
-  verify([container.querySelector("video").getAttribute("src"), "toBe", "video.mp4"]);
-  cleanup();
-  expect(revokeObjectURL).toHaveBeenCalledTimes(2);
+  expect(container.querySelector("iframe")).toBeNull();
+  expect(container.querySelector("video")).toBeNull();
+  expect(availability).toHaveBeenLastCalledWith(false);
 });
 test("waveform supports click, drag and range seeking", () => {
   const change = vi.fn();
@@ -290,6 +292,33 @@ test("lyrics keep a readable constant pace across the exact acoustic note envelo
   expect(fill()).toBe(100);
 });
 
+test("KAR lyrics fill every preserved syllable on its own timing", () => {
+  const word = {
+    index: 0,
+    text: "привет",
+    start: 0,
+    end: 1,
+    notes: [{ note: 60, start: 0, end: 1 }],
+    syllables: [
+      { text: "при", start: 0, end: 0.2 },
+      { text: "вет", start: 0.2, end: 1 }
+    ]
+  };
+  const view = render(<KaraokeLyrics lyricsSync={{ text: "привет", words: [word] }} currentTime={0.1} />);
+  const fills = () =>
+    [...view.container.querySelectorAll('[data-role="lyric-syllable"]')].map((node) =>
+      Number.parseFloat(node.style.getPropertyValue("--character-fill"))
+    );
+
+  expect(view.container.querySelectorAll('[data-role="lyric-syllable"]')).toHaveLength(2);
+  expect(view.container.querySelector('[data-role="lyric-word-fill"]')).toBeNull();
+  expect(fills()).toEqual([50, 0]);
+
+  view.rerender(<KaraokeLyrics lyricsSync={{ text: "привет", words: [word] }} currentTime={0.6} />);
+  expect(fills()[0]).toBe(100);
+  expect(fills()[1]).toBeCloseTo(50, 10);
+});
+
 test("lyrics show only the current and next source lines", () => {
   const lyricsSync = {
     text: "Первая строка\n.\nВторая строка\nТретья строка",
@@ -319,4 +348,25 @@ test("lyrics show only the current and next source lines", () => {
   expect(lineText(lines[0])).toBe("Втораястрока");
   expect(lineText(lines[1])).toBe("Третьястрока");
   expect(container.textContent).not.toContain("Первая");
+});
+
+test("standalone KAR punctuation stays on its source line without shifting following lyrics", () => {
+  const lyricsSync = {
+    text: "Ты - летящий вдаль\nСледующая строка",
+    words: [
+      { index: 0, text: "Ты", start: 1, end: 1.2 },
+      { index: 1, text: "-", start: 1.2, end: 1.3 },
+      { index: 2, text: "летящий", start: 1.3, end: 1.8 },
+      { index: 3, text: "вдаль", start: 1.8, end: 2.4 },
+      { index: 4, text: "Следующая", start: 3, end: 3.5 },
+      { index: 5, text: "строка", start: 3.5, end: 4 }
+    ]
+  };
+  const { container } = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />);
+  const lines = container.querySelectorAll('[data-role="lyric-line"]');
+  const texts = [...lines].map((line) =>
+    [...line.querySelectorAll(':scope > [data-role="lyric-word"]')].map(({ dataset }) => dataset.text).join(" ")
+  );
+
+  expect(texts).toEqual(["Ты - летящий вдаль", "Следующая строка"]);
 });

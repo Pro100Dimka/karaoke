@@ -1,16 +1,30 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
+import { registerLightingSource } from "../services/keyboardLighting";
+import { createLevelMeter } from "../services/levelMeter";
 import { clamp01 as clampVolume } from "../utils/math";
 import { readJsonStorage } from "../utils/storage";
 import { persistUiPreferences } from "../utils/ui-preferences";
 import useRadioLifecycle from "./hooks/useRadioLifecycle";
 import useRadioValue from "./hooks/useRadioValue";
 import { DEFAULT_RADIO_SETTINGS, RADIO_STATIONS } from "./radio-config";
-import { calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
+import {
+  calculateRadioLightingPulse,
+  calculateRadioSpectrum,
+  isAutoplayBlocked
+} from "./radio-utils";
 
 export { RADIO_STATIONS } from "./radio-config";
-export { calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
+export { calculateRadioLightingPulse, calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
 
 const STORAGE_KEY = "karaoke-radio";
 const STARTUP_FADE_MS = 2000;
@@ -43,7 +57,25 @@ export function RadioProvider({ children }) {
   const analyserRef = useRef(null);
   const frequencyDataRef = useRef(null);
   const bassRef = useRef(0);
+  const lightingBandsRef = useRef(Array(18).fill(0));
+  const lightingPulseRef = useRef(0);
   const spectrumRef = useRef(Array(18).fill(0));
+  useEffect(
+    () =>
+      registerLightingSource("radio", () => {
+        const active = !!audioRef.current && !audioRef.current.paused && !audioRef.current.ended;
+        if (active) {
+          lightingPulseRef.current = calculateRadioLightingPulse(
+            spectrumRef.current,
+            lightingBandsRef.current,
+            lightingPulseRef.current
+          );
+          lightingBandsRef.current = [...spectrumRef.current];
+        }
+        return { active, level: lightingPulseRef.current, transient: true };
+      }),
+    []
+  );
   const animationRef = useRef(0);
   const volumeFadeRef = useRef(0);
   const analysisVersionRef = useRef(createVersion());
@@ -105,6 +137,8 @@ export function RadioProvider({ children }) {
     analysisVersionRef.current = createVersion();
     cancelAnimationFrame(animationRef.current);
     bassRef.current = 0;
+    lightingBandsRef.current.fill(0);
+    lightingPulseRef.current = 0;
     spectrumRef.current.fill(0);
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty("--radio-bass", "0");
@@ -117,10 +151,16 @@ export function RadioProvider({ children }) {
   // Stryker disable ArrayDeclaration: stopAnalysis is stable for the provider lifetime.
   const startAnalysis = useCallback(() => {
     const analyser = analyserRef.current;
-    const data = frequencyDataRef.current;
+    const meter = frequencyDataRef.current;
+    let data;
     const audioContext = audioContextRef.current;
     const analysisVersion = createVersion();
     analysisVersionRef.current = analysisVersion;
+    // The only consumer (Library backdrop) samples these custom properties at
+    // ~30 Hz via getComputedStyle, and the values it reads are lerped further
+    // still -- writing them on every rAF tick (~60 Hz) just doubles style
+    // recalculation on documentElement for no visible gain.
+    let frameIndex = 0;
     const readBass = () => {
       if (
         analysisVersion !== analysisVersionRef.current ||
@@ -129,7 +169,7 @@ export function RadioProvider({ children }) {
       )
         return;
       try {
-        analyser.getByteFrequencyData(data);
+        data = meter.read();
       } catch {
         stopAnalysis();
         return;
@@ -146,12 +186,15 @@ export function RadioProvider({ children }) {
       spectrum.bands.forEach((level, index) => {
         bands[index] = level;
       });
-      const rootStyle = document.documentElement.style;
-      rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
-      rootStyle.setProperty("--radio-analysis-active", "1");
-      bands.forEach((level, index) => {
-        rootStyle.setProperty(`--radio-band-${index}`, level.toFixed(3));
-      });
+      if (frameIndex % 2 === 0) {
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
+        rootStyle.setProperty("--radio-analysis-active", "1");
+        bands.forEach((level, index) => {
+          rootStyle.setProperty(`--radio-band-${index}`, level.toFixed(3));
+        });
+      }
+      frameIndex += 1;
       animationRef.current = requestAnimationFrame(readBass);
     };
     cancelAnimationFrame(animationRef.current);
@@ -168,15 +211,19 @@ export function RadioProvider({ children }) {
     // Stryker disable next-line ConditionalExpression
     if (!AudioContext) return null;
     const context = new AudioContext();
-    const analyser = context.createAnalyser();
+    const meter = createLevelMeter(context, {
+      fftSize: 2048,
+      smoothingTimeConstant: 0.72,
+      domain: "frequency"
+    });
+    const { analyser } = meter;
     const source = context.createMediaElementSource(audio);
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.72;
+
     source.connect(analyser);
     analyser.connect(context.destination);
     audioContextRef.current = context;
     analyserRef.current = analyser;
-    frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+    frequencyDataRef.current = meter;
     return context;
   }, []);
   // Stryker restore ArrayDeclaration
@@ -275,8 +322,8 @@ export function RadioProvider({ children }) {
         setPlaying(false);
         setError(
           reason.message
-            ? translateSaved("Не удалось запустить радио: {0}", { 0: reason.message })
-            : translateSaved("Не удалось запустить радио")
+            ? translateSaved("radio.failedToStartRadio", { 0: reason.message })
+            : translateSaved("radio.failedToStartRadio2")
         );
         return false;
       } finally {
@@ -321,11 +368,24 @@ export function RadioProvider({ children }) {
   );
   // Stryker restore ArrayDeclaration
   const setStation = useCallback(
-    (nextId) => {
+    (nextId, { resume } = {}) => {
       const next = RADIO_STATIONS.find(({ id }) => id === nextId);
       if (!next || next.id === stationId) return;
-      const shouldResume = isPlaying || isLoading;
+      // Callers that already know the desired end state (e.g. room sync
+      // applying a remote {stationId, isPlaying} pair together) can pass
+      // `resume` explicitly instead of relying on the current `isPlaying`
+      // snapshot -- otherwise a simultaneous station-change + stop signal
+      // would resume playback here just before the caller's own turnOff()
+      // takes effect, since that state update hasn't committed yet.
+      const shouldResume = resume ?? (isPlaying || isLoading);
       playbackVersionRef.current = createVersion();
+      // A fade started for the previous station (e.g. the startup fade-in)
+      // only cancels itself when a NEW fade begins -- switching stations
+      // here doesn't necessarily start one (turnOn below defaults fadeIn to
+      // false), so the stale loop would otherwise keep nudging the new
+      // station's volume toward the old fade's target for its remaining
+      // duration, heard as an unexplained dip-and-recover.
+      cancelVolumeFade();
       audioRef.current.pause();
       stopAnalysis();
       setPlaying(false);
@@ -337,7 +397,7 @@ export function RadioProvider({ children }) {
       loadStream(0, next);
       if (shouldResume && !suspendedRef.current) turnOn({ remember: false, targetStation: next });
     },
-    [isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
+    [cancelVolumeFade, isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
   );
   const setRecordingActive = useCallback(
     (active) => {
@@ -359,6 +419,7 @@ export function RadioProvider({ children }) {
     // Initial/fallback playback is handled by turnOn() itself so onError must
     // not race with its pending play() promise.
     if (streamAttemptRef.current) return;
+    cancelVolumeFade();
     const nextIndex = streamIndexRef.current + 1;
     if (nextIndex < station.streams.length && isPlaying) {
       turnOn({ remember: false, startIndex: nextIndex });
@@ -366,9 +427,9 @@ export function RadioProvider({ children }) {
     }
     setPlaying(false);
     setLoading(false);
-    setError(translateSaved("{0} временно недоступна", { 0: station.name }));
+    setError(translateSaved("radio.temporarilyUnavailable", { 0: station.name }));
     stopAnalysis();
-  }, [isPlaying, station, stopAnalysis, turnOn]);
+  }, [cancelVolumeFade, isPlaying, station, stopAnalysis, turnOn]);
   const turnOnRef = useRef(turnOn);
   turnOnRef.current = turnOn;
   useRadioLifecycle({

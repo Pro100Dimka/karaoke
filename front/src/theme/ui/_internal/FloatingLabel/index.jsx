@@ -1,3 +1,4 @@
+import { translateSaved as tr } from "../../../../i18n/runtime";
 import { Info } from "lucide-react";
 import IconButton from "../../IconButton";
 import Tooltip from "../../Tooltip";
@@ -16,7 +17,7 @@ export default function FloatingLabel({ id, label, required = false, tooltip }) 
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Подробнее"
+            aria-label={tr("common.field.more")}
             onMouseDown={(event) => event.preventDefault()}
           >
             <Info size={14} />

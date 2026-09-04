@@ -1,11 +1,12 @@
 import builtins
 import importlib
+from pathlib import Path
 from unittest.mock import Mock
 
 import numpy as np
+from sqlalchemy.exc import IntegrityError
 
 import models
-from sqlalchemy.exc import IntegrityError
 from app.services import audio_service
 from tests._shared import patch_attrs, patch_many, raises
 
@@ -84,6 +85,8 @@ def test_normalized_settings_patch_handles_defaults_devices_and_asio(monkeypatch
     assert (updates, changed) == ({'input_device_id': 3, 'input_device_name': 'New'}, {'input_device_id'})
 
     raises(RuntimeError, lambda: audio_service._normalized_settings_patch(current, {'audio_driver': 'invalid'}), match='Unsupported')
+    updates, changed = audio_service._normalized_settings_patch(current, {"audio_driver": "mme"})
+    assert (updates, changed) == ({"audio_driver": "mme"}, {"audio_driver"})
 
     monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(return_value=[]))
     raises(RuntimeError, lambda: audio_service._normalized_settings_patch(current, {'audio_driver': 'asio'}), match='no ASIO')
@@ -194,7 +197,7 @@ def test_set_monitoring_enabled_is_idempotent_and_transactional(monkeypatch):
 
 def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     stop, asio, worker = Mock(), Mock(), Mock()
-    patch_attrs(monkeypatch, audio_service, stop_monitoring=stop, _start_asio_monitor=asio, _start_monitor_worker=worker, _monitor_effects_disabled=False)
+    patch_attrs(monkeypatch, audio_service, _stop_monitoring_process=stop, _start_asio_monitor=asio, _start_monitor_worker=worker, _monitor_effects_disabled=False)
 
     audio_service.configure_monitoring(settings(monitoring_enabled=False))
     stop.assert_called_once_with()
@@ -206,15 +209,25 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", False)
     raises(RuntimeError, lambda: audio_service.configure_monitoring(settings(monitoring_enabled=True)), match='unavailable')
 
-    patch_attrs(monkeypatch, audio_service, _AUDIO_BACKEND_AVAILABLE=True, preferred_input_device=Mock(return_value=1), preferred_output_device=Mock(return_value=2), _resolved_device_index=lambda value, _kind: value)
+    patch_attrs(monkeypatch, audio_service, _AUDIO_BACKEND_AVAILABLE=True, preferred_input_device=Mock(return_value=1), preferred_output_device=Mock(return_value=2), _resolved_device_index=lambda value, _kind, _devices: value)
     devices = {
-        1: {"hostapi": 0, "default_samplerate": 48_000, "max_input_channels": 1},
-        2: {"hostapi": 0, "default_samplerate": 48_000, "max_output_channels": 2},
+        1: {"name": "Selected microphone", "hostapi": 0, "default_samplerate": 48_000, "max_input_channels": 1},
+        2: {"name": "Selected speakers", "hostapi": 0, "default_samplerate": 48_000, "max_output_channels": 2},
     }
-    patch_many(monkeypatch, (audio_service.sd, "query_devices", lambda index: devices[index]))
+    patch_many(
+        monkeypatch,
+        (audio_service.sd, "query_devices", lambda: devices),
+        (audio_service.sd, "query_hostapis", lambda _index: {"name": "Windows WASAPI"}),
+        (audio_service.sd, "check_input_settings", lambda **_kwargs: None),
+        (audio_service.sd, "check_output_settings", lambda **_kwargs: None),
+    )
     worker.reset_mock()
     audio_service.configure_monitoring(settings(monitoring_enabled=True, volume=8, buffer_size=128))
-    assert worker.call_args.args[0] == {
+    worker_options = dict(worker.call_args.args[0])
+    relay_port = worker_options.pop("audio_relay_port")
+    assert relay_port == audio_service._monitor_relay.port
+    audio_service._monitor_relay.close()
+    assert worker_options == {
         "input_device_id": 1,
         "output_device_id": 2,
         "sample_rate": 48_000.0,
@@ -223,9 +236,14 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "gain": 4,
         "reverb": 0.0,
         "echo": 0.0,
-            "delay": 0.0,
-            "noise_suppression": 0.35,
+                "delay": 0.0,
+                "octave": 0.0,
+                "noise_suppression": 0.35,
             "wasapi_exclusive": False,
+            "wasapi_mode": "shared",
+            "native_shared": True,
+            "input_device_name": "Selected microphone",
+            "output_device_name": "Selected speakers",
     }
 
     monkeypatch.setattr(audio_service, "_monitor_effects_disabled", True)
@@ -262,7 +280,93 @@ def test_asio_monitor_validates_bridge_driver_and_clamps_command(monkeypatch, tm
         )
     )
     command = launch.call_args.args[0]
-    assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (launch.call_args.kwargs == {'cwd': tmp_path})
+    assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0')
+    assert launch.call_args.kwargs["cwd"] == tmp_path
+    assert callable(launch.call_args.kwargs["on_driver_reset"])
+    assert launch.call_args.kwargs["on_buffer_negotiated"] is None
+
+
+def test_asio_reset_restart_closure_holds_a_detached_snapshot_not_the_live_row(monkeypatch, tmp_path):
+    # configure_monitoring can be called with a live, DB-session-bound
+    # AudioSettings row (see app/routers/recording.py) whose session may
+    # already be closed by the time a driver reset happens later -- the
+    # restart closure must capture its own plain snapshot up front rather
+    # than close over that row.
+    bridge = tmp_path / "bridge.exe"
+    bridge.write_bytes(b"bridge")
+    monkeypatch.setattr(audio_service, "_asio_bridge_path", Mock(return_value=bridge))
+    monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(return_value=["Studio ASIO"]))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_launch_monitor_process", launch)
+    live_row = settings(audio_driver="asio", asio_driver_name="Studio ASIO", buffer_size=256)
+
+    audio_service._start_asio_monitor(live_row)
+    on_driver_reset = launch.call_args.kwargs["on_driver_reset"]
+
+    request = Mock()
+    monkeypatch.setattr(audio_service, "request_monitoring", request)
+    on_driver_reset()
+
+    request.assert_called_once()
+    (resubmitted,), kwargs = request.call_args
+    assert resubmitted is not live_row
+    assert resubmitted.buffer_size == 256
+    assert resubmitted.asio_driver_name == "Studio ASIO"
+    assert kwargs.get("adopt_driver_buffer") is True
+
+
+def test_asio_monitor_adopts_the_drivers_own_buffer_instead_of_the_saved_one(monkeypatch, tmp_path):
+    # A driver-initiated reset (see the test above) means the driver's own
+    # control panel changed something -- re-asserting this app's last-saved
+    # buffer_size would just clamp straight back to it and the panel change
+    # would never actually take effect. "0" is the bridge's sentinel for
+    # "use whatever the driver currently prefers" (resolve_buffer_size in
+    # bridge_main.cpp).
+    bridge = tmp_path / "bridge.exe"
+    bridge.write_bytes(b"bridge")
+    monkeypatch.setattr(audio_service, "_asio_bridge_path", Mock(return_value=bridge))
+    monkeypatch.setattr(audio_service, "list_asio_drivers", Mock(return_value=["Studio ASIO"]))
+    launch = Mock()
+    monkeypatch.setattr(audio_service, "_launch_monitor_process", launch)
+
+    audio_service._start_asio_monitor(
+        settings(audio_driver="asio", asio_driver_name="Studio ASIO", buffer_size=64),
+        adopt_driver_buffer=True,
+    )
+
+    command = launch.call_args.args[0]
+    assert command[command.index("--buffer-size") + 1] == "0"
+    assert launch.call_args.kwargs["on_buffer_negotiated"] is audio_service._persist_negotiated_buffer_size
+
+
+def test_persist_negotiated_buffer_size_writes_only_when_it_actually_changed(monkeypatch):
+    import database
+
+    current = settings(buffer_size=64)
+    db = Mock()
+    monkeypatch.setattr(database, "SessionLocal", Mock(return_value=db))
+    monkeypatch.setattr(audio_service, "_get_or_create_settings", Mock(return_value=current))
+    commit = Mock()
+    monkeypatch.setattr(audio_service, "commit_refresh", commit)
+
+    audio_service._persist_negotiated_buffer_size(64)
+    commit.assert_not_called()
+    db.close.assert_called_once_with()
+
+    db.close.reset_mock()
+    audio_service._persist_negotiated_buffer_size(256)
+    commit.assert_called_once_with(db, current)
+    assert current.buffer_size == 256
+    db.close.assert_called_once_with()
+
+
+def test_asio_bridge_converts_supported_mismatched_input_and_output_formats():
+    source = (Path(__file__).parents[1] / "engines/asio/bridge_main.cpp").read_text(encoding="utf-8")
+    assert "use_dsp && supports_dsp(output_type)" in source
+    assert "decode_sample(input, input_type, index) * g_engine.gain" in source
+    assert "output_type == input_type && use_dsp" not in source
+    assert "options.input_channel < 0" in source
+    assert "sample_peak(candidate" in source
 
 
 def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):
@@ -275,10 +379,18 @@ def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):
     patch_attrs(monkeypatch, audio_service, _monitor_process=live, _monitor_signal={'rms_db': -12.0, 'clipping': False, 'silent': False})
     assert audio_service.check_signal_quality(None)["rms_db"] == -12
 
-    dead = Mock()
+    dead, dead_reader = Mock(), Mock()
     dead.poll.return_value = 1
-    monkeypatch.setattr(audio_service, "_monitor_process", dead)
+    patch_attrs(monkeypatch, audio_service, _monitor_process=dead, _monitor_reader=dead_reader)
     assert (audio_service.check_signal_quality(None, monitoring_expected=True)['silent'] is True) and (audio_service._monitor_process is None)
+    # A worker discovered dead here (poll() != None) has nothing else to
+    # close its pipes/join its reader -- unlike the ordinary stop path, this
+    # is the only place that ever notices it died, so it must clean up
+    # itself instead of just dropping the _monitor_process reference.
+    dead.stdout.close.assert_called_once_with()
+    dead.stdin.close.assert_called_once_with()
+    dead_reader.join.assert_called_once_with(timeout=1.0)
+    assert audio_service._monitor_reader is None
 
     monkeypatch.setattr(audio_service, "_monitor_process", None)
     patch_attrs(monkeypatch, audio_service.sd, rec=Mock(return_value=np.array([[0.5], [-0.5]], dtype=np.float32)), wait=Mock())
@@ -287,6 +399,27 @@ def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):
 
     audio_service.sd.rec.return_value = np.empty((0, 1), dtype=np.float32)
     assert audio_service.check_signal_quality(None)["rms_db"] == -120
+
+
+def test_signal_quality_uses_selected_device_native_sample_rate(monkeypatch):
+    monkeypatch.setattr(audio_service, "_AUDIO_BACKEND_AVAILABLE", True)
+    monkeypatch.setattr(audio_service, "_monitor_process", None)
+    devices = [{"max_input_channels": 1, "default_samplerate": 16_000}]
+    monkeypatch.setattr(audio_service.sd, "query_devices", Mock(return_value=devices))
+    monkeypatch.setattr(audio_service.sd, "default", Mock(device=(0, 0)))
+
+    def record(_frames, *, samplerate, **_kwargs):
+        if samplerate != 16_000:
+            raise RuntimeError("Invalid sample rate")
+        return np.array([[0.25], [-0.25]], dtype=np.float32)
+
+    monkeypatch.setattr(audio_service.sd, "rec", Mock(side_effect=record))
+    monkeypatch.setattr(audio_service.sd, "wait", Mock())
+
+    quality = audio_service.check_signal_quality(0, duration_sec=0.1)
+
+    assert not quality["silent"]
+    assert audio_service.sd.rec.call_args.kwargs["samplerate"] == 16_000
 
 
 def test_audio_backend_import_failure_is_soft(monkeypatch):

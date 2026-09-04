@@ -15,6 +15,7 @@ vi.mock("../src/utils/audio-preferences", () => ({
 }));
 import useAudioOutputRouting from "../src/pages/Karaoke/hooks/useAudioOutputRouting.js";
 import useMicrophoneSettings from "../src/pages/Karaoke/hooks/useMicrophoneSettings.js";
+import { createOutputDeviceOptions } from "../src/pages/Karaoke/utils/devices.js";
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.releaseDirectMonitoring.mockResolvedValue(undefined);
@@ -24,6 +25,52 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+describe("audio output device choices", () => {
+  test("keeps active host endpoints and removes legacy duplicates and mappers", () => {
+    const devices = [
+      { index: 0, name: "Microsoft Sound Mapper - Output [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 1, name: "Speakers [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 2, name: "Speakers [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 2 },
+      { index: 3, name: "HDMI [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 2 },
+      { index: 4, name: "Disabled [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 0 },
+      { index: 5, name: "Kernel output [Windows WDM-KS]", host_api: "Windows WDM-KS", max_output_channels: 2 }
+    ];
+
+    expect(createOutputDeviceOptions(devices, "", "auto", "System")).toEqual([
+      { value: "", label: "System" },
+      { value: 2, label: "Speakers" },
+      { value: 3, label: "HDMI" }
+    ]);
+  });
+
+  test("uses only ASIO outputs while ASIO mode is active", () => {
+    const devices = [
+      { index: 1, name: "Interface [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 2, name: "Interface [ASIO]", host_api: "ASIO", max_output_channels: 2 },
+      { index: 3, name: "Monitor [ASIO]", host_api: "ASIO", max_output_channels: 2 }
+    ];
+
+    expect(createOutputDeviceOptions(devices, 1, "asio", "System")).toEqual([
+      { value: "", label: "System" },
+      { value: 2, label: "Interface" },
+      { value: 3, label: "Monitor" }
+    ]);
+  });
+
+  test("uses only MME outputs while MME mode is active", () => {
+    const devices = [
+      { index: 1, name: "Interface [MME]", host_api: "MME", max_output_channels: 2 },
+      { index: 2, name: "Interface [Windows WASAPI]", host_api: "Windows WASAPI", max_output_channels: 2 },
+      { index: 3, name: "Monitor [MME]", host_api: "MME", max_output_channels: 2 }
+    ];
+
+    expect(createOutputDeviceOptions(devices, 1, "mme", "System")).toEqual([
+      { value: "", label: "System" },
+      { value: 1, label: "Interface" },
+      { value: 3, label: "Monitor" }
+    ]);
+  });
 });
 describe("microphone settings", () => {
   test("normalizes backend settings and reacts to global changes", () => {
@@ -92,7 +139,8 @@ describe("microphone settings", () => {
       reverb: 0.2,
       echo: 0.3,
       delay: 0.4,
-      noise_suppression: 0.35
+      noise_suppression: 0.35,
+      octave: 0
     });
     act(() => window.dispatchEvent(new CustomEvent("audio-preferences-changed", { detail: { monitorInputDeviceId: "mic" } })));
     expect(hook.result.current.monitorInputDeviceId).toBe("mic");
@@ -124,7 +172,7 @@ describe("microphone settings", () => {
       "toMatchObject",
       {
         microphoneVolume: 1,
-        microphoneEffects: { reverb: 0, echo: 0, delay: 0, noise_suppression: 0.35 },
+        microphoneEffects: { reverb: 0, echo: 0, delay: 0, noise_suppression: 0.35, octave: 0 },
         audioDriver: "auto",
         directOutputDeviceId: "",
         monitoringEnabled: false,
@@ -152,6 +200,34 @@ describe("microphone settings", () => {
     expect(firstError).not.toHaveBeenCalled();
     expect(nextError).toHaveBeenCalledOnce();
     verify([nextError.mock.calls[0][0], "toContain", translateSaved("неизвестная ошибка")]);
+  });
+  test("effect mutations roll back on failure and preserve a newer queued value", async () => {
+    const onError = vi.fn();
+    const hook = renderHook(() =>
+      useMicrophoneSettings({
+        audioSettings: { reverb: 0.1, echo: 0.2, delay: 0, noise_suppression: 0.35, octave: 0 },
+        onError
+      })
+    );
+    mocks.updateAudioSettings.mockRejectedValueOnce(new Error("device busy"));
+    await act(async () => {
+      await hook.result.current.updateMicrophoneEffects({ echo: 0.8 });
+    });
+    expect(hook.result.current.microphoneEffects.echo).toBe(0.2);
+
+    mocks.updateAudioSettings
+      .mockRejectedValueOnce(new Error("obsolete failure"))
+      .mockResolvedValueOnce({ echo: 0.7 });
+    let first;
+    let second;
+    await act(async () => {
+      first = hook.result.current.updateMicrophoneEffects({ echo: 0.4 });
+      second = hook.result.current.updateMicrophoneEffects({ echo: 0.7 });
+      await Promise.all([first, second]);
+    });
+    expect(hook.result.current.microphoneEffects.echo).toBe(0.7);
+    expect(mocks.updateAudioSettings).toHaveBeenLastCalledWith({ echo: 0.7 });
+    expect(onError).toHaveBeenCalledTimes(2);
   });
   test("ignores microphone updates that settle after unmount", async () => {
     let resolveUpdate;
@@ -191,6 +267,8 @@ describe("microphone settings", () => {
 const mediaRef = (setSinkId = vi.fn().mockResolvedValue(undefined)) => ({ current: { setSinkId } });
 describe("audio output routing", () => {
   test("selects an ASIO output and routes browser media to the matching sink", async () => {
+    const roomRoute = vi.fn();
+    window.addEventListener("audio-output-route-changed", roomRoute);
     const setDirectOutputDeviceId = vi.fn();
     const updateMicrophone = vi.fn().mockRejectedValue(new Error("backend"));
     const instrumentalRef = mediaRef(vi.fn().mockRejectedValue(new Error("sink")));
@@ -219,6 +297,8 @@ describe("audio output routing", () => {
     hook.rerender({ ...options, directOutputDeviceId: 2 });
     await waitFor(() => expect(instrumentalRef.current.setSinkId).toHaveBeenCalledWith("browser-output"));
     calledWith([vocalsRef.current.setSinkId, ["browser-output"]], [videoRef.current.setSinkId, ["browser-output"]]);
+    expect(roomRoute).toHaveBeenCalledWith(expect.objectContaining({ detail: { deviceId: "browser-output" } }));
+    window.removeEventListener("audio-output-route-changed", roomRoute);
   });
   test("selects an ASIO output only when it is needed and available", () => {
     const setDirectOutputDeviceId = vi.fn();
@@ -334,6 +414,24 @@ describe("audio output routing", () => {
     window.dispatchEvent(new Event("pagehide"));
     expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
     await act(async () => Promise.resolve());
+  });
+  test("releases backend monitoring when leaving karaoke through client-side navigation", () => {
+    const hook = renderHook(() =>
+      useAudioOutputRouting({
+        audioDriver: "auto",
+        audioSettings: {},
+        directOutputDeviceId: "",
+        directOutputDevices: [],
+        instrumentalRef: { current: null },
+        microphoneOpen: false,
+        setDirectOutputDeviceId: vi.fn(),
+        updateMicrophone: vi.fn(),
+        videoRef: { current: null },
+        vocalsRef: { current: null }
+      })
+    );
+    hook.unmount();
+    expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
   });
   test("isolates browser device enumeration failures", async () => {
     Object.defineProperty(navigator, "mediaDevices", {

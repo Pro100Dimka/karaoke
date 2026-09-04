@@ -1,450 +1,99 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../../api/client";
-import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
-import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
-import { translateSaved } from "../../i18n/runtime";
 import { queryKeys } from "../../query-client";
 import { POLLING_INTERVALS } from "../../runtime-config";
-import { getErrorMessage } from "../../utils/errors";
-import { flattenLyricsNotes } from "../../utils/lyrics-sync";
-import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
-import useKaraokeControls from "./hooks/useKaraokeControls";
-import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
-import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
-import useKaraokePreferences from "./hooks/useKaraokePreferences";
-import useKaraokeResult from "./hooks/useKaraokeResult";
-import useKaraokeRoomPreferences from "./hooks/useKaraokeRoomPreferences";
-import useKaraokeSceneFlow from "./hooks/useKaraokeSceneFlow";
-import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
-import useKaraokeTransport from "./hooks/useKaraokeTransport";
-import useMelodyGuide from "./hooks/useMelodyGuide";
-import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
-import usePitchDetection from "./hooks/usePitchDetection";
-import usePlaybackMachine from "./hooks/usePlaybackMachine";
 import KaraokeLoadState from "./karaoke-load-state";
-import KaraokeView from "./karaoke-view";
-import { getYouTubeVideoId, transposeKey } from "./utils/data";
-import { formatCompactKey } from "./utils/display";
-import { getMicrophoneLevel } from "./utils/transport";
+import KaraokeSession from "./karaoke-session";
+
+const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+
+function useRoutedSong(songs, songId) {
+  const list = Array.isArray(songs) ? songs : [];
+  const listed =
+    songId == null
+      ? list.find((song) => song?.status === "done")
+      : list.find((song) => sameId(song?.id, songId));
+  const [loaded, setLoaded] = useState(null);
+
+  useEffect(() => {
+    if (songId == null || !Array.isArray(songs) || listed) return void setLoaded(null);
+    let active = true;
+    api.getSong(songId).then(
+      (song) => active && setLoaded(song),
+      () => active && setLoaded(null)
+    );
+    return () => { active = false; };
+  }, [listed?.id, songId, songs]);
+
+  return listed || (sameId(loaded?.id, songId) ? loaded : null);
+}
+
+function useKaraokeResult(song) {
+  const [state, setState] = useState({ result: null, loading: false, error: null });
+  const { id, status, updated_at: updatedAt } = song || {};
+
+  useEffect(() => {
+    if (!id || status !== "done") {
+      setState({ result: null, loading: false, error: null });
+      return;
+    }
+    let active = true;
+    setState({ result: null, loading: true, error: null });
+    api.getResult(id).then(
+      (result) => active && setState({ result, loading: false, error: null }),
+      (error) => active && setState({ result: null, loading: false, error })
+    );
+    return () => { active = false; };
+  }, [id, status, updatedAt]);
+
+  return state;
+}
+
 
 export default function Karaoke({ onOpenAppSettings }) {
-  const onlineRoom = useOnlineRoom();
-  const { room: onlineRoomState, syncUi: syncRoomUi } = onlineRoom;
-  const onlineParticipantCount = onlineRoom.participants.length;
-  const {
-    isPlaying: isRadioPlaying,
-    setRecordingActive,
-    toggle: toggleRadio,
-    turnOff: turnOffRadio,
-    turnOn: turnOnRadio
-  } = useRadio();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { state = {} } = useLocation();
   const { data: songs, error: songsError } = usePolling(
     api.listSongs,
     POLLING_INTERVALS.settings,
     [],
     { queryKey: queryKeys.songs }
   );
-  const songId = location.state?.songId || null;
-  const song = songId
-    ? (songs || []).find((s) => s.id === songId)
-    : (songs || []).find((s) => s.status === "done");
-  const { result, loading: resultLoading, error: resultError } = useKaraokeResult(song);
-  const instrumentalRef = useRef(null);
-  const vocalsRef = useRef(null);
-  const videoRef = useRef(null);
-  const youTubeClipRef = useRef(null);
-  const containerRef = useRef(null);
-  const playback = usePlaybackMachine();
-  const { isPlaying } = playback;
-  const resetPlayback = playback.reset;
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const karaokePreferences = useKaraokePreferences();
-  const {
-    musicVolume,
-    setMusicVolume,
-    vocalVolume,
-    setVocalVolume,
-    melodyVolume,
-    setMelodyVolume,
-    speed,
-    setSpeed,
-    keyShift,
-    setKeyShift,
-    showLyrics,
-    setShowLyrics,
-    showNotes,
-    setShowNotes,
-    autoHideConsole,
-    setAutoHideConsole,
-    effectPreset,
-    setEffectPreset
-  } = karaokePreferences;
-  useKaraokeRoomPreferences({
-    participantCount: onlineParticipantCount,
-    preferences: karaokePreferences,
-    room: onlineRoomState,
-    roomUi: onlineRoom.roomUi,
-    syncUi: syncRoomUi
-  });
-  const [recordingSessionId, setRecordingSessionId] = useState(null);
-  const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
-  const analysisRecordingIdRef = useRef(null);
-  const updateAnalysisRecordingId = useCallback((value) => {
-    if (typeof value === "function") {
-      setAnalysisRecordingId((previous) => {
-        const next = value(previous);
-        analysisRecordingIdRef.current = next;
-        return next;
-      });
-      return;
-    }
-    analysisRecordingIdRef.current = value;
-    setAnalysisRecordingId(value);
-  }, []);
-  const [recordingError, setRecordingError] = useState(null);
-  useEffect(() => {
-    // A paused recording session must not block the background radio. Only
-    // suspend radio output while karaoke playback is actually running.
-    setRecordingActive(Boolean(recordingSessionId) && isPlaying);
-    return () => setRecordingActive(false);
-  }, [isPlaying, recordingSessionId, setRecordingActive]);
-  const autoStartRequested = Boolean(location.state?.autoPlay);
-  const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
-    autoHideEnabled: autoHideConsole
-  });
-  const currentTimeRef = useRef(currentTime);
-  const durationRef = useRef(duration);
-  const playbackEndedRef = useRef(null);
-  currentTimeRef.current = currentTime;
-  durationRef.current = duration;
-  const { data: directOutputDevices } = usePolling(
-    () => api.listAudioOutputDevices(),
-    POLLING_INTERVALS.devices,
-    [],
-    { queryKey: ["audio-output-devices"] }
-  );
-  const { data: audioSettings } = usePolling(
-    () => api.getAudioSettings(),
-    POLLING_INTERVALS.devices,
-    [],
-    { queryKey: queryKeys.audioSettings }
-  );
-  const { data: signal } = usePolling(
-    () => api.getSignalQuality(),
-    POLLING_INTERVALS.karaokeSignal,
-    [],
-    { queryKey: ["signal-quality"] }
-  );
-  const microphoneLevel = getMicrophoneLevel(signal);
-  const microphoneSettings = useMicrophoneSettings({ audioSettings, onError: setRecordingError });
-  const { microphoneVolume, setMicrophoneVolume, microphoneEffects, setMicrophoneEffects } =
-    microphoneSettings;
-  useEffect(() => {
-    if (!onlineRoomState) return;
-    syncRoomUi({ participantEffects: microphoneEffects });
-  }, [microphoneEffects, onlineParticipantCount, onlineRoomState, syncRoomUi]);
-  const {
-    audioDriver,
-    directOutputDeviceId,
-    setDirectOutputDeviceId,
-    monitoringEnabled,
-    setMonitoringEnabled,
-    monitorInputDeviceId
-  } = microphoneSettings;
-  const { updateMicrophone } = microphoneSettings;
-  useAudioOutputRouting({
-    audioDriver,
-    audioSettings,
-    directOutputDeviceId,
-    directOutputDevices,
-    instrumentalRef,
-    setDirectOutputDeviceId,
-    updateMicrophone,
-    videoRef,
-    vocalsRef
-  });
-  useEffect(() => {
-    resetPlayback();
-    setCurrentTime(0);
-    setDuration(0);
-  }, [resetPlayback, song?.id]);
+  const songId = state.songId ?? null;
+  const song = useRoutedSong(songs, songId);
+  const resultState = useKaraokeResult(song);
 
-  const lyricsSync = result?.lyrics_sync;
-  const notes = useMemo(() => flattenLyricsNotes(lyricsSync), [lyricsSync]);
-  const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } = useMelodyGuide({
-    notes,
-    volume: melodyVolume,
-    keyShift,
-    currentTimeRef
-  });
-  const youTubeVideoId = getYouTubeVideoId(song?.video_url);
-
-  const lyricTime = currentTime;
-  const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
-    currentTimeRef,
-    instrumentalRef,
-    isPlaying,
-    keyShift,
-    melodyVolume,
-    musicVolume,
-    onPlaybackEndedRef: playbackEndedRef,
-    setCurrentTime,
-    setDuration,
-    setIsPlaying: playback.setPlaying,
-    silenceMelodyGuide,
-    songId: song?.id,
-    speed,
-    startMelodyGuide,
-    updateMelodyGuide,
-    videoRef,
-    vocalVolume,
-    vocalsRef,
-    youTubeClipRef
-  });
-  const { sungMidi, isPitchDetected } = usePitchDetection({
-    isPlaying,
-    monitorInputDeviceId,
-    monitoringEnabled
-  });
-  const { returnToLibrary, seekTo, skip, stop, togglePlay } = useKaraokeTransport({
-    currentTime,
-    duration,
-    durationRef,
-    instrumentalRef,
-    isPlaying,
-    microphoneEffects,
-    microphoneVolume,
-    musicVolume,
-    navigate,
-    onlineRoom,
-    recordingSessionId,
-    sendYouTubeCommand,
-    setAnalysisRecordingId: updateAnalysisRecordingId,
-    setCurrentTime,
-    setIsPlaying: playback.setPlaying,
-    playback,
-    setRecordingError,
-    setRecordingSessionId,
-    silenceMelodyGuide,
-    song,
-    startMelodyGuide,
-    syncSecondaryMedia,
-    videoRef,
-    vocalVolume,
-    vocalsRef
-  });
-  const {
-    handleStop,
-    handleTogglePlay,
-    navigateToLibraryFromBlackout,
-    revealStageActions,
-    sceneBlackout,
-    sceneIntroVisible,
-    sceneTransitioning,
-    stageActionsVisible
-  } = useKaraokeSceneFlow({
-    analysisRecordingIdRef,
-    autoStartRequested,
-    hideControls,
-    instrumentalRef,
-    isPlaying,
-    isRadioPlaying,
-    navigate,
-    setRecordingActive,
-    showControls,
-    songId: song?.id,
-    stop,
-    togglePlay,
-    turnOffRadio,
-    turnOnRadio,
-    vocalsRef
-  });
-  playbackEndedRef.current = handleStop;
-  useKaraokeHotkeys({
-    scopeRef: containerRef,
-    currentTime,
-    duration,
-    onTogglePlay: handleTogglePlay,
-    onSeek: seekTo,
-    onStop: handleStop
-  });
-  useKaraokeStageLayout(containerRef);
-  const isBlocked =
-    Boolean(songsError) ||
+  if (
+    songsError ||
     !songs ||
     !song ||
     song.status !== "done" ||
-    resultLoading ||
-    Boolean(resultError) ||
-    !result;
-  if (isBlocked) {
+    resultState.loading ||
+    resultState.error ||
+    !resultState.result
+  ) {
     return (
       <KaraokeLoadState
         songs={songs}
         songsError={songsError}
         song={song}
         songId={songId}
-        result={result}
-        resultLoading={resultLoading}
-        resultError={resultError}
+        result={resultState.result}
+        resultLoading={resultState.loading}
+        resultError={resultState.error}
       />
     );
   }
-  const rawBaseTempo = Number(lyricsSync?.bpm);
-  const baseTempo = rawBaseTempo;
-  const currentTempo = Math.max(1, Math.round(baseTempo * speed));
-  const compactKey = formatCompactKey(transposeKey(lyricsSync.key, keyShift));
-  const changeTempo = (delta) => {
-    const nextTempo = Math.max(1, currentTempo + delta);
-    setSpeed(Math.max(0.5, Math.min(1.5, nextTempo / baseTempo)));
-  };
-  const applyEffectPreset = (preset) => {
-    setEffectPreset(preset.id);
-    setMicrophoneEffects((effects) => ({
-      ...effects,
-      reverb: preset.reverb,
-      echo: preset.echo,
-      delay: preset.delay
-    }));
-    updateMicrophone({ reverb: preset.reverb, echo: preset.echo, delay: preset.delay });
-  };
-  const handleAnalysisClose = () => {
-    updateAnalysisRecordingId(null);
-    navigateToLibraryFromBlackout();
-  };
-  const handleEffectChange = (key, value) => {
-    setEffectPreset("custom");
-    setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
-    updateMicrophone({ [key]: value });
-  };
-  const handleMonitoringChange = async (enabled) => {
-    try {
-      if (onlineRoomState) {
-        const active = await onlineRoom.setLocalMonitoring(enabled);
-        setMonitoringEnabled(enabled ? active : false);
-        return;
-      }
-      const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
-      const updated = await action();
-      setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
-      globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
-    } catch (error) {
-      setRecordingError(
-        translateSaved("Не удалось изменить прослушивание микрофона: {0}", {
-          0: getErrorMessage(error)
-        })
-      );
-    }
-  };
+
   return (
-    <KaraokeView
-      containerRef={containerRef}
-      isPlaying={isPlaying}
-      controlsVisible={controlsVisible && !sceneTransitioning}
-      onMouseMove={(event) => {
-        if (sceneTransitioning) return;
-        if (!revealControls(event)) return;
-        revealStageActions();
-      }}
-      mediaProps={{
-        instrumentalRef,
-        isPlaying,
-        musicVolume,
-        sendYouTubeCommand,
-        song,
-        speed,
-        syncSecondaryMedia,
-        videoRef,
-        vocalVolume,
-        vocalsRef,
-        youTubeClipRef,
-        youTubeVideoId
-      }}
-      recordingError={recordingError}
-      analysisRecordingId={analysisRecordingId}
-      onAnalysisClose={handleAnalysisClose}
-      stageActionProps={{
-        controlsVisible,
-        hideControls,
-        isPlaying,
-        isRadioPlaying,
-        returnToLibrary,
-        sceneTransitioning,
-        showControls,
-        stageActionsVisible,
-        toggleRadio
-      }}
-      performanceProps={{
-        currentTime: lyricTime,
-        currentTimeRef,
-        isPitchDetected,
-        isPlaying,
-        keyShift,
-        lyricsSync,
-        notes,
-        sceneBlackout,
-        sceneIntroVisible,
-        sceneIntro: {
-          title: song.title,
-          artist: song.artist,
-          genre: song.genre,
-          key: compactKey,
-          tempo: currentTempo,
-          difficulty: song.difficulty_override
-        },
-        songId: song.id,
-        showLyrics,
-        showNotes,
-        sungMidi
-      }}
-      consoleProps={{
-        song,
-        currentTime,
-        duration,
-        microphoneLevel,
-        volumes: {
-          microphone: microphoneVolume,
-          music: musicVolume,
-          vocal: vocalVolume,
-          melody: melodyVolume
-        },
-        onVolumeChange: {
-          microphone: setMicrophoneVolume,
-          music: setMusicVolume,
-          vocal: setVocalVolume,
-          melody: setMelodyVolume
-        },
-        onMicrophoneCommit: (value) => updateMicrophone({ volume: value }),
-        microphoneEffects,
-        onEffectChange: handleEffectChange,
-        isPlaying,
-        onSkip: skip,
-        onTogglePlay: handleTogglePlay,
-        onStop: handleStop,
-        currentTempo,
-        onTempoChange: changeTempo,
-        compactKey,
-        keyShift,
-        onKeyShiftChange: setKeyShift,
-        showNotes,
-        onToggleNotes: () => setShowNotes(!showNotes),
-        showLyrics,
-        onToggleLyrics: () => setShowLyrics(!showLyrics),
-        onOpenAppSettings,
-        autoHideEnabled: autoHideConsole,
-        onAutoHideChange: setAutoHideConsole,
-        onClose: hideControls,
-        effectPreset,
-        onApplyEffectPreset: applyEffectPreset,
-        monitoringEnabled,
-        onMonitoringChange: handleMonitoringChange,
-        onSeek: seekTo
-      }}
+    <KaraokeSession
+      key={String(song.id)}
+      song={song}
+      lyricsSync={resultState.result.lyrics_sync}
+      autoStartRequested={Boolean(state.autoPlay)}
+      roomPrepared={Boolean(state.roomPrepared)}
+      onOpenAppSettings={onOpenAppSettings}
     />
   );
 }

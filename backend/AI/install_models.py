@@ -13,6 +13,13 @@ from .model_registry import MODELS, ModelSpec, model_path
 
 logger = logging.getLogger(__name__)
 
+# The installer already downloads the files of one Hugging Face snapshot in
+# parallel. Starting several hf-xet snapshots on top of that creates nested
+# connection pools which can get stuck in CLOSE_WAIT on Windows. Prefer the
+# regular resumable HTTP downloader here; it remains parallel per snapshot and
+# has reliable request timeouts/retries.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 
 def _hash(path: Path) -> str:
     digest = hashlib.sha256()
@@ -20,6 +27,30 @@ def _hash(path: Path) -> str:
         while chunk := stream.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+# is_valid() runs at the start of every song-processing job (via
+# ensure_ready_sync), and for a large checkpoint (e.g. the ~900MB
+# MelBandRoformer) that meant re-reading and re-hashing the entire file from
+# disk on every single request even though it never changes between runs.
+# Caching the digest against the file's (size, mtime) means it's only
+# recomputed when the file has actually been replaced -- by a repair/
+# re-download, which changes its mtime.
+_hash_cache: dict[Path, tuple[int, int, str]] = {}
+_hash_cache_lock = threading.Lock()
+
+
+def _cached_hash(path: Path) -> str:
+    stat = path.stat()
+    key = (stat.st_size, stat.st_mtime_ns)
+    with _hash_cache_lock:
+        cached = _hash_cache.get(path)
+        if cached is not None and cached[:2] == key:
+            return cached[2]
+    digest = _hash(path)
+    with _hash_cache_lock:
+        _hash_cache[path] = (*key, digest)
+    return digest
 
 
 def _size(path: Path) -> int:
@@ -39,9 +70,19 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
         return (
             path.is_file()
             and path.stat().st_size >= max(1, model.expected_bytes // 2)
-            and (not model.sha256 or _hash(path) == model.sha256)
+            and (not model.sha256 or _cached_hash(path) == model.sha256)
         )
-    return path.is_dir() and (path / "config.json").is_file()
+    if not path.is_dir() or not (path / "config.json").is_file():
+        return False
+    # snapshot_download writes config files before the multi-gigabyte weights.
+    # A cancelled install must not therefore make a partial snapshot look ready.
+    if any(path.rglob("*.incomplete")):
+        return False
+    if model.filename and model.sha256:
+        weights = path / model.filename
+        if not weights.is_file() or _cached_hash(weights) != model.sha256:
+            return False
+    return _size(path) >= max(1, model.expected_bytes // 2)
 
 
 class ProgressReporter:
@@ -234,6 +275,7 @@ def install_one(
                     local_dir=target,
                     cache_dir=cache_dir,
                     ignore_patterns=model.ignore_patterns,
+                    max_workers=8,
                 )
 
             if not is_valid(models_root, model):
@@ -311,6 +353,53 @@ def _install_models(
             future.result()
 
 
+def _write_environment(
+    downloads: Path,
+    models_root: Path,
+    msst: Path,
+    environment_file: Path,
+) -> None:
+    values: dict[str, str | Path] = {
+        "HF_HOME": downloads / "cache" / "huggingface",
+        "HF_HUB_CACHE": downloads / "cache" / "huggingface" / "hub",
+        "KARAOKE_AI_ALLOW_FALLBACK": "false",
+        "KARAOKE_AI_REQUIRE_CTC": "0",
+        "MSST_ENGINE_DIR": msst,
+        "MSST_CONFIG": (
+            msst
+            / "configs"
+            / "KimberleyJensen"
+            / "config_vocals_mel_band_roformer_kj.yaml"
+        ),
+    }
+    for model in MODELS:
+        values[model.env_var] = model_path(models_root, model)
+
+    fcpe_onnx = models_root / "optimized" / "fcpe" / "fcpe-core.onnx"
+    if fcpe_onnx.is_file():
+        values["KARAOKE_AI_FCPE_ONNX"] = fcpe_onnx
+    directml_runtime = downloads / "runtimes" / "onnxruntime-directml"
+    if (directml_runtime / "onnxruntime").is_dir():
+        values["KARAOKE_AI_ORT_DIRECTML_PATH"] = directml_runtime
+
+    environment_file.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["@echo off", *(f'set "{name}={value}"' for name, value in values.items())]
+    environment_file.write_bytes(("\r\n".join(lines) + "\r\n").encode("utf-8"))
+
+
+def _write_requested_environment(args, models_root: Path) -> None:
+    if not args.env:
+        return
+    if not args.downloads or not args.msst:
+        raise ValueError("--env requires both --downloads and --msst")
+    _write_environment(
+        args.downloads.resolve(),
+        models_root,
+        args.msst.resolve(),
+        args.env.resolve(),
+    )
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Install or verify A&D Voice AI models")
     parser.add_argument(
@@ -352,6 +441,8 @@ def main(argv=None) -> int:
     if args.check or args.quick_check:
         ready = verify_all(models_root)
         logger.info("AI model verification: %s", "ready" if ready else "missing")
+        if ready:
+            _write_requested_environment(args, models_root)
         return 0 if ready else 1
 
     reporter = ProgressReporter(models_root, args.progress_file)
@@ -366,6 +457,7 @@ def main(argv=None) -> int:
         )
         if not verify_all(models_root):
             raise RuntimeError("AI model verification failed after installation")
+        _write_requested_environment(args, models_root)
         reporter.finish(True)
         logger.info("All AI models are ready in %s", models_root)
         return 0

@@ -6,12 +6,16 @@ import { notCalled, calledWith, verify } from "./helpers/assertions.mjs";
 import { mockUseI18nWithValues } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   roomValue: null,
+  speakingValue: null,
   radioValue: null,
   copyText: vi.fn(),
   pending: false,
   run: vi.fn()
 }));
-vi.mock("../src/contexts/OnlineRoomContext", () => ({ useOnlineRoom: () => mocks.roomValue }));
+vi.mock("../src/contexts/OnlineRoomContext", () => ({
+  useOnlineRoom: () => mocks.roomValue,
+  useOnlineRoomSpeaking: () => mocks.speakingValue
+}));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => mocks.radioValue }));
 vi.mock("../src/utils/clipboard", () => ({ copyText: mocks.copyText }));
 vi.mock("../src/hooks/useExclusiveAsyncAction", () => ({
@@ -32,8 +36,6 @@ const roomValue = (overrides = {}) => ({
     { id: "self", name: "Alice", role: "host", micMuted: false },
     { id: "guest", name: "Bob", role: "guest", micMuted: false }
   ],
-  localSpeakingLevel: 0.7,
-  speakingLevels: { guest: 0.5 },
   microphoneMuted: false,
   roomSoundMuted: false,
   mutedPeople: new Set(),
@@ -53,6 +55,7 @@ const roomValue = (overrides = {}) => ({
 });
 beforeEach(() => {
   mocks.roomValue = roomValue();
+  mocks.speakingValue = { localSpeakingLevel: 0.7, speakingLevels: { guest: 0.5 } };
   mocks.radioValue = {
     isPlaying: false,
     stationId: "one",
@@ -76,6 +79,7 @@ afterEach(() => {
 });
 describe("online room participants", () => {
   test("renders self controls, voice level and leave action", () => {
+    const interval = vi.spyOn(globalThis, "setInterval");
     const props = {
       person: mocks.roomValue.participants[0],
       room: mocks.roomValue.room,
@@ -88,22 +92,30 @@ describe("online room participants", () => {
       onLeave: vi.fn(),
       onSetMicrophoneMuted: vi.fn(),
       onSetRoomSoundMuted: vi.fn(),
+      onSetEffectsLocked: vi.fn(),
       onTogglePersonMuted: vi.fn(),
       onTogglePersonEffects: vi.fn()
     };
     const view = render(<OnlineRoomParticipant {...props} />);
-    verify([document.querySelectorAll("[data-active]"), "toHaveLength", 3]);
+    const meter = screen.getByRole("meter", { name: /room.person.speaking/ });
+    expect(meter.getAttribute("aria-valuenow")).toBe("70");
+    expect(meter.querySelector("path")).not.toBeNull();
+    expect(meter.querySelector("rect")).toBeNull();
+    expect(interval).toHaveBeenCalledWith(expect.any(Function), 28);
     fireEvent.click(screen.getByLabelText("room.microphone.disable"));
     fireEvent.click(screen.getByLabelText("room.sound.disable"));
+    fireEvent.click(screen.getByLabelText("room.effects.deny"));
     fireEvent.click(screen.getByLabelText("room.leave"));
     calledWith([props.onSetMicrophoneMuted, [true]], [props.onSetRoomSoundMuted, [true]]);
     expect(props.onLeave).toHaveBeenCalledOnce();
+    expect(props.onSetEffectsLocked).toHaveBeenCalledWith(true);
     view.rerender(<OnlineRoomParticipant {...props} microphoneMuted roomSoundMuted />);
     verify([screen.getByLabelText("room.microphone.enable"), "not.toBeNull"], [screen.getByLabelText("room.sound.enable"), "not.toBeNull"]);
   });
   test("renders remote mute and effects controls", () => {
     const toggleMuted = vi.fn();
     const toggleEffects = vi.fn();
+    const setEffects = vi.fn();
     render(
       <OnlineRoomParticipant
         person={{ id: "guest", name: "Bob", role: "guest", micMuted: true }}
@@ -114,13 +126,25 @@ describe("online room participants", () => {
         roomSoundMuted={false}
         isLocallyMuted
         effectsEnabled
+        effectSettings={{ volume: 1.2, reverb: 0.2, echo: 0.3, delay: 0.4, noise_suppression: 0.5, octave: 0 }}
+        onSetParticipantEffects={setEffects}
         onTogglePersonMuted={toggleMuted}
         onTogglePersonEffects={toggleEffects}
       />
     );
     fireEvent.click(screen.getByLabelText(/room.person.effects.disable/));
+    fireEvent.mouseEnter(screen.getByLabelText(/room.person.effects.disable/).parentElement);
+    expect(document.querySelectorAll(".karaoke-effect-dial")).toHaveLength(6);
+    const reverb = screen.getByRole("slider", { name: "karaoke.reverb" });
+    fireEvent.change(reverb, { target: { value: "0.7" } });
+    fireEvent.pointerUp(reverb);
+    const octave = screen.getByRole("slider", { name: "karaoke.voiceOctave" });
+    fireEvent.change(octave, { target: { value: "0.5" } });
+    fireEvent.pointerUp(octave);
     fireEvent.click(screen.getByLabelText(/room.person.enable/));
     calledWith([toggleEffects, ["guest"]], [toggleMuted, ["guest"]]);
+    expect(setEffects).toHaveBeenCalledWith("guest", expect.objectContaining({ reverb: 0.7 }));
+    expect(setEffects).toHaveBeenCalledWith("guest", expect.objectContaining({ octave: 0.5 }));
     expect(document.querySelector("[data-speaking]")).toBeNull();
   });
 });
@@ -185,6 +209,36 @@ describe("online room dock", () => {
       [screen.getByText(/room.transfer.unknownError/), "not.toBeNull"]
     );
   });
+  test("warns a guest when no participant currently holds the host role", () => {
+    // TASK 5.1: the host disconnecting isn't announced by a dedicated message —
+    // it's derived from the participants list no longer containing a host, so
+    // this must react purely to that list (works for both "host left" and,
+    // later, "host reconnected").
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: false },
+      participants: [{ id: "guest", name: "Bob", role: "guest", micMuted: false }]
+    });
+    const view = render(<OnlineRoomDock />);
+    expect(screen.getByText("room.hostLeft")).not.toBeNull();
+
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: false },
+      participants: [
+        { id: "guest", name: "Bob", role: "guest", micMuted: false },
+        { id: "host", name: "Alice", role: "host", micMuted: false }
+      ]
+    });
+    view.rerender(<OnlineRoomDock />);
+    expect(screen.queryByText("room.hostLeft")).toBeNull();
+  });
+  test("never warns the host themself even while alone in the room", () => {
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: true },
+      participants: [{ id: "self", name: "Alice", role: "host", micMuted: false }]
+    });
+    render(<OnlineRoomDock />);
+    expect(screen.queryByText("room.hostLeft")).toBeNull();
+  });
 });
 describe("online room modal", () => {
   test("creates a room and closes on success", async () => {
@@ -200,7 +254,7 @@ describe("online room modal", () => {
     fireEvent.click(screen.getByText("room.joinByCode"));
     const input = screen.getByLabelText("room.code");
     fireEvent.change(input, { target: { value: " ab-cd " } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.submit(input.closest("form"));
     await act(async () => Promise.resolve());
     expect(mocks.roomValue.joinRoom).toHaveBeenCalledWith("AB-CD", "Bob");
     fireEvent.click(screen.getByText("room.back"));
@@ -261,6 +315,7 @@ describe("online room modal", () => {
     const create = screen.getByText("room.create");
     fireEvent.click(create);
     fireEvent.click(create);
+    await act(async () => Promise.resolve());
     expect(mocks.roomValue.createRoom).toHaveBeenCalledTimes(1);
     release();
     await act(async () => Promise.resolve());
@@ -276,14 +331,14 @@ describe("room radio synchronization", () => {
     render(<RoomRadioSync />);
     verify(
       [mocks.roomValue.syncUi, "not.toHaveBeenCalled"],
-      [mocks.radioValue.setStation, "toHaveBeenCalledWith", "two"],
+      [mocks.radioValue.setStation, "toHaveBeenCalledWith", "two", { resume: true }],
       [mocks.radioValue.turnOn, "toHaveBeenCalled"]
     );
   });
   test("applies remote station playback and stop", async () => {
     mocks.roomValue.roomUi = { __eventId: 1, radio: { stationId: "two", isPlaying: true } };
     const view = render(<RoomRadioSync />);
-    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two");
+    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two", { resume: true });
     verify([mocks.radioValue.turnOn, "toHaveBeenCalledWith", expect.objectContaining({ remember: false, fadeIn: true })]);
     await act(async () => Promise.resolve());
     mocks.radioValue = { ...mocks.radioValue, stationId: "two", isPlaying: true };
@@ -311,7 +366,7 @@ describe("room radio synchronization", () => {
       roomUi: { __eventId: 4, radio: { stationId: "two", isPlaying: false } }
     });
     view.rerender(<RoomRadioSync />);
-    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two");
+    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two", { resume: false });
     mocks.roomValue = roomValue({ roomUi: { __eventId: 5, radio: { isPlaying: true } } });
     view.rerender(<RoomRadioSync />);
     expect(mocks.radioValue.turnOn).toHaveBeenCalled();

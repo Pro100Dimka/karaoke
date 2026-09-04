@@ -6,6 +6,14 @@ class EngineUnavailableError(AICoreError):
     pass
 
 
+class AlignmentTimeoutError(EngineUnavailableError):
+    """The killable forced-alignment worker exceeded its hard deadline."""
+
+
+class AcceleratorUnavailableError(AICoreError):
+    """A typed accelerator failure that may be retried on CPU."""
+
+
 class InvalidArtifactError(AICoreError):
     pass
 

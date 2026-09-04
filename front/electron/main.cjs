@@ -7,10 +7,9 @@
 //     программы и его остановку при закрытии — пользователь просто
 //     запускает "A&D Voice", ему не нужно отдельно поднимать backend;
 //  3) IPC-мостик для управления окном и открытия папки песни в проводнике.
-const { spawn } = require("child_process");
-const crypto = require("crypto");
+
 const fs = require("fs");
-const http = require("http");
+
 const path = require("path");
 const { pathToFileURL } = require("url");
 const {
@@ -21,32 +20,43 @@ const {
   ipcMain,
   net,
   protocol,
+  screen,
   session,
   shell
 } = require("electron");
 
-const { chooseRuntimeBackendEndpoint } = require("./backend-endpoint.cjs");
 const { installBackendFileAuthentication } = require("./backend-media-auth.cjs");
+const { createBackendProcess } = require("./backend-process.cjs");
 const {
-  BACKEND_HOST,
-  BACKEND_PORT,
-  BACKEND_REQUEST_TIMEOUT_MS,
-  BACKEND_RESTART_BASE_DELAY_MS,
-  BACKEND_RESTART_MAX_DELAY_MS,
-  BACKEND_STOP_GRACE_MS,
-  BACKEND_URL,
-  DEV_RENDERER_ORIGIN
-} = require("./runtime-config.cjs");
+  LightingController,
+  loadWindows,
+  installLightingShutdown
+} = require("./rgb/controller.cjs");
+const { DEV_RENDERER_ORIGIN } = require("./runtime-config.cjs");
 const {
   getPackagedRendererUrl,
   isAllowedPermissionRequest,
   isAllowedRendererUrl,
+  isTrustedIpcEvent,
   registerTrustedIpc
 } = require("./security.cjs");
 const { findMatchingSongFolder } = require("./song-folders.cjs");
+const { readThemeBackgrounds } = require("./theme-backgrounds.cjs");
+const { createThemeIcons } = require("./theme-icons.cjs");
+const { clampWindowBounds, readWindowState, writeWindowState } = require("./window-state.cjs");
+
+// On hybrid-graphics laptops Chromium's GPU process otherwise defaults to
+// the power-saving integrated GPU; this asks the driver for the discrete one
+// (matters for the WebGL karaoke stage rendered with three.js/pixi.js).
+app.commandLine.appendSwitch("force_high_performance_gpu");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+// Chromium otherwise chooses a conservative Windows render buffer on many
+// consumer USB headsets. 128 frames is one Web Audio render quantum (about
+// 2.7 ms at 48 kHz) and keeps the room path interactive without relying on a
+// professional ASIO device.
+app.commandLine.appendSwitch("audio-buffer-size", "128");
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "karaoke-media",
@@ -65,6 +75,7 @@ const INSTALL_TEMP_DIR = path.join(INSTALL_DATA_ROOT, "temp");
 const INSTALL_LOG_DIR = path.join(INSTALL_DATA_ROOT, "logs");
 const INSTALL_SESSION_DIR = path.join(ELECTRON_PROFILE_DIR, "session");
 const INSTALL_CRASH_DIR = path.join(INSTALL_DATA_ROOT, "crash-dumps");
+const WINDOW_STATE_PATH = path.join(ELECTRON_PROFILE_DIR, "window-state.json");
 
 // Keep every writable runtime artefact next to the installed application.
 // This includes Chromium profile/session data, crash dumps and process temp files.
@@ -86,53 +97,58 @@ process.env.TEMP = INSTALL_TEMP_DIR;
 process.env.TMP = INSTALL_TEMP_DIR;
 process.env.TMPDIR = INSTALL_TEMP_DIR;
 
+// A small, separate file (not application.log, which the backend owns and
+// rotates) recording cold/warm launch timings: how long each stage of
+// startup took, one line per milestone, so a slow launch can be narrowed
+// down without guessing. Kept tiny -- only ever appended, one line per
+// milestone per run -- so it doesn't need rotation of its own.
+const STARTUP_TIMELINE_PATH = path.join(INSTALL_LOG_DIR, "startup-timeline.log");
+const startupBeganAt = Date.now();
+const recordedStartupMilestones = new Set();
+function recordStartupMilestone(name) {
+  if (recordedStartupMilestones.has(name)) return;
+  recordedStartupMilestones.add(name);
+  const elapsedMs = Date.now() - startupBeganAt;
+  try {
+    fs.appendFileSync(
+      STARTUP_TIMELINE_PATH,
+      `${new Date().toISOString()} +${elapsedMs}ms ${name}\n`
+    );
+  } catch {
+    // Best-effort diagnostics; must never break startup itself.
+  }
+}
+recordStartupMilestone("electron-process-start");
+
 let mainWindow = null;
-let backendProcess = null;
 let isQuitting = false;
-let backendRestartTimer = null;
-let backendStopRequested = false;
-let backendRestartAttempts = 0;
-let backendStableTimer = null;
-let backendDuplicateWatchTimer = null;
-let backendDuplicateDetected = false;
-let backendDuplicateWatchGeneration = 0;
-const BACKEND_STABLE_RESET_MS = 30_000;
-const BACKEND_DUPLICATE_WATCH_MS = 5_000;
-const BACKEND_API_TOKEN =
-  process.env.SONGAPP_API_TOKEN || crypto.randomBytes(32).toString("base64url");
-let runtimeBackendUrl = BACKEND_URL;
-let runtimeBackendHost = BACKEND_HOST;
-let runtimeBackendPort = BACKEND_PORT;
-
-async function configureRuntimeBackendEndpoint() {
-  const endpoint = await chooseRuntimeBackendEndpoint({
-    isDev,
-    explicitUrl: process.env.KARAOKE_BACKEND_URL,
-    defaultUrl: BACKEND_URL
-  });
-  runtimeBackendUrl = endpoint.url;
-  runtimeBackendHost = endpoint.host;
-  runtimeBackendPort = endpoint.port;
+let pendingVisibleBounds = null;
+// A second launch during the async window between app.whenReady() and the
+// window actually being shown (port negotiation, session/permission setup)
+// used to just drop the "focus me" signal on the floor -- neither
+// mainWindow.focus() (no window yet) nor a later re-check ever ran. Recorded
+// here and applied once the window is actually revealed.
+let pendingSecondInstanceFocus = false;
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+    pendingSecondInstanceFocus = true;
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
 }
-
-function packagedBackendDataDir() {
-  return isDev ? null : path.join(INSTALL_DATA_ROOT, "backend");
-}
-
-function resolvePackagedBackendDataDir() {
-  return packagedBackendDataDir();
-}
-
-function resolveBackendDir() {
-  // В dev-режиме backend лежит рядом с проектом (../backend при обычной
-  // раскладке репозитория). В собранном приложении ожидаем, что backend
-  // упакован рядом с ресурсами — см. README.md о сборке инсталлятора:
-  // это то место, которое нужно донастроить под конкретный способ
-  // распространения (PyInstaller-бинарник backend'а и т.п.).
-  if (isDev) return path.resolve(__dirname, "..", "..", "backend");
-  return path.join(process.resourcesPath, "backend");
-}
-
+let windowStateTimer = null;
+const backend = createBackendProcess({
+  isDev,
+  INSTALL_DATA_ROOT,
+  INSTALL_ROOT,
+  INSTALL_LOG_DIR,
+  IS_WINDOWS,
+  isQuitting: () => isQuitting,
+  recordStartupMilestone
+});
+const { configureRuntimeBackendEndpoint, resolveSongOutputDir, startBackend, stopBackend } =
+  backend;
 function resolveSceneVideoPath() {
   return isDev
     ? path.resolve(__dirname, "..", "..", "downloads", "media", "videoplayback.webm")
@@ -154,370 +170,19 @@ function registerMediaProtocol() {
   });
 }
 
-function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    const request = http.get(
-      `${runtimeBackendUrl}${pathname}`,
-      { headers: { "X-ADVoice-Token": BACKEND_API_TOKEN } },
-      (response) => {
-        let body = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          if (body.length < 1024 * 1024) body += chunk;
-        });
-        response.on("end", () => {
-          if (response.statusCode < 200 || response.statusCode >= 300) {
-            reject(new Error(`Backend returned HTTP ${response.statusCode}`));
-            return;
-          }
-          try {
-            resolve(JSON.parse(body));
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }
-    );
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error("Backend request timed out"));
-    });
-    request.on("error", reject);
-  });
-}
-
-// Folds Electron main-process errors into the same application.log file the
-// Python backend and renderer already report to, instead of leaving them
-// only in this process's own stdout. Best-effort: the backend is not always
-// reachable when these fire (e.g. the backend itself failed to start), so
-// failures here are swallowed rather than compounding the original error.
-function reportBackendError(message, stack) {
-  try {
-    const body = JSON.stringify({ source: "electron-main", level: "error", message, stack });
-    const request = http.request(
-      `${runtimeBackendUrl}/diagnostics/client-log`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-ADVoice-Token": BACKEND_API_TOKEN,
-          "Content-Length": Buffer.byteLength(body)
-        },
-        timeout: 2000
-      },
-      (response) => response.resume()
-    );
-    request.on("error", () => {});
-    request.on("timeout", () => request.destroy());
-    request.end(body);
-  } catch {
-    // Never let error reporting itself throw.
-  }
-}
-
-async function resolveSongOutputDir() {
-  try {
-    const settings = await requestBackendJson("/settings");
-    const configuredPath = settings?.songs_folder;
-    if (typeof configuredPath === "string" && configuredPath.trim()) {
-      return path.resolve(configuredPath.trim());
-    }
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(
-      "Не удалось получить папку библиотеки от backend, используется путь по умолчанию:",
-      error?.message || error
-    );
-  }
-
-  if (isDev) return path.resolve(resolveBackendDir(), "..", "karaoke_songs");
-  return path.join(resolvePackagedBackendDataDir(), "karaoke_songs");
-}
-
 function isPathInside(parentPath, candidatePath) {
   const relativePath = path.relative(parentPath, candidatePath);
   return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
 }
 
-function scheduleBackendRestart() {
-  if (
-    isQuitting ||
-    backendStopRequested ||
-    backendDuplicateDetected ||
-    process.env.KARAOKE_BACKEND_EXTERNAL === "1"
-  ) {
-    return;
-  }
-
-  clearTimeout(backendRestartTimer);
-  const delay = Math.min(
-    BACKEND_RESTART_MAX_DELAY_MS,
-    BACKEND_RESTART_BASE_DELAY_MS * 2 ** Math.min(backendRestartAttempts, 5)
-  );
-  backendRestartAttempts += 1;
-  backendRestartTimer = setTimeout(startBackend, delay);
-}
-
-function watchDuplicateBackend() {
-  backendDuplicateDetected = true;
-  const generation = ++backendDuplicateWatchGeneration;
-  clearTimeout(backendDuplicateWatchTimer);
-  const active = () =>
-    generation === backendDuplicateWatchGeneration &&
-    !isQuitting &&
-    !backendStopRequested &&
-    backendDuplicateDetected;
-  const check = async () => {
-    if (!active()) return;
-    try {
-      await requestBackendJson("/settings", Math.min(BACKEND_REQUEST_TIMEOUT_MS, 3000));
-      if (active()) backendDuplicateWatchTimer = setTimeout(check, BACKEND_DUPLICATE_WATCH_MS);
-    } catch {
-      if (!active()) return;
-      backendDuplicateDetected = false;
-      backendDuplicateWatchTimer = null;
-      startBackend();
-    }
-  };
-  backendDuplicateWatchTimer = setTimeout(check, BACKEND_DUPLICATE_WATCH_MS);
-}
-
-function startBackend() {
-  if (
-    isQuitting ||
-    backendStopRequested ||
-    process.env.KARAOKE_BACKEND_EXTERNAL === "1" ||
-    (backendProcess && !backendProcess.killed)
-  ) {
-    return;
-  }
-  clearTimeout(backendRestartTimer);
-  backendRestartTimer = null;
-  backendStopRequested = false;
-  const backendDir = resolveBackendDir();
-  const backendCommand = isDev
-    ? process.env.KARAOKE_PYTHON || (IS_WINDOWS ? "python" : "python3")
-    : path.join(backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend");
-  const backendArgs = isDev ? ["run.py"] : [];
-  const backendDataDir = isDev ? null : resolvePackagedBackendDataDir();
-  const backendLogDir = isDev
-    ? path.resolve(__dirname, "..", "..", "generated", "logs")
-    : INSTALL_LOG_DIR;
-  const packagedModelsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "models");
-  const packagedCacheDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "cache");
-  const packagedDownloadsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "downloads");
-
-  try {
-    const childProcess = spawn(backendCommand, backendArgs, {
-      cwd: backendDir,
-      // run.py already writes backend, renderer and Electron diagnostics to
-      // application.log; redirecting the child created a duplicate log stream.
-      stdio: isDev ? "inherit" : "ignore",
-      windowsHide: true,
-      env: {
-        ...process.env,
-        ...(backendDataDir
-          ? {
-              SONGAPP_INSTALL_ROOT: INSTALL_ROOT,
-              SONGAPP_DATA_DIR: backendDataDir,
-              SONGAPP_MODELS_DIR: packagedModelsDir,
-              SONGAPP_CACHE_DIR: packagedCacheDir,
-              SONGAPP_DOWNLOADS_DIR: packagedDownloadsDir,
-              HF_HOME: path.join(packagedCacheDir, "huggingface"),
-              HF_HUB_CACHE: path.join(packagedCacheDir, "huggingface", "hub"),
-              TORCH_HOME: path.join(packagedCacheDir, "torch"),
-              NUMBA_CACHE_DIR: path.join(packagedCacheDir, "numba"),
-              MPLCONFIGDIR: path.join(packagedCacheDir, "matplotlib")
-            }
-          : {}),
-        SONGAPP_HOST: runtimeBackendHost,
-        SONGAPP_PORT: String(runtimeBackendPort),
-        SONGAPP_LOG_DIR: backendLogDir,
-        SONGAPP_API_TOKEN: BACKEND_API_TOKEN,
-        ...(isDev ? {} : { SONGAPP_CORS_ORIGINS: "null" }),
-        // Packaged ffmpeg.exe is placed next to KaraokeBackend.exe.
-        PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`
-      }
-    });
-    backendProcess = childProcess;
-    childProcess.once("spawn", () => {
-      clearTimeout(backendStableTimer);
-      backendStableTimer = setTimeout(() => {
-        if (backendProcess === childProcess) backendRestartAttempts = 0;
-      }, BACKEND_STABLE_RESET_MS);
-    });
-    childProcess.on("error", (err) => {
-      clearTimeout(backendStableTimer);
-      backendStableTimer = null;
-      console.error("Не удалось запустить backend:", err);
-      reportBackendError("Не удалось запустить backend", err?.stack || String(err));
-      if (backendProcess === childProcess) backendProcess = null;
-      scheduleBackendRestart();
-    });
-    childProcess.on("exit", (code, signal) => {
-      clearTimeout(backendStableTimer);
-      backendStableTimer = null;
-      if (backendProcess === childProcess) backendProcess = null;
-      if (code === 23) {
-        // Another healthy backend owns the port. Watch it instead of either
-        // restart-looping or disabling self-healing for the whole app lifetime.
-        watchDuplicateBackend();
-        return;
-      }
-      if (isQuitting || backendStopRequested || process.env.KARAOKE_BACKEND_EXTERNAL === "1") {
-        return;
-      }
-      const message = `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`;
-      console.error(message);
-      reportBackendError(message);
-      scheduleBackendRestart();
-    });
-  } catch (err) {
-    backendProcess = null;
-    console.error("Не удалось запустить backend:", err);
-    reportBackendError("Не удалось запустить backend", err?.stack || String(err));
-    scheduleBackendRestart();
-  }
-}
-
-function stopBackend() {
-  if (backendStopRequested) return;
-  backendStopRequested = true;
-  clearTimeout(backendRestartTimer);
-  clearTimeout(backendStableTimer);
-  clearTimeout(backendDuplicateWatchTimer);
-  backendStableTimer = null;
-  backendDuplicateWatchTimer = null;
-  backendDuplicateDetected = false;
-  backendDuplicateWatchGeneration += 1;
-
-  const terminateBackend = () => {
-    if (backendProcess && !backendProcess.killed) {
-      const { pid } = backendProcess;
-      backendProcess.kill();
-      if (IS_WINDOWS && pid) {
-        // PyInstaller/native workers can outlive a soft child kill; terminate
-        // the whole process tree on app shutdown.
-        spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
-      }
-      backendProcess = null;
-    }
-  };
-
-  // Release the native audio worker before terminating Python. On Windows a
-  // direct child-process kill can otherwise leave an isolated monitor holding
-  // the microphone for a short time after the application has closed.
-  let finished = false;
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    terminateBackend();
-  };
-  const request = http.request(`${runtimeBackendUrl}/audio/direct-monitor/stop`, {
-    method: "POST",
-    timeout: 450,
-    headers: { "X-ADVoice-Token": BACKEND_API_TOKEN }
-  });
-  request.on("response", (response) => {
-    response.resume();
-    response.once("end", finish);
-  });
-  request.on("error", finish);
-  request.on("timeout", () => {
-    request.destroy();
-    finish();
-  });
-  request.end();
-  setTimeout(finish, BACKEND_STOP_GRACE_MS);
-}
-const THEME_ICONS = {
-  app: "app.ico",
-  dark: "dark.ico",
-  light: "light.ico",
-  green: "green.ico",
-  violet: "violet.ico"
-};
-const THEME_NAMES = Object.keys(THEME_ICONS).filter((name) => name !== "app");
-
-function getStoredIconTheme() {
-  try {
-    const theme = fs
-      .readFileSync(path.join(app.getPath("userData"), "selected-theme.txt"), "utf8")
-      .trim();
-    return THEME_NAMES.includes(theme) ? theme : "dark";
-  } catch {
-    return "dark";
-  }
-}
-
-function storeIconTheme(theme) {
-  if (!THEME_NAMES.includes(theme)) return false;
-  try {
-    const userData = app.getPath("userData");
-    fs.mkdirSync(userData, { recursive: true });
-    fs.writeFileSync(path.join(userData, "selected-theme.txt"), theme, "utf8");
-    fs.copyFileSync(getThemeIcon(theme), path.join(userData, "selected-theme.ico"));
-    return true;
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("Could not persist themed application icon:", error);
-    return false;
-  }
-}
-
-function getThemeIcon(theme = "app") {
-  const icon = THEME_ICONS[theme] ?? THEME_ICONS.app;
-
-  return path.join(__dirname, "..", "assets", "icons", icon);
-}
-
-function getThemeShortcutIcon(theme) {
-  if (isDev) return getThemeIcon(theme);
-  const stored = path.join(app.getPath("userData"), "selected-theme.ico");
-  return fs.existsSync(stored) ? stored : getThemeIcon(theme);
-}
-
-function updateThemeShortcuts(iconPath) {
-  if (process.platform !== "win32" || isDev) return;
-  const shortcutName = "A&D Voice.lnk";
-  const candidates = [
-    path.join(app.getPath("desktop"), shortcutName),
-    path.join(
-      app.getPath("appData"),
-      "Microsoft",
-      "Windows",
-      "Start Menu",
-      "Programs",
-      shortcutName
-    ),
-    process.env.PUBLIC && path.join(process.env.PUBLIC, "Desktop", shortcutName),
-    process.env.ProgramData &&
-      path.join(
-        process.env.ProgramData,
-        "Microsoft",
-        "Windows",
-        "Start Menu",
-        "Programs",
-        shortcutName
-      )
-  ].filter(Boolean);
-
-  for (const shortcutPath of new Set(candidates)) {
-    if (!fs.existsSync(shortcutPath)) continue;
-    try {
-      const details = shell.readShortcutLink(shortcutPath);
-      shell.writeShortcutLink(shortcutPath, "replace", {
-        ...details,
-        icon: iconPath,
-        iconIndex: 0
-      });
-    } catch (error) {
-      // A system-wide shortcut may require elevation; the window icon still updates.
-      // eslint-disable-next-line no-console
-      console.error("Could not update themed shortcut icon:", shortcutPath, error);
-    }
-  }
-}
-
+const {
+  THEME_ICONS,
+  getStoredIconTheme,
+  storeIconTheme,
+  getThemeIcon,
+  getThemeShortcutIcon,
+  updateThemeShortcuts
+} = createThemeIcons({ app, shell, isDev });
 handleTrustedIpc("window:setIconTheme", (theme) => {
   if (!mainWindow || !THEME_ICONS[theme] || theme === "app") return false;
 
@@ -528,17 +193,82 @@ handleTrustedIpc("window:setIconTheme", (theme) => {
 
   return true;
 });
+
+const displayWorkAreas = () => {
+  const primary = screen.getPrimaryDisplay();
+  return [primary, ...screen.getAllDisplays().filter(({ id }) => id !== primary.id)].map(
+    ({ workArea }) => workArea
+  );
+};
+const visibleWindowBounds = (bounds) =>
+  clampWindowBounds(bounds, displayWorkAreas(), { width: 1100, height: 700 });
+
+function applyWindowMinimum(bounds) {
+  mainWindow?.setMinimumSize(Math.min(1100, bounds.width), Math.min(700, bounds.height));
+}
+
+function persistWindowState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = pendingVisibleBounds || visibleWindowBounds(mainWindow.getNormalBounds());
+  try {
+    writeWindowState(fs, WINDOW_STATE_PATH, {
+      bounds,
+      fullscreen: mainWindow.isFullScreen(),
+      maximized: mainWindow.isMaximized()
+    });
+  } catch (error) {
+    process.stderr.write(`Could not persist window state: ${error.message}\n`);
+  }
+}
+
+function scheduleWindowStatePersist() {
+  if (windowStateTimer) clearTimeout(windowStateTimer);
+  windowStateTimer = setTimeout(() => {
+    windowStateTimer = null;
+    persistWindowState();
+  }, 150);
+}
+
+function ensureWindowIsVisible() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = visibleWindowBounds(mainWindow.getNormalBounds());
+  applyWindowMinimum(bounds);
+  if (mainWindow.isFullScreen() || mainWindow.isMaximized()) pendingVisibleBounds = bounds;
+  else {
+    pendingVisibleBounds = null;
+    mainWindow.setBounds(bounds);
+  }
+  scheduleWindowStatePersist();
+}
+
+function applyPendingVisibleBounds() {
+  if (!pendingVisibleBounds || !mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = pendingVisibleBounds;
+  pendingVisibleBounds = null;
+  applyWindowMinimum(bounds);
+  mainWindow.setBounds(bounds);
+}
+
 function createWindow() {
   const initialTheme = getStoredIconTheme();
+  const themeBackgrounds = readThemeBackgrounds();
+  const storedWindowState = readWindowState(fs, WINDOW_STATE_PATH);
+  const initialBounds = visibleWindowBounds(
+    storedWindowState.bounds || { x: 0, y: 0, width: 1440, height: 900 }
+  );
   if (!isDev) storeIconTheme(initialTheme);
   mainWindow = new BrowserWindow({
-    minWidth: 1100,
-    minHeight: 700,
+    ...initialBounds,
+    minWidth: Math.min(1100, initialBounds.width),
+    minHeight: Math.min(700, initialBounds.height),
     frame: false,
-    fullscreen: true,
+    fullscreen: storedWindowState.fullscreen,
     icon: getThemeIcon(initialTheme),
 
-    backgroundColor: "#0d0a1a",
+    // Match the native window surface to the selected theme. The renderer is
+    // revealed only after its large backdrop image has decoded, so neither
+    // Electron nor the page can flash white during application startup.
+    backgroundColor: themeBackgrounds[initialTheme] || themeBackgrounds.dark,
     show: false,
 
     webPreferences: {
@@ -546,22 +276,38 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The API token is deliberately NOT included here: additionalArguments
+      // become part of the renderer process's own OS command line, readable
+      // by any other process on the machine (Task Manager, `ps`, etc.), not
+      // just this renderer's JS. It is instead handed to preload over a
+      // synchronous IPC round trip (see the "advoice:get-api-token" handler
+      // below), which only this window's own webContents can reach.
       additionalArguments: [
         `--advoice-theme=${initialTheme}`,
-        `--advoice-backend-url=${runtimeBackendUrl}`,
-        `--advoice-api-token=${BACKEND_API_TOKEN}`
+        `--advoice-backend-url=${backend.url}`
       ]
     }
   });
+  if (storedWindowState.maximized && !storedWindowState.fullscreen) mainWindow.maximize();
+  recordStartupMilestone("window-create");
+  mainWindow.webContents.once("did-finish-load", () => recordStartupMilestone("frontend-loaded"));
   // Apply the initial window state before loading/rendering so the first
   // visible frame already occupies the full work area (no 1440x900 flash).
-  // mainWindow.maximize();
   updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
 
   const packagedIndexPath = path.join(__dirname, "..", "dist", "index.html");
   const packagedIndexUrl = getPackagedRendererUrl(packagedIndexPath);
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Only this explicit help link may leave the renderer; never launch an
+    // installer, arbitrary protocol, or an untrusted URL from room metadata.
+    if (url === "https://asio4all.org/about/download-asio4all/") {
+      shell
+        .openExternal(url)
+        .catch((error) => process.stderr.write(`Could not open ASIO4ALL help: ${error.message}\n`));
+    }
+    return { action: "deny" };
+  });
   mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
     const allowed = isAllowedRendererUrl(navigationUrl, {
       isDev,
@@ -571,8 +317,24 @@ function createWindow() {
     if (!allowed) event.preventDefault();
   });
 
+  let revealFallbackTimer = null;
+  let windowRevealed = false;
+  const revealWindow = () => {
+    if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
+    revealFallbackTimer = null;
+    windowRevealed = true;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+    if (pendingSecondInstanceFocus) {
+      pendingSecondInstanceFocus = false;
+      focusMainWindow();
+    }
+  };
+  mainWindow.__revealWhenVisualReady = revealWindow;
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+    if (windowRevealed) return;
+    // Never leave the application invisible if a corrupt/missing image cannot
+    // decode. Normal startup is revealed earlier by the visual-ready signal.
+    revealFallbackTimer = setTimeout(revealWindow, 4000);
   });
 
   const loadPromise = isDev
@@ -584,19 +346,62 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
+    if (revealFallbackTimer) clearTimeout(revealFallbackTimer);
+    if (windowStateTimer) clearTimeout(windowStateTimer);
+    windowStateTimer = null;
+    pendingVisibleBounds = null;
     mainWindow = null;
+  });
+  mainWindow.on("close", persistWindowState);
+  mainWindow.on("move", scheduleWindowStatePersist);
+  mainWindow.on("resize", scheduleWindowStatePersist);
+  mainWindow.on("minimize", () => {
+    mainWindow?.webContents.send("app:hardware-suspension-changed", true);
+    lighting.configure(false).catch(() => {});
+    backend.suspendHardware().catch(() => {});
+  });
+  mainWindow.on("restore", () => {
+    mainWindow?.webContents.send("app:hardware-suspension-changed", false);
+    backend.resumeHardware().catch(() => {});
+  });
+  mainWindow.on("maximize", scheduleWindowStatePersist);
+  mainWindow.on("unmaximize", () => {
+    applyPendingVisibleBounds();
+    scheduleWindowStatePersist();
   });
   const notifyFullscreenChange = (isFullScreen) => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.webContents.send("window:fullscreen-changed", isFullScreen);
   };
-  mainWindow.on("enter-full-screen", () => notifyFullscreenChange(true));
-  mainWindow.on("leave-full-screen", () => notifyFullscreenChange(false));
+  mainWindow.on("enter-full-screen", () => {
+    notifyFullscreenChange(true);
+    scheduleWindowStatePersist();
+  });
+  mainWindow.on("leave-full-screen", () => {
+    applyPendingVisibleBounds();
+    notifyFullscreenChange(false);
+    scheduleWindowStatePersist();
+  });
 }
 
 function handleTrustedIpc(channel, handler) {
   registerTrustedIpc(ipcMain, channel, () => mainWindow?.webContents, handler);
 }
+
+const lighting = new LightingController({
+  windows: loadWindows(app.isPackaged ? process.resourcesPath : null)
+});
+handleTrustedIpc("lighting:configure", (enabled) => lighting.configure(enabled));
+handleTrustedIpc("lighting:frame", (frame) => lighting.frame(frame));
+handleTrustedIpc("lighting:status", () => lighting.status);
+
+// Synchronous (not registerTrustedIpc's invoke/handle) because preload reads
+// this once, at script load, before contextBridge exposes apiToken() to the
+// renderer -- an async round trip there would leave a window where early
+// API calls have no token. Only this window's own webContents may ask.
+ipcMain.on("advoice:get-api-token", (event) => {
+  event.returnValue = isTrustedIpcEvent(event, mainWindow?.webContents) ? backend.apiToken : "";
+});
 
 handleTrustedIpc("window:minimize", () => mainWindow?.minimize());
 handleTrustedIpc("window:maximize", () => {
@@ -683,16 +488,20 @@ handleTrustedIpc("clipboard:writeText", (value) => {
   return true;
 });
 
+const RENDERER_STARTUP_MILESTONES = new Set(["visual-ready", "backend-healthy", "app-interactive"]);
+handleTrustedIpc("startup:milestone", (name) => {
+  if (!RENDERER_STARTUP_MILESTONES.has(name)) return false;
+  recordStartupMilestone(name);
+  if (name === "visual-ready") mainWindow?.__revealWhenVisualReady?.();
+  return true;
+});
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   isQuitting = true;
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  });
+  app.on("second-instance", focusMainWindow);
 }
 
 app.whenReady().then(async () => {
@@ -702,8 +511,8 @@ app.whenReady().then(async () => {
   registerMediaProtocol();
   installBackendFileAuthentication(
     session.defaultSession.webRequest,
-    runtimeBackendUrl,
-    BACKEND_API_TOKEN
+    backend.url,
+    backend.apiToken
   );
   const packagedIndexUrl = getPackagedRendererUrl(path.join(__dirname, "..", "dist", "index.html"));
   const rendererOptions = { isDev, devOrigin: DEV_RENDERER_ORIGIN, packagedIndexUrl };
@@ -730,6 +539,8 @@ app.whenReady().then(async () => {
   );
   startBackend();
   createWindow();
+  screen.on("display-removed", ensureWindowIsVisible);
+  screen.on("display-metrics-changed", ensureWindowIsVisible);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -739,11 +550,29 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   if (process.platform === "darwin") return;
   isQuitting = true;
-  stopBackend();
   app.quit();
 });
 
-app.on("before-quit", () => {
+// stopBackend()'s own shutdown sequence (ask the backend to cancel in-flight
+// work, release the audio monitor, then grace-kill the process tree) takes
+// up to BACKEND_STOP_GRACE_MS. Without gating quit on it, Electron could
+// finish exiting before that grace timer -- and its taskkill /T /F -- ever
+// runs, leaving the Python backend (and any native worker it spawned)
+// orphaned. This composes with installLightingShutdown's own before-quit
+// gate below: each blocks app.quit() until its own cleanup is done.
+let backendShutdownFinished = false;
+let backendShutdownPending = false;
+app.on("before-quit", (event) => {
   isQuitting = true;
-  stopBackend();
+  if (backendShutdownFinished) return;
+  event.preventDefault();
+  if (backendShutdownPending) return;
+  backendShutdownPending = true;
+  Promise.resolve(stopBackend())
+    .catch(() => {})
+    .finally(() => {
+      backendShutdownFinished = true;
+      app.quit();
+    });
 });
+installLightingShutdown(app, lighting);

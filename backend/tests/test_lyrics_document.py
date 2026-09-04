@@ -1,6 +1,7 @@
 import pytest
 
 from AI.lyrics_document import (
+    LYRICS_SCHEMA_VERSION,
     flatten_word_notes,
     replace_word_notes,
     validate_lyrics_document,
@@ -28,6 +29,88 @@ def test_accepts_exact_word_note_contract():
     )
 
     assert validate_lyrics_document(payload) is payload
+
+
+def test_accepts_ordered_syllables_that_reconstruct_the_word():
+    payload = document([{"note": 60, "start": 1.0, "end": 2.0}])
+    payload["words"][0]["syllables"] = [
+        {"text": "l", "start": 1.0, "end": 1.2},
+        {"text": "a", "start": 1.2, "end": 2.0},
+    ]
+
+    assert validate_lyrics_document(payload) is payload
+
+
+def test_audio_words_receive_language_independent_syllable_structure():
+    words = [Word(1.0, 3.0, "полковнику", index=0)]
+    notes = [
+        VocalNote(1.0, 1.5, 60, word_index=0),
+        VocalNote(1.5, 3.0, 62, word_index=0),
+    ]
+
+    [result] = words_with_notes(words, notes)
+
+    assert [item["text"] for item in result["syllables"]] == ["пол", "ков", "ни", "ку"]
+    assert "".join(item["text"] for item in result["syllables"]) == "полковнику"
+    assert result["syllables"][0]["start"] == 1.0
+    assert result["syllables"][-1]["end"] == 3.0
+
+
+@pytest.mark.parametrize(
+    "syllables",
+    [
+        [{"text": "la", "start": 0.9, "end": 1.2}],
+        [{"text": "la", "start": 1.8, "end": 2.1}],
+        [
+            {"text": "l", "start": 1.0, "end": 1.5},
+            {"text": "a", "start": 1.4, "end": 2.0},
+        ],
+        [{"text": "wrong", "start": 1.0, "end": 2.0}],
+        [],
+    ],
+)
+def test_rejects_invalid_syllable_contract(syllables):
+    payload = document()
+    payload["words"][0]["syllables"] = syllables
+
+    with pytest.raises(ValueError, match="syllable|Syllable"):
+        validate_lyrics_document(payload)
+
+
+@pytest.mark.parametrize("bpm", [0, -60, float("nan"), float("inf"), 5, 1000, "120", None])
+def test_rejects_an_absurd_or_wrong_type_bpm(bpm):
+    payload = document()
+    payload["bpm"] = bpm
+
+    with pytest.raises(ValueError, match="invalid bpm"):
+        validate_lyrics_document(payload)
+
+
+def test_accepts_bpm_at_the_boundaries_of_the_realistic_range():
+    payload = document()
+    payload["bpm"] = 20
+    assert validate_lyrics_document(payload)["bpm"] == 20
+
+    payload = document()
+    payload["bpm"] = 400
+    assert validate_lyrics_document(payload)["bpm"] == 400
+
+
+def test_schema_version_defaults_and_rejects_unsupported_values():
+    # A document with no schemaVersion (every file saved before this field
+    # existed) is treated as the current version and stamped with it.
+    legacy = document()
+    assert validate_lyrics_document(legacy)["schemaVersion"] == LYRICS_SCHEMA_VERSION
+
+    current = {**document(), "schemaVersion": LYRICS_SCHEMA_VERSION}
+    assert validate_lyrics_document(current)["schemaVersion"] == LYRICS_SCHEMA_VERSION
+
+    for bad_version in (0, -1, "1", 1.5, True):
+        with pytest.raises(ValueError, match="schemaVersion"):
+            validate_lyrics_document({**document(), "schemaVersion": bad_version})
+
+    with pytest.raises(ValueError, match="newer than this application"):
+        validate_lyrics_document({**document(), "schemaVersion": LYRICS_SCHEMA_VERSION + 1})
 
 
 def test_validation_does_not_rewrite_acoustically_detected_notes():
@@ -82,6 +165,19 @@ def test_sustained_acoustic_note_is_preserved_in_every_word_it_crosses():
         {"note": 60, "start": 1.1, "end": 1.4, "word_index": 0},
         {"note": 60, "start": 1.4, "end": 1.7, "word_index": 1},
     ]
+
+
+def test_owner_only_export_does_not_duplicate_a_note_into_an_overlapping_word():
+    words = [
+        Word(1.0, 2.0, "first", index=0),
+        Word(1.5, 2.5, "second", index=1),
+    ]
+    notes = [VocalNote(1.6, 1.9, 60, word_index=1)]
+
+    payload = words_with_notes(words, notes, owner_only=True)
+
+    assert payload[0]["notes"] == []
+    assert payload[1]["notes"] == [{"note": 60, "start": 1.6, "end": 1.9}]
 
 
 def test_export_preserves_every_acoustically_detected_interval_without_filling_gaps():
@@ -155,6 +251,17 @@ def test_rejects_notes_outside_word_or_overlapping(notes):
         validate_lyrics_document(document(notes))
 
 
+def test_rejects_overlapping_notes_from_kar_sources_too():
+    payload = document([
+        {"note": 60, "start": 1.0, "end": 1.6},
+        {"note": 62, "start": 1.5, "end": 1.8},
+    ])
+    payload["source"] = "kar"
+
+    with pytest.raises(ValueError, match="Overlapping notes"):
+        validate_lyrics_document(payload)
+
+
 def test_accepts_word_without_an_acoustically_detected_note():
     assert validate_lyrics_document(document([]))["words"][0]["notes"] == []
 
@@ -190,4 +297,48 @@ def test_rejects_a_word_whose_text_is_not_a_string(text):
     payload["words"][0]["text"] = text
 
     with pytest.raises(ValueError, match="Invalid word"):
+        validate_lyrics_document(payload)
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(float("nan"), float("nan")), (0.0, float("inf")), (float("-inf"), 1.0)],
+)
+def test_rejects_non_finite_word_timings(start, end):
+    payload = document()
+    payload["words"][0]["start"] = start
+    payload["words"][0]["end"] = end
+
+    with pytest.raises(ValueError, match="Invalid word interval"):
+        validate_lyrics_document(payload)
+
+
+def test_a_nan_word_does_not_silently_disable_ordering_checks_for_later_words():
+    # NaN comparisons are always False, so an unguarded NaN word would slip
+    # through *and* leave `previous` as NaN, making the next word's own
+    # ordering check (start + 1e-6 < previous) silently pass too.
+    payload = {
+        "bpm": 120,
+        "key": "Am",
+        "words": [
+            {"text": "la", "start": float("nan"), "end": float("nan"), "notes": []},
+            {"text": "la", "start": 0.0, "end": 1.0, "notes": []},
+        ],
+    }
+    with pytest.raises(ValueError, match="Invalid word interval 0"):
+        validate_lyrics_document(payload)
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "note"),
+    [
+        (float("nan"), 1.4, 60),
+        (1.0, float("inf"), 60),
+        (1.0, 1.4, float("nan")),
+    ],
+)
+def test_rejects_non_finite_note_fields(start, end, note):
+    payload = document([{"note": note, "start": start, "end": end}])
+
+    with pytest.raises(ValueError, match="Invalid note interval"):
         validate_lyrics_document(payload)

@@ -10,7 +10,7 @@ import KaraokePerformanceStage from "../src/pages/Karaoke/components/karaoke-per
 import KaraokeLyrics from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyrics.jsx";
 import MelodyRoll from "../src/pages/Karaoke/components/karaoke-performance-stage/melody-roll.jsx";
 import AuroraWorld from "../src/pages/Karaoke/components/karaoke-performance-stage/aurora-world.jsx";
-import { normalizePianoNotes, pianoRollFrame } from "../src/theme/features/PianoRoll/geometry.js";
+import { normalizePianoNotes, pianoPitchRange, pianoRollFrame } from "../src/theme/features/PianoRoll/geometry.js";
 beforeEach(() => {
   delete globalThis.electronAPI;
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -47,13 +47,16 @@ const notes = [
 ];
 test("melody roll renders lyricsSync notes at exact boundaries", () => {
   const normalized = normalizePianoNotes(notes);
-  expect(pianoRollFrame(normalized, 0.5).notes).toHaveLength(3);
-  expect(pianoRollFrame(normalized, 0.5).notes.find(({ state }) => state === "current").note).toBe(60);
-  expect(pianoRollFrame(normalized, 1).notes.find(({ state }) => state === "current").note).toBe(61);
+  const pitchRange = pianoPitchRange(normalized);
+  expect(pianoRollFrame(normalized, 0.5, undefined, pitchRange).notes).toHaveLength(3);
+  expect(pianoRollFrame(normalized, 0.5, undefined, pitchRange).connections).toHaveLength(2);
+  expect(pianoRollFrame(normalized, 0.5, undefined, pitchRange).notes.find(({ state }) => state === "current").note).toBe(60);
+  expect(pianoRollFrame(normalized, 1, undefined, pitchRange).notes.find(({ state }) => state === "current").note).toBe(61);
 });
 test("melody roll uses only the moving lyricsSync note window and restores pitch feedback", () => {
   const { container } = render(<MelodyRoll notes={notes} currentTime={20.5} isPitchDetected sungMidi={80} />);
-  const renderedNotes = pianoRollFrame(normalizePianoNotes(notes), 20.5, undefined, 80).notes;
+  const normalized = normalizePianoNotes(notes);
+  const renderedNotes = pianoRollFrame(normalized, 20.5, undefined, pianoPitchRange(normalized, 80)).notes;
   expect(renderedNotes).toHaveLength(1);
   expect(renderedNotes[0].start).toBe(20);
   expect(renderedNotes[0].end).toBe(21);
@@ -101,6 +104,23 @@ test("keeps a very short letter line visible without changing its word timing", 
   expect(letter.dataset.start).toBe("18.94");
   expect(letter.dataset.end).toBe("18.96");
   expect(letter.style.getPropertyValue("--character-fill")).toBe("100%");
+});
+test("renders exact KAR hold events without rewriting their timing", () => {
+  const lyricsSync = {
+    text: "долго - слово",
+    words: [
+      { index: 0, text: "долго", start: 10, end: 10.5 },
+      { index: 1, text: "-", start: 10.5, end: 11.25 },
+      { index: 2, text: "слово", start: 11.25, end: 12 }
+    ]
+  };
+
+  const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={10.75} />);
+  const rendered = [...view.container.querySelectorAll('[data-role="lyric-word"]')];
+
+  expect(rendered.map(({ dataset }) => dataset.text)).toEqual(["долго", "-", "слово"]);
+  expect(rendered[1].dataset.start).toBe("10.5");
+  expect(rendered[1].dataset.end).toBe("11.25");
 });
 test("aurora world produces deterministic decoration, stars and particles", () => {
   const { container } = render(<AuroraWorld seed={12} />);

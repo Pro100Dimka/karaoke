@@ -1,9 +1,12 @@
-import { describe, expect, test } from "vitest";
-import { buildNoiseGateCurve, buildSoftLimiterCurve, connectMicrophoneChannelStrip } from "../src/services/microphoneChannelStrip.js";
+import { describe, expect, test, vi } from "vitest";
+import { buildSoftLimiterCurve, connectMicrophoneChannelStrip } from "../src/services/microphoneChannelStrip.js";
 import { same, verify } from "./helpers/assertions.mjs";
 class Param {
   constructor() {
     this.value = 0;
+  }
+  setTargetAtTime(value) {
+    this.value = value;
   }
 }
 class Node {
@@ -15,6 +18,9 @@ class Node {
   connect(target) {
     this.target = target;
     return target;
+  }
+  getByteTimeDomainData(samples) {
+    samples.fill(this.sample ?? 128);
   }
 }
 function createContext(created) {
@@ -34,6 +40,12 @@ function createContext(created) {
       created.gains.push(node);
       return node;
     },
+    createAnalyser() {
+      if (!created.analysers) return undefined;
+      const node = new Node();
+      created.analysers.push(node);
+      return node;
+    },
     createWaveShaper() {
       const node = new Node();
       created.shapers.push(node);
@@ -49,14 +61,14 @@ describe("microphoneChannelStrip", () => {
     const destination = new Node();
     const nodes = connectMicrophoneChannelStrip(context, source, destination);
     expect(created.filters.map((node) => node.type)).toEqual(["highpass", "highshelf"]);
-    same([created.filters[0].frequency.value, 70], [created.filters[1].frequency.value, 2200], [created.filters[1].gain.value, 2.5]);
+    same([created.filters[0].frequency.value, 70], [created.filters[1].frequency.value, 2200], [created.filters[1].gain.value, 1.2]);
     verify(
       [created.compressors, "toHaveLength", 1],
       [created.compressors[0].threshold.value, "toBe", -16],
-      [created.gains, "toHaveLength", 1],
-      [created.gains[0].gain.value, "toBe", 1.08],
-      [created.shapers, "toHaveLength", 2],
-      [nodes.noiseGate.curve, "toHaveLength", 4096],
+      [created.gains, "toHaveLength", 2],
+      [nodes.noiseGate.gain.value, "toBe", 1],
+      [nodes.makeup.gain.value, "toBe", 1.04],
+      [created.shapers, "toHaveLength", 1],
       [nodes.limiter.curve, "toHaveLength", 1024]
     );
     // Every node hands off to exactly the next stage, ending at destination.
@@ -86,12 +98,31 @@ describe("microphoneChannelStrip", () => {
       );
     }
   });
-  test("noise suppression curve remains symmetric and strength-adjustable", () => {
-    const weak = buildNoiseGateCurve(0);
-    const strong = buildNoiseGateCurve(1);
-    verify([weak, "toHaveLength", 4096], [strong, "toHaveLength", 4096]);
-    expect(Math.abs(strong[2050])).toBeLessThan(Math.abs(weak[2050]));
-    expect(strong[0]).toBeCloseTo(-1, 5);
-    expect(strong.at(-1)).toBeCloseTo(1, 5);
+  test("realtime mode removes compressor look-ahead and limiter oversampling", () => {
+    const created = { filters: [], compressors: [], gains: [], shapers: [] };
+    const source = new Node();
+    const destination = new Node();
+    const nodes = connectMicrophoneChannelStrip(createContext(created), source, destination, {
+      realtime: true
+    });
+    same(
+      [nodes.limiter.oversample, "none"],
+      [nodes.presence.target, nodes.makeup],
+      [nodes.makeup.target, nodes.limiter],
+      [nodes.limiter.target, destination]
+    );
+    expect(nodes.compressor.target).toBeUndefined();
+  });
+  test("noise gate follows the signal envelope instead of reshaping individual samples", () => {
+    vi.useFakeTimers();
+    const created = { filters: [], compressors: [], gains: [], shapers: [], analysers: [] };
+    const nodes = connectMicrophoneChannelStrip(createContext(created), new Node(), new Node(), { noiseSuppression: 1 });
+    vi.advanceTimersByTime(48);
+    expect(nodes.noiseGate.gain.value).toBeLessThan(1);
+    created.analysers[0].sample = 160;
+    vi.advanceTimersByTime(24);
+    expect(nodes.noiseGate.gain.value).toBe(1);
+    nodes.close();
+    vi.useRealTimers();
   });
 });

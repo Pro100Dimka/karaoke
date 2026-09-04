@@ -219,7 +219,7 @@ export default function useEditorAudio({
       setPlaying(true);
     } catch (error) {
       setPlaying(false);
-      await notify(t("Не удалось начать воспроизведение: {0}", { 0: getErrorMessage(error) }));
+      await notify(t("editor.failedToStartPlayback", { 0: getErrorMessage(error) }));
     }
   }, [notify]);
 

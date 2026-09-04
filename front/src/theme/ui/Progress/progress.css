@@ -7,9 +7,15 @@
     background: var(--ui-surface-soft);
   }
 
-  .ui-progress[data-size="sm"] { height: 3px; }
-  .ui-progress[data-size="md"] { height: 5px; }
-  .ui-progress[data-size="lg"] { height: 8px; }
+  .ui-progress[data-size="sm"] {
+    height: 3px;
+  }
+  .ui-progress[data-size="md"] {
+    height: 5px;
+  }
+  .ui-progress[data-size="lg"] {
+    height: 8px;
+  }
 
   .ui-progress::before {
     content: "";
@@ -28,12 +34,22 @@
   }
 
   @keyframes ui-progress-indeterminate {
-    from { transform: translateX(-120%); }
-    to { transform: translateX(360%); }
+    from {
+      transform: translateX(-120%);
+    }
+    to {
+      transform: translateX(360%);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ui-progress::before { transition: none; }
-    .ui-progress[data-indeterminate]::before { animation: none; width: 100%; opacity: .45; }
+    .ui-progress::before {
+      transition: none;
+    }
+    .ui-progress[data-indeterminate]::before {
+      animation: none;
+      width: 100%;
+      opacity: 0.45;
+    }
   }
 }

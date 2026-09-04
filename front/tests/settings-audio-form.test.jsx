@@ -1,12 +1,12 @@
 /* @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import SettingsForm from "../src/pages/Settings/SettingsForm.jsx";
+import SettingsPage from "./helpers/settings-page";
 
 test("audio settings group devices, actions and levels semantically", () => {
   const monitor = vi.fn();
   render(
-    <SettingsForm
+    <SettingsPage
       tab="audio"
       settings={{
         app: { form: {} },
@@ -25,7 +25,11 @@ test("audio settings group devices, actions and levels semantically", () => {
   );
 
   expect(screen.getAllByRole("slider")).toHaveLength(2);
-  expect(screen.getByRole("button", { name: "Проверить динамики" })).not.toBeNull();
-  fireEvent.click(screen.getByRole("switch"));
+  const meter = screen.getByRole("meter", { name: "Уровень микрофона" });
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+  expect(meter.querySelector("path")).not.toBeNull();
+  expect(meter.querySelector("rect")).toBeNull();
+  expect(screen.getByRole("button", { name: "Проверить звук" })).not.toBeNull();
+  fireEvent.click(screen.getByRole("switch", { name: "Мониторинг" }));
   expect(monitor).toHaveBeenCalledOnce();
 });

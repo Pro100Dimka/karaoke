@@ -2,13 +2,52 @@
 from __future__ import annotations
 
 import importlib.metadata
+import json
 import logging
+import os
 import platform
 import subprocess
+import sys
+from pathlib import Path
 
 import config
+from app.version import APP_VERSION
 
-BACKEND_VERSION = "0.3.34"
+BACKEND_VERSION = APP_VERSION
+
+
+def _build_id() -> str:
+    for name in ("SONGAPP_BUILD_ID", "BUILD_ID", "GITHUB_SHA", "CI_COMMIT_SHA"):
+        if value := os.environ.get(name, "").strip():
+            return value
+    candidates = (
+        Path(sys.executable).resolve().parent / "build-identity.json",
+        config.RUNTIME_DIR / "build-identity.json",
+        config.PROJECT_ROOT / "build-identity.json",
+    )
+    for candidate in candidates:
+        try:
+            document = json.loads(candidate.read_text(encoding="utf-8"))
+            if document.get("version") == BACKEND_VERSION and document.get("build_id"):
+                return str(document["build_id"])
+        except (OSError, ValueError, TypeError):
+            continue
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(config.PROJECT_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "unknown"
+
+
+BUILD_ID = _build_id()
 _CLIENT_LOG_LEVELS = {
     "debug": logging.DEBUG,
     "info": logging.INFO,
@@ -110,6 +149,7 @@ def versions() -> dict:
 
     return {
         "backend_version": BACKEND_VERSION,
+        "build_id": BUILD_ID,
         "python_version": platform.python_version(),
         "components": components,
     }

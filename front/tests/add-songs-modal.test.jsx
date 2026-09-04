@@ -16,7 +16,7 @@ afterEach(() => {
 test("song confirmation presents metadata in a compact two-field layout", async () => {
   const onCancel = vi.fn();
   const onConfirm = vi.fn();
-  const onUpdate = vi.fn();
+
   const view = render(
     <AddSongsModal
       review={{
@@ -33,7 +33,6 @@ test("song confirmation presents metadata in a compact two-field layout", async 
       }}
       onCancel={onCancel}
       onConfirm={onConfirm}
-      onUpdate={onUpdate}
     />
   );
 
@@ -68,14 +67,14 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   expect(title.value).toBe("Track");
   expect(artist.value).toBe("Artist");
   fireEvent.change(title, { target: { value: "New title" } });
-  expect(onUpdate).toHaveBeenCalledWith({ title: "New title" });
+
   fireEvent.change(artist, { target: { value: "New artist" } });
-  expect(onUpdate).toHaveBeenCalledWith({ artist: "New artist" });
+
   fireEvent.click(view.getByText(/Авто ·/));
   fireEvent.click(await view.findByRole("option", { name: /Быстрый|Швидкий/ }));
-  expect(onUpdate).toHaveBeenCalledWith({ processingMode: "fast" });
-  fireEvent.submit(view.container.querySelector("form"));
-  expect(onConfirm).toHaveBeenCalledOnce();
+
+  fireEvent.click(view.getByRole("button", { name: /Подтвердить|Підтвердити/ }));
+  await waitFor(() => expect(onConfirm).toHaveBeenCalledWith({ title: "New title", artist: "New artist", processingMode: "fast" }));
   fireEvent.click(view.getByText("Пропустить"));
   expect(onCancel).toHaveBeenCalledOnce();
   view.unmount();

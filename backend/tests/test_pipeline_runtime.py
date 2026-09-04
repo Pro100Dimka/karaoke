@@ -118,6 +118,17 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
     }
     semantic = pipeline_service.get_processing_telemetry("semantic")
     assert semantic["semantic"] is True and 48 < semantic["progress_percent"] < 70
+    assert semantic["stage"] == "analysis"
+    assert semantic["stage_elapsed_seconds"] == 10
+    assert semantic["total_elapsed_seconds"] >= 0
+    assert semantic["estimated_finish_at"]
+    pipeline_service._progress_runtime["semantic"]["completed_stage_seconds"] = {
+        "decode": 300,
+        "separate": 300,
+    }
+    # A slow GPU separation must not multiply the estimates for unrelated
+    # CPU-bound lyrics/notes stages and make the displayed ETA jump upward.
+    assert pipeline_service.get_processing_telemetry("semantic")["eta_seconds"] == semantic["eta_seconds"]
     pipeline_service._progress_runtime["unknown"] = {
         "stage": "other",
         "direct_percent": 99,
@@ -125,6 +136,15 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
         "detail": "other",
     }
     assert pipeline_service.get_processing_telemetry("unknown")["eta_seconds"] >= 1
+    pipeline_service._progress_runtime["overdue"] = {
+        "stage": "transcribe",
+        "direct_percent": 70,
+        "stage_started_at": -100,
+        "detail": "asr",
+    }
+    overdue = pipeline_service.get_processing_telemetry("overdue")
+    assert overdue["eta_seconds"] is None
+    assert overdue["estimated_finish_at"] is None
 
 
 
@@ -142,6 +162,37 @@ def test_semantic_progress_keeps_advancing_for_long_separation(monkeypatch):
     monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=40.0))
     at_40 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
     assert (10.0 < at_20 < 42.0) and (at_20 < at_40 < 42.0)
+
+
+def test_long_alignment_never_claims_the_post_processing_98_percent(monkeypatch):
+    monkeypatch.setattr(pipeline_service, "_progress_runtime", {
+        "song": {
+            "stage": "align",
+            "direct_percent": 84.0,
+            "stage_started_at": 0.0,
+            "detail": "alignment",
+            "completed_stage_seconds": {},
+        }
+    })
+    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=300.0))
+
+    telemetry = pipeline_service.get_processing_telemetry("song")
+
+    assert telemetry["stage"] == "align"
+    assert telemetry["progress_percent"] < 95.0
+
+def test_update_progress_logs_but_still_applies_an_unexpected_transition(monkeypatch, caplog):
+    current = SimpleNamespace(status=models.SongStatus.DONE)
+    mock_song_lookup(monkeypatch, pipeline_service, current)
+    monkeypatch.setattr(pipeline_service, "commit", Mock())
+    with caplog.at_level("WARNING"):
+        pipeline_service._update_progress("song", status=models.SongStatus.ERROR)
+    assert current.status == models.SongStatus.ERROR  # applied despite DONE -> ERROR being invalid
+    assert any(
+        "song_id=song" in record.getMessage() and "done -> error" in record.getMessage()
+        for record in caplog.records
+    )
+
 
 def test_update_progress_persists_fields_and_closes_database(monkeypatch):
     current = SimpleNamespace()
@@ -196,6 +247,119 @@ def test_job_registry_start_cancel_release_and_cleanup(monkeypatch):
     assert "bad" not in pipeline_service._active_jobs
 
 
+def test_regular_processing_routes_karaoke_files_to_symbolic_worker(monkeypatch, tmp_path):
+    symbolic = Mock()
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _load_job_paths=Mock(return_value=(str(tmp_path / "source.kar"), tmp_path)),
+        _reject_full_process_if_source_retired=Mock(return_value=False),
+        _run_symbolic_job=symbolic,
+    )
+
+    pipeline_service._run_job("song", "quality")
+
+    symbolic.assert_called_once_with("song", str(tmp_path / "source.kar"), tmp_path)
+
+
+def test_timing_reprocessing_keeps_karaoke_in_symbolic_worker(monkeypatch, tmp_path):
+    symbolic = Mock()
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _load_job_paths=Mock(return_value=(str(tmp_path / "source.kar"), tmp_path)),
+        _reject_full_process_if_source_retired=Mock(return_value=False),
+        _run_symbolic_job=symbolic,
+    )
+
+    pipeline_service._run_job("song", "quality", reuse_vocals=True)
+
+    symbolic.assert_called_once_with(
+        "song",
+        str(tmp_path / "source.kar"),
+        tmp_path,
+        reuse_existing_audio=True,
+    )
+
+
+def test_symbolic_worker_publishes_ready_artifacts_as_a_normal_song(monkeypatch, tmp_path):
+    source = tmp_path / "source.kar"
+    source.write_bytes(b"midi")
+    capture = Mock()
+    prepare = Mock(return_value={"status": "ready", "stems_status": "ready", "warnings": []})
+    finalize = Mock()
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _acquire_processing_slot=Mock(return_value=True),
+        _release_processing_slot=Mock(),
+        _update_progress=Mock(),
+        _begin_runtime_progress=Mock(),
+        _end_runtime_progress=Mock(),
+        _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())),
+        _stop_progress_heartbeat=Mock(),
+        _create_progress_capture=Mock(return_value=capture),
+        _create_ai_progress_callback=Mock(return_value=Mock()),
+        _configure_ai_runtime=Mock(),
+        _load_original_filename=Mock(return_value="Artist - Song.kar"),
+        _load_song_identity=Mock(return_value=("Artist", "Song")),
+        _finalize_processed_job=finalize,
+    )
+    monkeypatch.setattr(pipeline_service.model_install_service, "ensure_ready_sync", Mock())
+    monkeypatch.setattr(pipeline_service.kar_dataset_service, "prepare_kar_file", prepare)
+
+    pipeline_service._run_symbolic_job("song", str(source), tmp_path)
+
+    assert prepare.call_args.kwargs["target_dir"] == tmp_path
+    assert prepare.call_args.kwargs["original_filename"] == "Artist - Song.kar"
+    assert prepare.call_args.kwargs["artist_override"] == "Artist"
+    assert prepare.call_args.kwargs["title_override"] == "Song"
+    finalize.assert_called_once_with("song", tmp_path, retain_source=True)
+    capture.close.assert_called_once_with()
+
+
+def test_cancel_all_active_processing_cancels_only_alive_jobs(monkeypatch):
+    alive_a, alive_b = Mock(is_alive=Mock(return_value=True)), Mock(is_alive=Mock(return_value=True))
+    dead = Mock(is_alive=Mock(return_value=False))
+    patch_attrs(
+        monkeypatch, pipeline_service,
+        _active_jobs={"a": alive_a, "b": alive_b, "gone": dead}, _cancelled_jobs=set(),
+    )
+    update = Mock()
+    monkeypatch.setattr(pipeline_service, "_update_progress", update)
+
+    assert pipeline_service.cancel_all_active_processing() == 2
+    assert pipeline_service._cancelled_jobs == {"a", "b"}
+
+
+def test_shutdown_stops_admission_cancels_and_joins_with_a_shared_deadline(monkeypatch):
+    alive = {"a": True, "b": True}
+
+    def thread(name):
+        worker = Mock()
+        worker.is_alive.side_effect = lambda: alive[name]
+        worker.join.side_effect = lambda timeout: alive.__setitem__(name, False)
+        return worker
+
+    workers = {name: thread(name) for name in alive}
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _active_jobs=workers,
+        _cancelled_jobs=set(),
+        _accepting_jobs=True,
+        _update_progress=Mock(),
+    )
+
+    result = pipeline_service.shutdown_active_processing(timeout=1.0)
+
+    assert result == {"requested": 2, "finished": 2, "lingering": []}
+    assert pipeline_service._accepting_jobs is False
+    assert pipeline_service._cancelled_jobs == {"a", "b"}
+    assert all(worker.join.call_count == 1 for worker in workers.values())
+    assert pipeline_service._start_background_job("new", Mock()) is False
+
+
 def test_job_entrypoint_releases_runtime_and_cuda_cache(monkeypatch):
     target, current = Mock(side_effect=RuntimeError('worker failed')), Mock()
     monkeypatch.setattr(pipeline_service.threading, "current_thread", Mock(return_value=current))
@@ -206,7 +370,29 @@ def test_job_entrypoint_releases_runtime_and_cuda_cache(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", torch)
     raises(RuntimeError, lambda: pipeline_service._job_entrypoint('song', target))
     assert ('song' not in pipeline_service._active_jobs) and ('song' not in pipeline_service._cancelled_jobs)
-    collect.assert_called_once()
-    torch.cuda.empty_cache.assert_called_once()
+    # Stage-specific model cleanup may release CUDA more than once before the
+    # final worker-boundary sweep; both operations must happen at least once.
+    assert collect.call_count >= 1
+    assert torch.cuda.empty_cache.call_count >= 1
     pipeline_service._release_active_job("other")
     assert "other" in pipeline_service._active_jobs
+
+
+def test_job_entrypoint_always_releases_storage_reservation(monkeypatch):
+    current, reservation = Mock(), Mock()
+    monkeypatch.setattr(pipeline_service.threading, "current_thread", Mock(return_value=current))
+    patch_attrs(
+        monkeypatch,
+        pipeline_service,
+        _active_jobs={"song": current},
+        _cancelled_jobs=set(),
+    )
+
+    raises(
+        RuntimeError,
+        lambda: pipeline_service._job_entrypoint(
+            "song", Mock(side_effect=RuntimeError("failed")), reservation
+        ),
+    )
+
+    reservation.release.assert_called_once_with()

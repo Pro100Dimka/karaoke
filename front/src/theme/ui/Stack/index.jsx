@@ -5,18 +5,21 @@ import "./stack.css";
 
 const unit = (value) => (typeof value === "number" ? `${value}rem` : value);
 
-const Stack = forwardRef(function Stack({
-  as = "div",
-  direction = "column",
-  gap = 0,
-  align,
-  justify,
-  wrap = false,
-  className,
-  sx,
-  style,
-  ...props
-}, ref) {
+const Stack = forwardRef(function Stack(
+  {
+    as = "div",
+    direction = "column",
+    gap = 0,
+    align,
+    justify,
+    wrap = false,
+    className,
+    sx,
+    style,
+    ...props
+  },
+  ref
+) {
   return (
     <Primitive
       ref={ref}

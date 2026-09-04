@@ -1,6 +1,6 @@
 import { Check, Copy, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useOnlineRoom } from "../contexts/OnlineRoomContext";
+import { useOnlineRoom, useOnlineRoomSpeaking } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
@@ -13,6 +13,7 @@ const ACTIVE_TRANSFER = new Set(["waiting", "sending", "receiving", "importing"]
 export function OnlineRoomDock() {
   const { t } = useI18n();
   const online = useOnlineRoom();
+  const { localSpeakingLevel, speakingLevels } = useOnlineRoomSpeaking();
   const mounted = useMountedRef();
   const timer = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -40,12 +41,11 @@ export function OnlineRoomDock() {
           sx={{
             position: "fixed",
             inset: "auto auto var(--space-5) var(--space-5)",
-            zIndex: 20,
-            inlineSize: "min(var(--content-sm), calc(100vw - var(--space-10)))"
+            zIndex: "var(--z-floating)"
           }}
         >
           <Stack gap="var(--space-3)" sx={{ padding: "var(--space-4)" }}>
-            <Stack direction="row" align="center" justify="space-between">
+            <Stack direction="row" align="center" justify="space-between" gap="var(--space-4)">
               <Typography as="strong">
                 {t("room.heading", {
                   role: t(online.room.host ? "room.role.host" : "room.role.participant")
@@ -80,23 +80,32 @@ export function OnlineRoomDock() {
                   key={person.id}
                   person={person}
                   room={online.room}
-                  localSpeakingLevel={online.localSpeakingLevel}
-                  speakingLevel={online.speakingLevels[person.id] || 0}
+                  localSpeakingLevel={localSpeakingLevel}
+                  speakingLevel={speakingLevels[person.id] || 0}
                   microphoneMuted={online.microphoneMuted}
                   roomSoundMuted={online.roomSoundMuted}
                   isLocallyMuted={online.mutedPeople.has(person.id)}
                   effectsEnabled={online.effectPeople.has(person.id)}
+                  effectsLocked={Boolean(person.effectsLocked)}
+                  effectSettings={online.roomUi?.effectsByParticipant?.[person.id]}
                   participantVolume={online.participantVolumes?.[person.id] ?? 1}
                   transferStatus={online.transferStatuses?.get(person.id)}
                   onLeave={online.leaveRoom}
                   onSetMicrophoneMuted={online.setMicrophoneMuted}
                   onSetRoomSoundMuted={online.setRoomSoundMuted}
                   onSetParticipantVolume={online.setParticipantVolume}
+                  onSetParticipantEffects={online.requestParticipantEffects}
+                  onSetEffectsLocked={online.setEffectsLocked}
                   onTogglePersonMuted={online.togglePersonMuted}
                   onTogglePersonEffects={online.togglePersonEffects}
                 />
               ))}
             </Stack>
+            {!online.room.host && !online.participants.some((person) => person.role === "host") && (
+              <Typography role="alert" tone="danger">
+                {t("room.hostLeft")}
+              </Typography>
+            )}
             {transfer?.stage === "error" && (
               <Typography role="alert" tone="danger">
                 {transfer.error || t("room.transfer.unknownError")}
@@ -123,7 +132,11 @@ export function OnlineRoomDock() {
       )}
       {collapsed && (
         <Box
-          sx={{ position: "fixed", inset: "auto auto var(--space-5) var(--space-5)", zIndex: 20 }}
+          sx={{
+            position: "fixed",
+            inset: "auto auto var(--space-5) var(--space-5)",
+            zIndex: "var(--z-floating)"
+          }}
         >
           <Button
             variant="outlined"

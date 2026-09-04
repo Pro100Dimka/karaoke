@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import TitleBar from "../src/components/TitleBar.jsx";
 import BackendBootLoader from "../src/components/backend-boot-loader.jsx";
 import AppLayout from "../src/components/layout.jsx";
-import { called, verify } from "./helpers/assertions.mjs";
+import { called, calledWith, verify } from "./helpers/assertions.mjs";
 
 const mocks = vi.hoisted(() => ({
   location: { pathname: "/" },
@@ -79,12 +79,15 @@ describe("application shell", () => {
     error.mockRestore();
   });
   test("layout opens global settings, radio and blackout state", async () => {
+    window.electronAPI = { recordStartupMilestone: vi.fn(() => Promise.resolve(true)) };
     const { container, getByLabelText, getByRole, getByTestId, rerender } = render(<AppLayout />);
     verify([container.querySelector(".app-shell").classList.contains("karaoke-app-shell"), "toBe", false]);
+    calledWith([window.electronAPI.recordStartupMilestone, ["app-interactive"]]);
     fireEvent.click(getByLabelText("radio.enable:Radio"));
     expect(mocks.radio.toggle).toHaveBeenCalled();
     mocks.radio.isPlaying = true;
     rerender(<AppLayout />);
+    fireEvent.pointerEnter(getByLabelText("radio.disable:Radio"));
     fireEvent.change(getByRole("slider"), {
       target: { value: "0.7" }
     });
@@ -125,6 +128,7 @@ describe("application shell", () => {
   });
   test("backend loader hydrates preferences and reacts to theme changes", async () => {
     mocks.hydrate.mockRejectedValueOnce(new Error("optional"));
+    window.electronAPI = { recordStartupMilestone: vi.fn(() => Promise.resolve(true)) };
     const { getByRole, getByText } = render(
       <BackendBootLoader>
         <div>ready-child</div>
@@ -134,6 +138,7 @@ describe("application shell", () => {
     document.documentElement.dataset.theme = "green";
     await waitFor(() => expect(mocks.getHealth).toHaveBeenCalled());
     await waitFor(() => expect(getByText("ready-child")).not.toBeNull());
+    calledWith([window.electronAPI.recordStartupMilestone, ["backend-healthy"]]);
   });
   test("backend loader retries health checks", async () => {
     vi.useFakeTimers();
@@ -149,6 +154,43 @@ describe("application shell", () => {
     await Promise.resolve();
     expect(mocks.getHealth).toHaveBeenCalledTimes(2);
   });
+  test("backend loader shows deferred startup progress before opening the app", async () => {
+    vi.useFakeTimers();
+    mocks.getHealth
+      .mockResolvedValueOnce({
+        status: "starting",
+        startup: { ready: false, phase: "storage_migration", progress: 20 }
+      })
+      .mockResolvedValueOnce({ status: "ok", startup: { ready: true, phase: "ready", progress: 100 } });
+    const view = render(
+      <BackendBootLoader>
+        <div>ready-after-recovery</div>
+      </BackendBootLoader>
+    );
+    await act(async () => Promise.resolve());
+    expect(view.getByText("backend.starting.phase.storage_migration · 20%")).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(5);
+    expect(view.getByText("ready-after-recovery")).not.toBeNull();
+  });
+  test("backend loader opens the interface while AI hardware detection continues", async () => {
+    mocks.getHealth.mockResolvedValue({
+      status: "starting",
+      startup: {
+        ready: false,
+        interactive: true,
+        phase: "hardware_detection",
+        progress: 75
+      }
+    });
+    const view = render(
+      <BackendBootLoader>
+        <div>interactive-before-ai</div>
+      </BackendBootLoader>
+    );
+
+    await waitFor(() => expect(view.getByText("interactive-before-ai")).not.toBeNull());
+    expect(mocks.hydrate).toHaveBeenCalledTimes(1);
+  });
   test("backend loader exposes a terminal error and can retry", async () => {
     vi.useFakeTimers();
     mocks.getHealth.mockRejectedValue(new Error("offline"));
@@ -157,12 +199,26 @@ describe("application shell", () => {
         <div>ready-after-manual-retry</div>
       </BackendBootLoader>
     );
-    await vi.advanceTimersByTimeAsync(40 * 5);
-    verify([view.getByText("backend.failed"), "not.toBeNull"], [mocks.getHealth, "toHaveBeenCalledTimes", 40]);
+    await vi.advanceTimersByTimeAsync(160 * 5);
+    verify([view.getByText("backend.failed"), "not.toBeNull"], [mocks.getHealth, "toHaveBeenCalledTimes", 160]);
     mocks.getHealth.mockResolvedValue({ ok: true });
     fireEvent.click(view.getByText("backend.retry"));
     await act(async () => Promise.resolve());
-    verify([mocks.getHealth, "toHaveBeenCalledTimes", 41], [view.getByText("ready-after-manual-retry"), "not.toBeNull"]);
+    verify([mocks.getHealth, "toHaveBeenCalledTimes", 161], [view.getByText("ready-after-manual-retry"), "not.toBeNull"]);
+  });
+  test("backend loader explains a slow first launch before giving up", async () => {
+    vi.useFakeTimers();
+    mocks.getHealth.mockRejectedValue(new Error("offline"));
+    const view = render(
+      <BackendBootLoader>
+        <div>ready-after-slow-start</div>
+      </BackendBootLoader>
+    );
+    await vi.advanceTimersByTimeAsync(18 * 5);
+    verify([view.getByText("backend.starting.slow"), "not.toBeNull"]);
+    mocks.getHealth.mockResolvedValueOnce({ ok: true });
+    await vi.advanceTimersByTimeAsync(5);
+    verify([view.getByText("ready-after-slow-start"), "not.toBeNull"]);
   });
   test("backend loader falls back for unknown themes and ignores late health", async () => {
     mocks.getTheme.mockReturnValue("unknown");

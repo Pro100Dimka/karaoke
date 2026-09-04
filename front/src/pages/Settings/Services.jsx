@@ -13,7 +13,7 @@ import { useAppDialog } from "../../contexts/AppDialog";
 import { usePolling } from "../../hooks/usePolling";
 import { useI18n } from "../../i18n";
 import { translateSaved as tr } from "../../i18n/runtime";
-import { POLLING_INTERVALS } from "../../runtime-config";
+import { POLLING_INTERVALS as POLL } from "../../runtime-config";
 import { Button, Card, Chip, Grid, Select, Stack, Typography } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 import { SERVICES } from "./schema";
@@ -24,7 +24,16 @@ export const SERVICE_ICONS = {
   diagnostics: Stethoscope,
   about: Info
 };
-const panel = { padding: "1rem", border: "1px solid var(--ui-border)", borderRadius: "1rem" };
+
+const PANEL = { padding: "1rem", border: "1px solid var(--ui-border)", borderRadius: "1rem" };
+const LOCALE = { uk: "uk-UA", ru: "ru-RU", en: "en-US" };
+const TONE = { done: "success", error: "danger" };
+const CLEAR = [
+  ["clearCache", api.clearCache],
+  ["deleteTemporaryFiles", api.deleteTemp]
+];
+
+const useData = (fn, interval, fallback) => usePolling(fn, interval, []).data ?? fallback;
 
 const ErrorText = ({ error }) =>
   error && (
@@ -36,35 +45,31 @@ const ErrorText = ({ error }) =>
 const Metrics = ({ items }) => (
   <Grid columns={2} gap="var(--space-2)">
     {items.map(([label, value]) => (
-      <Card key={label} sx={panel}>
+      <Card key={label} sx={PANEL}>
         <Typography variant="caption" tone="muted">
           {label}
         </Typography>
-        <Typography variant="body1" sx={{ fontWeight: 800, overflowWrap: "anywhere" }}>
-          {value ?? "—"}
-        </Typography>
+        <Typography sx={{ fontWeight: 800, overflowWrap: "anywhere" }}>{value ?? "—"}</Typography>
       </Card>
     ))}
   </Grid>
 );
 
+const Empty = ({ children }) => <Typography tone="muted">{children}</Typography>;
+
 function About() {
   const { t } = useI18n();
-  const query = usePolling(api.getAbout, POLLING_INTERVALS.about, []);
-  const data = query.data ?? {};
+  const { data: response, error } = usePolling(api.getAbout, POLL.about, []);
+  const data = response ?? {};
+  const fields = ["backendVersion", "frontendVersion", "aiVersion", "dataPath"];
+  const values = [data.backend_version, data.frontend_version, data.ai_version, data.data_dir];
+
   return (
     <Stack align="center" gap={1.2}>
-      <ErrorText error={query.error} />
+      <ErrorText error={error} />
       <Typography variant="h2">A&amp;D Voice</Typography>
       <Typography tone="muted">{t("settings.about.description")}</Typography>
-      <Metrics
-        items={[
-          [t("settings.about.backendVersion"), data.backend_version],
-          [t("settings.about.frontendVersion"), data.frontend_version],
-          [t("settings.about.aiVersion"), data.ai_version],
-          [t("settings.about.dataPath"), data.data_dir]
-        ]}
-      />
+      <Metrics items={fields.map((key, i) => [t(`settings.about.${key}`), values[i]])} />
       <Typography variant="caption" tone="muted">
         © 2026 A&amp;D Voice
       </Typography>
@@ -74,18 +79,18 @@ function About() {
 
 function Diagnostics() {
   const { t } = useI18n();
-  const health = usePolling(api.getHealth, POLLING_INTERVALS.health, []).data;
-  const pipeline = usePolling(api.getPipelineHealth, POLLING_INTERVALS.health, []).data;
-  const versions = usePolling(api.getVersions, POLLING_INTERVALS.versions, []).data;
-  const errors = usePolling(api.getErrors, POLLING_INTERVALS.errors, []).data?.errors ?? [];
-  const checks = [["backend", Boolean(health)], ...Object.entries(pipeline ?? {})];
+  const health = useData(api.getHealth, POLL.health);
+  const pipeline = useData(api.getPipelineHealth, POLL.health, {});
+  const versions = useData(api.getVersions, POLL.versions, {});
+  const errors = useData(api.getErrors, POLL.errors, {}).errors ?? [];
+
   return (
     <Stack gap={1}>
       <Grid columns={2} gap="var(--space-2)">
-        {checks.map(([name, ok]) => {
+        {[["backend", !!health], ...Object.entries(pipeline)].map(([name, ok]) => {
           const Icon = ok ? CheckCircle2 : CircleAlert;
           return (
-            <Card key={name} sx={panel}>
+            <Card key={name} sx={PANEL}>
               <Stack direction="row" align="center" justify="space-between">
                 <Typography>{t(`settings.diagnostics.${name}`, {}, name)}</Typography>
                 <Icon size={18} color={`var(--ui-${ok ? "success" : "danger"})`} />
@@ -94,150 +99,142 @@ function Diagnostics() {
           );
         })}
       </Grid>
-      <Metrics items={Object.entries(versions?.components ?? {})} />
+
+      <Metrics items={Object.entries(versions.components ?? {})} />
       <Typography variant="h3">{t("settings.diagnostics.errors")}</Typography>
+
       {errors.length ? (
-        errors.map((error) => (
-          <Card key={error.id ?? `${error.updated_at}-${error.title}`} sx={panel}>
+        errors.map(({ id, updated_at, title, error_message }) => (
+          <Card key={id ?? `${updated_at}-${title}`} sx={PANEL}>
             <Stack gap={0.25}>
               <Stack direction="row" justify="space-between">
-                <Typography>{error.title}</Typography>
+                <Typography>{title}</Typography>
                 <Typography variant="caption" tone="muted">
-                  {error.updated_at}
+                  {updated_at}
                 </Typography>
               </Stack>
               <Typography tone="danger" variant="body2">
-                {error.error_message}
+                {error_message}
               </Typography>
             </Stack>
           </Card>
         ))
       ) : (
-        <Typography tone="muted">{t("settings.diagnostics.noErrors")}</Typography>
+        <Empty>{t("settings.diagnostics.noErrors")}</Empty>
       )}
     </Stack>
   );
 }
 
 export const formatDate = (value, language) => {
-  const date = value && new Date(value);
-  return date && !Number.isNaN(date.getTime())
-    ? date.toLocaleString({ uk: "uk-UA", ru: "ru-RU", en: "en-US" }[language])
-    : "—";
+  const date = new Date(value);
+  return value && !Number.isNaN(+date) ? date.toLocaleString(LOCALE[language]) : "—";
 };
 
 function History() {
   const { language, t } = useI18n();
-  const query = usePolling(api.getHistory, POLLING_INTERVALS.history, []);
-  const data = query.data ?? [];
+  const { data: response, error } = usePolling(api.getHistory, POLL.history, []);
+  const data = response ?? [];
+
   return (
     <Stack gap={0.75}>
-      <ErrorText error={query.error} />
+      <ErrorText error={error} />
       {data.length ? (
-        data.map((item, index) => (
-          <Card key={item.id ?? `${item.timestamp}-${index}`} sx={panel}>
+        data.map(({ id, timestamp, song_title, kind, status }, i) => (
+          <Card key={id ?? `${timestamp}-${i}`} sx={PANEL}>
             <Stack direction="row" align="center" justify="space-between" gap={1}>
               <Stack gap={0.2}>
-                <Typography>{item.song_title ?? "—"}</Typography>
+                <Typography>{song_title ?? "—"}</Typography>
                 <Typography variant="caption" tone="muted">
-                  {t(`settings.history.${item.kind}`, {}, item.kind ?? "—")} ·{" "}
-                  {formatDate(item.timestamp, language)}
+                  {t(`settings.history.${kind}`, {}, kind ?? "—")} ·{" "}
+                  {formatDate(timestamp, language)}
                 </Typography>
               </Stack>
-              <Chip
-                tone={
-                  item.status === "done"
-                    ? "success"
-                    : item.status === "error"
-                      ? "danger"
-                      : "default"
-                }
-              >
-                {t(`status.${item.status}`, {}, item.status ?? "—")}
+              <Chip tone={TONE[status] ?? "default"}>
+                {t(`status.${status}`, {}, status ?? "—")}
               </Chip>
             </Stack>
           </Card>
         ))
       ) : (
-        <Typography tone="muted">{t("settings.history.empty")}</Typography>
+        <Empty>{t("settings.history.empty")}</Empty>
       )}
     </Stack>
   );
 }
 
 export const formatBytes = (value) => {
-  const bytes = Number(value) || 0;
-  if (!bytes) return tr("0 Б");
+  const bytes = +value || 0;
+  if (!bytes) return tr("settings.0B");
   const unit = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
-  const suffix = [tr("Б"), tr("КБ"), tr("МБ"), tr("ГБ")][unit];
-  return `${(bytes / 1024 ** unit).toFixed(1)} ${suffix}`;
+  return `${(bytes / 1024 ** unit).toFixed(1)} ${tr(`settings.${["b", "kb", "mb", "gb"][unit]}`)}`;
 };
 
 function Memory() {
   const { alert } = useAppDialog();
-  const size = usePolling(api.getCacheSize, POLLING_INTERVALS.memory, []);
-  const free = usePolling(api.getFreeSpace, POLLING_INTERVALS.freeSpace, []).data;
-  const songs = usePolling(api.listSongs, POLLING_INTERVALS.songs, []).data ?? [];
+  const { data: size, error } = usePolling(api.getCacheSize, POLL.memory, []);
+  const free = useData(api.getFreeSpace, POLL.freeSpace, {});
+  const songs = useData(api.listSongs, POLL.songs, []);
   const [song, setSong] = useState("");
-  const run = async (request, message) => {
+
+  const run = async (fn, format) => {
     try {
-      await alert(message(await request()));
-    } catch (error) {
-      await alert(getErrorMessage(error));
+      await alert(format(await fn()));
+    } catch (e) {
+      await alert(getErrorMessage(e));
     }
   };
-  const actions = [
-    [tr("Очистить кэш"), api.clearCache],
-    [tr("Удалить временные файлы"), api.deleteTemp]
-  ];
+
+  const freed = (value) => `${tr("settings.freed")}: ${value}`;
   const options = [
-    { value: "", label: tr("Выберите песню") },
+    { value: "", label: tr("settings.selectASong") },
     ...songs
       .filter(({ status, optimized }) => status === "done" && !optimized)
       .map(({ id: value, title: label }) => ({ value, label }))
   ];
+
   return (
     <Stack gap={1}>
-      <ErrorText error={size.error} />
+      <ErrorText error={error} />
       <Metrics
         items={[
-          [tr("Всего занято"), size.data?.total_human],
-          [tr("Свободно на диске"), free?.free_human]
+          [tr("settings.memory.total"), size?.total_human],
+          [tr("settings.memory.free"), free.free_human]
         ]}
       />
-      <Metrics
-        items={Object.entries(size.data?.breakdown ?? {}).map(([key, value]) => [
-          key,
-          formatBytes(value)
-        ])}
-      />
+      <Metrics items={Object.entries(size?.breakdown ?? {}).map(([k, v]) => [k, formatBytes(v)])} />
+
       <Stack direction="row" wrap gap={0.75}>
-        {actions.map(([label, request]) => (
+        {CLEAR.map(([key, fn]) => (
           <Button
-            key={label}
+            key={key}
             variant="outlined"
             startIcon={<Trash2 />}
-            onClick={() =>
-              run(request, (result) => `${tr("Освобождено")}: ${formatBytes(result?.freed_bytes)}`)
-            }
+            onClick={() => run(fn, ({ freed_bytes }) => freed(formatBytes(freed_bytes)))}
           >
-            {label}
+            {tr(`settings.${key}`)}
           </Button>
         ))}
       </Stack>
+
       <Grid columns={2} gap="var(--space-2)" align="end">
-        <Select label={tr("Песня")} value={song} options={options} onChange={setSong} />
+        <Select
+          label={tr("settings.history.song")}
+          value={song}
+          options={options}
+          onChange={setSong}
+        />
         <Button
           variant="contained"
           disabled={!song}
           onClick={() =>
             run(
               () => api.optimizeSong(song),
-              (result) => `${tr("Освобождено")}: ${result?.freed_human ?? "—"}`
+              (r) => freed(r?.freed_human ?? "—")
             )
           }
         >
-          {tr("Оптимизировать")}
+          {tr("settings.memory.optimize")}
         </Button>
       </Grid>
     </Stack>
@@ -261,7 +258,7 @@ export function ServiceCards({ open }) {
             tilt={false}
             onClick={() => open(id)}
             sx={{ cursor: "pointer", textAlign: "left", padding: 0 }}
-            cardContent={{ style: panel }}
+            cardContent={{ style: PANEL }}
           >
             <Stack gap={0.35}>
               <Icon size={20} />
@@ -279,10 +276,11 @@ export function ServiceCards({ open }) {
 
 export function Service({ id }) {
   const Screen = SCREENS[id];
-  if (!Screen) return null;
   return (
-    <Stack gap={1} sx={{ padding: "1.25rem" }}>
-      <Screen />
-    </Stack>
+    Screen && (
+      <Stack gap={1} sx={{ padding: "1.25rem" }}>
+        <Screen />
+      </Stack>
+    )
   );
 }

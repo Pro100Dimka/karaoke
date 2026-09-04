@@ -2,16 +2,16 @@ import { translateSaved as t } from "../i18n/runtime";
 
 const defaults = {
   alert: () => ({
-    title: t("Уведомление"),
+    title: t("common.notification"),
     label: "A&D Voice",
-    confirmText: t("Понятно"),
+    confirmText: t("common.itSClear"),
     confirmClassName: "btn btn-primary"
   }),
   confirm: () => ({
-    title: t("Подтвердите действие"),
-    label: t("Требуется подтверждение"),
-    confirmText: t("Подтвердить"),
-    cancelText: t("Отмена"),
+    title: t("common.confirmAction"),
+    label: t("common.confirmationRequired"),
+    confirmText: t("common.confirm"),
+    cancelText: t("common.cancel"),
     confirmClassName: "btn btn-primary"
   })
 };

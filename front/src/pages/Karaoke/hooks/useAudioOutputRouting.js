@@ -1,32 +1,36 @@
 import { useEffect } from "react";
-import { api } from "../../../api/client";
 import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 
-export default function useAudioOutputRouting(options) {
-  const {
-    audioDriver,
-    audioSettings,
-    directOutputDeviceId,
-    directOutputDevices,
-    instrumentalRef,
-    setDirectOutputDeviceId,
-    updateMicrophone,
-    videoRef,
-    vocalsRef
-  } = options;
-  const asioDriverName = audioSettings?.asio_driver_name;
-  const configuredOutputId = audioSettings?.output_device_id;
+const safe = (task) => Promise.resolve().then(task).catch(() => {});
+const publishRoute = (deviceId = "") =>
+  globalThis.dispatchEvent?.(
+    new CustomEvent("audio-output-route-changed", { detail: { deviceId } })
+  );
+
+export default function useAudioOutputRouting({
+  audioDriver,
+  audioSettings,
+  directOutputDeviceId,
+  directOutputDevices,
+  instrumentalRef,
+  setDirectOutputDeviceId,
+  updateMicrophone,
+  videoRef,
+  vocalsRef
+}) {
   useEffect(() => {
-    if (audioDriver !== "asio" || String(configuredOutputId ?? "").trim()) return;
-    const preferred = findDriverOutputDevice(directOutputDevices, asioDriverName);
-    if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
-      setDirectOutputDeviceId(preferred.index);
-      Promise.resolve(updateMicrophone({ output_device_id: preferred.index })).catch(() => {});
-    }
+    if (audioDriver !== "asio" || String(audioSettings?.output_device_id ?? "").trim()) return;
+    const device = findDriverOutputDevice(directOutputDevices, audioSettings?.asio_driver_name);
+    if (!device || String(directOutputDeviceId) === String(device.index)) return;
+
+    safe(async () => {
+      const updated = await updateMicrophone({ output_device_id: device.index });
+      if (updated) setDirectOutputDeviceId(updated.output_device_id ?? device.index);
+    });
   }, [
     audioDriver,
-    asioDriverName,
-    configuredOutputId,
+    audioSettings?.asio_driver_name,
+    audioSettings?.output_device_id,
     directOutputDeviceId,
     directOutputDevices,
     setDirectOutputDeviceId,
@@ -34,47 +38,33 @@ export default function useAudioOutputRouting(options) {
   ]);
 
   useEffect(() => {
-    const enumerateDevices = globalThis.navigator.mediaDevices?.enumerateDevices;
-    if (
-      directOutputDeviceId == null ||
-      directOutputDeviceId === "" ||
-      typeof enumerateDevices !== "function"
-    )
-      return undefined;
-    const selected = Array.from(directOutputDevices ?? []).find(
-      (device) => String(device.index) === String(directOutputDeviceId)
-    );
-    if (!selected) return undefined;
     let active = true;
-    Promise.resolve(enumerateDevices.call(globalThis.navigator.mediaDevices))
-      .then((entries) => {
-        if (!active) return;
-        const output = findMatchingBrowserOutput(entries, selected);
-        // Stryker disable next-line ConditionalExpression: equivalent catch fallback.
-        if (!output) return;
-        [instrumentalRef.current, vocalsRef.current, videoRef.current]
-          .filter(Boolean)
-          .forEach((media) => {
-            if (typeof media.setSinkId !== "function") return;
-            Promise.resolve(media.setSinkId(output.deviceId)).catch(() => {});
-          });
-      })
-      .catch(() => {});
+    const route = (deviceId = "") => {
+      if (!active) return;
+      publishRoute(deviceId);
+      for (const media of [instrumentalRef.current, vocalsRef.current, videoRef.current]) {
+        if (typeof media?.setSinkId === "function") safe(() => media.setSinkId(deviceId));
+      }
+    };
+
+    const selected = (Array.isArray(directOutputDevices) ? directOutputDevices : []).find(
+      ({ index }) => String(index) === String(directOutputDeviceId)
+    );
+    const devices = globalThis.navigator?.mediaDevices;
+
+    if (directOutputDeviceId == null || directOutputDeviceId === "" || !selected) {
+      route();
+    } else if (typeof devices?.enumerateDevices === "function") {
+      devices
+        .enumerateDevices()
+        .then((entries) => route(findMatchingBrowserOutput(entries, selected)?.deviceId || ""))
+        .catch(() => route());
+    } else {
+      route();
+    }
 
     return () => {
       active = false;
     };
   }, [directOutputDeviceId, directOutputDevices, instrumentalRef, videoRef, vocalsRef]);
-
-  useEffect(
-    () => {
-      const releaseMonitorOnClose = () => {
-        api.releaseDirectMonitoring().catch(() => {});
-      };
-      window.addEventListener("pagehide", releaseMonitorOnClose);
-      return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
-    },
-    // Stryker disable next-line ArrayDeclaration: browser/API globals are stable.
-    []
-  );
 }

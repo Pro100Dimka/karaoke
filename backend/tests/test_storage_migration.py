@@ -27,7 +27,7 @@ def test_existing_source_and_legacy_output_resolution(monkeypatch, tmp_path):
 
 def run_migration(monkeypatch, tmp_path, songs):
     database = Mock()
-    database.query.return_value.all.return_value = songs
+    database.scalars.return_value = songs
     monkeypatch.setattr(storage_migration, "SessionLocal", Mock(return_value=database))
     commit = Mock()
     monkeypatch.setattr(storage_migration, "commit", commit)
@@ -103,7 +103,7 @@ def test_migration_rewrites_source_inside_already_moved_output(monkeypatch, tmp_
 
 def test_migration_rolls_back_and_closes_database_on_failure(monkeypatch, tmp_path):
     database = Mock()
-    database.query.side_effect = RuntimeError("database failed")
+    database.scalars.side_effect = RuntimeError("database failed")
     monkeypatch.setattr(storage_migration, "SessionLocal", Mock(return_value=database))
     raises(RuntimeError, lambda: storage_migration.migrate_legacy_song_storage(), match='database failed')
     database.rollback.assert_called_once_with()
@@ -136,7 +136,7 @@ def test_migration_restores_files_when_commit_fails_after_move(monkeypatch, tmp_
     source = legacy / "song.mp3"
     source.write_bytes(b"audio")
     current, database = song(tmp_path, source_path=str(source), output_dir=str(legacy)), Mock()
-    database.query.return_value.all.return_value = [current]
+    database.scalars.return_value = [current]
     monkeypatch.setattr(storage_migration, "SessionLocal", Mock(return_value=database))
     patch_attrs(monkeypatch, storage_migration.config, BASE_DIR=tmp_path / 'backend', SONG_OUTPUT_DIR=tmp_path / 'library')
     monkeypatch.setattr(storage_migration, "commit", Mock(side_effect=RuntimeError("commit failed")))

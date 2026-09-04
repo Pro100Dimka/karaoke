@@ -1,11 +1,6 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { Check, ChevronDown } from "lucide-react";
-import {
-  forwardRef,
-  useEffect,
-  useId,
-  useRef,
-  useState
-} from "react";
+import { Fragment, forwardRef, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import Button from "../Button";
@@ -18,6 +13,7 @@ import mergeRefs from "../_internal/mergeRefs";
 import { optionItem } from "../_internal/option";
 import mergeSx from "../_internal/sx";
 import useControllable from "../_internal/useControllable";
+import { selectPosition } from "./position";
 
 import "./select.css";
 
@@ -36,7 +32,7 @@ const Select = forwardRef(
       value,
       defaultValue,
       onChange,
-      placeholder = "Выберите значение",
+      placeholder = tr("common.field.selectPlaceholder"),
       startIcon,
       endIcon,
       className = "",
@@ -44,6 +40,7 @@ const Select = forwardRef(
       sx,
       fieldSx,
       style,
+      fullWidth,
       fieldStyle,
       ...props
     },
@@ -56,16 +53,10 @@ const Select = forwardRef(
     const [open, setOpen] = useState(false);
     const [position, setPosition] = useState(null);
 
-    const [current, setCurrent] = useControllable(
-      value,
-      defaultValue,
-      onChange
-    );
+    const [current, setCurrent] = useControllable(value, defaultValue, onChange);
 
     const normalizedOptions = options.map(optionItem);
-    const selected = normalizedOptions.find(
-      (item) => String(item.value) === String(current)
-    );
+    const selected = normalizedOptions.find((item) => String(item.value) === String(current));
 
     const controlId = id || `ui-select-${uid}`;
     const listboxId = `${controlId}-listbox`;
@@ -76,11 +67,14 @@ const Select = forwardRef(
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      setPosition({
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width
+      const next = selectPosition(rect, {
+        width: document.documentElement.clientWidth,
+        height: window.innerHeight,
+        menuHeight: popoverRef.current?.scrollHeight || 0
       });
+      setPosition((previous) =>
+        previous && Object.keys(next).every((key) => previous[key] === next[key]) ? previous : next
+      );
     };
 
     const close = () => setOpen(false);
@@ -99,13 +93,11 @@ const Select = forwardRef(
     };
 
     const focusOption = (index) => {
-      const buttons = popoverRef.current?.querySelectorAll(
-        '.ui-select-option:not(:disabled)'
-      );
+      const buttons = popoverRef.current?.querySelectorAll(".ui-select-option:not(:disabled)");
       buttons?.[index]?.focus();
     };
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       if (!open) return;
 
       updatePosition();
@@ -121,12 +113,17 @@ const Select = forwardRef(
       };
 
       const onViewportChange = () => updatePosition();
+      const observer =
+        typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onViewportChange);
+      if (triggerRef.current) observer?.observe(triggerRef.current);
+      if (popoverRef.current) observer?.observe(popoverRef.current);
 
       document.addEventListener("pointerdown", onPointerDown, true);
       window.addEventListener("resize", onViewportChange);
       window.addEventListener("scroll", onViewportChange, true);
 
       return () => {
+        observer?.disconnect();
         document.removeEventListener("pointerdown", onPointerDown, true);
         window.removeEventListener("resize", onViewportChange);
         window.removeEventListener("scroll", onViewportChange, true);
@@ -137,11 +134,9 @@ const Select = forwardRef(
       if (!open) return;
 
       requestAnimationFrame(() => {
-        const enabled = [...(
-          popoverRef.current?.querySelectorAll(
-            '.ui-select-option:not(:disabled)'
-          ) || []
-        )];
+        const enabled = [
+          ...(popoverRef.current?.querySelectorAll(".ui-select-option:not(:disabled)") || [])
+        ];
 
         const selectedIndex = enabled.findIndex(
           (button) => button.dataset.value === String(current)
@@ -160,12 +155,7 @@ const Select = forwardRef(
             label={label}
             labelAccessory={Boolean(tooltip)}
             labelNode={
-              <FloatingLabel
-                id={controlId}
-                label={label}
-                required={required}
-                tooltip={tooltip}
-              />
+              <FloatingLabel id={controlId} label={label} required={required} tooltip={tooltip} />
             }
             required={required}
             disabled={disabled}
@@ -174,7 +164,7 @@ const Select = forwardRef(
             className={cx("ui-select-field", className)}
             data-filled={Boolean(selected) || undefined}
             sx={sx}
-            style={style}
+            style={{ ...style, ...(fullWidth && { width: "100%" }) }}
           >
             <InputBase
               component={Button}
@@ -191,23 +181,23 @@ const Select = forwardRef(
               aria-controls={open ? listboxId : undefined}
               onClick={toggle}
               onKeyDown={(event) => {
-              if (disabled) return;
+                if (disabled) return;
 
-              if (
-                event.key === "ArrowDown" ||
-                event.key === "ArrowUp" ||
-                event.key === "Enter" ||
-                event.key === " "
-              ) {
-                event.preventDefault();
+                if (
+                  event.key === "ArrowDown" ||
+                  event.key === "ArrowUp" ||
+                  event.key === "Enter" ||
+                  event.key === " "
+                ) {
+                  event.preventDefault();
 
-                if (!open) {
-                  updatePosition();
-                  setOpen(true);
+                  if (!open) {
+                    updatePosition();
+                    setOpen(true);
+                  }
+                } else if (event.key === "Escape") {
+                  close();
                 }
-              } else if (event.key === "Escape") {
-                close();
-              }
               }}
               {...ariaProps}
               {...props}
@@ -218,22 +208,15 @@ const Select = forwardRef(
                 </span>
               )}
 
-            <span
-              className="ui-select-value"
-              data-placeholder={!selected || undefined}
-            >
-              {selected?.label ?? placeholder}
-            </span>
+              <span className="ui-select-value" data-placeholder={!selected || undefined}>
+                {selected?.label ?? placeholder}
+              </span>
 
-            <span className="ui-select-actions" aria-hidden="true">
-              {endIcon && (
-                <span className="ui-select-end-icon">
-                  {endIcon}
-                </span>
-              )}
+              <span className="ui-select-actions" aria-hidden="true">
+                {endIcon && <span className="ui-select-end-icon">{endIcon}</span>}
 
-              <ChevronDown className="ui-select-chevron" size={16} />
-            </span>
+                <ChevronDown className="ui-select-chevron" size={16} />
+              </span>
             </InputBase>
           </OutlinedInput>
 
@@ -243,6 +226,7 @@ const Select = forwardRef(
               <Popover
                 ref={popoverRef}
                 open
+                portal={false}
                 id={listboxId}
                 role="listbox"
                 className="ui-select-popover ui-control"
@@ -251,28 +235,24 @@ const Select = forwardRef(
                   position: "fixed",
                   top: position.top,
                   left: position.left,
-                  width: position.width
+                  width: position.width,
+                  maxHeight: `min(24rem, ${position.maxHeight}px)`,
+                  transform: position.above ? "translateY(-100%)" : undefined
                 }}
                 onKeyDown={(event) => {
-                  const buttons = [...(
-                    popoverRef.current?.querySelectorAll(
-                      '.ui-select-option:not(:disabled)'
-                    ) || []
-                  )];
+                  const buttons = [
+                    ...(popoverRef.current?.querySelectorAll(".ui-select-option:not(:disabled)") ||
+                      [])
+                  ];
 
-                  const currentIndex = Math.max(
-                    0,
-                    buttons.indexOf(document.activeElement)
-                  );
+                  const currentIndex = Math.max(0, buttons.indexOf(document.activeElement));
 
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
                     focusOption((currentIndex + 1) % buttons.length);
                   } else if (event.key === "ArrowUp") {
                     event.preventDefault();
-                    focusOption(
-                      (currentIndex - 1 + buttons.length) % buttons.length
-                    );
+                    focusOption((currentIndex - 1 + buttons.length) % buttons.length);
                   } else if (event.key === "Home") {
                     event.preventDefault();
                     focusOption(0);
@@ -289,49 +269,49 @@ const Select = forwardRef(
                 }}
               >
                 <div className="ui-select-options">
-                  {normalizedOptions.map((item) => {
-                    const active =
-                      String(item.value) === String(current);
+                  {normalizedOptions.map((item, index) => {
+                    const active = String(item.value) === String(current);
+                    const showGroup =
+                      item.group && item.group !== normalizedOptions[index - 1]?.group;
 
                     return (
-                      <Button
-                        key={item.value}
-                        type="button"
-                        unstyled
-                        data-size={size}
-                        role="option"
-                        aria-selected={active}
-                        disabled={item.disabled}
-                        data-value={String(item.value)}
-                        data-selected={active || undefined}
-                        className="ui-select-option ui-control"
-                        onClick={(event) => selectOption(item, event)}
-                      >
-                        <span className="ui-select-option-mark">
-                          {active && <Check />}
-                        </span>
-
-                        {item.icon && (
-                          <span
-                            className="ui-select-option-icon"
-                            aria-hidden="true"
-                          >
-                            {item.icon}
-                          </span>
+                      <Fragment key={item.value}>
+                        {showGroup && (
+                          <div className="ui-select-group" role="presentation">
+                            {item.group}
+                          </div>
                         )}
+                        <Button
+                          type="button"
+                          unstyled
+                          data-size={size}
+                          role="option"
+                          aria-selected={active}
+                          disabled={item.disabled}
+                          data-value={String(item.value)}
+                          data-selected={active || undefined}
+                          className="ui-select-option ui-control"
+                          onClick={(event) => selectOption(item, event)}
+                        >
+                          <span className="ui-select-option-mark">{active && <Check />}</span>
 
-                        <span className="ui-select-option-content">
-                          <span className="ui-select-option-label">
-                            {item.label}
-                          </span>
-
-                          {item.description && (
-                            <span className="ui-select-option-description">
-                              {item.description}
+                          {item.icon && (
+                            <span className="ui-select-option-icon" aria-hidden="true">
+                              {item.icon}
                             </span>
                           )}
-                        </span>
-                      </Button>
+
+                          <span className="ui-select-option-content">
+                            <span className="ui-select-option-label">{item.label}</span>
+
+                            {item.description && (
+                              <span className="ui-select-option-description">
+                                {item.description}
+                              </span>
+                            )}
+                          </span>
+                        </Button>
+                      </Fragment>
                     );
                   })}
                 </div>
@@ -354,9 +334,13 @@ const Select = forwardRef(
       >
         {rendered}
         {error ? (
-          <small id={errorId} className="ui-field-message" data-error>{error}</small>
+          <small id={errorId} className="ui-field-message" data-error>
+            {error}
+          </small>
         ) : hint ? (
-          <small id={hintId} className="ui-field-message">{hint}</small>
+          <small id={hintId} className="ui-field-message">
+            {hint}
+          </small>
         ) : null}
       </div>
     );

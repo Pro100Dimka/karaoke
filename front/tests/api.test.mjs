@@ -270,23 +270,37 @@ describe("API domains", () => {
       method: "POST",
       keepalive: true
     });
+    await assertRequest(() => audioApi.startDirectMonitoring({ disabledEffects: true, wasapiMode: "shared", autoBuffer: true }), {
+      path: "/audio/direct-monitor/start?disabled_effects=true&wasapi_mode=shared",
+      method: "POST"
+    });
     fetch.mockRejectedValueOnce(Error("closed"));
     equal([await audioApi.releaseDirectMonitoring(), null]);
   });
-  test("routes model and recording operations and normalizes collections", async () => {
-    const [{ modelsApi }, { recordingsApi }] = await Promise.all([importDomain("models"), importDomain("recordings")]);
-    fetch.mockResolvedValueOnce(response({ body: '[{"name":" x ","size":-1}]' }));
-    deepEqual([await modelsApi.listWhisperModels(), [{ name: "x", size: 0, downloaded: false, selected: false }]]);
-    equal([pathOf(lastCall()[0]), "/models/whisper"]);
-    fetch.mockResolvedValueOnce(response({ body: "null" }));
-    deepEqual([await modelsApi.listWhisperModels(), []]);
-    equal([pathOf(lastCall()[0]), "/models/whisper"]);
-    for (const [invoke, path, method] of [
-      [() => modelsApi.downloadModel("a/b"), "/models/whisper/a%2Fb/download", "POST"],
-      [() => modelsApi.deleteModel("a/b"), "/models/whisper/a%2Fb", "DELETE"],
-      [() => modelsApi.selectModel("a/b"), "/models/whisper/a%2Fb/select", "POST"]
-    ])
-      await assertRequest(invoke, { path, method });
+  test("allows the backend monitor worker to finish its Windows driver fallback", async () => {
+    vi.useFakeTimers();
+    try {
+      const { audioApi } = await importDomain("audio");
+      fetch.mockImplementationOnce((_, { signal }) => abortPromise(signal, "aborted"));
+      const requestPromise = audioApi.startDirectMonitoring();
+      let settled = false;
+      requestPromise
+        .finally(() => {
+          settled = true;
+        })
+        .catch(() => {});
+      const rejection = assert.rejects(requestPromise, ({ name }) => name === "TimeoutError");
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      assert.equal(settled, false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  test("routes recording operations and normalizes collections", async () => {
+    const { recordingsApi } = await importDomain("recordings");
     for (const [args, body] of [
       [
         ["song"],
@@ -297,11 +311,15 @@ describe("API domains", () => {
           microphone_volume: 1,
           reverb: 0,
           echo: 0,
-          delay: 0
+          delay: 0,
+          octave: 0,
+          playback_rate: 1,
+          room_mode: false,
+          voice_relay: false
         }
       ],
       [
-        ["song", 1, 0.8, 0.7, 0.1, 0.2, 0.3],
+        ["song", 1, 0.8, 0.7, 0.1, 0.2, 0.3, true, 0, 1.25, true],
         {
           song_id: "song",
           position_sec: 1,
@@ -309,7 +327,11 @@ describe("API domains", () => {
           microphone_volume: 0.7,
           reverb: 0.1,
           echo: 0.2,
-          delay: 0.3
+          delay: 0.3,
+          octave: 0,
+          playback_rate: 1.25,
+          room_mode: true,
+          voice_relay: true
         }
       ]
     ])
@@ -323,10 +345,34 @@ describe("API domains", () => {
       [() => recordingsApi.pauseRecording(null), "/recording/pause?session_id="],
       [() => recordingsApi.resumeRecording("a/b ?"), "/recording/resume?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.resumeRecording(null), "/recording/resume?session_id="],
+      [() => recordingsApi.syncRecording("a/b ?", 4.25, 1.25), "/recording/sync?session_id=a%2Fb%20%3F&position_sec=4.25&playback_rate=1.25"],
       [() => recordingsApi.stopRecording("a/b ?"), "/recording/stop?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.stopRecording(null), "/recording/stop?session_id="]
     ])
       await assertRequest(invoke, { path, method: "POST" });
+    await assertRequest(
+      () =>
+        recordingsApi.updateRecordingControls("a/b ?", {
+          musicVolume: 0.25,
+          microphoneVolume: 1.75,
+          reverb: 0.4,
+          echo: 0.3,
+          delay: 0.2,
+          octave: -0.5
+        }),
+      {
+        path: "/recording/controls?session_id=a%2Fb%20%3F",
+        method: "PATCH",
+        body: {
+          music_volume: 0.25,
+          microphone_volume: 1.75,
+          reverb: 0.4,
+          echo: 0.3,
+          delay: 0.2,
+          octave: -0.5
+        }
+      }
+    );
     fetch.mockResolvedValueOnce(response({ body: '[{"id":1,"duration_sec":"2"}]' }));
     equal([(await recordingsApi.listRecordingsForSong("song"))[0].duration_sec, 2], [pathOf(lastCall()[0]), "/recording/by-song/song"]);
     fetch.mockResolvedValueOnce(response({ body: "null" }));
@@ -375,7 +421,7 @@ describe("API domains", () => {
       await songsApi.getSong(" a/b "),
       {
         id: "a/b",
-        title: "Без назви",
+        title: "Без названия",
         status: "pending",
         progress_percent: 0,
         progress_step: "",
@@ -396,6 +442,7 @@ describe("API domains", () => {
       [() => songsApi.getStatus(id), "/songs/a%2Fb/status"],
       [() => songsApi.getLog(id), "/songs/a%2Fb/log"],
       [() => songsApi.getResult(id), "/songs/a%2Fb/result"],
+      [() => songsApi.resolveSongRevision("sha256:abc"), "/songs/revision/resolve", "POST", { revision: "sha256:abc" }],
       [() => songsApi.getSongEditor(id), "/songs/a%2Fb/editor"],
       [
         () => songsApi.saveSongEditor(id, [{ pitch: 60 }]),
@@ -431,6 +478,12 @@ describe("API domains", () => {
     await songsApi.addSong(song);
     [, options] = lastCall();
     deepEqual([[...options.body.keys()], ["file", "artist"]]);
+    await songsApi.prepareKarDataset([new Blob(["kar-one"]), new Blob(["kar-two"])]);
+    [url, options] = lastCall();
+    deepEqual([
+      [pathOf(url), options.method, await Promise.all(options.body.getAll("files").map((file) => file.text()))],
+      ["/songs/training/kar", "POST", ["kar-one", "kar-two"]]
+    ]);
     equal([pathOf(songsApi.getAudioTrackUrl("a/b", "lead vocal")), "/songs/a%2Fb/audio/lead%20vocal"]);
     const coverUrl = new URL(songsApi.getSongCoverUrl("a/b", "2026-08-21 15:00"));
     deepEqual([
@@ -474,6 +527,13 @@ describe("API domains", () => {
       path: "/settings",
       method: "PATCH",
       body: {}
+    });
+    await assertRequest(settingsApi.getRemoteDiagnosticsPolicy, {
+      path: "/settings/remote-diagnostics"
+    });
+    await assertRequest(settingsApi.deleteRemoteDiagnostics, {
+      path: "/settings/remote-diagnostics",
+      method: "DELETE"
     });
     await assertRequest(settingsApi.getUiPreferences, { path: "/preferences" });
     await assertRequest(() => settingsApi.updateUiPreferences("karaoke room", { radio: true }), {

@@ -1,7 +1,6 @@
 // Стабильный публичный API. Доменные модули разделяют реализацию, но все
 // существующие импорты `api` продолжают работать без изменений.
 import { audioApi } from "./domains/audio";
-import { modelsApi } from "./domains/models";
 import { playerApi } from "./domains/player";
 import { recordingsApi } from "./domains/recordings";
 import { settingsApi } from "./domains/settings";
@@ -14,6 +13,5 @@ export const api = Object.freeze({
   ...recordingsApi,
   ...systemApi,
   ...audioApi,
-  ...settingsApi,
-  ...modelsApi
+  ...settingsApi
 });

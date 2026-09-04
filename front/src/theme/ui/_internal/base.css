@@ -5,26 +5,24 @@
     --control-md: 2.5rem;
     --control-lg: 3rem;
 
-    --control-pad-xs: .5rem;
-    --control-pad-sm: .625rem;
-    --control-pad-md: .75rem;
-    --control-pad-lg: .875rem;
+    --control-pad-xs: 0.5rem;
+    --control-pad-sm: 0.625rem;
+    --control-pad-md: 0.75rem;
+    --control-pad-lg: 0.875rem;
 
-    --control-font-xs: .75rem;
-    --control-font-sm: .8125rem;
-    --control-font-md: .875rem;
+    --control-font-xs: 0.75rem;
+    --control-font-sm: 0.8125rem;
+    --control-font-md: 0.875rem;
     --control-font-lg: 1rem;
 
-    --control-icon-xs: .875rem;
+    --control-icon-xs: 0.875rem;
     --control-icon-sm: 1rem;
     --control-icon-md: 1.125rem;
     --control-icon-lg: 1.25rem;
 
-    --focus-width: .125rem;
-    --focus-offset: .125rem;
-    --focus-shadow:
-      0 0 0 var(--focus-width)
-      color-mix(in srgb, var(--ui-focus) 18%, transparent);
+    --focus-width: 0.125rem;
+    --focus-offset: 0.125rem;
+    --focus-shadow: 0 0 0 var(--focus-width) color-mix(in srgb, var(--ui-focus) 18%, transparent);
   }
 
   .ui-control {

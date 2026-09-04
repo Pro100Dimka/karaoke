@@ -1,3 +1,4 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import Primitive from "../_internal/Primitive";
 import "./chip.css";
 
@@ -28,8 +29,8 @@ export default function Chip({
         <button
           type="button"
           className="ui-chip-remove"
-          aria-label="Удалить"
-          onClick={event => {
+          aria-label={tr("editor.delete")}
+          onClick={(event) => {
             event.stopPropagation();
             onRemove?.(event);
           }}

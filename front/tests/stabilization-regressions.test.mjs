@@ -2,16 +2,27 @@ import fs from "node:fs";
 import { expect, test } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
 const read = (path) => fs.readFileSync(path, "utf8");
-test("backend child exit 23 cannot create an Electron restart storm", () => {
-  const main = read("electron/main.cjs");
+test("startup fallback never masks the packaged theme backdrop", () => {
+  const html = read("index.html");
+  const renderer = read("src/main.jsx");
+  const electron = read("electron/main.cjs");
   verify(
-    [main, "toContain", "if (code === 23)"],
+    [html, "toContain", '<div id="root"></div>'],
+    [renderer, "not.toContain", "appRoot.style.background"],
+    [electron, "toContain", "backgroundColor: themeBackgrounds[initialTheme]"],
+    [electron, "toContain", "readThemeBackgrounds()"]
+  );
+});
+test("backend child exit 23 cannot create an Electron restart storm", () => {
+  const main = read("electron/backend-process.cjs");
+  verify(
+    [main, "toContain", "if (code === BACKEND_ALREADY_RUNNING_EXIT_CODE)"],
     [main, "toContain", "watchDuplicateBackend()"],
     [main, "toContain", "backendDuplicateDetected = false"],
     [main, "toContain", "backendDuplicateWatchGeneration"],
     [main, "toContain", "if (!active()) return"],
     [main, "toMatch", /function startBackend\(\)[\s\S]{0,260}isQuitting[\s\S]*backendStopRequested/],
-    [main, "not.toMatch", /if \(code === 23\)[\s\S]{0,300}backendStopRequested = true/],
+    [main, "not.toMatch", /if \(code === BACKEND_ALREADY_RUNNING_EXIT_CODE\)[\s\S]{0,300}backendStopRequested = true/],
     [main, "toContain", 'spawn("taskkill", ["/PID", String(pid), "/T", "/F"]']
   );
 });
@@ -22,11 +33,15 @@ test("room output mute never toggles the outgoing WebRTC microphone", () => {
   const body = context.slice(start, end);
   verify([body, "not.toContain", "setMicrophoneMuted("], [body, "toContain", "applyRemoteAudioMute()"]);
 });
-test("room self-monitor reuses the existing WebRTC stream", () => {
+test("room self-monitor keeps WebRTC transport and releases its realtime graph", () => {
   const audio = read("src/contexts/hooks/useOnlineRoomAudio.js");
   verify([audio, "toContain", "const stream = await voice.start()"], [audio, "toContain", "context.createMediaStreamSource(stream)"]);
   const karaoke = read("src/pages/Karaoke/index.jsx");
-  expect(karaoke).toContain("onlineRoom.setLocalMonitoring(enabled)");
+  verify(
+    [karaoke, "toContain", "setRoomLocalMonitoring(false)"],
+    [karaoke, "toContain", "api.startDirectMonitoring"],
+    [karaoke, "toContain", "api.stopDirectMonitoring"]
+  );
 });
 test("karaoke waveform loads the real instrumental through WaveSurfer", () => {
   const timeline = read("src/pages/Karaoke/components/waveform-timeline.jsx");
@@ -35,6 +50,25 @@ test("karaoke waveform loads the real instrumental through WaveSurfer", () => {
     [timeline, "toContain", 'api.getAudioTrackUrl(songId, "instrumental")'],
     [waveform, "toContain", 'import("wavesurfer.js")'],
     [waveform, "toContain", "fetchParams"],
+    [waveform, "not.toContain", "barWidth:"],
     [waveform, "not.toContain", "index / BAR_COUNT <= progress"]
+  );
+});
+test("recording and processing waveforms use their real audio files", () => {
+  const player = read("src/components/AudioPlayer.jsx");
+  const processing = read("src/pages/Library/modals.jsx");
+  verify(
+    [player, "toContain", "url={src}"],
+    [processing, "toContain", 'api.getAudioTrackUrl(song.id, "song")'],
+    [processing, "toContain", "fetchParams={waveformFetchParams}"]
+  );
+});
+test("a reopened waveform reuses the decoded real-audio peaks", () => {
+  const waveform = read("src/theme/ui/Waveform/index.jsx");
+  verify(
+    [waveform, "toContain", "const waveformPeakCache = new Map()"],
+    [waveform, "toContain", "wavesurfer.exportPeaks"],
+    [waveform, "toContain", "waveformPeakCache.get(url)"],
+    [waveform, "toContain", "{ duration: cached.duration, peaks: cached.peaks }"]
   );
 });

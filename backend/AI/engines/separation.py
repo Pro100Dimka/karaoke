@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import glob
 import multiprocessing
 import os
 import shutil
@@ -15,8 +16,30 @@ from types import ModuleType
 import numpy as np
 import soundfile as sf
 
-from ..errors import AICoreError, EngineUnavailableError, ProcessingCancelledError
+from ..errors import (
+    AcceleratorUnavailableError,
+    AICoreError,
+    EngineUnavailableError,
+    ProcessingCancelledError,
+)
 from .base import Separator
+
+
+def _worker_error(error: BaseException, device: str) -> dict[str, object]:
+    error_type = type(error)
+    type_name = f"{error_type.__module__}.{error_type.__name__}"
+    code = getattr(error, "code", getattr(error, "error_code", None))
+    accelerator = device == "cuda" and (
+        error_type.__module__.startswith(("torch.cuda", "torch.backends.cudnn"))
+        or error_type.__name__ in {"OutOfMemoryError", "AcceleratorError", "CUDNNError"}
+        or code in {2, 46, 700, 701, 702, 719}
+    )
+    return {
+        "message": f"{error_type.__name__}: {error}",
+        "type": type_name,
+        "code": code,
+        "accelerator": accelerator,
+    }
 
 
 def _worker(engine_dir, config_path, checkpoint, requests, results, device, parent_pid):
@@ -95,9 +118,9 @@ def _worker(engine_dir, config_path, checkpoint, requests, results, device, pare
                 run_folder(model, arguments, config, device, verbose=True)
                 results.put((job, time.perf_counter() - started))
             except BaseException as error:
-                results.put((job, f"{type(error).__name__}: {error}"))
+                results.put((job, _worker_error(error, device)))
     except BaseException as error:
-        results.put(("boot-error", f"{type(error).__name__}: {error}"))
+        results.put(("boot-error", _worker_error(error, device)))
 
 
 def _fit(audio: np.ndarray, frames: int, channels: int) -> np.ndarray:
@@ -132,20 +155,39 @@ class MSSTMelRoformerSeparator(Separator):
     def separate(self, mix, vocals, instrumental, *, profile=None, cancelled=None):
         if missing := self.missing_resources():
             raise EngineUnavailableError("Missing MSST resources: " + ", ".join(missing))
-        with tempfile.TemporaryDirectory(prefix="karaoke-msst-", dir=Path(mix).parent) as temporary:
+        # MSST enumerates inputs with glob.glob().  A song directory containing
+        # characters such as "[" is therefore interpreted as a glob pattern and
+        # MSST silently finds zero files.  Put its isolated staging directory in
+        # the closest ancestor whose full path is not a glob pattern.  Keeping it
+        # on the same volume also preserves the zero-copy hard-link fast path.
+        temporary_parent = Path(mix).resolve().parent
+        while glob.has_magic(str(temporary_parent)):
+            parent = temporary_parent.parent
+            if parent == temporary_parent:
+                temporary_parent = None
+                break
+            temporary_parent = parent
+        with tempfile.TemporaryDirectory(prefix="karaoke-msst-", dir=temporary_parent) as temporary:
             source, output = Path(temporary) / "input", Path(temporary) / "output"
             source.mkdir()
             output.mkdir()
-            shutil.copy2(mix, source / "song.wav")
+            staged = source / "song.wav"
+            try:
+                # source lives on the same volume as mix (see the
+                # TemporaryDirectory dir= above), so a hardlink gives the
+                # worker its own isolated single-file input folder -- MSST
+                # must not also see the pipeline's other temp files sitting
+                # next to mix -- without actually copying the mix's bytes.
+                os.link(mix, staged)
+            except OSError:
+                shutil.copy2(mix, staged)
             tuning = {
                 "num_overlap": profile.separation_overlap,
                 "batch_size": profile.separation_batch_size,
             } if profile else {}
             try:
                 self._run(source, output, tuning, cancelled=cancelled)
-            except AICoreError as error:
-                if not any(marker in str(error).lower() for marker in ("cuda", "cudnn", "accelerator")):
-                    raise
+            except AcceleratorUnavailableError as error:
                 print(f"[MSST] accelerator failed, retrying on CPU: {error}", flush=True)
                 self.close()
                 output = Path(temporary) / "output-cpu"
@@ -169,12 +211,23 @@ class MSSTMelRoformerSeparator(Separator):
             if vocal is None:
                 produced = ", ".join(str(item.relative_to(output)) for item in files) or "<none>"
                 raise AICoreError(f"MSST produced no vocal stem; audio outputs: {produced}")
-            mix_audio, rate = sf.read(mix, dtype="float32", always_2d=True)
+            # _fit() only ever needs the mix's target frame/channel count, not
+            # its samples -- reading that from metadata instead of decoding
+            # the whole file avoids holding a full extra copy of the song in
+            # memory on the (common) path where MSST already produced a
+            # backing stem. The full mix only has to be decoded when there is
+            # no backing stem and it must be computed as mix - vocal.
+            mix_info = sf.info(mix)
+            rate, target_frames, channels = mix_info.samplerate, mix_info.frames, mix_info.channels
             vocal_audio, vocal_rate = sf.read(vocal, dtype="float32", always_2d=True)
             if vocal_rate != rate:
                 raise AICoreError("MSST sample-rate mismatch")
-            vocal_audio = _fit(vocal_audio, len(mix_audio), mix_audio.shape[1])
-            backing_audio = _fit(sf.read(backing, dtype="float32", always_2d=True)[0], len(mix_audio), mix_audio.shape[1]) if backing else mix_audio - vocal_audio
+            vocal_audio = _fit(vocal_audio, target_frames, channels)
+            if backing:
+                backing_audio = _fit(sf.read(backing, dtype="float32", always_2d=True)[0], target_frames, channels)
+            else:
+                mix_audio = sf.read(mix, dtype="float32", always_2d=True)[0]
+                backing_audio = mix_audio - vocal_audio
             sf.write(vocals, np.clip(vocal_audio, -1, 1), rate, subtype="PCM_24")
             sf.write(instrumental, np.clip(backing_audio, -1, 1), rate, subtype="PCM_24")
 
@@ -217,8 +270,9 @@ class MSSTMelRoformerSeparator(Separator):
                 continue
             if response != job:
                 continue
-            if isinstance(value, str):
-                raise AICoreError(value)
+            if isinstance(value, dict):
+                error = AcceleratorUnavailableError if value.get("accelerator") else AICoreError
+                raise error(str(value.get("message") or "MSST worker failed"))
             return
         raise AICoreError(f"MSST worker exited with {self._process.exitcode}")
 
@@ -259,6 +313,9 @@ class MSSTMelRoformerSeparator(Separator):
                     raise AICoreError("MSST initialization timed out") from None
         if status != "ready":
             self.close()
+            if isinstance(detail, dict):
+                error = AcceleratorUnavailableError if detail.get("accelerator") else AICoreError
+                raise error(str(detail.get("message") or "MSST initialization failed"))
             raise AICoreError(detail or "MSST initialization failed")
 
 

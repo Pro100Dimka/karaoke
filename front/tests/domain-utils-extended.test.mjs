@@ -3,7 +3,12 @@ import { describe, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
 import { getAnalysisFeedback, normalizeAnalysisResult, normalizeAnalysisSection } from "../src/pages/Karaoke/utils/analysis.js";
 import { createPanoramaPath, getYouTubeVideoId, playbackGain, transposeKey, youTubeEmbedUrl } from "../src/pages/Karaoke/utils/data.js";
-import { createBrowserDeviceOptions, createBufferSizeOptions, createIndexedDeviceOptions } from "../src/pages/Karaoke/utils/devices.js";
+import {
+  createBrowserDeviceOptions,
+  createBufferSizeOptions,
+  createIndexedDeviceOptions,
+  createInputDeviceOptions
+} from "../src/pages/Karaoke/utils/devices.js";
 import {
   detectMidiFromAnalyser,
   findBestPitchLag,
@@ -90,15 +95,34 @@ describe("analysis normalization and feedback", () => {
   });
   test("normalizes result shape and removes malformed sections", () => {
     for (const result of [null, false, "bad"])
-      deepEqual([normalizeAnalysisResult(result), { pitch_accuracy_percent: null, mean_deviation_semitones: null, sections: [] }]);
+      deepEqual([
+        normalizeAnalysisResult(result),
+        {
+          pitch_accuracy_percent: null,
+          rhythm_accuracy_percent: null,
+          note_hold_percent: null,
+          note_coverage_percent: null,
+          overall_score_percent: null,
+          mean_deviation_semitones: null,
+          sections: []
+        }
+      ]);
     deepEqual([normalizeAnalysisResult({ sections: "bad" }).sections, []]);
     const normalized = normalizeAnalysisResult({
       pitch_accuracy_percent: 120,
+      rhythm_accuracy_percent: 72,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 84,
       mean_deviation_semitones: "2",
       sections: [null, "bad", { label: " best ", start: 1, end: 2, accuracy_percent: 90 }, { start: 3, end: 2, accuracy_percent: -2 }]
     });
     equal(
       [normalized.pitch_accuracy_percent, 100],
+      [normalized.rhythm_accuracy_percent, 72],
+      [normalized.note_hold_percent, 88],
+      [normalized.note_coverage_percent, 91],
+      [normalized.overall_score_percent, 84],
       [normalized.mean_deviation_semitones, 2],
       [normalized.sections.length, 2],
       [normalized.sections[0].label, "best"],
@@ -398,6 +422,35 @@ describe("device, settings and song-card factories", () => {
     equal(
       [createIndexedDeviceOptions(null)[0].label, translateSaved("По умолчанию")],
       [createBrowserDeviceOptions([], "Device")[0].label, translateSaved("Системное по умолчанию")]
+    );
+  });
+  test("shows only user-facing microphone inputs while preserving an advanced selection", () => {
+    const devices = [
+      { index: 0, name: "Microsoft Sound Mapper - Input [MME]", host_api: "MME" },
+      { index: 1, name: "Analogue 1/2 (Audient) [MME]", host_api: "MME" },
+      { index: 2, name: "ADAT 3/4 (Audient) [MME]", host_api: "MME" },
+      { index: 13, name: "Analogue 1/2 (Audient) [Windows DirectSound]", host_api: "Windows DirectSound" },
+      { index: 30, name: "Analogue 1/2 (Audient) [Windows WASAPI]", host_api: "Windows WASAPI" },
+      { index: 31, name: "Loop-back 1/2 (Audient) [Windows WASAPI]", host_api: "Windows WASAPI" },
+      { index: 40, name: "Internal kernel input [Windows WDM-KS]", host_api: "Windows WDM-KS" }
+    ];
+
+    deepEqual(
+      [
+        createInputDeviceOptions(devices, null, "Default"),
+        [
+          { value: "", label: "Default" },
+          { value: 30, label: "Analogue 1/2 (Audient)" }
+        ]
+      ],
+      [
+        createInputDeviceOptions(devices, 2, "Default"),
+        [
+          { value: "", label: "Default" },
+          { value: 30, label: "Analogue 1/2 (Audient)" },
+          { value: 2, label: "ADAT 3/4 (Audient)" }
+        ]
+      ]
     );
   });
   test("validates song settings and dispatches card actions", () => {

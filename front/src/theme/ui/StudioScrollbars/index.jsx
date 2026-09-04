@@ -1,3 +1,4 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { MoveHorizontal, MoveVertical } from "lucide-react";
 import { useCallback, useRef } from "react";
 import Box from "../Box";
@@ -42,7 +43,7 @@ function ScrollTrack({ axis, scrollRef, state, sync }) {
   return (
     <Box
       role="scrollbar"
-      aria-label={horizontal ? "Горизонтальная прокрутка" : "Вертикальная прокрутка"}
+      aria-label={horizontal ? tr("common.scroll.horizontal") : tr("common.scroll.vertical")}
       aria-orientation={horizontal ? "horizontal" : "vertical"}
       aria-valuemin={0}
       aria-valuemax={maximum}
@@ -104,7 +105,8 @@ function ScrollTrack({ axis, scrollRef, state, sync }) {
           minBlockSize: horizontal ? 0 : "var(--space-6)",
           borderRadius: "var(--radius-pill)",
           background: "linear-gradient(180deg, var(--color-primary-hover), var(--color-primary))",
-          boxShadow: "0 0 var(--space-2) color-mix(in srgb, var(--color-primary) 32%, transparent), inset 0 1px #ffffff38",
+          boxShadow:
+            "0 0 var(--space-2) color-mix(in srgb, var(--color-primary) 32%, transparent), inset 0 1px #ffffff38",
           cursor: "grab",
           touchAction: "none"
         }}
@@ -123,18 +125,14 @@ function Zoom({ axis, value, onChange }) {
       align="center"
       gap="var(--space-1)"
       sx={{
-        inlineSize: horizontal
-          ? "calc(var(--space-16) * 2 + var(--space-2))"
-          : "var(--space-4)",
-        blockSize: horizontal
-          ? "var(--space-4)"
-          : "calc(var(--space-16) + var(--space-10))",
+        inlineSize: horizontal ? "calc(var(--space-16) * 2 + var(--space-2))" : "var(--space-4)",
+        blockSize: horizontal ? "var(--space-4)" : "calc(var(--space-16) + var(--space-10))",
         flex: "none"
       }}
     >
       <Icon size="1em" aria-hidden="true" />
       <Slider
-        aria-label={horizontal ? "Горизонтальный масштаб" : "Вертикальный масштаб"}
+        aria-label={horizontal ? tr("common.zoom.horizontal") : tr("common.zoom.vertical")}
         min={horizontal ? 36 : 10}
         max={horizontal ? 600 : 36}
         step="1"
@@ -147,9 +145,7 @@ function Zoom({ axis, value, onChange }) {
           minInlineSize: 0,
           minBlockSize: 0,
           blockSize: "var(--space-4)",
-          transform: horizontal
-            ? undefined
-            : "translateY(var(--space-8)) rotate(-90deg)",
+          transform: horizontal ? undefined : "translateY(var(--space-8)) rotate(-90deg)",
           transformOrigin: "center"
         }}
         sx={{
@@ -183,7 +179,7 @@ export default function StudioScrollbars({
   return (
     <>
       <Stack
-        aria-label="Горизонтальная прокрутка"
+        aria-label={tr("common.scroll.horizontal")}
         direction="row"
         align="center"
         gap="var(--space-1)"
@@ -200,7 +196,7 @@ export default function StudioScrollbars({
         <Zoom axis="x" value={horizontalZoom} onChange={onHorizontalZoom} />
       </Stack>
       <Stack
-        aria-label="Вертикальная прокрутка"
+        aria-label={tr("common.scroll.vertical")}
         align="center"
         gap="var(--space-1)"
         sx={{

@@ -61,6 +61,31 @@ def test_default_data_and_models_directories_cover_runtime_modes(monkeypatch, tm
     assert (config._default_data_dir() == tmp_path / 'portable' / 'data' / 'backend') and (config._default_models_dir() == tmp_path / 'portable' / 'data' / 'models')
 
 
+def test_default_data_dir_falls_back_to_per_user_dir_when_install_root_is_unwritable(monkeypatch, tmp_path):
+    # e.g. an administrator installed to C:\Program Files\...; a standard
+    # user's process can't write there, so app data must not live under it.
+    root = tmp_path / "Program Files" / "installed"
+    local_appdata = tmp_path / "local-appdata"
+    monkeypatch.setattr(config, "IS_FROZEN", True)
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(root))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_appdata))
+
+    original_mkdir = config.Path.mkdir
+
+    def unwritable_mkdir(self, *args, **kwargs):
+        if self == root:
+            raise PermissionError("simulated read-only install root")
+        return original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(config.Path, "mkdir", unwritable_mkdir)
+
+    fallback_root = local_appdata / "A&D Voice"
+    assert config._default_data_dir() == fallback_root / "data" / "backend"
+    assert config._default_models_dir() == fallback_root / "data" / "models"
+
+
+
+
 def test_saved_storage_path_is_validated(monkeypatch, tmp_path):
     settings, default = tmp_path / 'paths.json', tmp_path / 'default'
     monkeypatch.setattr(config, "PATH_SETTINGS_FILE", settings)
@@ -117,7 +142,6 @@ def test_runtime_caches_follow_selected_cache_folder(monkeypatch, tmp_path):
         "TMP",
         "HF_HOME",
         "HUGGINGFACE_HUB_CACHE",
-        "TRANSFORMERS_CACHE",
         "TORCH_HOME",
         "XDG_CACHE_HOME",
         "NUMBA_CACHE_DIR",
@@ -188,3 +212,11 @@ def test_ensure_directories_creates_every_runtime_location(monkeypatch, tmp_path
         monkeypatch.setattr(config, attribute, path)
     config.ensure_directories()
     assert all(path.is_dir() for path in paths)
+
+
+def test_backend_import_defers_expensive_model_validation_until_startup_worker():
+    source = config.Path(config.__file__).read_text(encoding="utf-8")
+    module_tail = source[source.rfind("ensure_directories()") :]
+
+    assert "configure_runtime_cache_environment()" in module_tail
+    assert "configure_ai_resource_environment()" not in module_tail

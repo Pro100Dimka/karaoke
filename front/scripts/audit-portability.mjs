@@ -32,16 +32,23 @@ try {
   await new Promise((resolve) => blocker.close(resolve));
 }
 
-const [main, installer] = ["front/electron/main.cjs", "scripts/karaoke-studio.iss"].map((file) =>
-  fs.readFileSync(path.join(root, file), "utf8")
-);
+const [main, backendProcess, installer] = [
+  "front/electron/main.cjs",
+  "front/electron/backend-process.cjs",
+  "scripts/karaoke-studio.iss"
+].map((file) => fs.readFileSync(path.join(root, file), "utf8"));
 
 [
   [main.includes("path.dirname(process.execPath)"), "executable root is missing"],
   [main.includes('"data"'), "data root is missing"],
   [/app\.setPath\(\s*"userData"/.test(main), "userData path is not redirected"],
   [main.includes('app.setPath("temp"'), "temp path is not redirected"],
-  [main.includes("chooseRuntimeBackendEndpoint"), "dynamic backend endpoint is not used"],
+  [
+    /require\(["']\.\/backend-process\.cjs["']\)/.test(main) &&
+      /require\(["']\.\/backend-endpoint\.cjs["']\)/.test(backendProcess) &&
+      /chooseRuntimeBackendEndpoint\s*\(/.test(backendProcess),
+    "dynamic backend endpoint is not connected to Electron startup"
+  ],
   [/^PrivilegesRequired=lowest$/m.test(installer), "installer requires elevation"],
   [
     /^DefaultDirName=\{code:GetDefaultDir\}$/m.test(installer),
@@ -55,8 +62,16 @@ const [main, installer] = ["front/electron/main.cjs", "scripts/karaoke-studio.is
     !/\{(?:localappdata|userappdata)\}\\A&D Voice/.test(installer),
     "runtime data is written outside {app}"
   ],
-  ...[
-    ...["backend", "models", "cache", "logs"].map((x) => `{app}\\data\\${x}`),
-    "{app}\\.install\\app-runtime.zip"
-  ].map((x) => [installer.includes(x), `missing self-contained path: ${x}`])
+  ...["backend", "models", "logs"].map((name) => {
+    const expected = `{app}\\data\\${name}`;
+    return [installer.includes(expected), `missing self-contained installer path: ${expected}`];
+  }),
+  [
+    /path\.join\(INSTALL_DATA_ROOT,\s*["']cache["']\)/.test(backendProcess),
+    "backend cache is not rooted inside the installation data directory"
+  ],
+  [
+    installer.includes("{app}\\.install\\app-runtime.zip"),
+    "missing self-contained runtime archive path"
+  ]
 ].forEach(([ok, message]) => check(ok, message));

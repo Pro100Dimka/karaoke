@@ -16,7 +16,8 @@ function toBoolean(value) {
 }
 
 function normalizeDeviceId(value) {
-  return ["string", "number"].includes(typeof value) ? value : "";
+  if (typeof value === "string") return value;
+  return typeof value === "number" && Number.isFinite(value) ? value : "";
 }
 
 export function normalizeAudioEffects(settings) {
@@ -24,7 +25,8 @@ export function normalizeAudioEffects(settings) {
     reverb: clamp01(toFiniteNumber(settings?.reverb)),
     echo: clamp01(toFiniteNumber(settings?.echo)),
     delay: clamp01(toFiniteNumber(settings?.delay)),
-    noise_suppression: clamp01(toFiniteNumber(settings?.noise_suppression, 0.35))
+    noise_suppression: clamp01(toFiniteNumber(settings?.noise_suppression, 0.35)),
+    octave: clamp(toFiniteNumber(settings?.octave), -1, 1)
   };
 }
 

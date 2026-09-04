@@ -13,6 +13,23 @@ export default defineConfig({
     port: 5173,
     strictPort: true
   },
+  // The quantum backdrop imports these modules only after the Library chunk
+  // mounts. Pre-bundle them before Vite reports ready so Electron never sees
+  // the dependency-discovery reload as a blank intermediate frame.
+  optimizeDeps: {
+    include: [
+      "three",
+      "three/addons/controls/OrbitControls.js",
+      "three/addons/objects/Lensflare.js",
+      "three/addons/postprocessing/AfterimagePass.js",
+      "three/addons/postprocessing/EffectComposer.js",
+      "three/addons/postprocessing/OutputPass.js",
+      "three/addons/postprocessing/RenderPass.js",
+      "three/addons/postprocessing/ShaderPass.js",
+      "three/addons/postprocessing/UnrealBloomPass.js",
+      "three/examples/jsm/libs/lil-gui.module.min.js"
+    ]
+  },
   build: {
     outDir: "../generated/build/frontend/dist",
     emptyOutDir: true

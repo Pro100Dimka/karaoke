@@ -21,10 +21,10 @@ def voice_activity_intervals(source: str | Path, frame_seconds: float = _FRAME_S
     detector would miss, because a word's real start/end includes those too.
     """
     import numpy as np
-    import soundfile as sf
 
-    audio, rate = sf.read(source, always_2d=True, dtype="float64")
-    mono = audio.mean(axis=1)
+    from .audio import read_mono
+
+    mono, rate = read_mono(source)
     frame = max(1, round(rate * frame_seconds))
     usable = len(mono) // frame * frame
     if usable < frame:
@@ -37,21 +37,21 @@ def voice_activity_intervals(source: str | Path, frame_seconds: float = _FRAME_S
     threshold = max(floor * 4.0, 1e-4)
     active = rms >= threshold
 
+    # A song's vocal track is tens of thousands of 20ms frames -- stepping
+    # through each one in a Python loop just to find where "voiced" flips is
+    # pure overhead numpy already does in one vectorized pass. Only the merge
+    # step below (folding a rising/falling edge pair into the previous
+    # interval when the silence between them is short) still runs in Python,
+    # and it iterates the handful of raw voiced *intervals*, not every frame.
+    padded = np.concatenate(([False], active, [False]))
+    edges = np.diff(padded.astype(np.int8))
+    raw_starts = np.flatnonzero(edges == 1)
+    raw_ends = np.flatnonzero(edges == -1)
+
     intervals: list[tuple[float, float]] = []
-    start = None
-    for index, voiced in enumerate(active):
-        time = index * frame / rate
-        if voiced and start is None:
-            start = time
-        elif not voiced and start is not None:
-            end = time
-            if intervals and start - intervals[-1][1] <= _MAX_SILENCE_GAP:
-                intervals[-1] = (intervals[-1][0], end)
-            else:
-                intervals.append((start, end))
-            start = None
-    if start is not None:
-        end = len(active) * frame / rate
+    for raw_start, raw_end in zip(raw_starts, raw_ends, strict=True):
+        start = raw_start * frame / rate
+        end = raw_end * frame / rate
         if intervals and start - intervals[-1][1] <= _MAX_SILENCE_GAP:
             intervals[-1] = (intervals[-1][0], end)
         else:

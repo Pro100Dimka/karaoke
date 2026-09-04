@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from scipy.signal import lfilter, lfiltic
 
 # Largest float32 value that is guaranteed not to exceed the documented 0.985
 # limiter ceiling when compared in Python/float64. ``np.float32(0.985)`` itself
@@ -20,15 +21,29 @@ class StudioMicrophoneProcessor:
     def __init__(self, sample_rate: float, channels: int = 1):
         self.sample_rate = max(8_000.0, float(sample_rate))
         self.channels = max(1, int(channels))
-        self._prev_x = np.zeros(self.channels, dtype=np.float32)
-        self._hp_y = np.zeros(self.channels, dtype=np.float32)
-        self._tone_low = np.zeros(self.channels, dtype=np.float32)
         self._gate_gain = 1.0
         self._compressor_gain = 1.0
         self._noise_floor = 0.003
         self._hp_r = math.exp(-2.0 * math.pi * 70.0 / self.sample_rate)
         self._tone_alpha = 1.0 - \
             math.exp(-2.0 * math.pi * 2200.0 / self.sample_rate)
+        # hp[n] = x[n] - x[n-1] + hp_r*hp[n-1] and tone_low[n] =
+        # tone_alpha*hp[n] + (1-tone_alpha)*tone_low[n-1] are both first-order
+        # IIR recursions, previously run one sample at a time in a Python
+        # loop on every microphone callback buffer. scipy.signal.lfilter
+        # applies the same recursion to a whole buffer in one call (axis=0
+        # keeps each channel independent); zi/zf carry the filter's state
+        # across buffers exactly like _prev_x/_hp_y/_tone_low did before.
+        self._hp_b, self._hp_a = np.array([1.0, -1.0]), np.array([1.0, -self._hp_r])
+        self._tone_b = np.array([self._tone_alpha])
+        self._tone_a = np.array([1.0, -(1.0 - self._tone_alpha)])
+        self._reset_filter_state()
+
+    def _reset_filter_state(self) -> None:
+        hp_zi = lfiltic(self._hp_b, self._hp_a, y=[0.0], x=[0.0])
+        tone_zi = lfiltic(self._tone_b, self._tone_a, y=[0.0], x=[0.0])
+        self._hp_zi = np.tile(hp_zi[:, None], (1, self.channels))
+        self._tone_zi = np.tile(tone_zi[:, None], (1, self.channels))
 
     def process(self, data, gain: float = 1.0, noise_suppression: float = 0.35):
         source = np.asarray(data, dtype=np.float32)
@@ -38,19 +53,12 @@ class StudioMicrophoneProcessor:
             return source.copy()
         if source.shape[1] != self.channels:
             self.channels = source.shape[1]
-            self._prev_x = np.zeros(self.channels, dtype=np.float32)
-            self._hp_y = np.zeros(self.channels, dtype=np.float32)
-            self._tone_low = np.zeros(self.channels, dtype=np.float32)
+            self._reset_filter_state()
 
-        x = np.clip(source * float(gain), -1.5, 1.5)
-        y = np.empty_like(x)
-        for index in range(len(x)):
-            current = x[index]
-            hp = current - self._prev_x + self._hp_r * self._hp_y
-            self._prev_x = current
-            self._hp_y = hp
-            self._tone_low += self._tone_alpha * (hp - self._tone_low)
-            y[index] = hp * 0.94 + (hp - self._tone_low) * 0.16
+        x = np.clip(source * float(gain), -1.5, 1.5).astype(np.float64)
+        hp, self._hp_zi = lfilter(self._hp_b, self._hp_a, x, axis=0, zi=self._hp_zi)
+        tone_low, self._tone_zi = lfilter(self._tone_b, self._tone_a, hp, axis=0, zi=self._tone_zi)
+        y = hp * 0.94 + (hp - tone_low) * 0.16
 
         rms = float(np.sqrt(np.mean(np.square(y), dtype=np.float64)))
         if rms < self._noise_floor * 1.4:
@@ -85,6 +93,70 @@ class StudioMicrophoneProcessor:
 
         y = np.tanh(y * 1.12) / np.tanh(1.12)
         return np.clip(y, -_LIMITER_CEILING, _LIMITER_CEILING).astype(np.float32, copy=False)
+
+
+class RealtimePitchShifter:
+    """Streaming pitch shift with a true zero-latency neutral bypass."""
+
+    def __init__(self, sample_rate: float):
+        self._buffer_len = max(1024, int(round(max(8_000.0, float(sample_rate)) * 0.032)))
+        self._buffer = np.zeros(self._buffer_len, dtype=np.float32)
+        self._write_pos = 0
+        self._phase = 0.0
+        self._previous_octave = 0.0
+
+    def process(self, samples: np.ndarray, octave: float) -> np.ndarray:
+        octave = max(-1.0, min(1.0, float(octave)))
+        source = np.asarray(samples, dtype=np.float32)
+        if abs(octave) < 0.005:
+            if abs(self._previous_octave) >= 0.005:
+                self._buffer.fill(0.0)
+                self._phase = 0.0
+            self._previous_octave = octave
+            return source
+
+        ratio = 2.0**octave
+        length = self._buffer_len
+        count = len(source)
+        if not count:
+            return np.empty_like(source)
+        # The ring contains input samples only, so all fractional read heads
+        # can be evaluated together against a chronological history followed
+        # by this already-known input block. This preserves the original
+        # causal interpolation without a Python loop in the realtime callback.
+        history = np.concatenate((
+            self._buffer[self._write_pos:],
+            self._buffer[:self._write_pos],
+            source,
+        ))
+        increment = (1.0 - ratio) / length
+        phases = np.mod(self._phase + np.arange(count) * increment, 1.0)
+        phase_a = phases
+        phase_b = np.mod(phases + 0.5, 1.0)
+        current = np.arange(count, dtype=np.float64)
+
+        def read(phase):
+            positions = length + current - 1.0 - phase * (length - 2.0)
+            lower = np.floor(positions).astype(np.intp)
+            fraction = positions - lower
+            return history[lower] * (1.0 - fraction) + history[lower + 1] * fraction
+
+        sample_a, sample_b = read(phase_a), read(phase_b)
+        weight_a = 0.5 - 0.5 * np.cos(2.0 * math.pi * phase_a)
+        weight_b = 0.5 - 0.5 * np.cos(2.0 * math.pi * phase_b)
+        output = (sample_a * weight_a + sample_b * weight_b) / np.maximum(
+            1e-6, weight_a + weight_b
+        )
+        if count >= length:
+            self._buffer[:] = source[-length:]
+            self._write_pos = 0
+        else:
+            positions = (self._write_pos + np.arange(count)) % length
+            self._buffer[positions] = source
+            self._write_pos = (self._write_pos + count) % length
+        self._phase = (self._phase + count * increment) % 1.0
+        self._previous_octave = octave
+        return output.astype(source.dtype, copy=False)
 
 
 class MonitorEffectsChain:
@@ -122,19 +194,55 @@ class MonitorEffectsChain:
         if not any(active):
             return samples
         length = self._buffer_len
-        offsets, decays, buffers, write_pos, out = [min(length - 1, max(1, int(delay_sec * self.sample_rate))) for delay_sec, _ in slots], [
-            decay for _, decay in slots], self._buffers, self._write_pos, np.empty_like(samples)
+        offsets = [min(length - 1, max(1, int(delay_sec * self.sample_rate))) for delay_sec, _ in slots]
+        decays = [decay for _, decay in slots]
+        count = len(samples)
+        if count and all(offset >= count for slot, offset in enumerate(offsets) if active[slot]):
+            return self._process_block(samples, active, offsets, decays, count)
+        return self._process_sample_by_sample(samples, active, offsets, decays, length)
+
+    def _process_block(self, samples, active, offsets, decays, count) -> np.ndarray:
+        # Live monitoring calls this on every audio callback -- at the small
+        # (64-256 sample) blocksizes real-time low-latency monitoring uses,
+        # that can be several hundred times a second. Every configured tap
+        # delay is comfortably longer than one callback's worth of samples
+        # (the shortest is ~0.055s, versus a 256-sample block being ~5ms at
+        # 48kHz), so a whole block's reads always land in already-settled
+        # buffer content from earlier calls, never in samples this same call
+        # is about to write -- which means the block can be gathered/
+        # scattered in one vectorized pass per slot instead of one Python
+        # step per sample.
+        length = self._buffer_len
+        dry = samples.astype(np.float64, copy=False)
+        wet = np.zeros(count, dtype=np.float64)
+        write_positions = (self._write_pos + np.arange(count)) % length
+        for slot in range(self._SLOT_COUNT):
+            if not active[slot]:
+                continue
+            read_positions = (write_positions - offsets[slot]) % length
+            delayed = self._buffers[slot, read_positions]
+            self._buffers[slot, write_positions] = dry + decays[slot] * delayed
+            wet += decays[slot] * delayed
+        self._write_pos = (self._write_pos + count) % length
+        return (dry + wet).astype(samples.dtype, copy=False)
+
+    def _process_sample_by_sample(self, samples, active, offsets, decays, length) -> np.ndarray:
+        # Fallback for a tap delay shorter than the current block (not
+        # reachable with any real audio callback size, only exercised by
+        # deliberately extreme test parameters) -- samples within the block
+        # can then depend on each other through the same slot's buffer, so
+        # they must be resolved one at a time.
+        buffers, write_pos, out = self._buffers, self._write_pos, np.empty_like(samples)
         for index in range(len(samples)):
             dry = float(samples[index])
             wet = 0.0
             for slot in range(self._SLOT_COUNT):
-                decay = decays[slot]
-                if decay <= 0.0:
+                if not active[slot]:
                     continue
                 read_pos = (write_pos - offsets[slot]) % length
                 delayed = buffers[slot, read_pos]
-                buffers[slot, write_pos] = dry + decay * delayed
-                wet += decay * delayed
+                buffers[slot, write_pos] = dry + decays[slot] * delayed
+                wet += decays[slot] * delayed
             out[index] = dry + wet
             write_pos = (write_pos + 1) % length
         self._write_pos = write_pos

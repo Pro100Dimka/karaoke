@@ -73,6 +73,9 @@ export class FakePeer {
       this.remoteDescription = description;
     });
     this.addIceCandidate = vi.fn().mockResolvedValue(undefined);
+    this.setConfiguration = vi.fn((next) => {
+      this.configuration = { ...this.configuration, ...next };
+    });
     this.close = vi.fn(() => {
       this.connectionState = "closed";
     });

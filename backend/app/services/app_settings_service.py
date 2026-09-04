@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import config
+from app.services import song_service
 from app.utils.json_files import read_json, write_json
 
 SETTINGS_FILE = config.DATA_DIR / "settings.json"
@@ -35,6 +36,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "thread_count": _default_thread_count(),
     "compute_mode": "auto",
     "online_name": "",
+    "keyboard_lighting_enabled": False,
+    "keyboard_lighting_mode": "music",
+    "keyboard_lighting_brightness": 0.5,
+    "keyboard_lighting_sensitivity": 1.0,
+    "remote_diagnostics_enabled": False,
+    "remote_diagnostics_errors_enabled": False,
+    "remote_diagnostics_hardware_enabled": False,
+    "remote_crash_reports_enabled": False,
 }
 
 UI_PREFERENCES_FILE = config.DATA_DIR / "ui-preferences.json"
@@ -131,16 +140,40 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
         paths_changed = any(key in patch for key in PATH_SETTING_KEYS)
         ai_runtime_changed = "compute_mode" in patch or "thread_count" in patch or "ai_folder" in patch
         if ai_runtime_changed or paths_changed:
-            from app.services import pipeline_service
+            from app.services import model_install_service, pipeline_service
             if pipeline_service.has_active_jobs(): raise ValueError("Нельзя менять AI/хранилище, пока песни стоят в очереди или обрабатываются")
+            # A model download runs on its own untracked thread (not one of
+            # pipeline_service's song jobs), so it needs its own check — else
+            # reassigning MODELS_DIR mid-download orphans the in-flight files.
+            if model_install_service.has_active_download(): raise ValueError("Нельзя менять AI/хранилище, пока идёт загрузка AI-моделей")
         try:
             persisted_paths = _persist_path_settings(path_values) if paths_changed else None
             write_json(SETTINGS_FILE, persisted)
-            if persisted_paths is not None: config.apply_storage_paths(**persisted_paths)
+            if persisted_paths is not None:
+                # Reassigning SONG_OUTPUT_DIR/SONG_LIBRARY_ROOTS must not happen
+                # while some other request is mid-write against the paths it's
+                # about to change (pipeline finalization, package import/export,
+                # editor/lyrics saves) — they all serialize through this same
+                # lock, so holding it here makes the switch atomic with respect
+                # to them instead of racing on the module-global config values.
+                with song_service.library_write_lock(): config.apply_storage_paths(**persisted_paths)
             if ai_runtime_changed:
                 from AI.service import reset_ai_service
                 reset_ai_service()
             updated = _read_settings_unlocked()
+            diagnostics_policy_changed = any(
+                key in patch
+                for key in (
+                    "remote_diagnostics_enabled",
+                    "remote_diagnostics_errors_enabled",
+                    "remote_diagnostics_hardware_enabled",
+                    "remote_crash_reports_enabled",
+                )
+            )
+            if diagnostics_policy_changed:
+                from app.services.remote_log_service import apply_policy
+
+                apply_policy()
             if ai_runtime_changed:
                 from app.services.remote_log_service import queue_hardware_snapshot
 
@@ -165,12 +198,13 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
                         if isinstance(roots_value, list)
                         else None
                     )
-                    config.apply_storage_paths(
-                        songs_folder=str(old_paths.get("songs_folder", defaults["songs_folder"])),
-                        ai_folder=str(old_paths.get("ai_folder", defaults["ai_folder"])),
-                        cache_folder=str(old_paths.get("cache_folder", defaults["cache_folder"])),
-                        song_library_roots=roots,
-                    )
+                    with song_service.library_write_lock():
+                        config.apply_storage_paths(
+                            songs_folder=str(old_paths.get("songs_folder", defaults["songs_folder"])),
+                            ai_folder=str(old_paths.get("ai_folder", defaults["ai_folder"])),
+                            cache_folder=str(old_paths.get("cache_folder", defaults["cache_folder"])),
+                            song_library_roots=roots,
+                        )
             raise
 
 

@@ -1,10 +1,11 @@
 import { Cog, Radio, Volume2 } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useI18n } from "../i18n";
-import { Box, IconButton, Slider, Stack } from "../theme/ui";
+import { Box, IconButton, Popover, Slider, Stack } from "../theme/ui";
+import { recordStartupMilestone } from "../utils/platform";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
@@ -22,6 +23,21 @@ const useBlackout = () => {
 function FloatingControls({ openSettings }) {
   const { t } = useI18n();
   const radio = useRadio();
+  const radioAnchorRef = useRef(null);
+  const radioCloseTimerRef = useRef(null);
+  const [radioVolumeOpen, setRadioVolumeOpen] = useState(false);
+  const showRadioVolume = () => {
+    clearTimeout(radioCloseTimerRef.current);
+    if (radio.isPlaying) setRadioVolumeOpen(true);
+  };
+  const hideRadioVolumeSoon = () => {
+    clearTimeout(radioCloseTimerRef.current);
+    radioCloseTimerRef.current = setTimeout(() => setRadioVolumeOpen(false), 120);
+  };
+  useEffect(() => () => clearTimeout(radioCloseTimerRef.current), []);
+  useEffect(() => {
+    if (!radio.isPlaying) setRadioVolumeOpen(false);
+  }, [radio.isPlaying]);
   const radioLabel =
     radio.error ||
     t(radio.isPlaying ? "radio.disable" : "radio.enable", { station: radio.station.name });
@@ -32,34 +48,49 @@ function FloatingControls({ openSettings }) {
         position: "fixed",
         bottom: "var(--space-4)",
         right: "var(--space-4)",
-        zIndex: 20,
+        zIndex: "var(--z-floating)",
         width: "auto"
       }}
     >
       <Stack direction="row" align="center" gap="var(--space-5)">
-        {radio.isPlaying && (
-          <Slider
-            min={0}
-            label={<Volume2 size={15} />}
-            max={1}
-            step={0.01}
-            value={radio.volume}
-            formatValue={(value) => `${Math.round(value * 100)}%`}
-            onChange={(value) => radio.setVolume(value)}
-            controlSx={{ inlineSize: "var(--space-16)" }}
+        <Box
+          ref={radioAnchorRef}
+          sx={{ display: "inline-flex", width: "auto" }}
+          onPointerEnter={showRadioVolume}
+          onPointerLeave={hideRadioVolumeSoon}
+        >
+          <IconButton
+            icon={Radio}
+            label={radioLabel}
+            title={radioLabel}
+            variant={radio.isPlaying ? "contained" : "outline"}
+            tone={radio.isPlaying ? "success" : "primary"}
+            aria-pressed={radio.isPlaying}
+            iconSize={70}
+            disabled={radio.isLoading}
+            onClick={radio.toggle}
           />
-        )}
-        <IconButton
-          icon={Radio}
-          label={radioLabel}
-          title={radioLabel}
-          variant={radio.isPlaying ? "contained" : "outline"}
-          tone={radio.isPlaying ? "success" : "primary"}
-          aria-pressed={radio.isPlaying}
-          iconSize={70}
-          disabled={radio.isLoading}
-          onClick={radio.toggle}
-        />
+          <Popover
+            open={radioVolumeOpen}
+            anchorRef={radioAnchorRef}
+            placement="top-end"
+            onClose={() => setRadioVolumeOpen(false)}
+            onPointerEnter={showRadioVolume}
+            onPointerLeave={hideRadioVolumeSoon}
+            aria-label={t("radio.volume")}
+          >
+            <Slider
+              min={0}
+              label={<Volume2 size={15} />}
+              max={1}
+              step={0.01}
+              value={radio.volume}
+              formatValue={(value) => `${Math.round(value * 100)}%`}
+              onChange={(value) => radio.setVolume(value)}
+              controlSx={{ inlineSize: "var(--space-16)" }}
+            />
+          </Popover>
+        </Box>
         <IconButton
           icon={Cog}
           variant="contained"
@@ -80,14 +111,35 @@ export default function AppLayout() {
   const karaoke = pathname === "/karaoke";
   const editor = pathname.startsWith("/editor/");
   useOnlineRoomNavigation();
+  useEffect(() => {
+    recordStartupMilestone("app-interactive");
+    // Stryker disable next-line ArrayDeclaration: fires once, first mount only.
+  }, []);
   return (
     <Box
       className={`app-shell${karaoke ? " karaoke-app-shell" : ""}${editor ? " melody-editor-app-shell" : ""}`}
-      sx={{ display: "flex", flexDirection: "column", minBlockSize: "100vh" }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        minBlockSize: "100vh",
+        backgroundColor: "var(--color-bg-deep)",
+        // backgroundImage: "var(--bg-image)",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed"
+      }}
     >
       <TitleBar hideActions={editor} />
-      <Box className="app-body" sx={{ position: "relative", flex: 1, minBlockSize: 0 }}>
-        <Box as="main" className="app-main" sx={{ blockSize: "100%" }}>
+      <Box
+        className="app-body"
+        sx={{ position: "relative", flex: 1, minBlockSize: 0, backgroundColor: "transparent" }}
+      >
+        <Box
+          as="main"
+          className="app-main"
+          sx={{ blockSize: "100%", backgroundColor: "transparent" }}
+        >
           <AppRoutes onOpenAppSettings={() => setSettings(true)} />
         </Box>
         {!karaoke && !editor && <FloatingControls openSettings={() => setSettings(true)} />}
@@ -97,6 +149,7 @@ export default function AppLayout() {
           sx={{
             position: "fixed",
             inset: 0,
+            zIndex: "var(--z-transition)",
             pointerEvents: "none",
             opacity: blackout ? 1 : 0,
             background: "var(--color-bg-deep)",

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createLevelMeter } from "../../services/levelMeter";
 
 const METER_INTERVAL_MS = 70;
-const MIN_LEVEL_DELTA_PERCENT = 4;
+const MIN_LEVEL_DELTA_PERCENT = 1;
 
 function disconnectNode(node) {
   try {
@@ -120,19 +121,18 @@ export default function useSpeakingLevels() {
 
       let source;
       let analyser;
+      let meter;
       try {
         source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
+        meter = createLevelMeter(audioContext);
+        analyser = meter.analyser;
       } catch {
         disconnectNode(source);
         disconnectNode(analyser);
         return;
       }
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.72;
       source.connect(analyser);
 
-      const samples = new Uint8Array(analyser.fftSize);
       let smoothed = 0;
       let lastPublished;
       const liveTrack = stream.getAudioTracks()[0];
@@ -146,23 +146,22 @@ export default function useSpeakingLevels() {
           stopSpeakingMeter(key);
           return;
         }
+        let rms;
         try {
-          analyser.getByteTimeDomainData(samples);
+          rms = meter.read();
         } catch {
           stopSpeakingMeter(key);
           return;
         }
-        let sum = 0;
-        for (const sample of samples) {
-          const normalized = (sample - 128) / 128;
-          sum += normalized * normalized;
-        }
-
-        const rms = Math.sqrt(sum / samples.length);
-        const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.012) / 0.16));
-        smoothed = smoothed * 0.68 + normalizedLevel * 0.32;
+        // Float analyser samples preserve quiet microphones below the 8-bit
+        // analyser's ~-42 dB quantisation floor. Keep a small analogue-noise
+        // floor, then map normal speech onto the visible indicator range.
+        const visibleRms = rms >= 0.004 ? (rms - 0.004) / 0.12 : (rms - 0.0005) / 0.08;
+        const normalizedLevel = Math.min(1, Math.max(0, visibleRms));
+        const response = normalizedLevel > smoothed ? 0.48 : 0.18;
+        smoothed += (normalizedLevel - smoothed) * response;
         const rounded = Number(smoothed.toFixed(2));
-        const published = rounded >= 0.04 ? rounded : 0;
+        const published = rounded >= 0.01 ? rounded : 0;
         if (Math.abs(published - lastPublished) * 100 < MIN_LEVEL_DELTA_PERCENT) return;
         lastPublished = published;
         publishLevel(key, published);

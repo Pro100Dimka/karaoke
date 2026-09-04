@@ -8,10 +8,9 @@ import shutil
 import stat
 import subprocess
 import tempfile
-import unicodedata
 import wave
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
@@ -21,11 +20,12 @@ import config
 import models
 from AI.lyrics_document import flatten_word_notes, validate_lyrics_document
 from AI.version import AI_BUILD_ID
-from app.services import revision_cache, song_artifacts, song_service
+from app.services import revision_cache, song_artifacts, song_service, storage_budget_service
 from app.services.db_utils import commit_refresh
 from app.utils.atomic_files import atomic_write
 from app.utils.hashing import sha256_file, sha256_stream
 from app.utils.json_files import read_json, write_json
+from app.utils.windows_paths import normalize_windows_component
 from database import SessionLocal
 
 MAX_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
@@ -42,7 +42,6 @@ REVISION_RUNTIME_FIELDS = (
 )
 REVISION_ENTITY_FIELDS = ("title", "artist", "genre", "original_filename")
 REVISION_SCHEMA_VERSION = 3
-_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _SKIPPED_DIRS = {config.LOGS_DIRNAME, config.RECORDINGS_DIRNAME}
 _IMPORT_JOURNAL_PREFIX = ".room-import-journal-"
 
@@ -187,12 +186,43 @@ def _fresh_song(db: Session, song_id: str) -> models.Song:
 def _locked_done_song(db: Session, song_id: str) -> Iterator[models.Song]:
     with song_service.song_content_lock(song_id), song_service.library_write_lock():
         song = _fresh_song(db, song_id)
-        if song.status != models.SongStatus.DONE: raise ValueError("Song processing is not complete")
+        if not song_service.is_done(song): raise ValueError("Song processing is not complete")
         yield song
 
 
 def content_revision_for_song(db: Session, song_id: str) -> str:
     with _locked_done_song(db, song_id) as song: return content_revision(song)
+
+
+def content_revisions_for_songs(
+    db: Session, song_ids: Iterable[str],
+) -> list[tuple[str, str | None, str | None]]:
+    """Fingerprint many songs under one library-lock hold instead of one per song.
+
+    A caller (e.g. a room participant publishing their whole library) that
+    fingerprints N songs one request at a time forces N separate acquisitions
+    of the process-wide library_write_lock, serializing what should be a
+    single batch of reads. Holding it once for the whole list keeps the same
+    per-song locking/error semantics as content_revision_for_song while
+    cutting that contention -- and the request count -- by N.
+    """
+    results: list[tuple[str, str | None, str | None]] = []
+    with song_service.library_write_lock():
+        for song_id in song_ids:
+            try:
+                results.append((song_id, content_revision_for_song(db, song_id), None))
+            except (OSError, ValueError) as exc:
+                results.append((song_id, None, str(exc)))
+    return results
+
+
+def find_song_id_by_content_revision(db: Session, revision: str) -> str | None:
+    """Return the local id of a completed song with identical packaged content."""
+    done_ids = [song.id for song in song_service.list_songs(db) if song_service.is_done(song)]
+    for song_id, local_revision, _error in content_revisions_for_songs(db, done_ids):
+        if local_revision == revision:
+            return song_id
+    return None
 
 
 def build_package_for_song(
@@ -237,32 +267,51 @@ def build_package(song: models.Song, *, expected_revision: str | None = None) ->
         source = song_service.resolve_source_path(song)
         output_dir = song_service.resolve_output_dir(song)
         if not source.is_file() or not output_dir.is_dir(): raise ValueError("Song files are incomplete")
-        current_revision = compute_content_revision(song)
+        # Cached, not compute_content_revision() directly: the lock held for
+        # this whole method means nothing can change the signature before
+        # _manifest() below asks for the same revision again, so routing
+        # through the cache here lets that second call hit it instead of
+        # re-hashing every artifact a second time.
+        current_revision = content_revision(song)
         if expected_revision is not None and current_revision != expected_revision: raise ValueError("Song revision changed before package export")
 
-        with tempfile.NamedTemporaryFile(
-            prefix="karaoke-song-", suffix=".karaoke.zip", dir=config.CACHE_DIR, delete=False,
-        ) as package:
-            package_path = Path(package.name)
-        try:
-            manifest = _manifest(song)
-            if manifest["content_revision"] != current_revision: raise ValueError("Song revision changed before package snapshot")
-            with zipfile.ZipFile(package_path, "w", zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
-                archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-                archive.write(source, f"source/{source.name}")
-                for name in REQUIRED_OUTPUT_PATHS:
-                    path = output_dir / name
-                    if not path.is_file(): raise ValueError(f"Song artifact is missing: {name}")
-                    archive.write(path, f"output/{name}")
-            with zipfile.ZipFile(package_path) as archive:
-                members = _safe_members(archive)
-                exported_manifest = _read_manifest(archive)
-                _validate_semantic_package(archive, members, exported_manifest)
-                if exported_manifest.get("content_revision") != current_revision: raise ValueError("Exported package revision differs from requested revision")
-            return package_path
-        except Exception:
-            package_path.unlink(missing_ok=True)
-            raise
+        package_payload = storage_budget_service.tree_size(output_dir)
+        if source.resolve() != (output_dir / "instrumental.flac").resolve():
+            package_payload += storage_budget_service.tree_size(source)
+        with storage_budget_service.reserve(
+            "song_package_export", config.CACHE_DIR, package_payload
+        ):
+            with tempfile.NamedTemporaryFile(
+                prefix="karaoke-song-", suffix=".karaoke.zip", dir=config.CACHE_DIR, delete=False,
+            ) as package:
+                package_path = Path(package.name)
+            try:
+                manifest = _manifest(song)
+                if manifest["content_revision"] != current_revision: raise ValueError("Song revision changed before package snapshot")
+                with zipfile.ZipFile(package_path, "w", zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
+                    archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+                    # After processing, source_path usually already points at
+                    # output/instrumental.flac (see pipeline finalization) — don't
+                    # store that file a second time under source/, it would just
+                    # double the archive size for no benefit (import discards the
+                    # source/ copy and aliases source_path to output/instrumental.flac
+                    # anyway). Only write a distinct source/ entry when it's actually
+                    # a different file.
+                    if source.resolve() != (output_dir / "instrumental.flac").resolve():
+                        archive.write(source, f"source/{source.name}")
+                    for name in REQUIRED_OUTPUT_PATHS:
+                        path = output_dir / name
+                        if not path.is_file(): raise ValueError(f"Song artifact is missing: {name}")
+                        archive.write(path, f"output/{name}")
+                with zipfile.ZipFile(package_path) as archive:
+                    members = _safe_members(archive)
+                    exported_manifest = _read_manifest(archive)
+                    _validate_semantic_package(archive, members, exported_manifest)
+                    if exported_manifest.get("content_revision") != current_revision: raise ValueError("Exported package revision differs from requested revision")
+                return package_path
+            except Exception:
+                package_path.unlink(missing_ok=True)
+                raise
 
 def _member_path(member: zipfile.ZipInfo) -> PurePosixPath:
     name = member.filename
@@ -275,10 +324,10 @@ def _member_path(member: zipfile.ZipInfo) -> PurePosixPath:
 def _portable_destination_key(path: PurePosixPath) -> tuple[str, ...]:
     result: list[str] = []
     for raw_part in path.parts:
-        part = unicodedata.normalize("NFKC", raw_part).rstrip(" .")
-        if not part: raise ValueError("Song package contains a Windows-unsafe path")
-        stem = part.split(".", 1)[0].rstrip(" .").upper()
-        if stem in _WINDOWS_RESERVED_NAMES: raise ValueError("Song package contains a Windows reserved path")
+        try:
+            part = normalize_windows_component(raw_part, reject_reserved=True)
+        except ValueError as exc:
+            raise ValueError("Song package contains a Windows-unsafe path") from exc
         result.append(part.casefold())
     return tuple(result)
 
@@ -510,7 +559,21 @@ def _source_member(members: list[zipfile.ZipInfo]) -> zipfile.ZipInfo:
         for member in members
         if _member_path(member).parts[:1] == ("source",) and not member.is_dir()
     ]
-    if len(sources) != 1: raise ValueError("Song package must contain one source file")
+    if len(sources) > 1: raise ValueError("Song package must contain one source file")
+    if not sources:
+        # No source/ entry means the exporter deduplicated it against
+        # output/instrumental.flac (they were byte-identical) — that IS the
+        # canonical source for this package.
+        instrumental = next(
+            (
+                member
+                for member in members
+                if _member_path(member) == PurePosixPath("output/instrumental.flac") and not member.is_dir()
+            ),
+            None,
+        )
+        if instrumental is None: raise ValueError("Song package must contain one source file")
+        return instrumental
     source = sources[0]
     if Path(_member_path(source).name).suffix.lower() not in config.ALLOWED_AUDIO_EXTENSIONS: raise ValueError("Song package source format is not supported")
     return source
@@ -598,7 +661,12 @@ def _validate_destination_names(members: list[zipfile.ZipInfo], final_source_nam
         if member.is_dir(): continue
         path = _member_path(member)
         destination = _final_destination(path, final_source_name)
-        if destination is None or path.parts[:1] == ("source",): continue
+        # A distinct source/ entry (see _source_member) is no longer skipped
+        # here: it now actually gets published as final_source_name too (see
+        # _prepare_publish_tree), so if a crafted/coincidental source
+        # filename collides with a required output artifact's own name, it
+        # must be rejected here rather than silently overwriting it on import.
+        if destination is None: continue
         key = _portable_destination_key(destination)
         if key in destinations: raise ValueError("Song package namespaces collide on the destination filesystem")
         destinations.add(key)
@@ -608,7 +676,6 @@ def _prepare_publish_tree(
     archive: zipfile.ZipFile, members: list[zipfile.ZipInfo], source_member: zipfile.ZipInfo,
     staging_root: Path, final_source_name: str,
 ) -> Path:
-    del source_member, final_source_name
     staged_output, publish = staging_root / "output", staging_root / "publish"
     publish.mkdir()
     _extract_output(archive, members, staged_output)
@@ -618,23 +685,30 @@ def _prepare_publish_tree(
             shutil.copytree(item, target)
         else:
             shutil.copy2(item, target)
+    # A distinct source/ entry (not deduplicated against output/instrumental
+    # .flac -- see _source_member) has to actually land on disk as
+    # final_source_name. Without this, the imported song's source_path was
+    # aliased to instrumental.flac regardless, while manifest.content_revision
+    # was computed (in _archive_revision, at export time) from the real
+    # source file's own hash -- the post-publish revision check a few lines
+    # below in _publish_imported_package then always failed, so importing a
+    # package with a genuinely distinct source file was simply impossible.
+    if _member_path(source_member).parts[:1] == ("source",):
+        _copy_archive_member(archive, source_member, publish / final_source_name)
     return publish
-
-
-def _trusted_library_roots() -> set[Path]: return {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
 
 
 def _safe_library_root(value: object) -> Path:
     if not isinstance(value, str) or not value or "\x00" in value: raise ValueError("Room import recovery journal is invalid")
     candidate = Path(value).expanduser().resolve()
-    if candidate not in _trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
+    if candidate not in song_service.trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
     return candidate
 
 
 def _safe_library_entry(name: object, *, root: Path | None = None) -> Path:
     if not isinstance(name, str) or not name or any(token in name for token in ("/", "\\", ":", "\x00")): raise ValueError("Room import recovery journal is invalid")
     trusted_root = (root or config.SONG_OUTPUT_DIR).resolve()
-    if trusted_root not in _trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
+    if trusted_root not in song_service.trusted_library_roots(): raise ValueError("Room import recovery journal references an untrusted library root")
     candidate = (trusted_root / name).resolve()
     if candidate.parent != trusted_root: raise ValueError("Room import recovery journal escapes the library root")
     return candidate
@@ -651,7 +725,7 @@ def _preserve_local_output(backup_dir: Path | None, output_dir: Path) -> None:
 
 def _import_journal_path(output_dir: Path) -> Path:
     root = output_dir.resolve().parent
-    if root not in _trusted_library_roots(): raise ValueError("Song output directory is outside the trusted library roots")
+    if root not in song_service.trusted_library_roots(): raise ValueError("Song output directory is outside the trusted library roots")
     return root / f"{_IMPORT_JOURNAL_PREFIX}{uuid4().hex}.json"
 
 
@@ -673,33 +747,44 @@ def _recover_import_journal(db: Session, journal_path: Path) -> None:
     if journal_path.resolve().parent != root: raise ValueError("Room import recovery journal is stored under a different library root")
     output_dir, backup_name = _safe_library_entry(journal.get('target'), root=root), journal.get('backup')
     backup_dir = _safe_library_entry(backup_name, root=root) if backup_name else None
+    staging_name = journal.get("staging")
+    staging_dir = _safe_library_entry(staging_name, root=root) if staging_name else None
 
-    if phase == "prepared":
+    # A crash between staging_root being populated and the in-process
+    # except/finally in _publish_imported_package removing it leaves that
+    # full copy of the imported output tree with no reference anywhere else
+    # -- clean it up here regardless of which branch below actually runs.
+    try:
+        if phase == "prepared":
+            journal_path.unlink(missing_ok=True)
+            return
+
+        song, committed = _fresh_song_or_none(db, song_id), False
+        if song is not None and output_dir.exists():
+            try:
+                committed = compute_content_revision(song) == revision
+            except (OSError, ValueError, TypeError, AttributeError):
+                committed = False
+
+        if committed or phase == "db-committed":
+            if not committed: raise ValueError("Room import recovery found a committed journal with mismatched DB state")
+            _preserve_local_output(backup_dir, output_dir)
+            if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
+            journal_path.unlink(missing_ok=True)
+            assert song is not None  # noqa: S101 -- committed can only be True when song was found above
+            invalidate_content_revision(song)
+            return
+
+        if output_dir.exists(): shutil.rmtree(output_dir, ignore_errors=True)
+        if backup_dir is not None and backup_dir.exists(): backup_dir.replace(output_dir)
         journal_path.unlink(missing_ok=True)
-        return
-
-    song, committed = _fresh_song_or_none(db, song_id), False
-    if song is not None and output_dir.exists():
-        try:
-            committed = compute_content_revision(song) == revision
-        except (OSError, ValueError, TypeError, AttributeError):
-            committed = False
-
-    if committed or phase == "db-committed":
-        if not committed: raise ValueError("Room import recovery found a committed journal with mismatched DB state")
-        _preserve_local_output(backup_dir, output_dir)
-        if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
-        journal_path.unlink(missing_ok=True)
-        revision_cache.invalidate(song)
-        return
-
-    if output_dir.exists(): shutil.rmtree(output_dir, ignore_errors=True)
-    if backup_dir is not None and backup_dir.exists(): backup_dir.replace(output_dir)
-    journal_path.unlink(missing_ok=True)
+    finally:
+        if staging_dir is not None:
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def recover_import_transactions() -> None:
-    roots = sorted(_trusted_library_roots(), key=lambda path: str(path).casefold())
+    roots = sorted(song_service.trusted_library_roots(), key=lambda path: str(path).casefold())
     journals = [
         journal
         for root in roots if root.exists()
@@ -723,13 +808,36 @@ def _publish_imported_package(
     manifest: dict[str, object], existing: models.Song | None, source_member: zipfile.ZipInfo,
     *, song_id: str, title: str, slug: str, final_source_name: str, output_dir: Path,
 ) -> models.Song:
-    staging_root, backup_dir, journal_path, published, db_committed = Path(tempfile.mkdtemp(prefix='song-import-', dir=config.CACHE_DIR)), output_dir.with_name(f'.{output_dir.name}.room-backup-{uuid4().hex}') if existing else None, _import_journal_path(output_dir), False, False
+    # The final publish is an atomic directory rename. Windows cannot perform
+    # that rename across volumes (WinError 17), so the fully validated tree
+    # must be staged beside its destination rather than in the global cache,
+    # which may live on another drive.
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_root = Path(
+        tempfile.mkdtemp(
+            prefix=f".{output_dir.name}.room-import-",
+            dir=output_dir.parent,
+        )
+    )
+    backup_dir = (
+        output_dir.with_name(f".{output_dir.name}.room-backup-{uuid4().hex}")
+        if existing
+        else None
+    )
+    journal_path, published, db_committed = _import_journal_path(output_dir), False, False
     journal = {
         "operation": "room-import",
         "song_id": song_id,
         "library_root": str(output_dir.resolve().parent),
         "target": output_dir.name,
         "backup": backup_dir.name if backup_dir is not None else None,
+        # Recorded so a hard crash (kill/power loss) mid-import -- before the
+        # in-process except/finally below gets a chance to remove
+        # staging_root itself -- still lets the next startup's
+        # recover_import_transactions() find and delete it; without this the
+        # staging directory (a full copy of the imported output tree) has no
+        # reference anywhere and accumulates on disk forever.
+        "staging": staging_root.name,
         "new_revision": manifest.get("content_revision"),
     }
     try:
@@ -763,7 +871,7 @@ def _publish_imported_package(
         if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
         shutil.rmtree(staging_root, ignore_errors=True)
         journal_path.unlink(missing_ok=True)
-        revision_cache.invalidate(saved)
+        invalidate_content_revision(saved)
         return saved
     except Exception:
         if db_committed:
@@ -785,18 +893,32 @@ def import_package(db: Session, package_path: Path, *, expected_revision: str | 
         revision = manifest["content_revision"]
         if expected_revision is not None and revision != expected_revision: raise ValueError("Imported package revision differs from the expected room revision")
         source_member = _source_member(members)
-        final_source_name = "instrumental.flac"
+        # _source_member returns output/instrumental.flac itself when the
+        # exporter deduplicated an identical source (see its docstring) --
+        # only a genuine source/<name> entry gets published as its own file
+        # (see _prepare_publish_tree); the aliasing to instrumental.flac
+        # stays the same as before for the dedup case.
+        final_source_name = (
+            _member_path(source_member).name
+            if _member_path(source_member).parts[:1] == ("source",)
+            else "instrumental.flac"
+        )
         _validate_destination_names(members, final_source_name)
         base_slug = song_service.slugify(str(manifest.get("slug") or title), "song")
-        from app.services import recording_service
+        from app.services import pipeline_service, recording_service
+        if pipeline_service.is_processing(song_id): raise ValueError("Cannot replace a song while it is being processed")
         if recording_service.has_active_recording(song_id): raise ValueError("Cannot replace a song while a recording session is active")
         with song_service.song_content_lock(song_id), song_service.library_write_lock():
             existing = _fresh_song_or_none(db, song_id)
             if existing is not None and _same_revision(existing, revision): return existing
             slug = existing.slug if existing is not None else song_service.make_unique_slug(db, base_slug)
             output_dir = song_service.resolve_output_dir(existing) if existing is not None else config.SONG_OUTPUT_DIR / slug
-            return _publish_imported_package(
-                db, archive, members, manifest, existing, source_member,
-                song_id=song_id, title=title, slug=slug,
-                final_source_name=final_source_name, output_dir=output_dir,
-            )
+            package_bytes = sum(member.file_size for member in members if not member.is_dir())
+            with storage_budget_service.reserve(
+                "song_package_import", output_dir, package_bytes
+            ):
+                return _publish_imported_package(
+                    db, archive, members, manifest, existing, source_member,
+                    song_id=song_id, title=title, slug=slug,
+                    final_source_name=final_source_name, output_dir=output_dir,
+                )

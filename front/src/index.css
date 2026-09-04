@@ -10,6 +10,7 @@
 html,
 body,
 #root {
+  overflow: hidden;
   min-inline-size: 0;
   min-block-size: 100%;
   margin: 0;
@@ -26,7 +27,7 @@ body {
   min-block-size: 100dvh;
   overflow-x: hidden;
   color: var(--color-text);
-  background: var(--bg-image) center / cover no-repeat fixed;
+  /* background: var(--bg-image) center / cover no-repeat fixed; */
 }
 
 button,
@@ -39,6 +40,7 @@ textarea {
 button {
   color: inherit;
 }
+
 img,
 svg {
   display: block;
@@ -48,9 +50,11 @@ svg {
   inline-size: var(--space-2);
   block-size: var(--space-2);
 }
+
 ::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--color-bg-deep) 50%, transparent);
 }
+
 ::-webkit-scrollbar-thumb {
   border: var(--hairline) solid transparent;
   border-radius: var(--radius-pill);

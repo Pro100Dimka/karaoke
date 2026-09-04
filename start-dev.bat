@@ -24,8 +24,10 @@ set "PKG=%TEMP%\advoice-python-%VER%.zip"
 set "URL=https://api.nuget.org/v3-flatcontainer/python/%VER%/python.%VER%.nupkg"
 
 set "AI=%ROOT%scripts\install-ai-models.bat"
-set "ASIO=%ROOT%scripts\install-asio-sdk.bat"
+set "ASIO=%ROOT%scripts\prepare-native-audio.bat"
 set "JOBS=%TEMP%\advoice-dev-%RANDOM%-%RANDOM%"
+set "NODE_ENV_FILE=%TEMP%\advoice-node-%RANDOM%-%RANDOM%.path"
+set "FFMPEG_ENV_FILE=%TEMP%\advoice-ffmpeg-%RANDOM%-%RANDOM%.path"
 
 set "PYTHONHOME="
 set "PYTHONPATH="
@@ -51,6 +53,28 @@ for %%F in ("%AI%" "%ASIO%") do if not exist "%%~F" (
     echo [ERROR] Script not found:
     echo   %%~F
     goto :err
+)
+
+echo Checking the project Node.js runtime...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\ensure-node.ps1" -Root "%ROOT%." -OutputEnvironmentFile "%NODE_ENV_FILE%"
+if errorlevel 1 goto :err
+if not exist "%NODE_ENV_FILE%" goto :err
+for /f "usebackq delims=" %%P in ("%NODE_ENV_FILE%") do set "PATH=%%P;%PATH%"
+del /q "%NODE_ENV_FILE%" >nul 2>&1
+where node.exe >nul 2>&1 || goto :err
+where npm.cmd >nul 2>&1 || goto :err
+
+echo Checking native build tools and FFmpeg...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\ensure-dev-tools.ps1" -Root "%ROOT%." -OutputEnvironmentFile "%FFMPEG_ENV_FILE%"
+if errorlevel 1 goto :err
+if not exist "%FFMPEG_ENV_FILE%" goto :err
+for /f "usebackq delims=" %%P in ("%FFMPEG_ENV_FILE%") do set "PATH=%%P;%PATH%"
+del /q "%FFMPEG_ENV_FILE%" >nul 2>&1
+where ffmpeg.exe >nul 2>&1 || goto :err
+
+if "%PREPARE_ONLY%"=="0" (
+    call :stop_dev_processes
+    if errorlevel 1 goto :err
 )
 
 mkdir "%JOBS%" >nul 2>&1 || goto :err
@@ -119,19 +143,6 @@ echo.
 call :start_job ai "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%"
 
 rem ============================================================================
-rem PORTS
-rem ============================================================================
-
-if "%PREPARE_ONLY%"=="0" (
-    echo Stopping processes on development ports 18000 and 5173...
-
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$p=18000,5173;$seen=@{};foreach($x in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)){if($p -contains $x.LocalPort){$owner=[string]$x.OwningProcess;if(-not $seen.ContainsKey($owner)){$seen[$owner]=$true;taskkill.exe /PID $owner /T /F}}}"
-
-    if errorlevel 1 echo [WARN] Could not fully clean development ports.
-)
-
-rem ============================================================================
 rem WAIT
 rem ============================================================================
 
@@ -173,11 +184,27 @@ echo ============================================================
 echo.
 
 cd /d "%FRONT%" || goto :err
-where node >nul 2>nul || (echo [ERROR] Node.js is required. & goto :err)
-for /f %%V in ('node -p "process.versions.node"') do set "NODE_VER=%%V"
-node -e "const [a,b,c]=process.versions.node.split('.').map(Number);const ok=(a===22&&(b>18||b===18&&c>=0))||(a===24&&(b>11||b===11&&c>=0))||a>24;process.exit(ok?0:1)" || (echo [ERROR] Node.js 22.18+ ^(or 24.11+^) is required. Found !NODE_VER! & goto :err)
 call npm run dev:electron
 exit /b %errorlevel%
+
+rem ============================================================================
+rem STOP PREVIOUS DEVELOPMENT INSTANCE
+rem ============================================================================
+
+:stop_dev_processes
+echo Stopping previous A^&D Voice development processes...
+set "ADVOICE_DEV_ROOT=%ROOT%"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"$p=18000,5173;$root=[IO.Path]::GetFullPath($env:ADVOICE_DEV_ROOT).TrimEnd('\');$names=@('node.exe','electron.exe','python.exe','pythonw.exe');function Get-Targets{$ids=[Collections.Generic.HashSet[int]]::new();foreach($proc in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)){if($names -notcontains [string]$proc.Name){continue};$exe=[string]$proc.ExecutablePath;$cmd=[string]$proc.CommandLine;$owned=$exe.StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase)-or $cmd.IndexOf($root,[StringComparison]::OrdinalIgnoreCase)-ge 0;$editorTool=$cmd.IndexOf('\.vscode\extensions\',[StringComparison]::OrdinalIgnoreCase)-ge 0;if($owned -and -not $editorTool){[void]$ids.Add([int]$proc.ProcessId)}};foreach($x in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)){if($p -contains [int]$x.LocalPort){[void]$ids.Add([int]$x.OwningProcess)}};return @($ids)};for($pass=0;$pass -lt 3;$pass++){$targets=@(Get-Targets);if($targets.Count -eq 0){break};foreach($target in $targets){if($target -gt 4 -and $target -ne $PID -and (Get-Process -Id $target -ErrorAction SilentlyContinue)){Start-Process -FilePath taskkill.exe -ArgumentList '/PID',([string]$target),'/T','/F' -Wait -WindowStyle Hidden}};Start-Sleep -Milliseconds 350};$left=@(Get-Targets);if($left.Count -gt 0){Write-Host ('[ERROR] Could not stop process IDs: '+($left -join ', '));exit 1}"
+
+set "STOP_RC=%errorlevel%"
+set "ADVOICE_DEV_ROOT="
+if not "%STOP_RC%"=="0" exit /b %STOP_RC%
+
+echo Previous development processes stopped.
+echo.
+exit /b 0
 
 rem ============================================================================
 rem START JOB
@@ -362,7 +389,7 @@ set "NAME=%~2"
 set "TARGET=%~3"
 set "ARG=%~4"
 set "LOG=%~5"
-set "RC=%~6"
+set "JOB_RESULT=%~6"
 
 >"%LOG%" echo %NAME% worker started.
 
@@ -371,7 +398,7 @@ if /i "%NAME%"=="front" (
 
     if exist "%TARGET%\node_modules\" (
         >>"%LOG%" echo Frontend dependencies already exist.
-        >"%RC%" echo 0
+        >"%JOB_RESULT%" echo 0
         exit /b 0
     )
 
@@ -386,11 +413,11 @@ if /i "%NAME%"=="front" (
 )
 
 set "E=!errorlevel!"
->"%RC%" echo !E!
+>"%JOB_RESULT%" echo !E!
 exit /b !E!
 
 :job_fail
->"%RC%" echo 1
+>"%JOB_RESULT%" echo 1
 exit /b 1
 
 rem ============================================================================
@@ -398,6 +425,8 @@ rem ERROR
 rem ============================================================================
 
 :err
+if defined NODE_ENV_FILE del /q "%NODE_ENV_FILE%" >nul 2>&1
+if defined FFMPEG_ENV_FILE del /q "%FFMPEG_ENV_FILE%" >nul 2>&1
 echo.
 echo ============================================================
 echo [ERROR] Development environment could not be started.

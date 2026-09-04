@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
 import { playbackGain } from "../utils/data";
-import { getSecondaryMediaPosition, shouldSyncMedia } from "../utils/transport";
+import {
+  classifyDrift,
+  driftCorrectedRate,
+  getSecondaryMediaPosition,
+  normalizePlaybackRate
+} from "../utils/transport";
 
-const YOUTUBE_NO_COOKIE_ORIGIN = "https://www.youtube-nocookie.com";
+const safe = (task) => Promise.resolve().then(task).catch(() => {});
+const now = () => globalThis.performance?.now?.() ?? Date.now();
 
 export default function useKaraokeMediaSync({
   currentTimeRef,
@@ -22,122 +28,72 @@ export default function useKaraokeMediaSync({
   updateMelodyGuide,
   videoRef,
   vocalVolume,
-  vocalsRef,
-  youTubeClipRef
+  vocalsRef
 }) {
-  const lastSecondarySyncRef = useRef(0);
-
-  const sendYouTubeCommand = useCallback(
-    (func, args = []) => {
-      const frame = youTubeClipRef.current;
-      const target = frame?.contentWindow;
-      if (!target || typeof func !== "string" || !func.trim()) return false;
-      let targetOrigin = "https://www.youtube.com";
-      try {
-        const { origin } = new URL(frame.src, globalThis.location.href);
-        if (origin === YOUTUBE_NO_COOKIE_ORIGIN) targetOrigin = origin;
-      } catch {
-        // Keep the trusted default origin for malformed or not-yet-set src.
-      }
-      target.postMessage(
-        JSON.stringify({ event: "command", func: func.trim(), args }),
-        targetOrigin
-      );
-      return true;
-    },
-    [youTubeClipRef]
-  );
+  const syncAt = useRef({ react: 0, secondary: 0 });
 
   const syncSecondaryMedia = useCallback(
     (position, force = false) => {
-      [vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
-        if (!Number.isFinite(media.duration) || media.duration <= 0) return;
-        if (force || shouldSyncMedia(media.currentTime, position)) {
-          try {
-            media.currentTime = getSecondaryMediaPosition(position, media.duration);
-          } catch {
-            // Media may become unavailable while sources are being replaced.
-          }
+      const rate = normalizePlaybackRate(speed);
+
+      for (const media of [vocalsRef.current, videoRef.current]) {
+        if (!media || !Number.isFinite(media.duration) || media.duration <= 0) continue;
+
+        const target = getSecondaryMediaPosition(position, media.duration);
+        const drift = media.currentTime - target;
+        const correction = force ? "hard" : classifyDrift(drift);
+
+        try {
+          if (correction === "hard") media.currentTime = target;
+          media.playbackRate = ["soft", "strong"].includes(correction)
+            ? driftCorrectedRate(rate, drift, correction)
+            : rate;
+        } catch {
+          // Media can disappear while its source is being replaced.
         }
-      });
-      if (force) sendYouTubeCommand("seekTo", [position, true]);
+      }
     },
-    [sendYouTubeCommand, videoRef, vocalsRef]
+    [speed, videoRef, vocalsRef]
   );
 
   useEffect(() => {
-    // Karaoke/index.jsx renders a loading placeholder instead of <KaraokeMedia>
-    // until the song result finishes fetching, which can land in a render
-    // *after* this effect's songId dependency already changed -- so on the
-    // commit where songId first resolves, instrumentalRef.current is still
-    // null, this effect bails out, and songId never changes again to trigger
-    // a retry. That permanently starved duration/timeupdate listeners while
-    // the unrelated rAF-driven currentTime loop kept working (it re-reads
-    // instrumentalRef.current live every frame instead of capturing it once),
-    // which is why the timecode text ticked up but the timeline never moved
-    // or became seekable. Poll for the element instead of giving up once.
-    let detachListeners;
-    let cancelRetry = () => {};
+    const audio = instrumentalRef.current;
+    if (!audio) return;
 
-    const attach = () => {
-      const instrumental = instrumentalRef.current;
-      const vocals = vocalsRef.current;
-      if (!instrumental) {
-        if (typeof globalThis.requestAnimationFrame === "function") {
-          const frame = globalThis.requestAnimationFrame(attach);
-          cancelRetry = () => globalThis.cancelAnimationFrame(frame);
-        } else {
-          const timer = globalThis.setTimeout(attach, 16);
-          cancelRetry = () => globalThis.clearTimeout(timer);
-        }
-        return;
-      }
-
-      const handleMetadata = () => {
-        const nextDuration = Number(instrumental.duration);
-        setDuration(Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0);
-      };
-      const handleTimeUpdate = () => {
-        const position = Number(instrumental.currentTime);
-        if (!Number.isFinite(position) || position < 0) return;
-        currentTimeRef.current = position;
-        setCurrentTime(position);
-      };
-      const handleEnded = () => {
-        if (onPlaybackEndedRef.current) {
-          Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
-          return;
-        }
-        vocals?.pause();
-        videoRef.current?.pause();
-        sendYouTubeCommand("pauseVideo");
-        silenceMelodyGuide();
-        setIsPlaying(false);
-      };
-
-      const metadataEvents = ["loadedmetadata", "durationchange"];
-      metadataEvents.forEach((event) => instrumental.addEventListener(event, handleMetadata));
-      instrumental.addEventListener("ended", handleEnded);
-      instrumental.addEventListener("timeupdate", handleTimeUpdate);
-      // The element may already have metadata before this effect subscribes.
-      handleMetadata();
-      detachListeners = () => {
-        metadataEvents.forEach((event) => instrumental.removeEventListener(event, handleMetadata));
-        instrumental.removeEventListener("ended", handleEnded);
-        instrumental.removeEventListener("timeupdate", handleTimeUpdate);
-      };
+    const syncDuration = () => {
+      const value = Number(audio.duration);
+      setDuration(Number.isFinite(value) ? Math.max(0, value) : 0);
+    };
+    const syncTime = () => {
+      const value = Number(audio.currentTime);
+      if (!Number.isFinite(value) || value < 0) return;
+      currentTimeRef.current = value;
+      setCurrentTime(value);
+    };
+    const ended = () => {
+      if (onPlaybackEndedRef.current) return safe(onPlaybackEndedRef.current);
+      vocalsRef.current?.pause();
+      videoRef.current?.pause();
+      silenceMelodyGuide();
+      setIsPlaying(false);
     };
 
-    attach();
+    audio.addEventListener("loadedmetadata", syncDuration);
+    audio.addEventListener("durationchange", syncDuration);
+    audio.addEventListener("timeupdate", syncTime);
+    audio.addEventListener("ended", ended);
+    syncDuration();
+
     return () => {
-      cancelRetry();
-      detachListeners?.();
+      audio.removeEventListener("loadedmetadata", syncDuration);
+      audio.removeEventListener("durationchange", syncDuration);
+      audio.removeEventListener("timeupdate", syncTime);
+      audio.removeEventListener("ended", ended);
     };
   }, [
     currentTimeRef,
     instrumentalRef,
     onPlaybackEndedRef,
-    sendYouTubeCommand,
     setCurrentTime,
     setDuration,
     setIsPlaying,
@@ -148,75 +104,72 @@ export default function useKaraokeMediaSync({
   ]);
 
   useEffect(() => {
-    if (!isPlaying) return undefined;
+    if (!isPlaying || !globalThis.requestAnimationFrame) return;
 
-    let animationFrameId;
-    let active = true;
-    const updatePosition = () => {
-      if (!active) return;
-      const position = instrumentalRef.current?.currentTime;
-      const numericPosition = Number(position);
-      if (Number.isFinite(numericPosition) && numericPosition >= 0) {
-        currentTimeRef.current = numericPosition;
-        setCurrentTime(numericPosition);
-        updateMelodyGuide(numericPosition);
-        const now = globalThis.performance?.now?.() ?? Date.now();
-        if (now - lastSecondarySyncRef.current > 450) {
-          syncSecondaryMedia(numericPosition);
-          lastSecondarySyncRef.current = now;
+    let frame;
+    const update = () => {
+      const position = Number(instrumentalRef.current?.currentTime);
+
+      if (Number.isFinite(position) && position >= 0) {
+        currentTimeRef.current = position;
+        updateMelodyGuide(position);
+        const time = now();
+
+        if (time - syncAt.current.react >= 100) {
+          setCurrentTime(position);
+          syncAt.current.react = time;
+        }
+        if (time - syncAt.current.secondary >= 450) {
+          syncSecondaryMedia(position);
+          syncAt.current.secondary = time;
         }
       }
-      animationFrameId = globalThis.requestAnimationFrame(updatePosition);
+
+      frame = requestAnimationFrame(update);
     };
 
-    if (typeof globalThis.requestAnimationFrame !== "function") return undefined;
-    updatePosition();
+    const resync = () => {
+      if (globalThis.document?.visibilityState !== "visible") return;
+      const position = Number(instrumentalRef.current?.currentTime);
+      if (!Number.isFinite(position) || position < 0) return;
+
+      currentTimeRef.current = position;
+      setCurrentTime(position);
+      syncAt.current.react = syncAt.current.secondary = now();
+      syncSecondaryMedia(position, true);
+    };
+
+    globalThis.document?.addEventListener?.("visibilitychange", resync);
+    frame = requestAnimationFrame(update);
+
     return () => {
-      active = false;
-      if (animationFrameId != null) globalThis.cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(frame);
+      globalThis.document?.removeEventListener?.("visibilitychange", resync);
     };
-  }, [
-    currentTimeRef,
-    instrumentalRef,
-    isPlaying,
-    setCurrentTime,
-    syncSecondaryMedia,
-    updateMelodyGuide
-  ]);
+  }, [currentTimeRef, instrumentalRef, isPlaying, setCurrentTime, syncSecondaryMedia, updateMelodyGuide]);
 
   useEffect(() => {
-    if (instrumentalRef.current) instrumentalRef.current.volume = playbackGain(musicVolume);
-  }, [instrumentalRef, musicVolume]);
+    const instrumental = instrumentalRef.current;
+    const vocals = vocalsRef.current;
+    const rate = normalizePlaybackRate(speed);
+
+    if (instrumental) instrumental.volume = playbackGain(musicVolume);
+    if (vocals) vocals.volume = playbackGain(vocalVolume);
+
+    for (const media of [instrumental, vocals, videoRef.current]) {
+      if (!media) continue;
+      try {
+        media.playbackRate = rate;
+      } catch {
+        // Detached media can reject rate changes.
+      }
+    }
+  }, [instrumentalRef, musicVolume, speed, videoRef, vocalVolume, vocalsRef]);
 
   useEffect(() => {
-    if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);
-  }, [vocalVolume, vocalsRef]);
-
-  useEffect(() => {
-    if (isPlaying && melodyVolume > 0) startMelodyGuide().catch(() => {});
+    if (isPlaying && melodyVolume > 0) safe(startMelodyGuide);
     else silenceMelodyGuide();
   }, [isPlaying, keyShift, melodyVolume, silenceMelodyGuide, startMelodyGuide]);
 
-  useEffect(() => {
-    const normalizedSpeed = Number(speed);
-    const playbackRate =
-      Number.isFinite(normalizedSpeed) && normalizedSpeed > 0
-        ? Math.max(0.25, Math.min(4, normalizedSpeed))
-        : 1;
-    // Without this filter, the guarded setter's catch preserves identical
-    // behavior for null media.
-    // Stryker disable next-line MethodExpression
-    [instrumentalRef.current, vocalsRef.current, videoRef.current]
-      .filter(Boolean)
-      .forEach((media) => {
-        try {
-          media.playbackRate = playbackRate;
-        } catch {
-          // A detached media element can reject rate changes.
-        }
-      });
-    sendYouTubeCommand("setPlaybackRate", [playbackRate]);
-  }, [instrumentalRef, sendYouTubeCommand, speed, videoRef, vocalsRef]);
-
-  return { sendYouTubeCommand, syncSecondaryMedia };
+  return { syncSecondaryMedia };
 }

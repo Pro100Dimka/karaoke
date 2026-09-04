@@ -1,9 +1,29 @@
 import logging
+import sys
 from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock
 
 import run
+
+
+def test_audio_monitor_mode_dispatches_before_backend_startup(monkeypatch):
+    from app.services import monitor_worker
+
+    worker = Mock(return_value=7)
+    monkeypatch.setattr(monitor_worker, "main", worker)
+    monkeypatch.setattr(sys, "argv", ["KaraokeBackend.exe", "--audio-monitor", "--config", "{}"])
+    monkeypatch.setattr(run, "configure_logging", Mock(side_effect=AssertionError("HTTP startup ran")))
+
+    try:
+        run.main()
+    except SystemExit as exit_status:
+        assert exit_status.code == 7
+    else:
+        raise AssertionError("monitor mode must return the worker exit code")
+
+    worker.assert_called_once_with()
+    assert sys.argv == ["KaraokeBackend.exe", "--config", "{}"]
 
 
 def test_single_instance_lock_rejects_second_holder(tmp_path: Path):
@@ -44,3 +64,77 @@ def test_raw_error_stream_is_forwarded_to_remote():
     stream.write("backend crashed\n")
 
     remote.handle.assert_called_once()
+
+
+def test_python_future_warning_from_stderr_is_not_labelled_as_error():
+    local, remote = Mock(), Mock()
+    stream = run._StreamToLogFile(local, remote, logging.ERROR, StringIO())
+
+    stream.write("transformers/hub.py:1: FutureWarning: old cache variable\n  warnings.warn(\n")
+
+    assert [call.args[0].levelno for call in remote.handle.call_args_list] == [
+        logging.WARNING,
+        logging.WARNING,
+    ]
+
+
+def test_raw_stream_never_crashes_on_text_missing_from_windows_code_page():
+    class Cp1251Stream:
+        encoding = "cp1251"
+
+        def __init__(self): self.output = ""
+
+        def write(self, message):
+            message.encode(self.encoding)
+            self.output += message
+
+        def flush(self): pass
+
+    original = Cp1251Stream()
+    stream = run._StreamToLogFile(Mock(), Mock(), logging.INFO, original)
+
+    message = "CTC cannot encode かわいそう\n"
+    assert stream.write(message) == len(message)
+    assert "\\u304b\\u308f" in original.output
+
+
+def test_legacy_log_cleanup_keeps_rotated_backups_of_the_active_file(tmp_path):
+    log_path = tmp_path / "application.log"
+    log_path.write_text("current")
+    backup = tmp_path / "application.log.1"
+    backup.write_text("rotated backup")
+    unrelated = tmp_path / "old-crash.log"
+    unrelated.write_text("stale")
+    directory = tmp_path / "logs-subdir"
+    directory.mkdir()
+
+    assert run._is_unrelated_legacy_log(log_path, log_path) is False
+    assert run._is_unrelated_legacy_log(backup, log_path) is False
+    assert run._is_unrelated_legacy_log(unrelated, log_path) is True
+    assert run._is_unrelated_legacy_log(directory, log_path) is False  # not a file at all
+
+
+def test_redact_log_text_hides_the_api_token_bearer_tokens_and_home_paths(monkeypatch):
+    monkeypatch.setenv("SONGAPP_API_TOKEN", "s3cr3t-token-value")
+
+    assert run._redact_log_text("auth failed for token s3cr3t-token-value") == (
+        "auth failed for token <redacted-token>"
+    )
+    assert run._redact_log_text("Authorization: Bearer abcdEFGH12345678") == (
+        "Authorization: Bearer <redacted>"
+    )
+    assert run._redact_log_text(r"reading C:\Users\Dmitriy\AppData\song.wav") == (
+        r"reading C:\Users\<user>\AppData\song.wav"
+    )
+    assert run._redact_log_text("reading /home/dmitriy/library/song.wav") == (
+        "reading /home/<user>/library/song.wav"
+    )
+    assert run._redact_log_text("no secrets here") == "no secrets here"
+
+
+def test_redacting_formatter_scrubs_the_final_formatted_line(monkeypatch):
+    monkeypatch.setenv("SONGAPP_API_TOKEN", "s3cr3t-token-value")
+    formatter = run._RedactingFormatter("%(message)s")
+    record = logging.LogRecord("test", logging.ERROR, __file__, 1, "token=%s", ("s3cr3t-token-value",), None)
+
+    assert formatter.format(record) == "token=<redacted-token>"

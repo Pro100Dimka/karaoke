@@ -19,6 +19,7 @@ vi.mock("../src/theme/ui", () => ({
       <input type="range" aria-label={label} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   ),
+  NumberField: ({ onChange, ...props }) => <input {...props} type="number" onChange={onChange} />,
   Slider: ({ label, value, onChange, onCommit, formatValue: _format, showValue: _show, sx, ...props }) => (
     <input
       {...props}
@@ -29,6 +30,18 @@ vi.mock("../src/theme/ui", () => ({
       onChange={(event) => onChange?.(Number(event.target.value))}
       onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
     />
+  ),
+  Switch: ({ label, checked, onChange, ...props }) => (
+    <label>
+      {label}
+      <input
+        {...props}
+        type="checkbox"
+        aria-label={label}
+        checked={Boolean(checked)}
+        onChange={(event) => onChange?.(event.target.checked)}
+      />
+    </label>
   ),
   Stack: passthrough("div"),
   Grid: passthrough("div"),
@@ -46,7 +59,7 @@ vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({
 }));
 import RotaryKnob from "../src/theme/ui/RotaryKnob/index.jsx";
 import { getRotaryDragValue, getRotaryPointerValue, getRotaryWheelValue } from "../src/theme/ui/RotaryKnob/utils.js";
-import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
+import ConsoleCenter, { noteRangeLabel } from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";
 import ToolsPanel from "../src/pages/Karaoke/components/console/tools.jsx";
@@ -171,6 +184,46 @@ test("rotary knob jumps to the clicked arc and accepts an exact percentage", () 
   expect(change).toHaveBeenLastCalledWith(0.75);
   expect(commit).toHaveBeenLastCalledWith(0.75);
 });
+test("rotary knob displays amplified volume and remains inert while disabled", () => {
+  const change = vi.fn();
+  const commit = vi.fn();
+  const view = render(
+    <RotaryKnob
+      label="Microphone"
+      value={1.2}
+      max={2}
+      displayFactor={100}
+      onChange={change}
+      onCommit={commit}
+    />
+  );
+  expect(view.container.querySelector("strong").textContent).toBe("120%");
+  fireEvent.doubleClick(view.container.querySelector("strong"));
+  const editor = view.getByRole("spinbutton", { name: "Microphone, 120%" });
+  fireEvent.change(editor, { target: { value: "150" } });
+  fireEvent.keyDown(editor, { key: "Enter" });
+  expect(change).toHaveBeenLastCalledWith(1.5);
+  expect(commit).toHaveBeenLastCalledWith(1.5);
+
+  view.rerender(
+    <RotaryKnob
+      label="Microphone"
+      value={1.2}
+      max={2}
+      displayFactor={100}
+      disabled
+      onChange={change}
+      onCommit={commit}
+    />
+  );
+  change.mockClear();
+  commit.mockClear();
+  fireEvent.change(view.getByRole("slider", { name: "Microphone" }), {
+    target: { value: "1.5" }
+  });
+  expect(change).not.toHaveBeenCalled();
+  expect(commit).not.toHaveBeenCalled();
+});
 test("song strip formats metadata and delegates seeking", () => {
   const seek = vi.fn();
   const result = render(<SongStrip song={{ title: "Song", performer: "Singer" }} currentTime={65} duration={130} onSeek={seek} />);
@@ -183,14 +236,18 @@ test("mixer changes and commits volumes and effects", () => {
   const microphone = vi.fn();
   const commit = vi.fn();
   const effect = vi.fn();
+  const monitoring = vi.fn();
   const view = render(
     <MixerPanel
       microphoneLevel={2}
       volumes={{ microphone: 0.4, music: 0.5, vocal: 0.6, melody: 0.7 }}
       onVolumeChange={{ microphone, music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
-      onMicrophoneCommit={commit}
+      onVolumeCommit={{ microphone: commit, music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
       microphoneEffects={{ echo: 0.1, reverb: 0.2, delay: 0.3 }}
       onEffectChange={effect}
+      onEffectCommit={vi.fn()}
+      monitoringEnabled
+      onMonitoringChange={monitoring}
     />
   );
   const { container } = view;
@@ -205,23 +262,26 @@ test("mixer changes and commits volumes and effects", () => {
   fireEvent.change(container.querySelector(".karaoke-effect-dial input"), {
     target: { value: "0.6" }
   });
+  fireEvent.click(view.getByLabelText(/Чую себе|Слышу себя/));
   expect(microphone).toHaveBeenCalledWith(0.8);
   called(commit, effect);
+  expect(monitoring).toHaveBeenCalledWith(false);
   view.rerender(
     <MixerPanel
       microphoneLevel={0}
       volumes={{}}
       onVolumeChange={{ microphone: vi.fn(), music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
+      onVolumeCommit={{ microphone: vi.fn(), music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
       microphoneEffects={{}}
       onEffectChange={vi.fn()}
+      onEffectCommit={vi.fn()}
     />
   );
 });
-test("tools toggle visibility, monitoring, auto-hide, settings and presets", () => {
+test("tools toggle visibility, auto-hide, settings and presets", () => {
   const handlers = {
     onToggleNotes: vi.fn(),
     onToggleLyrics: vi.fn(),
-    onMonitoringChange: vi.fn(),
     onAutoHideChange: vi.fn(),
     onOpenAppSettings: vi.fn(),
     onApplyEffectPreset: vi.fn()
@@ -234,7 +294,7 @@ test("tools toggle visibility, monitoring, auto-hide, settings and presets", () 
   const preset = [...container.querySelectorAll("button")].find((button) => button.title?.includes("%"));
   fireEvent.click(preset);
   called(handlers.onToggleNotes, handlers.onToggleLyrics);
-  calledWith([handlers.onMonitoringChange, [false]], [handlers.onAutoHideChange, [true]]);
+  calledWith([handlers.onAutoHideChange, [true]]);
   called(handlers.onOpenAppSettings, handlers.onApplyEffectPreset);
 });
 test("center controls transport, tempo and bounded key changes", () => {
@@ -243,7 +303,8 @@ test("center controls transport, tempo and bounded key changes", () => {
     onTogglePlay: vi.fn(),
     onStop: vi.fn(),
     onTempoChange: vi.fn(),
-    onKeyShiftChange: vi.fn()
+    onKeyShiftChange: vi.fn(),
+    onLyricsOffsetChange: vi.fn()
   };
   const result = render(
     <ConsoleCenter
@@ -252,21 +313,26 @@ test("center controls transport, tempo and bounded key changes", () => {
       currentTempo={128}
       compactKey="Dm"
       keyShift={12}
+      lyricsOffset={-3}
       isPlaying={false}
     />
   );
   fireEvent.click(result.getByLabelText("Назад на 5 секунд"));
-  fireEvent.click(result.getByLabelText("Вперед на 5 секунд"));
-  fireEvent.click(result.getByLabelText("Відтворити"));
-  fireEvent.click(result.getByLabelText("Зупинити"));
-  fireEvent.click(result.getByLabelText("Зменшити темп на 1 BPM"));
-  fireEvent.click(result.getByLabelText("Збільшити темп на 1 BPM"));
-  fireEvent.click(result.getByLabelText("Зменшити тональність"));
-  fireEvent.click(result.getByLabelText("Підвищити тональність"));
+  fireEvent.click(result.getByLabelText("Вперёд на 5 секунд"));
+  fireEvent.click(result.getByLabelText("Воспроизвести"));
+  fireEvent.click(result.getByLabelText("Остановить"));
+  fireEvent.click(result.getByLabelText("Уменьшить темп на 1 BPM"));
+  fireEvent.click(result.getByLabelText("Увеличить темп на 1 BPM"));
+  fireEvent.click(result.getByLabelText("Понизить тональность"));
+  fireEvent.click(result.getByLabelText("Повысить тональность"));
+  fireEvent.change(result.getByLabelText("Сдвиг слов в секундах"), {
+    target: { value: "-2.9" }
+  });
   expect(handlers.onSkip.mock.calls).toEqual([[-5], [5]]);
   expect(handlers.onTogglePlay).toHaveBeenCalledOnce();
   expect(handlers.onStop).toHaveBeenCalledOnce();
   sameDeep([handlers.onTempoChange.mock.calls, [[-1], [1]]], [handlers.onKeyShiftChange.mock.calls, [[11], [12]]]);
+  expect(handlers.onLyricsOffsetChange).toHaveBeenCalledWith(-2.9);
   expect(result.container.textContent).toContain("A2 – E5");
 });
 test("center uses fallback note range and pause state", () => {
@@ -284,8 +350,14 @@ test("center uses fallback note range and pause state", () => {
       onKeyShiftChange={vi.fn()}
     />
   );
-  fireEvent.click(result.getByLabelText("Зменшити тональність"));
+  fireEvent.click(result.getByLabelText("Понизить тональность"));
   verify([result.getByLabelText("Пауза"), "toBeTruthy"], [result.container.textContent, "toContain", "C2 – C5"]);
+});
+test("formats numeric MIDI range as musical note names", () => {
+  expect(noteRangeLabel(46, "C2")).toBe("A♯2");
+  expect(noteRangeLabel(73, "C5")).toBe("C♯5");
+  expect(noteRangeLabel(60, "C2", 2)).toBe("D4");
+  expect(noteRangeLabel(null, "C2")).toBe("C2");
 });
 test("hidden console always leaves a visible restore action", () => {
   const { getByLabelText } = render(

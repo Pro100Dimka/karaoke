@@ -59,7 +59,7 @@ def prepare_vocal_reference(source: str | Path, target: str | Path, sample_rate=
             "-i", str(source), "-vn", "-ac", "1", "-ar", str(sample_rate),
             "-af", f"{gate}highpass=f=70,lowpass=f=14000,afftdn=nr=12:nf=-45:tn=1,anlmdn=s=0.002:p=0.002:r=0.006",
             temporary,
-        ])
+        ], timeout=20 * 60)
         os.replace(temporary, target)
     finally:
         Path(temporary).unlink(missing_ok=True)

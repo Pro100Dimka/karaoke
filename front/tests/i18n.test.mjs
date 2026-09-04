@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-import sourceMessages from "../src/i18n/source-messages.json" with { type: "json" };
+import { messages } from "../src/i18n/messages.js";
 import { interpolate, missingTranslationKeys, translate } from "../src/i18n/translate.js";
 import { equal, deepEqual } from "./helpers/assertions.mjs";
 const loadLanguage = async () => {
@@ -21,7 +21,7 @@ const catalogs = {
 test("UI locale source files do not contain duplicate translation keys", () => {
   for (const language of ["uk", "ru", "en"]) {
     const source = fs.readFileSync(new URL(`../src/i18n/messages-${language}.js`, import.meta.url), "utf8");
-    const keys = [...source.matchAll(/^\s{4}"([^"]+)":/gm)].map(([, key]) => key);
+    const keys = [...source.matchAll(/^\s+"([^"]+)":/gm)].map(([, key]) => key);
     equal([new Set(keys).size, keys.length, `Duplicate translation key in messages-${language}.js`]);
   }
 });
@@ -84,29 +84,30 @@ test("saved locale handles available, absent and blocked storage", async () => {
   equal([getSavedLanguage(), "uk"], [saveLanguage("en"), "en"]);
   globalThis.localStorage = original;
 });
-test("generated source catalog is complete and preserves placeholders", () => {
-  const ukrainianSources = Object.keys(sourceMessages.uk);
-  deepEqual([ukrainianSources, Object.keys(sourceMessages.en)]);
-  assert.ok(ukrainianSources.length > 350);
-  for (const source of ukrainianSources) {
-    const placeholders = source.match(/\{[A-Za-z0-9_]+\}/g)?.sort() ?? [];
+test("named catalogs have identical keys and preserve interpolation parameters", () => {
+  const keys = Object.keys(messages.ru).sort();
+  for (const language of ["uk", "en"]) deepEqual([keys, Object.keys(messages[language]).sort()]);
+  assert.ok(keys.length > 350);
+  for (const key of keys) {
+    assert.match(key, /^[a-zA-Z][\w-]*(?:\.[\w-]+)+$/);
+    const placeholders = messages.ru[key].match(/\{[A-Za-z0-9_]+\}/g)?.sort() ?? [];
     for (const language of ["uk", "en"]) {
-      equal([typeof sourceMessages[language][source], "string"]);
-      deepEqual([sourceMessages[language][source].match(/\{[A-Za-z0-9_]+\}/g)?.sort() ?? [], placeholders, `${language}: ${source}`]);
+      equal([typeof messages[language][key], "string"]);
+      deepEqual([messages[language][key].match(/\{[A-Za-z0-9_]+\}/g)?.sort() ?? [], placeholders, `${language}: ${key}`]);
     }
   }
 });
-test("runtime translates Russian sources using the persisted language", () => {
+test("runtime resolves named keys using the persisted language", () => {
   const original = globalThis.localStorage;
   let language = "uk";
   globalThis.localStorage = { getItem: () => language };
-  const source = "Библиотека песен";
-  equal([translateSaved(source), sourceMessages.uk[source]]);
+  const key = "settings.appearance.online_name.label";
+  equal([translateSaved(key), messages.uk[key]]);
   language = "en";
-  equal([translateSaved(source), sourceMessages.en[source]]);
+  equal([translateSaved(key), messages.en[key]]);
   language = "ru";
-  equal([translateSaved(source), source]);
+  equal([translateSaved(key), messages.ru[key]]);
   language = "uk";
-  equal([translateSaved("Неизвестно: {name}", { name: "X" }), "Неизвестно: X"]);
+  equal([translateSaved("room.person.speaking", { name: "X" }), "X говорить"]);
   globalThis.localStorage = original;
 });

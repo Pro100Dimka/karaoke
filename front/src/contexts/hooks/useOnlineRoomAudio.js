@@ -1,4 +1,5 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { connectVoiceEffects } from "../../services/voiceEffects";
 import { clamp01 as clampUnit } from "../../utils/math";
 
 const clamp01 = (value) => clampUnit(Number(value) || 0);
@@ -8,6 +9,14 @@ const closeContext = (context) => {
     result?.catch?.(() => {});
   } catch {
     // Closing an already-closed Web Audio context is harmless.
+  }
+};
+const routeMediaOutput = (target, deviceId) => {
+  if (typeof target?.setSinkId !== "function") return null;
+  try {
+    return Promise.resolve(target.setSinkId(deviceId || "")).catch(() => false);
+  } catch {
+    return Promise.resolve(false);
   }
 };
 
@@ -24,6 +33,25 @@ export default function useOnlineRoomAudio({
   const remoteEffectsRef = useRef(new Map());
   const remoteEffectVersionsRef = useRef(new Map());
   const localMonitorRef = useRef(null);
+  const outputDeviceIdRef = useRef("");
+
+  const applyOutputRoute = useCallback(
+    (deviceId) => {
+      const normalized = typeof deviceId === "string" ? deviceId : "";
+      outputDeviceIdRef.current = normalized;
+      remoteAudioRef.current.forEach((audio) => routeMediaOutput(audio, normalized));
+      remoteEffectsRef.current.forEach(({ context }) => routeMediaOutput(context, normalized));
+      routeMediaOutput(voiceRef.current, normalized);
+      routeMediaOutput(localMonitorRef.current?.context, normalized);
+    },
+    [voiceRef]
+  );
+
+  useEffect(() => {
+    const route = (event) => applyOutputRoute(event.detail?.deviceId);
+    globalThis.addEventListener?.("audio-output-route-changed", route);
+    return () => globalThis.removeEventListener?.("audio-output-route-changed", route);
+  }, [applyOutputRoute]);
 
   const applyRemoteAudioMute = useCallback(() => {
     for (const [participantId, audio] of remoteAudioRef.current) {
@@ -33,11 +61,15 @@ export default function useOnlineRoomAudio({
         0,
         Math.min(1, Number(participantVolumesRef.current?.[participantId] ?? 1))
       );
+      const ownerVolume = Math.max(
+        0,
+        Math.min(2, Number(roomUiRef.current.effectsByParticipant?.[participantId]?.volume ?? 1))
+      );
       audio.muted = muted || Boolean(effectGraph);
       audio.volume = effectGraph ? 1 : Math.min(1, volume);
-      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : volume;
+      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : volume * ownerVolume;
     }
-  }, [mutedPeopleRef, participantVolumesRef, roomSoundMutedRef]);
+  }, [mutedPeopleRef, participantVolumesRef, roomSoundMutedRef, roomUiRef]);
 
   const setParticipantVolume = useCallback(
     (participantId, value) => {
@@ -52,10 +84,17 @@ export default function useOnlineRoomAudio({
 
   const removeRemoteAudio = useCallback(
     (participantId) => {
-      remoteEffectVersionsRef.current.set(
-        participantId,
-        (remoteEffectVersionsRef.current.get(participantId) || 0) + 1
-      );
+      // Deleting (rather than just bumping) still invalidates any in-flight
+      // applyParticipantEffects activation for this participant -- it reads
+      // undefined back, which never equals a real (>=1) effectVersion, so a
+      // stale activation still correctly closes its context instead of
+      // attaching. Participant ids are fresh crypto.randomUUID()s per
+      // connection (see cloudflare/src/worker.js), never reused, so a
+      // future join can't collide with a version number left behind here.
+      // OnlineRoomProvider mounts once for the whole app session, so
+      // without this the map only ever grew, one entry per participant who
+      // ever passed through any room, for the process's entire lifetime.
+      remoteEffectVersionsRef.current.delete(participantId);
       stopSpeakingMeter(participantId);
       const effectGraph = remoteEffectsRef.current.get(participantId);
       remoteEffectsRef.current.delete(participantId);
@@ -74,6 +113,16 @@ export default function useOnlineRoomAudio({
     [...remoteAudioRef.current.keys()].forEach(removeRemoteAudio);
   }, [removeRemoteAudio]);
 
+  const getRemoteVoiceStreams = useCallback(
+    () =>
+      [...remoteAudioRef.current.values()]
+        .map((audio) => audio.srcObject)
+        .filter((stream) =>
+          stream?.getAudioTracks?.().some((track) => track.readyState === "live")
+        ),
+    []
+  );
+
   const attachRemoteStream = useCallback(
     (participantId, stream, onPlayBlocked) => {
       removeRemoteAudio(participantId);
@@ -87,7 +136,10 @@ export default function useOnlineRoomAudio({
       remoteAudioRef.current.set(participantId, audio);
       startSpeakingMeter(participantId, stream);
       applyRemoteAudioMute();
-      audio.play().catch(() => onPlayBlocked?.());
+      const routed = routeMediaOutput(audio, outputDeviceIdRef.current);
+      const play = () => audio.play().catch(() => onPlayBlocked?.());
+      if (routed) routed.finally(play);
+      else play();
       return audio;
     },
     [applyRemoteAudioMute, removeRemoteAudio, startSpeakingMeter]
@@ -112,45 +164,14 @@ export default function useOnlineRoomAudio({
         return;
       }
       const effects = roomUiRef.current.effectsByParticipant?.[participantId] || {};
-      const context = new AudioContextClass({ latencyHint: "interactive" });
+      const context = new AudioContextClass({ latencyHint: 0 });
+      routeMediaOutput(context, outputDeviceIdRef.current);
       const source = context.createMediaStreamSource(stream);
       const master = context.createGain();
       master.gain.value = 1;
       source.connect(master);
 
-      const echo = clamp01(effects.echo);
-      const delayAmount = clamp01(effects.delay);
-      if (echo || delayAmount) {
-        const delay = context.createDelay(1);
-        const feedback = context.createGain();
-        const wet = context.createGain();
-        delay.delayTime.value = 0.06 + delayAmount * 0.34;
-        feedback.gain.value = Math.min(0.72, echo * 0.55 + delayAmount * 0.3);
-        wet.gain.value = Math.min(0.65, echo * 0.46 + delayAmount * 0.24);
-        source.connect(delay);
-        delay.connect(feedback);
-        feedback.connect(delay);
-        delay.connect(wet);
-        wet.connect(master);
-      }
-
-      const reverb = clamp01(effects.reverb);
-      if (reverb) {
-        const convolver = context.createConvolver();
-        const wet = context.createGain();
-        const frames = Math.floor(context.sampleRate * (0.35 + reverb * 1.15));
-        const impulse = context.createBuffer(2, frames, context.sampleRate);
-        for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
-          const data = impulse.getChannelData(channel);
-          for (let index = 0; index < frames; index += 1)
-            data[index] = (Math.random() * 2 - 1) * (1 - index / frames) ** (1.5 + reverb * 2);
-        }
-        convolver.buffer = impulse;
-        wet.gain.value = Math.min(0.58, reverb * 0.48);
-        source.connect(convolver);
-        convolver.connect(wet);
-        wet.connect(master);
-      }
+      connectVoiceEffects(context, source, master, effects);
       master.connect(context.destination);
       const activate = () => {
         if (
@@ -179,6 +200,10 @@ export default function useOnlineRoomAudio({
     const monitor = localMonitorRef.current;
     localMonitorRef.current = null;
     if (!monitor) return;
+    if (monitor.direct) {
+      monitor.voice.setLocalMonitoring(false);
+      return;
+    }
     try {
       monitor.source.disconnect();
       monitor.gain.disconnect();
@@ -189,7 +214,7 @@ export default function useOnlineRoomAudio({
   }, []);
 
   const setLocalMonitoring = useCallback(
-    async (enabled) => {
+    async (enabled, effects = {}) => {
       if (!enabled) {
         stopLocalMonitoring();
         return false;
@@ -197,6 +222,16 @@ export default function useOnlineRoomAudio({
       if (localMonitorRef.current) return true;
       const voice = voiceRef.current;
       if (!voice) return false;
+      if (typeof voice.setLocalMonitoring === "function") {
+        await routeMediaOutput(voice, outputDeviceIdRef.current);
+        const active = await voice.setLocalMonitoring(true, effects);
+        if (voiceRef.current !== voice) {
+          voice.setLocalMonitoring(false);
+          return false;
+        }
+        if (active) localMonitorRef.current = { voice, direct: true };
+        return Boolean(active);
+      }
       const stream = await voice.start();
       if (voiceRef.current !== voice) {
         stream.getTracks().forEach((track) => track.stop());
@@ -206,14 +241,17 @@ export default function useOnlineRoomAudio({
       if (!AudioContextClass) return false;
       let context;
       try {
-        context = new AudioContextClass({ latencyHint: "interactive" });
+        context = new AudioContextClass({ latencyHint: 0 });
+        await routeMediaOutput(context, outputDeviceIdRef.current);
         const source = context.createMediaStreamSource(stream);
         const gain = context.createGain();
-        gain.gain.value = 1;
+        gain.gain.value = Math.max(0, Math.min(2, Number(effects.volume ?? 1)));
         // voice.start() returns the already processed stream from the central
         // microphone service. Applying the channel strip again would gate and
         // compress the singer twice.
         source.connect(gain);
+
+        connectVoiceEffects(context, source, gain, effects);
         gain.connect(context.destination);
         await context.resume?.();
         if (voiceRef.current !== voice) {
@@ -234,6 +272,7 @@ export default function useOnlineRoomAudio({
     applyParticipantEffects,
     applyRemoteAudioMute,
     attachRemoteStream,
+    getRemoteVoiceStreams,
     removeAllRemoteAudio,
     removeRemoteAudio,
     setParticipantVolume,

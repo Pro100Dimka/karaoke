@@ -1,178 +1,230 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useRadio } from "../../contexts/radio";
 import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved as tr } from "../../i18n/runtime";
-import { POLLING_INTERVALS } from "../../runtime-config";
+import { POLLING_INTERVALS as POLL } from "../../runtime-config";
+import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
+import { getLightingStatus } from "../../utils/platform";
 import { applyTheme } from "../../utils/theme";
-import { createIndexedDeviceOptions } from "../Karaoke/utils/devices";
+import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/utils/devices";
+
+const MME_SENTINEL = "mme";
+const emit = (detail) => dispatchEvent(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const useOpenPoll = (open, fn, interval, fallback) =>
+  usePolling(() => (open ? fn() : Promise.resolve(fallback)), open ? interval : 0, [open]);
+
+function useQueue() {
+  const queue = useRef(Promise.resolve());
+  const latest = useRef(new Map());
+  return (key, task) => {
+    const token = Symbol(key);
+    latest.current.set(key, token);
+    return (queue.current = queue.current
+      .catch(() => {})
+      .then(() => task(() => latest.current.get(key) === token)));
+  };
+}
+
+async function testSpeaker() {
+  const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!Audio) return false;
+
+  const context = new Audio({ latencyHint: "interactive" });
+  const tone = context.createOscillator();
+  const gain = context.createGain();
+
+  gain.gain.setValueAtTime(0.12, context.currentTime);
+  tone.frequency.setValueAtTime(523.25, context.currentTime);
+  tone.connect(gain).connect(context.destination);
+  tone.start();
+  tone.stop(context.currentTime + 0.7);
+
+  try {
+    await wait(800);
+  } finally {
+    await context.close();
+  }
+  return true;
+}
 
 export const signalLevel = (signal) => {
   const db = Number(signal?.rms_db ?? signal?.rms_dbfs);
-  return Number.isFinite(db) ? Math.max(0, Math.min(100, ((db + 60) / 60) * 100)) : 0;
+  return Number.isFinite(db) ? Math.min(100, Math.max(0, ((db + 60) / 60) * 100)) : 0;
 };
 
-const useConditionalPolling = (open, fetcher, interval, fallback) =>
-  usePolling(() => (open ? fetcher() : Promise.resolve(fallback)), open ? interval : 0, [open]);
-
-function useAppForm() {
-  const { alert } = useAppDialog();
-  const { updateSettings } = useAppSettings();
-  const [form, setForm] = useState(null);
-  const writes = useRef(new Map());
-  const queue = useRef(Promise.resolve());
-
-  useEffect(() => {
-    let active = true;
-    api
-      .getAppSettings()
-      .then((value) => active && setForm(value))
-      .catch((error) => {
-        if (active) alert(tr("Не удалось загрузить настройки: {0}", { 0: getErrorMessage(error) }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [alert]);
-
-  const change = useCallback((name, value) => {
-    setForm((current) => ({ ...current, [name]: value }));
-    if (name === "theme") applyTheme(value);
-  }, []);
-
-  const save = useCallback(
-    (name, value) => {
-      const token = Symbol(name);
-      writes.current.set(name, token);
-      queue.current = queue.current
-        .catch(() => {})
-        .then(async () => {
-          try {
-            const saved = await api.updateAppSettings({ [name]: value === "" ? null : value });
-            if (writes.current.get(name) !== token) return;
-            setForm((current) => ({ ...current, ...saved }));
-            updateSettings((current) => ({ ...current, ...saved }));
-          } catch (error) {
-            await alert(tr("Не удалось сохранить настройку: {0}", { 0: getErrorMessage(error) }));
-          }
-        });
-      return queue.current;
-    },
-    [alert, updateSettings]
-  );
-
-  return { form, change, save };
+function useAppActions() {
+  const { settings: form, error, updateSettings } = useAppSettings();
+  const queue = useQueue();
+  return {
+    form,
+    error,
+    replace: updateSettings,
+    change: (name, value) => name === "theme" && applyTheme(value),
+    save: (name, value) =>
+      queue(name, async (latest) => {
+        const previous = form?.[name];
+        try {
+          const saved = await api.updateAppSettings({ [name]: value ?? null });
+          if (latest()) updateSettings((state) => ({ ...state, [name]: saved[name] }));
+        } catch (error) {
+          if (latest() && name === "theme") applyTheme(previous);
+          throw error;
+        }
+      })
+  };
 }
 
 function useAudio(open) {
   const { alert } = useAppDialog();
-  const settings = useConditionalPolling(
-    open,
-    api.getAudioSettings,
-    POLLING_INTERVALS.settings,
-    null
-  );
-  const inputs = useConditionalPolling(open, api.listAudioDevices, POLLING_INTERVALS.devices, []);
-  const outputs = useConditionalPolling(
-    open,
-    api.listAudioOutputDevices,
-    POLLING_INTERVALS.devices,
-    []
-  );
-  const signal = useConditionalPolling(
-    open,
-    api.getSignalQuality,
-    POLLING_INTERVALS.realtimeSignal,
-    null
-  );
+  const queue = useQueue();
+  const settings = useOpenPoll(open, api.getAudioSettings, POLL.settings, null);
+  const inputs = useOpenPoll(open, api.listAudioDevices, POLL.devices, []);
+  const outputs = useOpenPoll(open, api.listAudioOutputDevices, POLL.devices, []);
+  const signal = useOpenPoll(open, api.getSignalQuality, POLL.realtimeSignal, null);
+  const monitorStatus = useOpenPoll(open, api.getDirectMonitorStatus, 750, null);
+  // The ASIO driver's own control panel can change the buffer out from
+  // under a running monitor (e.g. ASIO4ALL/an interface's mixer app); the
+  // backend detects that, restarts, and persists the size it actually
+  // negotiated (see audio_service._persist_negotiated_buffer_size). The
+  // fast-polled monitor status reflects that new size within ~1s; the
+  // buffer_size dropdown otherwise only follows the much slower settings
+  // poll, so react to that change here instead of leaving it stale for up
+  // to POLL.settings.
+  const negotiatedBlocksizeRef = useRef();
+  useEffect(() => {
+    const blocksize = monitorStatus.data?.blocksize;
+    if (blocksize == null) return;
+    if (
+      negotiatedBlocksizeRef.current !== undefined &&
+      negotiatedBlocksizeRef.current !== blocksize
+    ) {
+      settings.refresh();
+    }
+    negotiatedBlocksizeRef.current = blocksize;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monitorStatus.data?.blocksize]);
   const [local, setLocal] = useState({});
   const [busy, setBusy] = useState(false);
-  const queue = useRef(Promise.resolve());
-  const writes = useRef(new Map());
-  const values = { ...(settings.data ?? {}), ...local };
-
+  // Exclusive WASAPI mode is intentionally session-only, never a saved
+  // default (see settings.audio.wasapiMode.warning) -- it resets to shared
+  // on every app restart and is only ever requested explicitly by the user.
+  const [wasapiExclusive, setWasapiExclusive] = useState(false);
+  const values = { ...settings.data, ...local };
+  const asio = useOpenPoll(open, api.listAsioDrivers, POLL.devices, []);
+  const fail = (key, error) => alert(tr(key, { 0: getErrorMessage(error) }));
+  const merge = (patch) => setLocal((state) => ({ ...state, ...patch }));
   const update = (name, value) => {
     const patch = { [name]: value };
-    const token = Symbol(name);
-    writes.current.set(name, token);
-    setLocal((current) => ({ ...current, ...patch }));
-    queue.current = queue.current
-      .catch(() => {})
-      .then(async () => {
-        try {
-          const saved = await api.updateAudioSettings(patch);
-          if (writes.current.get(name) === token) {
-            setLocal((current) => ({ ...current, ...saved }));
-          }
-          await settings.refresh();
-        } catch (error) {
-          await alert(
-            tr("Не удалось сохранить аудионастройки: {0}", { 0: getErrorMessage(error) })
-          );
-        }
-      });
-    return queue.current;
+    const previous = values[name];
+    merge(patch);
+    return queue(name, async (latest) => {
+      try {
+        const saved = await api.updateAudioSettings(patch);
+        if (latest()) merge(saved);
+        emit(saved);
+        await settings.refresh();
+      } catch (error) {
+        if (latest()) merge({ [name]: previous });
+        await fail("settings.couldNotSaveAudioSettings", error);
+      }
+    });
   };
-
-  const monitor = async () => {
+  const monitor = async (retry = false) => {
     setBusy(true);
     try {
-      const enabled = Boolean(values.monitoring_enabled);
-      await (enabled
+      const enabled = !!values.monitoring_enabled && !retry;
+      const saved = await (enabled
         ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({ disabledEffects: true }));
-      setLocal((current) => ({ ...current, monitoring_enabled: !enabled }));
-      await settings.refresh();
+        : api.startDirectMonitoring({
+            disabledEffects: true,
+            wasapiMode: wasapiExclusive ? "exclusive" : "shared"
+          }));
+
+      merge({ monitoring_enabled: !enabled });
+      emit(saved);
+      await Promise.all([monitorStatus.refresh(), settings.refresh()]);
     } catch (error) {
-      await alert(tr("Не удалось изменить прослушивание: {0}", { 0: getErrorMessage(error) }));
+      await fail("settings.couldNotChangeMonitoring", error);
     } finally {
       setBusy(false);
     }
   };
-
+  const selectDriver = (name) =>
+    queue("driver", async () => {
+      try {
+        // The dropdown's visible value is bound to asio_driver_name (see
+        // audio.jsx), not audio_driver -- "auto" and "mme" would otherwise
+        // both display as "" and be indistinguishable in the UI. MME_SENTINEL
+        // is a reserved, non-empty stand-in stored in that field for "mme"
+        // mode; nothing on the backend reads asio_driver_name unless
+        // audio_driver is actually "asio", so this is safe there too.
+        const driver = name === MME_SENTINEL ? "mme" : name ? "asio" : "auto";
+        const saved = await api.updateAudioSettings({
+          audio_driver: driver,
+          asio_driver_name: driver === "asio" ? name : driver === "mme" ? MME_SENTINEL : ""
+        });
+        merge(saved);
+        emit(saved);
+        await settings.refresh();
+      } catch (error) {
+        await fail("settings.couldNotSaveAudioSettings", error);
+      }
+    });
   const speaker = async () => {
-    const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!AudioContext || busy) return;
+    if (busy) return;
     setBusy(true);
-    let context;
     try {
-      context = new AudioContext({ latencyHint: "interactive" });
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      gain.gain.setValueAtTime(0.12, context.currentTime);
-      oscillator.frequency.setValueAtTime(523.25, context.currentTime);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.7);
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await testSpeaker();
     } catch (error) {
-      await alert(tr("Не удалось проверить динамики: {0}", { 0: getErrorMessage(error) }));
+      await fail("settings.failedToCheckSpeakers", error);
     } finally {
-      await context?.close?.();
       setBusy(false);
     }
   };
-
   return {
     values,
-    options: {
-      inputs: createIndexedDeviceOptions(inputs.data),
-      outputs: createIndexedDeviceOptions(outputs.data, tr("Системное устройство"))
-    },
-    level: values.monitoring_enabled ? signalLevel(signal.data) : 0,
     busy,
     update,
     monitor,
-    speaker
+    speaker,
+    selectDriver,
+    monitorStatus: monitorStatus.data,
+    monitorStatusError: monitorStatus.error,
+    suggestAsio: false,
+    // Exclusive only ever applies through the WASAPI host (audio_driver
+    // "auto"); ASIO and MME have their own buffer paths and never see this.
+    wasapiExclusiveAvailable: !["asio", "mme"].includes(values.audio_driver),
+    wasapiExclusive,
+    setWasapiExclusive,
+    level: values.monitoring_enabled ? signalLevel(signal.data) : 0,
+    options: {
+      drivers: [
+        { value: "", label: tr("settings.audio.wasapiMode.options.shared") },
+        { value: MME_SENTINEL, label: "MME" },
+        ...(asio.data ?? []).map(({ name }) => ({ value: name, label: `ASIO · ${name}` }))
+      ],
+      inputs: createInputDeviceOptions(inputs.data, values.input_device_id),
+      outputs: createOutputDeviceOptions(
+        outputs.data,
+        values.output_device_id,
+        values.audio_driver,
+        tr("karaoke.systemDevice")
+      )
+    }
   };
 }
 
 export default function useSettings(open) {
-  const app = useAppForm();
-  const audio = useAudio(open);
-  const radio = useRadio();
-  return { app, audio, radio };
+  const lighting = useOpenPoll(open, getLightingStatus, 1500, null);
+  return {
+    app: useAppActions(),
+    audio: useAudio(open),
+    radio: useRadio(),
+    lighting: lighting.data
+  };
 }

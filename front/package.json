@@ -1,17 +1,18 @@
 {
   "name": "a-and-d-voice",
-  "version": "0.3.34",
+  "version": "0.3.44",
   "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
   "author": "A&D Voice",
   "private": true,
+  "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "postinstall": "patch-package",
     "dev": "vite",
     "dev:web": "node scripts/start-web.mjs",
-    "dev:electron": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "dev:electron": "npm run build:lighting && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build:lighting": "node scripts/build-lighting.mjs",
     "build": "vite build",
-    "build:electron": "npm run release:check && electron-builder",
     "preview": "vite preview",
     "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --ignore-pattern **/*OLD/**",
     "lint:fix": "npm run lint -- --fix",
@@ -22,7 +23,7 @@
     "audit:css": "node scripts/audit-css-full.mjs --strict",
     "audit:exports": "node scripts/audit-exports.mjs",
     "check:sizes": "node scripts/check-file-sizes.mjs",
-    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run audit:semantic-density && npm run check:sizes && npm run audit:duplicates && npm run audit:media-auth && npm run audit:release-gate && npm run audit:portability && npm run audit:architecture && npm run audit:localization",
+    "audit": "npm run check:syntax && npm run audit:openapi-contract && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run audit:semantic-density && npm run check:sizes && npm run audit:duplicates && npm run audit:media-auth && npm run audit:release-gate && npm run audit:portability && npm run audit:architecture && npm run audit:localization",
     "audit:react": "node scripts/audit-react.mjs",
     "audit:cycles": "node scripts/audit-cycles.mjs",
     "audit:complexity": "node scripts/audit-complexity.mjs",
@@ -35,6 +36,8 @@
     "build:mock": "cross-env VITE_USE_MOCK_API=true vite build --mode mock",
     "preview:mock": "vite preview --mode mock --host 127.0.0.1 --port 4173",
     "clean": "node scripts/clean.mjs",
+    "generate:sbom": "node scripts/generate-sbom.mjs",
+    "audit:openapi-contract": "node scripts/audit-openapi-contract.mjs",
     "verify": "npm run release:normalize && npm run check:imports && npm run lint && npm run format:check && npm run test:unit:coverage && npm run audit && npm run build",
     "audit:reachability": "node scripts/audit-reachability.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
@@ -59,14 +62,12 @@
     "@tanstack/react-virtual": "^3.14.10",
     "@xstate/react": "^6.1.0",
     "comlink": "^4.4.2",
-    "konva": "^10.3.1",
+    "formik": "^2.4.9",
     "lucide-react": "^0.383.0",
     "pixi.js": "^7.4.3",
-    "prop-types": "^15.8.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-dropzone": "^20.1.1",
-    "react-konva": "^18.2.16",
     "react-router-dom": "^7.18.2",
     "three": "^0.185.1",
     "wavesurfer.js": "^7.12.11",
@@ -74,6 +75,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@babel/parser": "^8.0.4",
     "@babel/preset-env": "^7.29.7",
     "@babel/preset-react": "^7.29.7",
@@ -103,7 +105,7 @@
     "patch-package": "8.0.1",
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.4",
-    "prettier": "^3.9.6",
+    "prettier": "3.9.6",
     "vite": "^8.2.1",
     "vitest": "^4.1.10",
     "wait-on": "^7.2.0"
@@ -118,6 +120,7 @@
         "to": "dist"
       },
       "electron/**/*",
+      "src/theme/palettes.css",
       "assets/icons/**/*"
     ],
     "extraResources": [
@@ -134,21 +137,18 @@
       "output": "../generated/build/electron"
     },
     "win": {
-      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "../generated/build/lighting/KeyboardLighting.node",
+          "to": "lighting/KeyboardLighting.node"
+        },
+        {
+          "from": "../generated/build/lighting/sources",
+          "to": "lighting/sources"
+        }
+      ],
+      "target": "dir",
       "icon": "assets/icons/app.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "A&D Voice"
-    },
-    "mac": {
-      "target": "dmg"
-    },
-    "linux": {
-      "target": "AppImage"
     }
   },
   "overrides": {

@@ -1,35 +1,82 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Box from "../Box";
 import RangeInput from "../RangeInput";
+import "./waveform.css";
 
 const COUNT = 180;
 const WIDTH = COUNT * 3;
-const BARS = Array.from({ length: COUNT }, (_, index) => [
-  index,
-  8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
-]);
+const HEIGHT = 44;
+const FALLBACK_SAMPLES = Array.from(
+  { length: COUNT },
+  (_, index) => 0.12 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 0.18
+);
+const fallbackPath = (() => {
+  const center = HEIGHT / 2;
+  const points = FALLBACK_SAMPLES.map((sample, index) => ({
+    x: (index / (COUNT - 1)) * WIDTH,
+    halfHeight: 1 + sample * (center - 3)
+  }));
+  const upper = points.map(
+    ({ x, halfHeight }) => `${x.toFixed(2)} ${(center - halfHeight).toFixed(2)}`
+  );
+  const lower = points
+    .map(({ x, halfHeight }) => `${x.toFixed(2)} ${(center + halfHeight).toFixed(2)}`)
+    .reverse();
+  return `M ${upper[0]} L ${upper.slice(1).join(" L ")} L ${lower.join(" L ")} Z`;
+})();
+const clampProgress = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+const waveformPeakCache = new Map();
+const MAX_CACHED_WAVEFORMS = 32;
 
-export default function Waveform({ value = 0, duration = 0, onChange, label, url, fetchParams }) {
+const rememberWaveform = (url, wavesurfer) => {
+  const duration = wavesurfer.getDuration();
+  if (!(duration > 0)) return;
+  const peaks = wavesurfer.exportPeaks({ channels: 1, maxLength: 1600, precision: 5 });
+  if (!peaks?.[0]?.length) return;
+  waveformPeakCache.delete(url);
+  waveformPeakCache.set(url, { duration, peaks });
+  while (waveformPeakCache.size > MAX_CACHED_WAVEFORMS) {
+    waveformPeakCache.delete(waveformPeakCache.keys().next().value);
+  }
+};
+
+export default function Waveform({
+  value = 0,
+  duration = 0,
+  progress: progressOverride,
+  onChange,
+  label,
+  url,
+  fetchParams,
+  retryKey = 0,
+  fallbackWhileLoading = true,
+  interactive = true,
+  compact = false
+}) {
   const gradient = `wave-${useId().replace(/:/g, "")}`;
   const host = useRef(null);
   const instance = useRef(null);
   const [real, setReal] = useState(false);
-  const progress = duration > 0 ? Math.min(1, Math.max(0, value / duration)) : 0;
+  const progress =
+    progressOverride == null
+      ? duration > 0
+        ? clampProgress(value / duration)
+        : 0
+      : clampProgress(progressOverride);
   const playhead = progress * WIDTH;
 
   useEffect(() => {
     if (!url || !host.current) return undefined;
     let active = true;
+    setReal(false);
     import("wavesurfer.js")
       .then(({ default: WaveSurfer }) => {
         if (!active || !host.current) return;
         const styles = getComputedStyle(host.current);
         const color = (name) => styles.getPropertyValue(name).trim();
+        const cached = waveformPeakCache.get(url);
+        host.current.replaceChildren();
         const wavesurfer = WaveSurfer.create({
-          barGap: 2,
-          barMinHeight: 1,
-          barRadius: 2,
-          barWidth: 2,
           container: host.current,
           cursorColor: color("--color-primary-hover"),
           cursorWidth: 1,
@@ -38,12 +85,17 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
           hideScrollbar: true,
           interact: false,
           normalize: true,
+          ...(cached ? { duration: cached.duration, peaks: cached.peaks } : { fetchParams, url }),
           progressColor: [color("--color-highlight"), color("--color-primary-hover")],
-          url,
           waveColor: [color("--color-primary"), color("--color-secondary")]
         });
         instance.current = wavesurfer;
-        wavesurfer.once("ready", () => active && setReal(true));
+        if (cached) setReal(true);
+        wavesurfer.once("ready", () => {
+          if (!active) return;
+          if (!cached) rememberWaveform(url, wavesurfer);
+          setReal(true);
+        });
         wavesurfer.once("error", () => active && setReal(false));
       })
       .catch(() => {
@@ -51,51 +103,63 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
       });
     return () => {
       active = false;
-      instance.current?.destroy();
+      try {
+        instance.current?.destroy();
+      } catch {
+        // An aborted media fetch may already have disposed the player.
+      }
       instance.current = null;
     };
-  }, [fetchParams, url]);
+  }, [fetchParams, retryKey, url]);
   useEffect(() => {
     const wavesurfer = instance.current;
-    if (wavesurfer && Math.abs(wavesurfer.getCurrentTime() - value) > 0.08)
-      wavesurfer.setTime(value);
-  }, [value]);
+    if (!wavesurfer || !real) return;
+    const target =
+      progressOverride == null ? value : wavesurfer.getDuration() * clampProgress(progressOverride);
+    if (Math.abs(wavesurfer.getCurrentTime() - target) > 0.08) wavesurfer.setTime(target);
+  }, [progressOverride, real, value]);
   const seek = (event) => {
-    if (!duration) return;
+    if (!interactive || !duration) return;
     const rect = event.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
     onChange?.(((event.clientX - rect.left) / rect.width) * duration);
   };
   return (
     <Box
+      className="ui-waveform"
       data-role="waveform"
+      data-compact={compact ? "true" : undefined}
+      data-interactive={interactive ? "true" : "false"}
       onPointerDown={(event) => {
+        if (!interactive) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture?.(event.pointerId);
         seek(event);
       }}
       onPointerMove={(event) =>
+        interactive &&
         (event.buttons === 1 || event.currentTarget.hasPointerCapture?.(event.pointerId)) &&
         seek(event)
       }
-      sx={{ position: "relative", flex: 1, minInlineSize: 0, color: "var(--color-primary)" }}
+      sx={{ flex: "1 1 0", display: "flex", color: "var(--color-primary)" }}
     >
       <Box
         ref={host}
+        className="ui-waveform__host"
         aria-hidden="true"
-        sx={{ display: url ? "block" : "none", inlineSize: "100%", blockSize: "var(--control-md)" }}
+        sx={{ display: url ? "block" : "none" }}
       />
       <Box
         as="svg"
-        viewBox={`0 0 ${WIDTH} 44`}
+        className="ui-waveform__fallback"
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         preserveAspectRatio="none"
         aria-hidden="true"
         sx={{
-          display: real ? "none" : "block",
-          position: url ? "absolute" : "relative",
-          inset: url ? 0 : undefined,
-          inlineSize: "100%",
-          blockSize: "var(--control-md)"
+          width: "stretch",
+          display: real || (url && !fallbackWhileLoading) ? "none" : "block",
+          position: "absolute",
+          inset: 0
         }}
       >
         <defs>
@@ -105,7 +169,7 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
             <stop offset="1" stopColor="var(--color-secondary)" />
           </linearGradient>
           <clipPath id={`${gradient}-played`}>
-            <rect width={playhead} height="44" />
+            <rect width={playhead} height={HEIGHT} />
           </clipPath>
         </defs>
         {["base", "played"].map((layer) => (
@@ -118,35 +182,28 @@ export default function Waveform({ value = 0, duration = 0, onChange, label, url
             }
             clipPath={layer === "played" ? `url(#${gradient}-played)` : undefined}
           >
-            {BARS.map(([index, amplitude]) => (
-              <rect
-                key={index}
-                x={index * 3 + 0.75}
-                y={22 - amplitude / 2}
-                width="1.5"
-                height={amplitude}
-                rx=".75"
-              />
-            ))}
+            <path d={fallbackPath} />
           </g>
         ))}
-        <line x1={playhead} x2={playhead} y2="44" stroke="currentColor" />
+        <line x1={playhead} x2={playhead} y2={HEIGHT} stroke="currentColor" />
       </Box>
-      <RangeInput
-        aria-label={label}
-        min="0"
-        max={duration || 0}
-        step="0.01"
-        value={Math.min(value, duration || 0)}
-        onChange={onChange}
-        style={{
-          position: "absolute",
-          inset: 0,
-          inlineSize: "100%",
-          opacity: 0,
-          cursor: "pointer"
-        }}
-      />
+      {interactive && (
+        <RangeInput
+          aria-label={label}
+          min="0"
+          max={duration || 0}
+          step="0.01"
+          value={Math.min(value, duration || 0)}
+          onChange={onChange}
+          style={{
+            position: "absolute",
+            inset: 0,
+            inlineSize: "100%",
+            opacity: 0,
+            cursor: "pointer"
+          }}
+        />
+      )}
     </Box>
   );
 }

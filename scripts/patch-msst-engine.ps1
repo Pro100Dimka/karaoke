@@ -1,3 +1,18 @@
+# Patches the vendored MSST engine (ZFTurbo/Music-Source-Separation-Training,
+# pinned in scripts\install-msst-engine.bat) after every fresh checkout.
+# Upstream's chunk-overlap math and window fade-in/fade-out only account for
+# a single, static overlap step computed once per file; on short inputs (or
+# an overlap that doesn't evenly divide the chunk size) this produces
+# integer-division drift and edge chunks whose fade windows don't line up
+# with their actual segment boundaries, which is audible as clicks at chunk
+# seams in the separated output. The two edits below make the overlap step a
+# float-based computation (`max(1, chunk_size / num_overlap)` instead of
+# `chunk_size // num_overlap`) and compute each fade window from that
+# specific chunk's own start/length instead of a shared `step`/`i` state.
+#
+# Safe to remove once upstream fixes this itself (the throws below already
+# guard against silently no-op'ing against a changed upstream file: they fire
+# if the exact code this patch expects is no longer present).
 param(
     [Parameter(Mandatory = $true)]
     [string]$Engine
@@ -23,7 +38,7 @@ $oldWindow = @'
 
                     for j, (start, seg_len) in enumerate(batch_locations):
                         if mode == "generic":
-'@
+'@.Replace("`r`n", "`n")
 $newWindow = @'
                     for j, (start, seg_len) in enumerate(batch_locations):
                         if mode == "generic":
@@ -32,7 +47,7 @@ $newWindow = @'
                                 window[:min(fade_size, seg_len)] = 1
                             if start + seg_len >= mix.shape[1]:
                                 window[max(0, seg_len - fade_size):seg_len] = 1
-'@
+'@.Replace("`r`n", "`n")
 
 if ($content.Contains($oldStep)) {
     $content = $content.Replace($oldStep, $newStep)

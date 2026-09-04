@@ -2,7 +2,7 @@ import { translateSaved } from "../../../i18n/runtime";
 import { clamp01 } from "../../../utils/math";
 
 export function transposeKey(key, semitones) {
-  if (!key) return translateSaved("Тональность не определена");
+  if (!key) return translateSaved("karaoke.tonalityNotDefined");
   const match = /^([A-G](?:#|b)?)(.*)/i.exec(key.trim());
   if (!match) return key;
   const [, rootText, suffix] = match;

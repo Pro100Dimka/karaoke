@@ -10,7 +10,7 @@ import {
   mergeSelectedNotes,
   resizeBounds
 } from "../src/pages/MelodyEditor/model.js";
-import { flattenLyricsNotes, lyricsNoteFillPercent, mergeAdjacentLyricsNotes } from "../src/utils/lyrics-sync.js";
+import { flattenLyricsNotes, lyricsNoteFillPercent, mergeAdjacentLyricsNotes, shiftLyricsSync } from "../src/utils/lyrics-sync.js";
 
 describe("canonical lyricsSync utilities", () => {
   const lyricsSync = {
@@ -28,6 +28,13 @@ describe("canonical lyricsSync utilities", () => {
       }
     ]
   };
+  test("shifts words and their notes together without mutating the canonical document", () => {
+    const shifted = shiftLyricsSync(lyricsSync, -0.75);
+    expect(shifted.words[0]).toMatchObject({ start: 0.25, end: 2.25 });
+    expect(shifted.words[0].notes[0]).toMatchObject({ start: 0.25, end: 1.25 });
+    expect(lyricsSync.words[0]).toMatchObject({ start: 1, end: 3 });
+    expect(shiftLyricsSync(lyricsSync, 0)).toBe(lyricsSync);
+  });
 
   test("flattens only word-owned notes without changing their values", () => {
     expect(flattenLyricsNotes(lyricsSync)).toEqual([
@@ -230,7 +237,8 @@ test("microphone settings clamp malformed values and preserve noise suppression"
     reverb: 1,
     echo: 0,
     delay: 0.5,
-    noise_suppression: 0.35
+    noise_suppression: 0.35,
+    octave: 0
   });
   expect(normalizeAudioRuntimeSettings({ volume: 4, monitoring_enabled: "false", buffer_size: 0 })).toMatchObject({
     volume: 2,

@@ -36,6 +36,10 @@ class Song(Base):
     artist: Mapped[str | None] = mapped_column(String)
     genre: Mapped[str | None] = mapped_column(String)
     original_filename: Mapped[str] = mapped_column(String, nullable=False)
+    # Path to the original uploaded/imported audio file (pre-processing),
+    # distinct from output_dir below (where the processed instrumental/
+    # vocals/lyricsSync artifacts are written). Always resolved against the
+    # trusted library roots -- see song_service.resolve_source_path().
     source_path: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     output_dir: Mapped[str | None] = mapped_column(String)
@@ -54,9 +58,9 @@ class Song(Base):
     show_lyrics: Mapped[bool] = mapped_column(Boolean, default=True)
     show_notes: Mapped[bool] = mapped_column(Boolean, default=True)
     optimized: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, index=True
     )
 
     recordings: Mapped[list[Recording]] = relationship(
@@ -71,12 +75,14 @@ class Recording(Base):
     __tablename__ = "recordings"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
-    song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"))
+    song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"), index=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     duration_sec: Mapped[float | None] = mapped_column(Float)
     sample_rate: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    playback_offset_sec: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    playback_segments_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
 
     song: Mapped[Song] = relationship(back_populates="recordings")
     analysis: Mapped[AnalysisResult | None] = relationship(
@@ -91,6 +97,10 @@ class AnalysisResult(Base):
     recording_id: Mapped[str] = mapped_column(ForeignKey("recordings.id"), unique=True)
     pitch_accuracy_percent: Mapped[float | None] = mapped_column(Float)
     mean_deviation_semitones: Mapped[float | None] = mapped_column(Float)
+    rhythm_accuracy_percent: Mapped[float | None] = mapped_column(Float)
+    note_hold_percent: Mapped[float | None] = mapped_column(Float)
+    note_coverage_percent: Mapped[float | None] = mapped_column(Float)
+    overall_score_percent: Mapped[float | None] = mapped_column(Float)
     sections_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
@@ -128,6 +138,7 @@ class AudioSettings(Base):
     echo: Mapped[float] = mapped_column(Float, default=0.0)
     delay: Mapped[float] = mapped_column(Float, default=0.0)
     noise_suppression: Mapped[float] = mapped_column(Float, default=0.35)
+    octave: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )

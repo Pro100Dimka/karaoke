@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 import time
@@ -8,13 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifacts import publish_files_atomically
-from .audio import decode_audio, duration
+from .audio import PREDECODED_MIX_NAME, audio_buffer_cache, decode_audio, duration
 from .config import CoreConfig
+from .engines.device import release_torch_memory
 from .engines.registry import EngineRegistry
-from .engines.text import UniformTextFallback
+from .engines.text import UniformTextFallback, tokenize
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .lyrics_document import validate_lyrics_document, words_with_notes
-from .lyrics_sources import LyricsDiscovery, discover_lyrics
+from .lyrics_sources import LyricsDiscovery, TimedLine, discover_lyrics
 from .models import StageReport, Word
 from .music import analyze_music
 from .notes import build_vocal_notes
@@ -28,6 +30,35 @@ from .word_voicing import anchor_words_to_voice, voice_activity_intervals
 
 ProgressCallback = callable
 CancelCallback = callable
+logger = logging.getLogger(__name__)
+
+
+def _prepare_mix(source: Path, output: Path, mix: Path, sample_rate: int) -> str:
+    """Consume the strict upload decode instead of decoding the source twice."""
+    validated = output / PREDECODED_MIX_NAME
+    if validated.is_file():
+        validated.replace(mix)
+        return "ffmpeg-validated-upload"
+    decode_audio(source, mix, sample_rate, 2)
+    return "ffmpeg"
+
+
+def _process_rss_bytes() -> int:
+    try:
+        import psutil
+        return psutil.Process().memory_info().rss
+    except Exception:  # best-effort telemetry -- must never fail a stage
+        return 0
+
+
+def _cuda_memory_bytes() -> tuple[int, int]:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
+    except Exception:  # best-effort telemetry -- must never fail a stage
+        pass
+    return 0, 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +67,7 @@ class PipelineRequest:
     output_dir: str | Path
     language: str | None = None
     lyrics_path: str | Path | None = None
+    artist: str | None = None
     title: str | None = None
     progress: object | None = None
     cancelled: object | None = None
@@ -60,7 +92,69 @@ class KaraokePipeline:
         self.engines = engines or EngineRegistry.create_default(self.config)
 
     def close(self) -> None:
-        getattr(self.engines.separator, "close", lambda: None)()
+        self._release_engines(
+            self.engines.separator,
+            self.engines.pitch,
+            self.engines.transcriber,
+            self.engines.aligner,
+        )
+
+    def separate_stems(
+        self,
+        source_path: str | Path,
+        vocals_path: str | Path,
+        instrumental_path: str | Path,
+        *,
+        processing_mode: str = "fast",
+    ) -> None:
+        """Split one reference track without running the karaoke pipeline.
+
+        Training imports only need the two raw stems.  In particular, do not
+        run vocal cleanup, transcription, pitch extraction or alignment here.
+        Keeping the separator worker alive also avoids loading the model again
+        for every item in a large KAR/MID/KFN batch.
+        """
+        profile = resolve_processing_profile(processing_mode, get_runtime_plan())
+        self.engines.separator.separate(
+            Path(source_path),
+            Path(vocals_path),
+            Path(instrumental_path),
+            profile=profile,
+        )
+
+    @staticmethod
+    def _release_engines(*engines: object) -> None:
+        for engine in engines:
+            try:
+                getattr(engine, "close", lambda: None)()
+            except Exception:
+                logger.exception("Failed to close AI engine %s", type(engine).__name__)
+        release_torch_memory()
+
+    @staticmethod
+    def _park_engines(*engines: object) -> None:
+        # Keeping several neural networks resident in system RAM is useful on
+        # workstations, but on 16 GB machines it pushes Windows into paging and
+        # can make the mouse and unrelated applications stutter.  Prefer a
+        # clean unload unless the machine has comfortable total *and* currently
+        # available memory headroom.
+        keep_warm = False
+        try:
+            import psutil
+
+            memory = psutil.virtual_memory()
+            keep_warm = memory.total >= 32 * 1024**3 and memory.available >= 10 * 1024**3
+        except ProcessingCancelledError:
+            raise
+        except Exception:
+            pass
+        for engine in engines:
+            action = getattr(engine, "park", None) if keep_warm else None
+            try:
+                (action or getattr(engine, "close", lambda: None))()
+            except Exception:
+                logger.exception("Failed to release AI engine %s", type(engine).__name__)
+        release_torch_memory()
 
     @staticmethod
     def _notify(request: PipelineRequest, stage: str, progress: float, detail: str) -> None:
@@ -70,35 +164,76 @@ class KaraokePipeline:
             request.progress(stage, progress, detail)
 
     @staticmethod
-    def _stage(reports: list[StageReport], name: str, engine: str, started: float) -> None:
-        reports.append(StageReport(name, time.perf_counter() - started, False, engine))
+    def _stage(
+        reports: list[StageReport], name: str, engine: str, started: float, *, role: str | None = None,
+    ) -> None:
+        details: dict[str, object] = {"rss_bytes": _process_rss_bytes()}
+        allocated, reserved = _cuda_memory_bytes()
+        if allocated or reserved:
+            details["cuda_allocated_bytes"], details["cuda_reserved_bytes"] = allocated, reserved
+        backend = get_runtime_plan().selected.get(role) if role is not None else None
+        if backend is not None:
+            details["device"], details["dtype"] = backend.device, backend.precision
+        reports.append(StageReport(name, time.perf_counter() - started, False, engine, details))
 
     def _lyrics(
         self,
         request: PipelineRequest,
         vocals: Path,
         discovery: Future[LyricsDiscovery | None] | None = None,
-    ) -> tuple[str, list[Word]]:
+    ) -> tuple[str, list[Word], tuple[TimedLine, ...]]:
         if request.lyrics_path and Path(request.lyrics_path).is_file():
             text = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
-            return text, []
-        found = discovery.result() if discovery else discover_lyrics(request.title)
+            return text, [], ()
+        found = discovery.result() if discovery else discover_lyrics(
+            request.title, request.artist
+        )
+        if found is None and discovery is not None:
+            found = discover_lyrics(request.title, request.artist)
         if found:
-            print(f"[lyrics] FOUND via {found.source}", flush=True)
-            return found.text, []
-        print("[lyrics] NOT FOUND online -> ASR fallback", flush=True)
+            print(
+                f"[AI] lyrics source={found.source} timed_lines={len(found.lines)}",
+                flush=True,
+            )
+            return found.text, [], found.lines
+        print("[AI] lyrics source=ASR timed_lines=0", flush=True)
         text, words = self.engines.transcriber.transcribe(vocals, request.language)
-        return text, words
+        return text, words, ()
 
-    def _align(self, vocals: Path, text: str, language: str | None, direct: list[Word]) -> list[Word]:
+    def _align(
+        self,
+        vocals: Path,
+        text: str,
+        language: str | None,
+        direct: list[Word],
+        timed_lines: tuple[TimedLine, ...] = (),
+        cancelled=None,
+    ) -> list[Word]:
+        self._last_alignment_engine = getattr(
+            self.engines.aligner, "name", type(self.engines.aligner).__name__
+        )
         if direct:
             return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(direct)]
+        set_cancelled = getattr(self.engines.aligner, "set_cancelled", None)
+        if callable(set_cancelled): set_cancelled(cancelled)
         try:
-            words = self.engines.aligner.align_long_text(vocals, text, language)
-        except Exception:
+            if timed_lines and hasattr(self.engines.aligner, "align_timed_lines"):
+                words = self.engines.aligner.align_timed_lines(
+                    vocals, text, timed_lines, language
+                )
+            else:
+                words = self.engines.aligner.align_long_text(vocals, text, language)
+        except Exception as error:
+            # A timed-out child has already been terminated. Do not leave the
+            # whole song failed after minutes of useful work: publish a safe,
+            # approximate word layout and let processing reach a terminal state.
             if not self.config.allow_fallback:
                 raise
+            logger.warning("Acoustic alignment unavailable; using uniform timing: %s", error)
             words = UniformTextFallback().align(vocals, text, language)
+            self._last_alignment_engine = UniformTextFallback.name
+        finally:
+            if callable(set_cancelled): set_cancelled(None)
         return [Word(word.start, word.end, word.text, word.confidence, index) for index, word in enumerate(words)]
 
     def run(self, request: PipelineRequest) -> PipelineResult:
@@ -108,32 +243,52 @@ class KaraokePipeline:
         output.mkdir(parents=True, exist_ok=True)
         reports: list[StageReport] = []
         warnings: list[str] = []
-        profile = resolve_processing_profile(request.processing_mode, get_runtime_plan())
+        requested_mode = (
+            "fast"
+            if str(request.processing_mode or "auto").strip().lower() == "auto"
+            else request.processing_mode
+        )
+        profile = resolve_processing_profile(requested_mode, get_runtime_plan())
+        # Keep expensive model weights warm in system RAM between jobs while
+        # returning their CUDA memory to the separator. Reloading Qwen's
+        # checkpoint shards from disk added tens of seconds to every song.
+        self._park_engines(
+            self.engines.pitch, self.engines.transcriber, self.engines.aligner
+        )
 
         with (
             tempfile.TemporaryDirectory(prefix=".ai-clean-", dir=output) as temporary,
             ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai-independent") as parallel,
+            audio_buffer_cache(),
         ):
             work = Path(temporary)
             mix, raw_vocals = work / "mix.wav", work / "vocals.raw.flac"
             vocals, instrumental, lyrics = work / "vocals.flac", work / "instrumental.flac", work / "lyricsSync.json"
             discovery = (
-                parallel.submit(discover_lyrics, request.title)
+                parallel.submit(discover_lyrics, request.title, request.artist)
                 if request.title and not request.lyrics_path else None
             )
 
             self._notify(request, "decode", 3, "Декодирование исходной записи")
             started = time.perf_counter()
-            decode_audio(source, mix, self.config.sample_rate, 2)
-            self._stage(reports, "decode", "ffmpeg", started)
+            decoder = _prepare_mix(source, output, mix, self.config.sample_rate)
+            self._stage(reports, "decode", decoder, started)
 
             self._notify(request, "separate", 10, "Разделение голоса и минуса")
             started = time.perf_counter()
-            self.engines.separator.separate(
-                mix, raw_vocals, instrumental,
-                profile=profile, cancelled=request.cancelled,
-            )
-            self._stage(reports, "separate", self.engines.separator.name, started)
+            try:
+                self.engines.separator.separate(
+                    mix, raw_vocals, instrumental,
+                    profile=profile, cancelled=request.cancelled,
+                )
+            finally:
+                # MSST lives in a child process and keeps its CUDA model loaded
+                # after returning. On 8 GB GPUs that leaves too little VRAM for
+                # the forced aligner, causing minutes of paging at the lyrics
+                # stage. Jobs are serialized, so retaining this worker brings
+                # no useful throughput; release it before loading later models.
+                getattr(self.engines.separator, "close", lambda: None)()
+            self._stage(reports, "separate", self.engines.separator.name, started, role="separation")
 
             music_started = time.perf_counter()
             music_future = parallel.submit(analyze_music, instrumental)
@@ -145,21 +300,45 @@ class KaraokePipeline:
 
             self._notify(request, "analysis", 48, "Анализ музыки и мелодии по vocals.flac")
             pitch_started = time.perf_counter()
-            pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
-            self._stage(reports, "pitch", self.engines.pitch.name, pitch_started)
+            try:
+                pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            finally:
+                self._park_engines(self.engines.pitch)
+            self._stage(reports, "pitch", self.engines.pitch.name, pitch_started, role="pitch")
             music = music_future.result()
             self._stage(reports, "music", "librosa", music_started)
 
-            self._notify(request, "lyrics", 70, "Поиск и синхронизация текста")
+            self._notify(request, "transcribe", 70, "Получение и распознавание текста")
             started = time.perf_counter()
-            text, direct = self._lyrics(request, vocals, discovery)
+            text, direct, timed_lines = self._lyrics(request, vocals, discovery)
             if not text:
                 raise EngineUnavailableError("Lyrics and ASR transcript are unavailable")
-            words = self._align(vocals, text, request.language, direct)
-            words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
-            self._stage(reports, "lyrics", self.engines.aligner.name, started)
+            # Alignment may run in a killable child process. Release the ASR
+            # model before that child allocates its aligner on the same GPU;
+            # keeping both resident caused VRAM paging and apparent hangs at
+            # the 98% boundary on 6–8 GB cards.
+            self._park_engines(self.engines.transcriber)
+            self._notify(request, "align", 84, "Синхронизация слов с голосом")
+            try:
+                words = self._align(
+                    vocals, text, request.language, direct, timed_lines, request.cancelled
+                )
+            finally:
+                self._park_engines(self.engines.aligner)
+            # Timed-line alignment already uses short acoustic windows anchored
+            # by the provider's LRC timestamps. Re-anchoring those words against
+            # global VAD can merge repeated adjacent lines and collapse one of
+            # them to a fraction of a second. The VAD repair remains valuable
+            # for un-timed whole-song/ASR alignment only.
+            if not timed_lines and getattr(
+                self.engines.aligner, "needs_voice_anchoring", True
+            ):
+                words = anchor_words_to_voice(
+                    words, voice_activity_intervals(vocals), duration(vocals)
+                )
+            self._stage(reports, "lyrics", self._last_alignment_engine, started, role="aligner")
 
-            self._notify(request, "notes", 84, "Построение мелодии голоса")
+            self._notify(request, "notes", 94, "Построение мелодии голоса")
             started = time.perf_counter()
             notes = build_vocal_notes(
                 pitch, words=words, min_note=self.config.min_note_sec,
@@ -201,19 +380,41 @@ class KaraokePipeline:
             raise EngineUnavailableError("lyricsSync.json has no text to align")
         request = PipelineRequest(vocals, output, **options)
         reports: list[StageReport] = []
+        timed_lines: tuple[TimedLine, ...] = ()
+        if request.title:
+            found = discover_lyrics(request.title, request.artist)
+            if found and found.lines:
+                canonical = [token.casefold() for token in tokenize(text)]
+                discovered = [token.casefold() for token in tokenize(found.text)]
+                if canonical == discovered:
+                    timed_lines = found.lines
 
-        self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
-        started = time.perf_counter()
-        pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
-        self._stage(reports, "pitch", self.engines.pitch.name, started)
+        with audio_buffer_cache():
+            self._notify(request, "analysis", 48, "Анализ мелодии по vocals.flac")
+            started = time.perf_counter()
+            try:
+                pitch = stabilize_pitch(self.engines.pitch.estimate(vocals))
+            finally:
+                self._park_engines(self.engines.pitch)
+            self._stage(reports, "pitch", self.engines.pitch.name, started, role="pitch")
 
-        self._notify(request, "lyrics", 70, "Синхронизация текста по vocals.flac")
-        started = time.perf_counter()
-        words = self._align(vocals, text, request.language, [])
-        words = anchor_words_to_voice(words, voice_activity_intervals(vocals), duration(vocals))
-        self._stage(reports, "lyrics", self.engines.aligner.name, started)
+            self._notify(request, "align", 70, "Синхронизация текста по vocals.flac")
+            started = time.perf_counter()
+            try:
+                words = self._align(
+                    vocals, text, request.language, [], timed_lines, request.cancelled
+                )
+            finally:
+                self._park_engines(self.engines.transcriber, self.engines.aligner)
+            if not timed_lines and getattr(
+                self.engines.aligner, "needs_voice_anchoring", True
+            ):
+                words = anchor_words_to_voice(
+                    words, voice_activity_intervals(vocals), duration(vocals)
+                )
+            self._stage(reports, "lyrics", self._last_alignment_engine, started, role="aligner")
 
-        self._notify(request, "notes", 84, "Построение мелодии голоса")
+        self._notify(request, "notes", 94, "Построение мелодии голоса")
         started = time.perf_counter()
         notes = build_vocal_notes(
             pitch, words=words, min_note=self.config.min_note_sec,

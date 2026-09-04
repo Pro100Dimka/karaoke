@@ -33,7 +33,14 @@ def write_json_atomic(path: str | Path, data: Any, *, compact: bool = False) -> 
 
 
 def read_json(path: str | Path, default: Any = None) -> Any:
+    source = Path(path)
     try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        text = source.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return default
+    except OSError:
+        raise
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Invalid JSON file: {source}") from exc

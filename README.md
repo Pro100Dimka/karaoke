@@ -152,6 +152,8 @@ wss://karaoke-studio-online.pro100dimka-and.workers.dev
 
 Создатель генерирует room id и криптографический host token. Участники получают room-state, события join/leave и сигнальные сообщения для WebRTC.
 
+Ведущий является единственным владельцем комнаты и не передаёт эту роль другому участнику. При сетевом обрыве комната сохраняется 45 секунд для восстановления ведущего с тем же host token. Явный выход ведущего закрывает комнату сразу, а истечение этих 45 секунд закрывает её с причиной `host-timeout`; во всех случаях оставшиеся клиенты получают `room-closed`, останавливают общее воспроизведение и возвращаются из комнаты с однозначным сообщением.
+
 Если выбранной песни нет локально у участника или revision отличается, клиент может запросить у владельца **готовый package песни**. Backend экспортирует пакет через `GET /songs/{id}/package`, другой клиент принимает бинарный файл по WebRTC data channel и импортирует его через `POST /songs/package/import`. Команда запуска песни должна продолжаться после успешной доставки/импорта нужной revision, а не запускать отсутствующий локальный файл.
 
 ### 1.9. Радио
@@ -584,6 +586,7 @@ scripts/build-installer.ps1
 ```
 
 Builder проверяет Node/npm, FFmpeg и Windows build tooling, собирает backend PyInstaller, native audio/ASIO, frontend, Electron и Windows installer/ISO-артефакты.
+Это единственный production installer path: `electron-builder` используется внутри него только с `--dir` для создания `win-unpacked`, а установщик выпускается через Inno Setup.
 
 ---
 
@@ -599,7 +602,7 @@ Builder проверяет Node/npm, FFmpeg и Windows build tooling, собир
 - installer прямо требует Windows `tar.exe` и сообщает, что нужен Windows 10/11;
 - присутствует native ASIO bridge.
 
-`electron-builder` содержит также декларации `mac: dmg` и `linux: AppImage`, но текущий полный bootstrap/release/ASIO/installer pipeline ориентирован на Windows и не подтверждает эквивалентный production flow для macOS/Linux.
+Конфигурация `electron-builder` ограничена target `dir` и не выпускает отдельные NSIS/DMG/AppImage-установщики.
 
 ### 4.2. Версия приложения
 
@@ -715,6 +718,8 @@ pytest     >=9.0.3,<10
 pytest-cov >=5,<7
 ```
 
+`requirements*.txt` declare ranges, not exact pins — a fresh install can legitimately resolve to a newer compatible release. `backend/requirements-lock.txt` (generated with `pip freeze`) records the exact versions last verified to pass the full test suite; regenerate it after intentionally upgrading a dependency. `torch`/`torchvision`/`torchaudio` are pinned separately by `scripts\install-ai-models.bat` (exact versions plus a CUDA/CPU wheel index choice) and are not installed from either requirements file.
+
 ### 4.8. Frontend/Electron — фактически разрешённые lock-файлом версии
 
 По текущему `front/package-lock.json`:
@@ -730,7 +735,7 @@ Stryker            9.6.1
 electron-builder   26.15.3
 ```
 
-Также используются React Query, React Router, Pixi, Three.js, Konva/react-konva, WaveSurfer, XState, Zustand, Comlink и другие зависимости, полный resolution находится в `front/package-lock.json`.
+Также используются React Query, React Router, Pixi, Three.js, WaveSurfer, XState, Zustand, Comlink и другие зависимости, полный resolution находится в `front/package-lock.json`.
 
 ### 4.9. Cloudflare
 
@@ -751,6 +756,25 @@ data/app.db
 ```
 
 База хранит сущности песен, записей, результатов анализа, playback state и связанные metadata. Аудио и крупные AI-артефакты хранятся в файловой системе, а не как BLOB в SQLite.
+
+### 4.11. SBOM / лицензии
+
+```bat
+backend\venv\Scripts\python.exe scripts\backend\generate_sbom.py
+cd front && npm run generate:sbom
+```
+
+Пишут `generated/sbom/backend.json` и `generated/sbom/frontend.json` — плоский список `{name, version, license}` по каждому установленному пакету (backend: `importlib.metadata`, без новых зависимостей; frontend: `npm ls --all --json --long`). `generated/` не коммитится — эти файлы предназначены для разового аудита лицензий/supply chain, а не как отслеживаемый артефакт.
+
+### 4.12. OpenAPI ↔ frontend contract
+
+Фронтенд — чистый JS (без TypeScript), поэтому вместо генерации типизированного клиента используется runtime-сверка:
+
+```bat
+cd front && npm run audit:openapi-contract
+```
+
+Парсит (через `@babel/parser`, без TS) каждый литеральный путь в `front/src/api/domains/*.js` и сверяет его с реальной OpenAPI-схемой (`app.openapi()` из работающего backend venv, без запуска сервера). Падает с ненулевым кодом, если фронтенд вызывает путь, которого нет в схеме backend — так был найден и удалён мёртвый `src/api/domains/models.js` (`/models/whisper*`, ни одного вызова из UI, ни одного соответствующего backend-роута). Отдельно, только информационно, печатает backend-эндпоинты без вызывающего кода в `src/api/domains` — не обязательно ошибка (могут использоваться иначе или быть намеренно не покрыты), но повод проверить при следующем ревью. Не входит в агрегированный `npm run audit`, так как требует рабочего `backend/venv`, которого может не быть в чисто frontend-окружении.
 
 ---
 
@@ -831,6 +855,8 @@ Mel-Band RoFormer          KimberleyJSN/melbandroformer / MelBandRoformer.ckpt
 ```
 
 Registry содержит pinned Hugging Face revisions, а RoFormer checkpoint также имеет SHA-256. `install-ai-models.bat` восстанавливает модели и MSST engine в `downloads/`/models location и создаёт runtime environment.
+
+MSST (`ZFTurbo/Music-Source-Separation-Training`) — сторонний движок, а не пакет из PyPI/npm; `scripts\install-msst-engine.bat` фиксирует его на конкретном commit SHA (переменная `COMMIT` в начале скрипта), а не на `refs/heads/main` — `scripts\patch-msst-engine.ps1` предполагает точную структуру `utils/model_utils.py` и падает, если апстрим её изменит, так что клон живой ветки мог бы незаметно подставить несовместимый код при следующем bootstrap. Обновление MSST — сознательное действие: поднять `COMMIT` и заново проверить, что патч всё ещё применяется.
 
 Важно: старое утверждение о Qwen3-ASR-0.6B для этого архива неверно — текущий registry использует **Qwen3-ASR-1.7B**.
 

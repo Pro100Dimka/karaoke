@@ -35,7 +35,15 @@ test("library search applies sorting from the theme popover", () => {
 });
 
 test("library filter popover closes only after an outside click", () => {
-  render(<LibraryActions canManageLibrary filters={defaultLibraryFilters} query="" setQuery={vi.fn()} />);
+  render(
+    <LibraryActions
+      canManageLibrary
+      filterOptions={{ genres: ["Rock"], keys: ["Am"] }}
+      filters={defaultLibraryFilters}
+      query=""
+      setQuery={vi.fn()}
+    />
+  );
 
   fireEvent.click(screen.getByRole("button", { name: "Фильтры и сортировка" }));
   const popover = document.querySelector(".ui-popover");
@@ -43,6 +51,11 @@ test("library filter popover closes only after an outside click", () => {
 
   fireEvent.click(screen.getByText("Сортировка"));
   expect(popover.dataset.open).not.toBeUndefined();
+
+  fireEvent.click(screen.getByRole("button", { name: /Жанр/ }));
+  fireEvent.pointerDown(screen.getByRole("option", { name: "Rock" }));
+  fireEvent.click(screen.getByRole("option", { name: "Rock" }));
+  expect(screen.getByRole("button", { name: "Применить" })).not.toBeNull();
 
   fireEvent.pointerDown(document.body);
   expect(popover.dataset.open).toBeUndefined();

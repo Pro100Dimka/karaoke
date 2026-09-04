@@ -1,7 +1,10 @@
 
 import base64
 import contextlib
+import os
 import re
+import subprocess
+import tempfile
 import threading
 import unicodedata
 import weakref
@@ -15,11 +18,12 @@ import config
 import models
 import schemas
 from app import repositories
-from app.services import revision_cache
+from app.services import revision_cache, song_artifacts
 from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
 from app.utils.atomic_files import atomic_write_bytes, move_path
+from app.utils.windows_paths import normalize_windows_component
 
 _first_audio_tag = first_audio_tag
 
@@ -57,8 +61,19 @@ def _ensure_path_within(path: Path, root: Path) -> Path:
     raise ValueError("Song file path is outside the application library")
 
 
+def trusted_library_roots() -> set[Path]:
+    """Every root a song's ``output_dir``/``source_path`` may legitimately live under.
+
+    Includes both the *current* library location and every *historical* one
+    the user has ever pointed the app at (``SONG_LIBRARY_ROOTS``) -- a song
+    created before a storage-location change still lives under its original
+    root, and reads/ownership checks must keep trusting that root too.
+    """
+    return {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+
+
 def resolve_library_path(path: Path) -> Path:
-    errors, roots = [], {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+    errors, roots = [], trusted_library_roots()
     for root in roots:
         try:
             return _ensure_path_within(path, root)
@@ -75,6 +90,61 @@ def resolve_output_dir(song: models.Song) -> Path:
     path = Path(
         song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
     return resolve_library_path(path)
+
+
+def is_done(song: models.Song) -> bool: return song.status == models.SongStatus.DONE
+
+
+class InvalidStatusTransition(ValueError):
+    """A caller asked for a song.status change that the state machine forbids."""
+
+    def __init__(self, current: models.SongStatus | None, requested: models.SongStatus):
+        super().__init__(f"Cannot move song from {current} to {requested}")
+        self.current, self.requested = current, requested
+
+
+# PENDING is the only status a brand-new song can start in (see
+# create_song_from_path); every other entry describes the statuses a song may
+# legally move to FROM the key. QUEUED accepts every terminal status (retry)
+# plus itself (a second /process call before the background thread has
+# registered is a harmless no-op, not a new transition). DONE/CANCELLED/ERROR
+# are themselves reachable only from an active run, never from each other or
+# from PENDING directly -- a paused/never-started song has nothing to finish.
+ALLOWED_STATUS_TRANSITIONS: dict[models.SongStatus | None, frozenset[models.SongStatus]] = {
+    None: frozenset({models.SongStatus.PENDING}),
+    models.SongStatus.PENDING: frozenset({models.SongStatus.QUEUED}),
+    models.SongStatus.QUEUED: frozenset({
+        models.SongStatus.QUEUED, models.SongStatus.PROCESSING, models.SongStatus.CANCELLED,
+    }),
+    models.SongStatus.PROCESSING: frozenset({
+        models.SongStatus.DONE, models.SongStatus.ERROR,
+        models.SongStatus.CANCELLING, models.SongStatus.CANCELLED,
+    }),
+    models.SongStatus.CANCELLING: frozenset({
+        models.SongStatus.QUEUED, models.SongStatus.CANCELLED, models.SongStatus.ERROR,
+    }),
+    models.SongStatus.ERROR: frozenset({models.SongStatus.QUEUED}),
+    models.SongStatus.CANCELLED: frozenset({models.SongStatus.QUEUED}),
+    models.SongStatus.DONE: frozenset({models.SongStatus.QUEUED}),
+}
+
+
+def validate_status_transition(current: models.SongStatus | None, requested: models.SongStatus) -> None:
+    if requested not in ALLOWED_STATUS_TRANSITIONS.get(current, frozenset()):
+        raise InvalidStatusTransition(current, requested)
+
+
+def original_source_retired(song: models.Song) -> bool:
+    """True once the true original upload has been deleted and ``source_path``
+    now points at the produced instrumental instead (see pipeline finalization).
+    A full reprocess cannot run from this state because there is no longer a
+    vocal+instrumental mix to separate."""
+    try:
+        source, output_dir = resolve_source_path(song), resolve_output_dir(song)
+    except ValueError:
+        return False
+    instrumental = song_artifacts.resolve_audio_artifact(output_dir, "instrumental")
+    return instrumental is not None and source == instrumental.resolve()
 
 
 def _cover_extension(payload: bytes) -> str | None:
@@ -234,23 +304,21 @@ def _read_source_identity(
     return (filename_artist, filename_title) if filename_artist else (None, requested_title.strip() or filename_title)
 
 
-_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *
-                           (f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
-
-
 def _windows_safe_component(value: str, fallback: str) -> str:
-    value = unicodedata.normalize("NFC", value).rstrip(" .")
-    stem = value.split(".", 1)[0].rstrip(" .").upper()
-    if stem in _WINDOWS_RESERVED_NAMES: value = f"_{value}"
-    return value or fallback
+    return normalize_windows_component(value, fallback=fallback)
 
 
-def _folder_name(artist: str | None, title: str, fallback: str) -> str:
+def song_folder_name(artist: str | None, title: str, fallback: str) -> str:
     identity = " ".join(part for part in (artist, title)
                         if part and part.strip()).strip()
     value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity)
     value = " ".join(value.split()).rstrip(" .")
     return _windows_safe_component(value[:180], fallback)
+
+
+# Kept for callers and tests written before the folder naming rule became
+# shared with dataset preparation.
+_folder_name = song_folder_name
 
 
 def _unique_output_dir(base_name: str) -> Path:
@@ -279,10 +347,10 @@ def make_unique_slug(db: Session, base_slug: str) -> str:
 def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
     safe_original_name = Path(original_filename).name.strip() or "song"
     extension = Path(safe_original_name).suffix.lower()
-    if extension not in config.ALLOWED_AUDIO_EXTENSIONS:
+    if extension not in config.ALLOWED_SONG_UPLOAD_EXTENSIONS:
         raise ValueError(
             f"Неподдерживаемый формат файла: {extension or '(нет расширения)'}. "
-            f"Разрешено: {', '.join(sorted(config.ALLOWED_AUDIO_EXTENSIONS))}"
+            f"Разрешено: {', '.join(sorted(config.ALLOWED_SONG_UPLOAD_EXTENSIONS))}"
         )
     fallback_title = _clean_identity(Path(safe_original_name).stem) or "song"
     clean_title = _clean_identity(title.strip()) or fallback_title
@@ -296,13 +364,25 @@ def _identity_key(artist: str | None, title: str) -> str:
 
 
 def _find_duplicate(db: Session, artist: str | None, title: str) -> models.Song | None:
-    del artist
-    expected = _identity_key(None, title)
+    # Identity is artist+title, not title alone — otherwise unrelated songs that
+    # happen to share a title (e.g. two different artists' "Home") would collide.
+    # When one side has no known artist, _identity_key naturally falls back to a
+    # title-only key, so an untagged upload can still match an existing entry
+    # that also has no artist.
+    expected = _identity_key(artist, title)
     if not expected: return None
-    songs = db.scalars(select(models.Song))
-    if not hasattr(songs, "__iter__"): return None
-    for song in songs:
-        if _identity_key(None, song.title) == expected: return song
+    # Identity comparison is Unicode-normalization-aware (NFKC + casefold),
+    # which SQLite has no built-in equivalent for, so the match itself still
+    # has to happen in Python across every song. But the row itself isn't
+    # needed until a match is found -- selecting only (id, artist, title)
+    # instead of full Song rows (db.scalars(select(models.Song)) below)
+    # avoids hydrating every other column (source_path, output_dir,
+    # error_message, ...) for songs that never match.
+    rows = db.execute(select(models.Song.id, models.Song.artist, models.Song.title))
+    if not hasattr(rows, "__iter__"): return None
+    for song_id, song_artist, song_title in rows:
+        if _identity_key(song_artist, song_title) == expected:
+            return db.get(models.Song, song_id)
     return None
 
 
@@ -322,27 +402,35 @@ def _persist_song(
         if _find_duplicate(db, artist, title) is not None:
             raise SongAlreadyExistsError("Такая песня уже существует")
         slug = make_unique_slug(db, base_slug)
-        folder_base = _folder_name(artist, title, slug) if artist else slug
+        folder_base = song_folder_name(artist, title, slug) if artist else slug
         output_dir = _unique_output_dir(folder_base)
         destination = output_dir / f"source{extension}"
-        write_source(destination)
-        extract_embedded_cover(destination, output_dir)
-        song = models.Song(
-            title=title,
-            artist=artist,
-            original_filename=original_filename,
-            source_path=str(destination),
-            slug=slug,
-            output_dir=str(output_dir),
-            status=models.SongStatus.PENDING,
-        )
-        db.add(song)
+        # write_source/extract_embedded_cover used to run outside this
+        # try/except, so a failure there (e.g. disk full right after writing
+        # a large source file, while extracting its cover) skipped the
+        # cleanup below entirely -- the audio file and output_dir were left
+        # orphaned on disk with no DB row, and the folder's slug stayed
+        # "taken" for every later retry of the same title (make_unique_slug/
+        # _unique_output_dir both check the filesystem).
         try:
+            write_source(destination)
+            extract_embedded_cover(destination, output_dir)
+            song = models.Song(
+                title=title,
+                artist=artist,
+                original_filename=original_filename,
+                source_path=str(destination),
+                slug=slug,
+                output_dir=str(output_dir),
+                status=models.SongStatus.PENDING,
+            )
+            db.add(song)
             saved = commit_refresh(db, song)
             revision_cache.invalidate(saved)
             return saved
         except Exception:
             destination.unlink(missing_ok=True)
+            (output_dir / ".validated-mix.wav").unlink(missing_ok=True)
             for cover in output_dir.glob("cover.*"): cover.unlink(missing_ok=True)
             with contextlib.suppress(OSError): output_dir.rmdir()
             raise
@@ -364,6 +452,57 @@ def create_song(db: Session, title: str, original_filename: str, file_bytes: byt
     )
 
 
+def _check_duration_limit(source: Path) -> None:
+    from AI.audio import duration as audio_duration
+
+    try:
+        length_seconds = audio_duration(source)
+    except (RuntimeError, OSError):
+        return  # Unreadable audio is rejected later, by the pipeline itself.
+    if length_seconds > config.MAX_SONG_DURATION_SECONDS:
+        limit_minutes = config.MAX_SONG_DURATION_SECONDS // 60
+        raise ValueError(f"Song is longer than the {limit_minutes}-minute limit")
+
+
+class InvalidAudioError(ValueError):
+    """The uploaded container cannot be decoded completely and safely."""
+
+
+def _validate_audio_source(source: Path) -> Path:
+    from AI.audio import run_ffmpeg
+    from AI.errors import AICoreError
+
+    _check_duration_limit(source)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".validated-mix-", suffix=".wav", dir=source.parent
+    )
+    os.close(descriptor)
+    normalized = Path(temporary_name)
+    try:
+        # Decode once, strictly, into the exact format the pipeline needs. The
+        # pipeline consumes this file instead of decoding the upload a second
+        # time, so validation adds no duplicate full-song pass.
+        run_ffmpeg(
+            [
+                "-xerror",
+                "-err_detect",
+                "explode",
+                "-i",
+                str(source),
+                "-map", "0:a:0",
+                "-vn",
+                "-ar", "44100",
+                "-ac", "2",
+                str(normalized),
+            ],
+            timeout=20 * 60,
+        )
+        return normalized
+    except (AICoreError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        normalized.unlink(missing_ok=True)
+        raise InvalidAudioError("errors.audioFileCorruptedOrUnsupported") from exc
+
+
 def create_song_from_path(
     db: Session,
     title: str,
@@ -373,29 +512,56 @@ def create_song_from_path(
 ) -> models.Song:
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0: raise ValueError("Audio file is empty")
-
-    detected_artist, detected_title = _read_source_identity(
-        temporary_source, safe_name, clean_title)
-    resolved_title = clean_title if title.strip() else detected_title
-    resolved_artist = artist.strip() or None if artist is not None else detected_artist
-
-    def move_source(destination: Path) -> None:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        move_path(temporary_source, destination)
-
-    return _persist_song(
-        db,
-        title=resolved_title,
-        artist=resolved_artist,
-        original_filename=safe_name,
-        extension=extension,
-        write_source=move_source,
+    validated_mix = (
+        _validate_audio_source(temporary_source)
+        if extension in config.ALLOWED_AUDIO_EXTENSIONS
+        else None
     )
+
+    try:
+        detected_artist, detected_title = _read_source_identity(
+            temporary_source, safe_name, clean_title)
+        resolved_title = clean_title if title.strip() else detected_title
+        resolved_artist = artist.strip() or None if artist is not None else detected_artist
+
+        def move_source(destination: Path) -> None:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            move_path(temporary_source, destination)
+            if validated_mix is not None:
+                move_path(validated_mix, destination.parent / ".validated-mix.wav")
+
+        return _persist_song(
+            db,
+            title=resolved_title,
+            artist=resolved_artist,
+            original_filename=safe_name,
+            extension=extension,
+            write_source=move_source,
+        )
+    finally:
+        if validated_mix is not None:
+            validated_mix.unlink(missing_ok=True)
 
 
 def list_songs(db: Session) -> list[models.Song]:
     return list(
         db.scalars(select(models.Song).order_by(models.Song.created_at.desc(), models.Song.id.desc()))
+    )
+
+
+def list_recently_updated_songs(db: Session, limit: int) -> list[models.Song]:
+    """The most recently touched songs, for bounded "recent activity" views.
+
+    Ordered by updated_at (falling back to id for a stable tie-break/NULL
+    order) rather than created_at, since "recent activity" cares about the
+    last time a song was processed/reprocessed, not when it was first added.
+    """
+    return list(
+        db.scalars(
+            select(models.Song)
+            .order_by(models.Song.updated_at.desc().nullslast(), models.Song.id.desc())
+            .limit(limit)
+        )
     )
 
 
@@ -427,15 +593,16 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
 
 
 def delete_song(db: Session, song: models.Song) -> None:
-    output_dir, source_path = resolve_output_dir(song), resolve_source_path(song)
-    paths = (
-        (output_dir,)
-        if output_dir == source_path or output_dir in source_path.parents
-        else (
-            output_dir,
-            source_path,
+    with song_content_lock(song.id), library_write_lock():
+        output_dir, source_path = resolve_output_dir(song), resolve_source_path(song)
+        paths = (
+            (output_dir,)
+            if output_dir == source_path or output_dir in source_path.parents
+            else (
+                output_dir,
+                source_path,
+            )
         )
-    )
-    song_id = song.id
-    delete_with_files(db, song, paths)
-    revision_cache.invalidate(song_id)
+        song_id = song.id
+        delete_with_files(db, song, paths, defer_windows_locks=True)
+        revision_cache.invalidate(song_id)

@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -42,6 +43,45 @@ def configure_files(monkeypatch, tmp_path):
     settings, paths, install, ui = tmp_path / 'settings.json', tmp_path / 'path-settings.json', tmp_path / 'install-preferences.json', tmp_path / 'ui-preferences.json'
     patch_attrs(monkeypatch, app_settings_service, SETTINGS_FILE=settings, PATH_SETTINGS_FILE=paths, INSTALL_PREFERENCES_FILE=install, UI_PREFERENCES_FILE=ui)
     return settings, paths, install, ui
+
+
+def test_keyboard_lighting_defaults_and_zero_values_persist(monkeypatch, tmp_path):
+    configure_files(monkeypatch, tmp_path)
+    initial = app_settings_service.read_settings()
+    assert initial["keyboard_lighting_enabled"] is False
+    assert initial["keyboard_lighting_sensitivity"] == 1.0
+    patch = {"keyboard_lighting_enabled": True, "keyboard_lighting_mode": "theme", "keyboard_lighting_brightness": 0.7, "keyboard_lighting_sensitivity": 1.6}
+    app_settings_service.update_settings(patch)
+    saved = app_settings_service.read_settings()
+    assert all(saved[key] == value for key, value in patch.items())
+    app_settings_service.update_settings({"keyboard_lighting_enabled": False, "keyboard_lighting_brightness": 0})
+    saved = app_settings_service.read_settings()
+    assert saved["keyboard_lighting_enabled"] is False
+    assert saved["keyboard_lighting_brightness"] == 0
+    assert saved["keyboard_lighting_mode"] == "theme"
+
+
+def test_remote_diagnostics_require_explicit_persisted_opt_in(monkeypatch, tmp_path):
+    configure_files(monkeypatch, tmp_path)
+    initial = app_settings_service.read_settings()
+    assert initial["remote_diagnostics_enabled"] is False
+    assert initial["remote_diagnostics_errors_enabled"] is False
+    assert initial["remote_diagnostics_hardware_enabled"] is False
+    assert initial["remote_crash_reports_enabled"] is False
+
+    from app.services import remote_log_service
+
+    apply_policy = Mock()
+    monkeypatch.setattr(remote_log_service, "apply_policy", apply_policy)
+    updated = app_settings_service.update_settings(
+        {
+            "remote_diagnostics_enabled": True,
+            "remote_diagnostics_errors_enabled": True,
+        }
+    )
+    assert updated["remote_diagnostics_enabled"] is True
+    assert updated["remote_diagnostics_errors_enabled"] is True
+    apply_policy.assert_called_once_with()
 
 
 def test_directory_normalization_validates_input_and_write_access(monkeypatch, tmp_path):
@@ -88,9 +128,18 @@ def test_settings_recover_when_installer_preferences_cannot_be_read(monkeypatch,
 
 def test_update_settings_validates_compute_and_applies_storage_paths(monkeypatch, tmp_path):
     _settings, paths, _install, _ui = configure_files(monkeypatch, tmp_path)
-    apply_paths = Mock()
+    events: list[str] = []
+    apply_paths = Mock(side_effect=lambda **_kwargs: events.append("apply"))
     monkeypatch.setattr(app_settings_service.config, "apply_storage_paths", apply_paths)
     patch_attrs(monkeypatch, app_settings_service, path_settings=lambda: {'songs_folder': str(tmp_path / 'old-songs'), 'ai_folder': str(tmp_path / 'old-models'), 'cache_folder': str(tmp_path / 'old-cache')})
+
+    @contextmanager
+    def tracking_lock():
+        events.append("enter")
+        yield
+        events.append("exit")
+
+    monkeypatch.setattr(app_settings_service.song_service, "library_write_lock", tracking_lock)
 
     raises(ValueError, lambda: app_settings_service.update_settings({'compute_mode': 'quantum'}), match='Unsupported')
 
@@ -102,6 +151,39 @@ def test_update_settings_validates_compute_and_applies_storage_paths(monkeypatch
     persisted_paths = json.loads(paths.read_text(encoding="utf-8"))
     assert persisted_paths["songs_folder"] == str(selected.resolve())
     apply_paths.assert_called_once_with(**persisted_paths)
+    # TASK 3.2: reassigning the library roots must happen while
+    # library_write_lock is held, so it can't race an in-flight song write.
+    assert events == ["enter", "apply", "exit"]
+
+
+def test_update_settings_rejects_path_changes_during_active_song_processing(monkeypatch, tmp_path):
+    from app.services import pipeline_service
+
+    configure_files(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipeline_service, "has_active_jobs", Mock(return_value=True))
+    raises(
+        ValueError,
+        lambda: app_settings_service.update_settings({"songs_folder": str(tmp_path / "songs")}),
+        match="песни стоят в очереди",
+    )
+
+
+def test_update_settings_rejects_ai_folder_changes_during_active_model_download(monkeypatch, tmp_path):
+    from app.services import model_install_service
+
+    configure_files(monkeypatch, tmp_path)
+    monkeypatch.setattr(model_install_service, "has_active_download", Mock(return_value=True))
+    raises(
+        ValueError,
+        lambda: app_settings_service.update_settings({"ai_folder": str(tmp_path / "models")}),
+        match="загрузка AI-моделей",
+    )
+    # Once no download is active, the same change must go through.
+    monkeypatch.setattr(model_install_service, "has_active_download", Mock(return_value=False))
+    apply_paths = Mock()
+    monkeypatch.setattr(app_settings_service.config, "apply_storage_paths", apply_paths)
+    app_settings_service.update_settings({"ai_folder": str(tmp_path / "models")})
+    apply_paths.assert_called_once()
 
 
 def test_update_optimization_settings_queues_remote_hardware_refresh(monkeypatch, tmp_path):

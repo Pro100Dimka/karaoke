@@ -7,7 +7,7 @@ ProcessingMode = Literal["fast", "balanced", "quality"]
 @dataclass(frozen=True, slots=True)
 class ProcessingProfile:
     mode: ProcessingMode
-    separation_overlap: float
+    separation_overlap: int
     separation_batch_size: int
     wpe_iterations: int
 
@@ -34,7 +34,9 @@ def resolve_processing_profile(value: str | None, runtime=None, **_context) -> P
     else:
         batch = 2 if getattr(hardware, "logical_cores", 0) >= 8 and getattr(hardware, "ram_bytes", 0) >= 16 * 1024**3 else 1
     if mode == "fast":
-        return ProcessingProfile(mode, 20 / 19, batch, 1)
+        # MSST's num_overlap is an integer.  One is both the minimum valid
+        # value and the fastest setting for bulk training-data preparation.
+        return ProcessingProfile(mode, 1, batch, 1)
     if mode == "quality":
         return ProcessingProfile(mode, 4, batch, 6)
     return ProcessingProfile(mode, 2, batch, 3)

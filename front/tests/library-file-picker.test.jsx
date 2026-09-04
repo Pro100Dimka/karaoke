@@ -3,7 +3,18 @@ import { cleanup, render } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import LibraryActions from "../src/pages/Library/hero/actions";
-import LibraryResults from "../src/pages/Library/songs-grid/results";
+import LibrarySongsGrid from "../src/pages/Library/songs-grid";
+
+function LibraryResults({ songs, importing, onFileChosen, canManageLibrary }) {
+  return (
+    <LibrarySongsGrid
+      state={{ filteredSongs: songs, canManageLibrary, songActions: {} }}
+      fileImport={{ importing, importFile: onFileChosen }}
+      processing={{}}
+      recordings={{}}
+    />
+  );
+}
 
 afterEach(cleanup);
 
@@ -22,7 +33,9 @@ test("deleting the last song keeps the single file picker owned by the hero", ()
   const view = render(
     <>
       <LibraryActions {...props} />
-      <LibraryResults {...props} songs={[{ id: "song" }]}>song</LibraryResults>
+      <LibraryResults {...props} songs={[{ id: "song" }]}>
+        song
+      </LibraryResults>
     </>
   );
   const heroInput = view.container.querySelector("input[type=file]");
@@ -32,7 +45,9 @@ test("deleting the last song keeps the single file picker owned by the hero", ()
   view.rerender(
     <>
       <LibraryActions {...props} />
-      <LibraryResults {...props} songs={[]}>empty</LibraryResults>
+      <LibraryResults {...props} songs={[]}>
+        empty
+      </LibraryResults>
     </>
   );
 

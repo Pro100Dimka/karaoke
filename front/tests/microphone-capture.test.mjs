@@ -77,6 +77,45 @@ describe("central microphone capture", () => {
     await selectedLease.release();
   });
 
+  test("release() does not run until a device switch already queued ahead of it finishes", async () => {
+    // release() used to mutate `active`/`entry.users` immediately, outside
+    // the acquire queue. A release landing while a concurrent device switch
+    // was still mid-await (capturing the new device, then replaceInput())
+    // could close the very graph the switch was still using, or null out
+    // `active` out from under it.
+    const { acquireMicrophone } = await import("../src/services/microphoneCapture.js");
+    const first = await acquireMicrophone();
+
+    let resolveSwitchCapture;
+    getUserMedia = vi.fn(
+      () => new Promise((resolve) => { resolveSwitchCapture = () => resolve({ id: "studio" }); })
+    );
+    navigator.mediaDevices.getUserMedia = getUserMedia;
+    let resolveReplaceInput;
+    graph.replaceInput.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveReplaceInput = resolve; })
+    );
+
+    const switching = acquireMicrophone("studio-mic");
+    const releasing = first.release();
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(graph.close).not.toHaveBeenCalled();
+
+    resolveSwitchCapture();
+    for (let tick = 0; tick < 10 && !resolveReplaceInput; tick += 1) await Promise.resolve();
+    resolveReplaceInput();
+    const second = await switching;
+    await releasing;
+    // The switch (queued first) has now finished and still holds a lease,
+    // so release()'s own cleanup -- which ran after it -- must not have
+    // closed the shared graph yet.
+    expect(graph.close).not.toHaveBeenCalled();
+    await second.release();
+    expect(graph.close).toHaveBeenCalledOnce();
+  });
+
   test("falls back to the default input when the selected device disappeared", async () => {
     getUserMedia = vi.fn().mockRejectedValueOnce(new Error("missing device")).mockResolvedValueOnce({ id: "fallback" });
     navigator.mediaDevices.getUserMedia = getUserMedia;

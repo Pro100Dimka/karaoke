@@ -78,7 +78,37 @@ def _install_root() -> Path:
     return PROJECT_ROOT
 
 
-def _default_data_dir() -> Path: return PROJECT_ROOT / 'data' if not IS_FROZEN else _install_root() / 'data' / 'backend'
+def _per_user_fallback_root() -> Path:
+    """Per-user directory that never requires admin rights to write to.
+
+    Used only when the install root itself turns out to be read-only for the
+    current user (e.g. an administrator pointed the installer at
+    ``C:\\Program Files\\...``); this app's own generated data -- DB, song
+    library, downloaded AI models -- must never require elevation just to run.
+    """
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "A&D Voice"
+
+
+def _writable_install_root() -> Path:
+    """``_install_root()``, falling back to a per-user directory if unwritable."""
+    root = _install_root()
+    if not IS_FROZEN: return root
+    probe = root / ".write-test"
+    try:
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.touch()
+        probe.unlink()
+        return root
+    except OSError:
+        return _per_user_fallback_root()
+
+
+def _default_data_dir() -> Path:
+    return PROJECT_ROOT / 'data' if not IS_FROZEN else _writable_install_root() / 'data' / 'backend'
 
 
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
@@ -122,12 +152,12 @@ def _saved_path(name: str, default: Path) -> Path:
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path(
     "SONGAPP_DOWNLOADS_DIR",
-    _install_root() / "data" / "downloads" if IS_FROZEN else PROJECT_ROOT / "downloads",
+    _writable_install_root() / "data" / "downloads" if IS_FROZEN else PROJECT_ROOT / "downloads",
 )
 
 
 # Packaged models stay under the selected installation root together with the app.
-def _default_models_dir() -> Path: return DOWNLOADS_DIR / 'models' if not IS_FROZEN else _install_root() / 'data' / 'models'
+def _default_models_dir() -> Path: return DOWNLOADS_DIR / 'models' if not IS_FROZEN else _writable_install_root() / 'data' / 'models'
 
 
 _DEFAULT_MODELS_DIR = _default_models_dir()
@@ -175,7 +205,6 @@ def configure_runtime_cache_environment() -> None:
         "TMP": root / "temp",
         "HF_HOME": root / "huggingface",
         "HUGGINGFACE_HUB_CACHE": root / "huggingface" / "hub",
-        "TRANSFORMERS_CACHE": root / "huggingface" / "transformers",
         "TORCH_HOME": root / "torch",
         "XDG_CACHE_HOME": root,
         "NUMBA_CACHE_DIR": root / "numba",
@@ -276,13 +305,12 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 DEFAULT_LANGUAGE = None  # автоопределение
 
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}
+ALLOWED_KARAOKE_EXTENSIONS = {".kar", ".mid", ".kfn"}
+ALLOWED_SONG_UPLOAD_EXTENSIONS = ALLOWED_AUDIO_EXTENSIONS | ALLOWED_KARAOKE_EXTENSIONS
 MAX_AUDIO_UPLOAD_BYTES = _env_int("SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1)
 UPLOAD_CHUNK_SIZE = _env_int("SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4096)
-
-# Стандартный формат аудио, который backend гарантирует на выходе
-# (используется при оптимизации/конвертации файлов песни, см. cache_service).
-STANDARD_SAMPLE_RATE = 44100
-STANDARD_BIT_DEPTH = 24
+MAX_SONG_DURATION_SECONDS = _env_int("SONGAPP_MAX_SONG_DURATION_SECONDS", 20 * 60, minimum=1)
+MAX_RECORDING_DURATION_SECONDS = _env_int("SONGAPP_MAX_RECORDING_DURATION_SECONDS", 15 * 60, minimum=1)
 
 # --------------------------------------------------------------------
 # Запись голоса
@@ -313,4 +341,3 @@ def ensure_directories() -> None:
 
 ensure_directories()
 configure_runtime_cache_environment()
-configure_ai_resource_environment()

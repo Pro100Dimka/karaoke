@@ -107,11 +107,13 @@ test("injects one runtime backend URL and allows required renderer resources", (
   const preload = fs.readFileSync(new URL("../electron/preload.cjs", import.meta.url), "utf8");
   const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
   const runtime = fs.readFileSync(new URL("../src/runtime-config.js", import.meta.url), "utf8");
+  const platform = fs.readFileSync(new URL("../src/utils/platform.js", import.meta.url), "utf8");
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   verify(
-    [main, "toContain", "--advoice-backend-url=${runtimeBackendUrl}"],
+    [main, "toContain", "--advoice-backend-url=${backend.url}"],
     [preload, "toContain", "backendUrl"],
-    [runtime, "toContain", "globalThis.electronAPI?.backendUrl"],
+    [runtime, "toContain", "platform.backendUrl()"],
+    [platform, "toContain", "electronAPI()?.backendUrl"],
     [html, "toContain", "http://127.0.0.1:*"],
     [html, "toContain", "http://localhost:*"],
     [html, "toContain", "worker-src 'self' blob:"]
@@ -127,7 +129,11 @@ test("keeps packaged writable Electron state beside the installed executable", (
     [main, "toContain", "path.dirname(process.execPath)"],
     [main, "toContain", 'path.join(INSTALL_DATA_ROOT, "electron-profile")'],
     [main, "toContain", 'app.setPath("temp", INSTALL_TEMP_DIR)'],
-    [main, "toContain", 'path.join(app.getPath("userData"), "selected-theme.ico")']
+    [
+      fs.readFileSync(new URL("../electron/theme-icons.cjs", import.meta.url), "utf8"),
+      "toContain",
+      'path.join(app.getPath("userData"), "selected-theme.ico")'
+    ]
   );
 });
 describe("renderer and permission security", () => {
@@ -284,9 +290,10 @@ describe("song folder matching", () => {
   });
 });
 describe("preload bridge", () => {
-  function runPreload(arguments_ = []) {
+  function runPreload(arguments_ = [], { sendSyncResult = "test-api-token" } = {}) {
     const invoke = vi.fn((...values) => values);
     const exposeInMainWorld = vi.fn();
+    const sendSync = vi.fn(() => sendSyncResult);
     const originalArguments = process.argv;
     // Loading through Node's CJS loader keeps coverage attributable while replacing
     // only Electron's process-bound bridge with this local contract fake.
@@ -294,7 +301,7 @@ describe("preload bridge", () => {
     const originalLoad = nodeModule._load;
     // eslint-disable-next-line no-underscore-dangle
     nodeModule._load = function load(specifier, parent, isMain) {
-      if (specifier === "electron") return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } };
+      if (specifier === "electron") return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke, sendSync } };
       return originalLoad.call(this, specifier, parent, isMain);
     };
     process.argv = ["electron", "app", ...arguments_];
@@ -308,18 +315,23 @@ describe("preload bridge", () => {
       // eslint-disable-next-line no-underscore-dangle
       nodeModule._load = originalLoad;
     }
-    return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke };
+    return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke, sendSync };
   }
   test("exposes the minimal frozen-channel renderer API", () => {
-    const { api, exposeInMainWorld, invoke } = runPreload(["--advoice-theme=violet", "--advoice-backend-url=http://127.0.0.1:8123"]);
+    const { api, exposeInMainWorld, invoke, sendSync } = runPreload([
+      "--advoice-theme=violet",
+      "--advoice-backend-url=http://127.0.0.1:8123"
+    ]);
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     same(
       [exposeInMainWorld.mock.calls[0][0], "electronAPI"],
       [api.initialTheme, "violet"],
       [api.backendUrl, "http://127.0.0.1:8123"],
+      [api.apiToken, "test-api-token"],
       [api.isElectron, true],
       [api.getSceneVideoUrl(), "karaoke-media://scene/main"]
     );
+    expect(sendSync).toHaveBeenCalledWith("advoice:get-api-token");
     sameDeep(
       [api.minimize(), ["window:minimize"]],
       [api.maximize(), ["window:maximize"]],
@@ -334,5 +346,9 @@ describe("preload bridge", () => {
   });
   test("leaves runtime arguments undefined when Electron did not inject them", () => {
     expect(runPreload().api).toMatchObject({ initialTheme: undefined, backendUrl: undefined });
+  });
+  test("normalizes a rejected/missing token to undefined instead of an empty string", () => {
+    const { api } = runPreload([], { sendSyncResult: "" });
+    expect(api.apiToken).toBeUndefined();
   });
 });

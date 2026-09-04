@@ -206,16 +206,38 @@ describe("AudioPlayer and error boundary", () => {
     const playing = { paused: false, pause: vi.fn() };
     expect(await toggleAudioPlayback(playing)).toBe(false);
     expect(playing.pause).toHaveBeenCalledOnce();
-    expect(await toggleAudioPlayback({ paused: true, play: vi.fn().mockResolvedValue() })).toBe(true);
-    expect(
-      await toggleAudioPlayback({
-        paused: true,
-        play: vi.fn().mockRejectedValue(new Error("blocked"))
-      })
-    ).toBe(false);
+    const accelerated = {
+      paused: true,
+      playbackRate: 32,
+      defaultPlaybackRate: 32,
+      play: vi.fn().mockResolvedValue()
+    };
+    expect(await toggleAudioPlayback(accelerated)).toBe(true);
+    expect(accelerated.playbackRate).toBe(1);
+    expect(accelerated.defaultPlaybackRate).toBe(1);
+    const blocked = {
+      paused: true,
+      pause: vi.fn(),
+      load: vi.fn(),
+      play: vi.fn().mockRejectedValue(new Error("blocked"))
+    };
+    expect(await toggleAudioPlayback(blocked)).toBe(false);
+    expect(blocked.play).toHaveBeenCalledTimes(2);
+    expect(blocked.load).toHaveBeenCalledOnce();
+    const recovered = {
+      paused: true,
+      pause: vi.fn(),
+      load: vi.fn(),
+      play: vi.fn().mockRejectedValueOnce(new Error("device switched")).mockResolvedValueOnce()
+    };
+    expect(await toggleAudioPlayback(recovered)).toBe(true);
+    expect(recovered.load).toHaveBeenCalledOnce();
+    expect(recovered.muted).toBe(false);
   });
   test("handles playback, media events, seeking and volume", async () => {
-    render(<AudioPlayer src="one.wav" initialDuration={10} className="extra" />);
+    const { unmount } = render(
+      <AudioPlayer src="one.wav" initialDuration={10} className="extra" />
+    );
     const audio = document.querySelector("audio");
     const buttons = screen.getAllByRole("button");
     fireEvent.click(buttons[0]);
@@ -234,6 +256,15 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.ended(audio);
     expect(audio.currentTime).toBe(0);
     verify([document.querySelector(".performance-player").className, "toContain", "extra"]);
+    unmount();
+    expect(audio.getAttribute("src")).toBe("one.wav");
+  });
+  test("keeps the recording source through React strict effect replay", () => {
+    const { container } = render(<AudioPlayer src="recording.wav" initialDuration={10} />, {
+      reactStrictMode: true
+    });
+
+    expect(container.querySelector("audio").getAttribute("src")).toBe("recording.wav");
   });
   test("ignores browser media property assignment failures", () => {
     render(<AudioPlayer src="one.wav" initialDuration={10} />);

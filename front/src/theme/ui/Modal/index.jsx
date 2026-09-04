@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { translateSaved as tr } from "../../../i18n/runtime";
 import Card from "../Card";
 import IconButton from "../IconButton";
 import Primitive from "../_internal/Primitive";
@@ -35,8 +36,8 @@ export default function Modal({
   children,
   isOpen,
   onClose,
-  ariaLabel = "Диалог",
-  closeAriaLabel = "Закрыть",
+  ariaLabel = tr("common.dialog"),
+  closeAriaLabel = tr("common.close"),
   closeIconSize = 58,
   portal = false,
   tilt = true,
@@ -69,6 +70,7 @@ export default function Modal({
     const keydown = (event) => {
       if (dialogs.at(-1) !== current) return;
       if (event.key === "Escape") {
+        if (event.target instanceof Element && event.target.closest('[role="listbox"]')) return;
         event.preventDefault();
         event.stopPropagation();
         close.current?.();
@@ -137,10 +139,8 @@ export default function Modal({
         </Primitive>
         {titleProps && <ModalTitle {...titleProps} />}
         <Primitive className="ui-modal-body">{children}</Primitive>
-         {titleProps?.actions && (
-          <Primitive className={cx("ui-modal-actions", )}>
-            {titleProps?.actions}
-          </Primitive>
+        {titleProps?.actions && (
+          <Primitive className={cx("ui-modal-actions")}>{titleProps?.actions}</Primitive>
         )}
       </Card>
     </Primitive>
@@ -150,4 +150,3 @@ export default function Modal({
 
 export { default as ModalCarouselNavigation } from "./carousel-navigation";
 export { default as ModalTitle } from "./title";
-

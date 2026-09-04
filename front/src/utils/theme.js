@@ -1,3 +1,4 @@
+import * as platform from "./platform";
 import { getBrowserStorage } from "./storage";
 
 const KEY = "karaoke-theme";
@@ -27,7 +28,12 @@ export const saveTheme = (theme) => writeStoredTheme(getBrowserStorage(), theme)
 export const getSavedTheme = () => readStoredTheme(getBrowserStorage());
 export function applyTheme(theme) {
   const value = saveTheme(theme);
-  if (globalThis.document?.documentElement) document.documentElement.dataset.theme = value;
-  (globalThis.electronAPI ?? globalThis.window?.electronAPI)?.setIconTheme?.(value);
+  if (globalThis.document?.documentElement) {
+    document.documentElement.dataset.theme = value;
+    const background = "var(--color-bg)";
+    if (document.documentElement.style) document.documentElement.style.backgroundColor = background;
+    if (document.body?.style) document.body.style.backgroundColor = background;
+  }
+  platform.setIconTheme(value);
   return value;
 }

@@ -68,6 +68,27 @@ describe("application audio muting", () => {
     hook.unmount();
     expect(inserted.muted).toBe(false);
   });
+  test("forgets a muted element's original state once it's removed from the DOM", async () => {
+    // Regression test: without this, originalMuteStateRef kept one entry
+    // per <audio>/<video> element that ever got muted while room-sound
+    // mute was on, even after the element was removed (e.g. KaraokeMedia
+    // remounting a fresh <audio> per song) -- pinning detached DOM nodes in
+    // memory for as long as the toggle stayed on.
+    const container = document.createElement("section");
+    document.body.append(container);
+    const removed = document.createElement("audio");
+    container.append(removed);
+    const deleteSpy = vi.spyOn(Map.prototype, "delete");
+    const hook = renderHook(() => useApplicationAudioMute(true));
+    await waitFor(() => expect(removed.muted).toBe(true));
+    deleteSpy.mockClear();
+
+    removed.remove();
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(removed));
+
+    hook.unmount();
+    deleteSpy.mockRestore();
+  });
   test("restores audio without mutation observer support", () => {
     const audio = document.createElement("audio");
     document.body.append(audio);
@@ -123,6 +144,22 @@ function installAudioContext({ sample = 255, state = "running", resumeError, res
 }
 const streamWith = (track) => ({ getAudioTracks: () => (track ? [track] : []) });
 describe("speaking level meters", () => {
+  test("shows a quiet local microphone that is lost by 8-bit analyser samples", () => {
+    vi.useFakeTimers();
+    const contexts = installAudioContext({ sample: 128 });
+    const localTrack = new FakeTrack();
+    const hook = renderHook(() => useSpeakingLevels());
+    hook.result.current.prepareSpeakingMeter();
+    contexts[0].analyser.getFloatTimeDomainData = vi.fn((samples) => samples.fill(0.002));
+
+    act(() => {
+      hook.result.current.startSpeakingMeter("local", streamWith(localTrack));
+      vi.advanceTimersByTime(140);
+    });
+
+    expect(hook.result.current.localSpeakingLevel).toBeGreaterThan(0);
+  });
+
   test("publishes local and remote levels and removes ended meters", async () => {
     vi.useFakeTimers();
     const contexts = installAudioContext();
@@ -135,7 +172,7 @@ describe("speaking level meters", () => {
       vi.advanceTimersByTime(140);
     });
     expect(result.current.localSpeakingLevel).toBeGreaterThan(0);
-    same([result.current.localSpeakingLevel, 0.54], [result.current.speakingLevels.guest, 0.54]);
+    same([result.current.localSpeakingLevel, 0.73], [result.current.speakingLevels.guest, 0.73]);
     verify([contexts[0].source.connect, "toHaveBeenCalled"], [contexts[0].options, "toEqual", { latencyHint: "interactive" }]);
     verify([remoteTrack.addEventListener, "toHaveBeenCalledWith", "ended", expect.any(Function), { once: true }]);
     act(() => remoteTrack.dispatchEvent(new Event("ended")));
@@ -267,11 +304,11 @@ describe("speaking level meters", () => {
       hook.result.current.startSpeakingMeter("second", streamWith(second));
       vi.advanceTimersByTime(70);
     });
-    expect(hook.result.current.speakingLevels).toEqual({ first: 0.16, second: 0.16 });
+    expect(hook.result.current.speakingLevels).toEqual({ first: 0.36, second: 0.36 });
     act(() => hook.result.current.stopSpeakingMeter("first"));
-    expect(hook.result.current.speakingLevels).toEqual({ second: 0.16 });
+    expect(hook.result.current.speakingLevels).toEqual({ second: 0.36 });
     act(() => hook.result.current.stopSpeakingMeter("first"));
-    expect(hook.result.current.speakingLevels).toEqual({ second: 0.16 });
+    expect(hook.result.current.speakingLevels).toEqual({ second: 0.36 });
   });
   test("publishes only meaningful quantized level changes", () => {
     vi.useFakeTimers();
@@ -280,17 +317,17 @@ describe("speaking level meters", () => {
     const hook = renderHook(() => useSpeakingLevels());
     act(() => hook.result.current.startSpeakingMeter("guest", streamWith(new FakeTrack())));
     act(() => vi.advanceTimersByTime(70));
-    expect(hook.result.current.speakingLevels.guest).toBe(0.04);
+    expect(hook.result.current.speakingLevels.guest).toBe(0.11);
     act(() => vi.advanceTimersByTime(70));
-    expect(hook.result.current.speakingLevels.guest).toBe(0.04);
+    expect(hook.result.current.speakingLevels.guest).toBe(0.13);
     act(() => hook.result.current.stopSpeakingMeter("guest"));
     act(() => hook.result.current.startSpeakingMeter("boundary", streamWith(new FakeTrack())));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.boundary).toBe(0);
     act(() => vi.advanceTimersByTime(70));
-    expect(hook.result.current.speakingLevels.boundary).toBe(0.04);
+    expect(hook.result.current.speakingLevels.boundary).toBe(0.11);
     act(() => hook.result.current.stopSpeakingMeter("boundary"));
-    values.push(131);
+    values.push(128);
     act(() => hook.result.current.startSpeakingMeter("quiet", streamWith(new FakeTrack())));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.quiet).toBe(0);
@@ -302,7 +339,7 @@ describe("speaking level meters", () => {
     const hook = renderHook(() => useSpeakingLevels());
     act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track)));
     act(() => vi.advanceTimersByTime(70));
-    expect(hook.result.current.speakingLevels.guest).toBe(0.32);
+    expect(hook.result.current.speakingLevels.guest).toBe(0.48);
     contexts[0].state = "closed";
     act(() => vi.advanceTimersByTime(70));
     verify([hook.result.current.speakingLevels.guest, "toBeUndefined"], [contexts[0].source.disconnect, "toHaveBeenCalled"]);

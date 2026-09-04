@@ -76,6 +76,7 @@ export const mockAudioSettings = {
   reverb: 0,
   echo: 0,
   delay: 0,
+  octave: 0,
   noise_suppression: 0.35,
   audio_driver: "auto",
   asio_driver_name: "",

@@ -61,7 +61,8 @@ describe("karaoke preferences", () => {
         showLyrics: true,
         showNotes: true,
         autoHideConsole: true,
-        effectPreset: "studio"
+        effectPreset: "studio",
+        timingOffsets: {}
       }
     ]);
     act(() => {
@@ -74,6 +75,7 @@ describe("karaoke preferences", () => {
       result.current.setShowNotes(false);
       result.current.setAutoHideConsole(false);
       result.current.setEffectPreset("hall");
+      result.current.setTimingOffsets({ song: -3.1 });
     });
     await act(async () => Promise.resolve());
     verify([
@@ -88,7 +90,8 @@ describe("karaoke preferences", () => {
         showLyrics: false,
         showNotes: false,
         autoHideConsole: false,
-        effectPreset: "hall"
+        effectPreset: "hall",
+        timingOffsets: { song: -3.1 }
       }
     ]);
     verify([
@@ -104,7 +107,8 @@ describe("karaoke preferences", () => {
         showLyrics: false,
         showNotes: false,
         autoHideConsole: false,
-        effectPreset: "hall"
+        effectPreset: "hall",
+        timingOffsets: { song: -3.1 }
       }
     ]);
   });

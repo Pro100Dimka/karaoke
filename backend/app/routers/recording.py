@@ -1,8 +1,9 @@
 """Запись голоса пользователя."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 import models
 import schemas
@@ -10,6 +11,7 @@ from app import repositories
 from app.api.dependencies import DatabaseSession, RecordingDependency, SongDependency
 from app.api.errors import http_error
 from app.services import audio_service, pipeline_service, recording_service
+from app.services.audio_runtime import serialized
 from database import get_db
 
 router = APIRouter(prefix="/recording", tags=["recording"])
@@ -27,6 +29,30 @@ def _restore_monitoring(db: Session) -> None:
         audio_service.stop_monitoring()
 
 
+def _configure_room_relay_monitor(settings) -> bool:
+    """Keeps the shared Python monitor running for a room-mode recording
+    when the frontend is using its audio relay (body.voice_relay) instead
+    of its own local Web Audio DSP graph.
+
+    Unlike the JS-graph room path below, the monitor here is now the source
+    of BOTH local self-monitoring in the singer's headphones AND the audio
+    relayed to the browser for the WebRTC peer (see app/routers/
+    audio_relay.py) -- stopping it would silence what the room hears, not
+    just local playback. No second hardware output path is opened: the
+    monitor already owns the one real output device, exactly as it does
+    outside of room mode.
+    """
+    if not settings.monitoring_enabled:
+        audio_service.stop_monitoring()
+        return False
+    try:
+        audio_service.configure_monitoring(settings)
+    except RuntimeError:
+        audio_service.stop_monitoring()
+        return False
+    return True
+
+
 def _configure_recording_monitor(settings, body: schemas.RecordingStartRequest) -> bool:
     keep_native_monitor = settings.audio_driver == "asio"
     if not keep_native_monitor:
@@ -38,18 +64,23 @@ def _configure_recording_monitor(settings, body: schemas.RecordingStartRequest) 
         return True
 
     transient_values = {
-        name: getattr(settings, name)
-        for name in ("monitoring_enabled", "volume", "reverb", "echo", "delay")
+        name: (hasattr(settings, name), getattr(settings, name, 0.0))
+        for name in ("monitoring_enabled", "volume", "reverb", "echo", "delay", "octave")
     }
     settings.monitoring_enabled = True
     settings.volume = body.microphone_volume
     settings.reverb = body.reverb
     settings.echo = body.echo
     settings.delay = body.delay
+    settings.octave = body.octave
     try:
         audio_service.configure_monitoring(settings)
     finally:
-        for name, value in transient_values.items(): setattr(settings, name, value)
+        for name, (existed, value) in transient_values.items():
+            if existed:
+                setattr(settings, name, value)
+            else:
+                delattr(settings, name)
     return True
 
 
@@ -59,13 +90,29 @@ def get_recording_settings(db: Session = Depends(get_db)):
 
 
 @router.post("/start", response_model=schemas.RecordingStartOut)
+@serialized
 def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
     song = repositories.get_song(db, body.song_id)
     if song is None: raise HTTPException(status_code=404, detail="Песня не найдена")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Нельзя начать запись во время обработки песни")
+    if recording_service.has_live_capture():
+        raise HTTPException(status_code=409, detail="A microphone recording is already active")
     settings = audio_service.get_settings(db)
     try:
-        keep_native_monitor = _configure_recording_monitor(settings, body)
+        if body.room_mode and body.voice_relay:
+            keep_native_monitor = _configure_room_relay_monitor(settings)
+        elif body.room_mode:
+            # Fallback path: the browser's own local Web Audio graph owns
+            # live self-monitoring for the room here (voice_relay is false --
+            # the frontend could not use the Python monitor's relay, e.g. an
+            # ASIO driver or an unavailable/failed relay connection). Opening
+            # a second PortAudio output path here makes consumer USB/WASAPI
+            # devices buffer twice and creates the delayed doubled voice
+            # users hear.
+            audio_service.stop_monitoring()
+            keep_native_monitor = False
+        else:
+            keep_native_monitor = _configure_recording_monitor(settings, body)
         input_device_id = audio_service.preferred_input_device(
             settings.input_device_id,
             settings.audio_driver,
@@ -85,16 +132,31 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
                 settings.audio_driver,
             ),
             gain=body.microphone_volume,
-            monitoring_enabled=settings.monitoring_enabled and not keep_native_monitor,
+            monitoring_enabled=(
+                settings.monitoring_enabled and not keep_native_monitor and not body.room_mode
+            ),
             playback_offset_sec=body.position_sec,
+            playback_rate=body.playback_rate,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
-            effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},
+            effects={
+                "reverb": body.reverb,
+                "echo": body.echo,
+                "delay": body.delay,
+                "octave": body.octave,
+            },
             noise_suppression=(
                 0.35
                 if getattr(settings, "noise_suppression", None) is None
                 else settings.noise_suppression
             ),
+            monitor_owner=(
+                "room-relay" if body.room_mode and body.voice_relay
+                else "room" if body.room_mode
+                else "asio" if keep_native_monitor
+                else "recording"
+            ),
+            monitor_mode=None if body.room_mode or keep_native_monitor else audio_service.recording_monitor_mode(input_device_id),
         )
     except RuntimeError as exc:
         _restore_monitoring(db)
@@ -113,17 +175,56 @@ def resume_recording(session_id: str):
     return _change_session_state(session_id, recording_service.resume_recording, "recording")
 
 
+@router.post("/sync")
+def sync_recording(session_id: str, position_sec: float, playback_rate: float = 1):
+    # Unlike /recording/start and /player/{id}/seek, these arrive as bare
+    # query params (not a validated Pydantic body), so nothing enforced their
+    # bounds -- an arbitrary negative/out-of-range position_sec written here
+    # persists permanently in recordings.playback_segments_json.
+    if not (0 <= position_sec and 0.5 <= playback_rate <= 1.5):
+        raise HTTPException(
+            status_code=422,
+            detail="position_sec must be >= 0 and playback_rate must be between 0.5 and 1.5",
+        )
+    with http_error(KeyError, 404), http_error(RuntimeError, 409):
+        recording_service.sync_recording(session_id, position_sec, playback_rate)
+    return {"status": "synchronized"}
+
+
+@router.patch("/controls")
+def update_recording_controls(session_id: str, body: schemas.RecordingControlsRequest):
+    with http_error(KeyError, 404):
+        recording_service.update_recording_controls(
+            session_id,
+            music_gain=body.music_volume,
+            gain=body.microphone_volume,
+            effects={
+                "reverb": body.reverb,
+                "echo": body.echo,
+                "delay": body.delay,
+                "octave": body.octave,
+            },
+        )
+    return {"status": "updated"}
+
+
 @router.post("/stop", response_model=schemas.RecordingOut)
 def stop_recording(session_id: str, db: Session = Depends(get_db)):
+    # Monitoring must be restored no matter how this ends — success, a mapped
+    # error below, or an unmapped one (e.g. a writer/stream failure surfaces as
+    # RuntimeError) — otherwise the user is left without mic monitoring until
+    # they notice and start a new recording to trigger another restore.
     try:
-        recording = recording_service.stop_recording(session_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
-    _restore_monitoring(db)
+        try:
+            recording = recording_service.stop_recording(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except (OSError, RuntimeError) as exc:
+            raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
+    finally:
+        _restore_monitoring(db)
     return recording
 
 
@@ -164,6 +265,35 @@ def get_performance_file(recording: RecordingDependency):
             media_type = "audio/mpeg" if mixed_path.suffix == ".mp3" else "audio/wav"
             return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
     return _wav_file_response(recording)
+
+
+@router.post("/{recording_id}/room-audio", response_model=schemas.RecordingOut)
+async def attach_room_audio(
+    recording: RecordingDependency,
+    db: DatabaseSession,
+    file: UploadFile = File(...),
+    start_playback_sec: float = Form(default=0),
+    latency_compensation_sec: float = Form(default=0),
+):
+    song = repositories.get_song(db, recording.song_id)
+    if song is None: raise HTTPException(status_code=404, detail="Песня для записи не найдена")
+    try:
+        await file.seek(0)
+        await run_in_threadpool(
+            recording_service.attach_room_audio,
+            recording,
+            song,
+            file.file,
+            start_playback_sec,
+            latency_compensation_sec,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Could not add room voices: {exc}") from exc
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=500, detail=f"Could not add room voices: {exc}") from exc
+    finally:
+        await file.close()
+    return recording
 
 
 @router.delete("/{recording_id}", status_code=204)

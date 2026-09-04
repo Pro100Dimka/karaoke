@@ -11,7 +11,7 @@ export default function useAsyncQueue() {
   const run = useCallback(
     (action) => {
       if (typeof action !== "function")
-        return Promise.reject(new TypeError(t("Операция очереди должна быть функцией")));
+        return Promise.reject(new TypeError(t("common.theQueueOperationMustBeAFunction")));
       count.current += 1;
       if (mounted.current) setPending(true);
       const result = tail.current.then(action);

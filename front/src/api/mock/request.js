@@ -28,7 +28,6 @@ const STATIC_RESPONSES = Object.freeze({
   "/audio/signal-quality": { rms_dbfs: -42 },
   "/recording/pause": { ok: true },
   "/recording/resume": { ok: true },
-  "/models/whisper": [],
   "/diagnostics/ai-models": {
     state: "ready",
     ready: true,
@@ -161,9 +160,23 @@ export async function mockRequest(path, options = {}) {
     return clone(store.audioSettings);
   }
   if (Object.hasOwn(STATIC_RESPONSES, pathname)) return clone(STATIC_RESPONSES[pathname]);
-  if (pathname.startsWith("/audio/direct-monitor/")) return { ok: true };
+  if (pathname === "/audio/direct-monitor/status") {
+    return {
+      state: store.audioSettings.monitoring_enabled ? "running" : "idle",
+      mode: "shared",
+      blocksize: 128,
+      sample_rate: 48000,
+      fallback_count: 0,
+      glitch_fallback_count: 0
+    };
+  }
+  if (pathname === "/audio/direct-monitor/start" || pathname === "/audio/direct-monitor/stop") {
+    store.audioSettings.monitoring_enabled = pathname.endsWith("/start");
+    return clone(store.audioSettings);
+  }
 
   if (pathname === "/recording/start") return { recording_session_id: "mock-session-1" };
+  if (pathname === "/recording/sync") return { status: "synchronized" };
   if (pathname === "/recording/stop") {
     const recording = {
       id: `mock-recording-${store.recordings.length + 1}`,
@@ -184,13 +197,30 @@ export async function mockRequest(path, options = {}) {
     return null;
   }
 
-  if (/^\/analysis\/[^/]+\/run$/.test(pathname)) return { queued: true };
+  if (/^\/analysis\/[^/]+\/run$/.test(pathname)) {
+    return {
+      pitch_accuracy_percent: 82,
+      rhythm_accuracy_percent: 76,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 82.1,
+      mean_deviation_semitones: 0.32,
+      sections: []
+    };
+  }
   if (/^\/analysis\/[^/]+$/.test(pathname)) {
-    return { accuracy_percent: 82, average_deviation_cents: 18, sections: [] };
+    return {
+      pitch_accuracy_percent: 82,
+      rhythm_accuracy_percent: 76,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 82.1,
+      mean_deviation_semitones: 0.32,
+      sections: []
+    };
   }
 
-  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix)))
-    return { ok: true };
+  if (pathname.startsWith("/cache/")) return { ok: true };
 
   throw new Error(`Mock API route is not implemented: ${method} ${pathname}`);
 }

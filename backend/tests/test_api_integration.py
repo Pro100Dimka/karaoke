@@ -87,3 +87,22 @@ def test_missing_resources_have_stable_404_contract(api_client):
 
     response = client.get("/songs/missing")
     assert (response.status_code == 404) and (response.json()['detail'] == 'Песня не найдена') and (client.get('/recording/missing').status_code == 404)
+
+
+def test_error_responses_carry_a_correlation_id_matching_the_response_header(api_client):
+    client, _sessions = api_client
+
+    response = client.get("/songs/missing")
+
+    request_id = response.headers["X-Request-Id"]
+    assert request_id and response.json()["correlationId"] == request_id
+
+
+def test_client_supplied_request_id_is_echoed_back(api_client):
+    client, _sessions = api_client
+
+    response = client.get("/songs/missing", headers={"X-Request-Id": "caller-chosen-id"})
+
+    assert (response.headers["X-Request-Id"] == "caller-chosen-id") and (
+        response.json()["correlationId"] == "caller-chosen-id"
+    )

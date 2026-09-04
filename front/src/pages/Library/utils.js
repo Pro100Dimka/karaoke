@@ -2,63 +2,81 @@ import { translateSaved as tr } from "../../i18n/runtime";
 
 const ACTIVE = new Set(["processing", "queued", "cancelling"]);
 const array = (value) => (Array.isArray(value) ? value : []);
+const text = (value) => String(value ?? "").trim();
+
+export const sameId = (a, b) => a != null && b != null && String(a) === String(b);
 
 export const formatLibraryDate = (value, locale = "ru-RU") => {
   const date = value && new Date(value);
-  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString(locale) : "—";
+  return date && !Number.isNaN(+date) ? date.toLocaleDateString(locale) : "—";
 };
 
 export const formatEta = (seconds) => {
-  const rounded = Math.round(Number(seconds));
-  if (!Number.isFinite(rounded) || rounded <= 0) return tr("рассчитываем…");
-  const minutes = Math.floor(rounded / 60);
+  const value = Math.round(Number(seconds));
+  if (!Number.isFinite(value) || value <= 0) return tr("library.counting");
+  const minutes = Math.floor(value / 60);
   return minutes
-    ? tr("~{0} мин {1} сек", { 0: minutes, 1: rounded % 60 })
-    : tr("~{0} сек", { 0: rounded });
+    ? tr("library.minSec", { 0: minutes, 1: value % 60 })
+    : tr("library.sec", { 0: value });
 };
 
 export const getProcessingProgress = (status, song) =>
   Math.min(100, Math.max(0, Number(status?.progress_percent ?? song?.progress_percent) || 0));
+
 export const isProcessingActive = (status) => ACTIVE.has(String(status));
 export const hasActiveSongProcessing = (songs) =>
-  array(songs).some((song) => isProcessingActive(song?.status));
+  array(songs).some(({ status } = {}) => isProcessingActive(status));
+
 export const getProcessingSongs = (songs) => {
   const rank = { processing: 0, cancelling: 1, queued: 2 };
   return array(songs)
-    .map((song, index) => ({ song, index }))
-    .filter(({ song }) => isProcessingActive(song?.status))
-    .sort((a, b) => (rank[a.song.status] ?? 3) - (rank[b.song.status] ?? 3) || a.index - b.index)
-    .map(({ song }) => song);
+    .filter((song) => isProcessingActive(song?.status))
+    .sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3));
 };
 
 export const mergeSongProcessingStatus = (songs, status) =>
   !Array.isArray(songs) || !status?.song_id
     ? (songs ?? [])
     : songs.map((song) =>
-        String(song?.id) !== String(status.song_id)
-          ? song
-          : ["status", "progress_step", "progress_percent", "error_message"].reduce(
-              (next, key) => ({ ...next, [key]: status[key] ?? song[key] }),
-              { ...song }
-            )
+        sameId(song?.id, status.song_id)
+          ? {
+              ...song,
+              ...Object.fromEntries(
+                ["status", "progress_step", "progress_percent", "error_message"].map((key) => [
+                  key,
+                  status[key] ?? song[key]
+                ])
+              )
+            }
+          : song
       );
 
 export const getLocalVisibleSongs = (songs, hidden) =>
   array(songs).filter((song) => song && typeof song === "object" && !hidden?.has?.(song.id));
 
 export const resolveVisibleSongs = ({ localSongs, room, roomSongs, roomSongsByParticipant }) => {
-  if (!room || room.host) return array(localSongs);
-  const merged = new Map();
-  [...Object.values(roomSongsByParticipant || {}).flatMap(array), ...array(roomSongs)].forEach(
-    (song) => song?.id && !merged.has(song.id) && merged.set(song.id, song)
-  );
-  return merged.size ? [...merged.values()] : array(localSongs);
+  if (!room) return array(localSongs);
+  const songs = new Map();
+  const add = (song, local) => {
+    if (!song?.id || songs.has(String(song.id))) return;
+    songs.set(
+      String(song.id),
+      local
+        ? { ...song, __roomLocal: true, __roomOwnerId: room.selfId || song.__roomOwnerId }
+        : song
+    );
+  };
+
+  array(localSongs).forEach((song) => add(song, true));
+  array(roomSongs).forEach((song) => add(song, false));
+  Object.values(roomSongsByParticipant || {})
+    .flatMap(array)
+    .forEach((song) => add(song, false));
+  return [...songs.values()];
 };
 
 export const filterSongs = (songs, query) => {
-  const needle = String(query || "")
-    .trim()
-    .toLowerCase();
+  const needle = text(query).toLowerCase();
   return needle
     ? array(songs).filter((song) =>
         [song?.title, song?.artist, song?.genre]
@@ -77,16 +95,13 @@ export const defaultLibraryFilters = Object.freeze({
   status: ""
 });
 
-const songKey = (song) => String(song?.key_override ?? song?.key ?? "").trim();
-const normalized = (value) =>
-  String(value || "")
-    .trim()
-    .toLocaleLowerCase();
+const songKey = (song) => text(song?.key_override ?? song?.key);
+const normalized = (value) => text(value).toLocaleLowerCase();
 const unique = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 const timestamp = (value) => Date.parse(value) || 0;
 
 export const getLibraryFilterOptions = (songs) => ({
-  genres: unique(array(songs).map((song) => String(song?.genre || "").trim())),
+  genres: unique(array(songs).map((song) => text(song?.genre))),
   keys: unique(array(songs).map(songKey))
 });
 
@@ -100,25 +115,25 @@ export const arrangeSongs = (songs, query, filters = defaultLibraryFilters) => {
           ? isProcessingActive(song?.status)
           : song?.status === filters.status))
   );
-  const text = (value) => String(value || "");
   const compare = {
-    title: (left, right) => text(left.title).localeCompare(text(right.title)),
-    artist: (left, right) => text(left.artist).localeCompare(text(right.artist)),
-    recent: (left, right) => timestamp(right.created_at) - timestamp(left.created_at)
+    title: (a, b) => text(a.title).localeCompare(text(b.title)),
+    artist: (a, b) => text(a.artist).localeCompare(text(b.artist)),
+    recent: (a, b) => timestamp(b.created_at) - timestamp(a.created_at)
   }[filters.sort];
   return compare ? [...result].sort(compare) : result;
 };
 
 export const countReadySongs = (songs) =>
   array(songs).filter(({ status }) => status === "done").length;
+
 export const getSongCardState = (song) => {
   const status = typeof song?.status === "string" && song.status ? song.status : "pending";
   return { status, isWorking: isProcessingActive(status), isReady: status === "done" };
 };
 
 export const formatSongKey = (value) => {
-  const key = String(value || "").trim();
+  const key = text(value);
   return key
     ? key.replace(/\s+minor$/i, "m").replace(/\s+major$/i, "maj")
-    : tr("Тональность определяется");
+    : tr("library.theTonalityIsDetermined");
 };

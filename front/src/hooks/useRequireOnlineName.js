@@ -4,10 +4,7 @@ import { useAppDialog } from "../contexts/AppDialog";
 import { translateSaved as t } from "../i18n/runtime";
 import useAppSettings from "./useAppSettings";
 
-export const getOnlineNameMessage = () =>
-  t(
-    "Укажите своё имя в настройках приложения. Оно нужно для совместного исполнения и будет видно участникам комнаты."
-  );
+export const getOnlineNameMessage = () => t("room.enterYourNameInTheApplicationSettingsItIs");
 
 export function useRequireOnlineName({ onMissingName } = {}) {
   const { alert } = useAppDialog();

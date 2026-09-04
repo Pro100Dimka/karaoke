@@ -11,15 +11,18 @@ import threading
 import time
 import traceback
 from collections.abc import Callable, Iterator
+from datetime import datetime, timedelta
 from pathlib import Path
 
+import soundfile as sf
 from sqlalchemy.orm import Session
 
 import config
 import models
+from AI.artifacts import recover_orphaned_backups
+from AI.audio_pipeline_v2 import AudioPipelineV2, validate_audio_artifacts
 from AI.cache import StageCache
 from AI.notes import NOTE_DECODER_VERSION
-from AI.pipeline import KaraokePipeline
 from AI.pitch_post import PITCH_STABILIZER_VERSION
 from AI.runtime import RuntimePlan, configure_runtime, format_runtime_plan
 from AI.version import AI_BUILD_ID
@@ -28,9 +31,13 @@ from app.services import (
     ai_bridge,
     app_settings_service,
     cache_service,
+    kar_dataset_service,
+    kfn_dataset_service,
+    metadata_enrichment_service,
     model_install_service,
     revision_cache,
     song_service,
+    storage_budget_service,
 )
 from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit
@@ -53,8 +60,9 @@ _active_jobs: dict[str, threading.Thread] = {}
 _active_jobs_lock = threading.RLock()
 _processing_condition = threading.Condition(threading.RLock())
 _processing_queue: list[str] = []
-_processing_owner: str | None = None
+_processing_active: set[str] = set()
 _cancelled_jobs: set[str] = set()
+_accepting_jobs = True
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
 
@@ -63,14 +71,46 @@ def _configure_ai_runtime() -> RuntimePlan:
     config.configure_ai_resource_environment(force=True)
     settings = app_settings_service.read_settings()
     configured_device, override = str(settings['compute_mode']), os.getenv('KARAOKE_AI_RUNTIME_OVERRIDE', '').strip().lower()
-    device, thread_count = override if override in {'auto', 'cuda', 'cpu'} else configured_device, int(settings['thread_count'])
+    device = override if override in {'auto', 'cuda', 'cpu'} else configured_device
+    configured_threads = int(settings['thread_count'])
+    thread_count = configured_threads
+    try:
+        import psutil
+
+        physical = int(psutil.cpu_count(logical=False) or os.cpu_count() or 2)
+        reserve = 2 if physical >= 6 else 1
+        thread_count = min(configured_threads, max(1, physical - reserve))
+        process = psutil.Process()
+        if os.name == "nt":
+            process.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else:
+            process.nice(max(int(process.nice()), 5))
+    except (ImportError, OSError, ValueError, TypeError):
+        pass
     os.environ["SONGAPP_DEVICE"] = device
     for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"): os.environ[name] = str(thread_count)
     with contextlib.suppress(ImportError, RuntimeError):
         import torch
 
         torch.set_num_threads(thread_count)
+    logger.info(
+        "AI background resources: configured_threads=%s effective_threads=%s priority=background",
+        configured_threads, thread_count,
+    )
     return configure_runtime(device, force=True)
+
+
+@contextlib.contextmanager
+def _limit_background_native_threads() -> Iterator[None]:
+    """Apply the configured background limit to already-loaded BLAS pools."""
+    limit = max(1, int(os.environ.get("OMP_NUM_THREADS", "1")))
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        yield
+        return
+    with threadpool_limits(limits=limit):
+        yield
 
 
 
@@ -114,13 +154,17 @@ _STEP_PLAN = {
 # and text intended for a person rather than an internal engine log.
 _AI_STAGE_PLAN = {
     "decode": (10.0, 5, "Подготавливаем аудио"),
-    "separate": (42.0, 35, "Отделяем голос исполнителя от музыки"),
-    "vocal": (48.0, 8, "Очищаем голос и переводим его в моно"),
-    "analysis": (70.0, 35, "Определяем темп, тональность и мелодию голоса"),
-    "lyrics": (84.0, 55, "Синхронизируем слова с голосом"),
-    "notes": (98.0, 12, "Строим вокальные ноты"),
+    "separate": (42.0, 70, "Отделяем голос исполнителя от музыки"),
+    "vocal": (48.0, 10, "Очищаем голос и переводим его в моно"),
+    "analysis": (70.0, 18, "Определяем темп, тональность и мелодию голоса"),
+    "transcribe": (84.0, 30, "Распознаём текст вокала"),
+    "align": (94.0, 20, "Синхронизируем слова с голосом"),
+    "notes": (98.0, 8, "Строим вокальные ноты"),
     "validate": (99.7, 3, "Проверяем результат"),
     "complete": (100.0, 1, "Завершаем обработку"),
+    "karaoke_parse": (6.0, 3, "Читаем слова и ноты караоке-файла"),
+    "karaoke_audio": (34.0, 45, "Ищем и проверяем оригинальную песню"),
+    "karaoke_media": (97.0, 90, "Подготавливаем обложку и клип"),
 }
 
 
@@ -262,16 +306,10 @@ def get_processing_telemetry(song_id: str) -> dict:
                     runtime.get("detail") or "Обрабатываем песню")
         )
         elapsed = max(0.0, now - float(runtime.get("stage_started_at", now)))
-        completed = runtime.get("completed_stage_seconds", {})
-        expected_done = sum(_AI_STAGE_PLAN[name][1]
-                            for name in completed if name in _AI_STAGE_PLAN)
-        actual_done = sum(float(value) for value in completed.values())
-        speed_factor = (
-            min(3.0, max(0.35, actual_done / expected_done))
-            if expected_done >= 5 and actual_done > 0
-            else 1.0
-        )
-        scale = max(1.0, expected * speed_factor)
+        # GPU separation, CPU lyrics and short validation stages do not share
+        # one speed factor. Applying the duration of one completed stage to all
+        # later stages made ETA jump from seconds to minutes and back again.
+        scale = max(1.0, expected)
         fraction = 1.0 - math.exp(-2.0 * elapsed / scale)
         percent = base + (next_percent - base) * fraction
         percent = min(next_percent - 0.1,
@@ -281,15 +319,29 @@ def get_processing_telemetry(song_id: str) -> dict:
             stage_index = stage_names.index(stage)
         except ValueError:
             stage_index = len(stage_names) - 1
-        remaining = max(0.0, expected * speed_factor - elapsed)
-        remaining += sum(
-            _AI_STAGE_PLAN[name][1] * speed_factor for name in stage_names[stage_index + 1:]
+        future_seconds = sum(
+            _AI_STAGE_PLAN[name][1] for name in stage_names[stage_index + 1:]
+        )
+        overdue = elapsed > max(15.0, expected * 1.25)
+        remaining = max(0.0, expected - elapsed) + future_seconds
+        eta_seconds = None if overdue else max(1, int(round(remaining)))
+        total_elapsed = max(0.0, now - float(runtime.get("started_at", now)))
+        estimated_finish = (
+            datetime.now().astimezone() + timedelta(seconds=eta_seconds)
+            if eta_seconds is not None else None
         )
         return {
             "step": float(runtime.get("step", 0.0)),
             "progress_percent": round(min(99.7, percent), 1),
             "progress_detail": runtime.get("detail"),
-            "eta_seconds": max(1, int(round(remaining))),
+            "eta_seconds": eta_seconds,
+            "stage": stage,
+            "stage_elapsed_seconds": int(round(elapsed)),
+            "total_elapsed_seconds": int(round(total_elapsed)),
+            "estimated_finish_at": (
+                estimated_finish.isoformat(timespec="seconds")
+                if estimated_finish is not None else None
+            ),
             "semantic": True,
         }
 
@@ -325,6 +377,25 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
                     step_label=label,
                     percent=telemetry["progress_percent"],
                 )
+                if telemetry.get("semantic"):
+                    should_log = False
+                    with _progress_runtime_lock:
+                        if runtime := _progress_runtime.get(song_id):
+                            now = time.monotonic()
+                            last = float(runtime.get("last_stage_log_at", 0.0))
+                            if now - last >= 15.0:
+                                runtime["last_stage_log_at"] = now
+                                should_log = True
+                    if should_log:
+                        logger.info(
+                            "AI stage active: song_id=%s stage=%s elapsed_sec=%s "
+                            "total_elapsed_sec=%s eta_sec=%s estimated_finish=%s",
+                            song_id, telemetry.get("stage"),
+                            telemetry.get("stage_elapsed_seconds"),
+                            telemetry.get("total_elapsed_seconds"),
+                            telemetry.get("eta_seconds"),
+                            telemetry.get("estimated_finish_at"),
+                        )
         except Exception:  # A transient SQLite error must not kill telemetry forever.
             logger.warning(
                 "Could not persist pipeline heartbeat for song %s", song_id, exc_info=True
@@ -351,7 +422,20 @@ def _update_progress(
         if song is None: return
         if step_label is not None: song.progress_step = step_label
         if percent is not None: song.progress_percent = percent
-        if status is not None: song.status = status
+        if status is not None:
+            # Log-only, not enforced: this funnel runs deep inside job
+            # recovery/error handling, where refusing the write could leave a
+            # song stuck in a non-terminal status forever -- worse than an
+            # occasional transition this table doesn't yet recognize.
+            current_status = getattr(song, "status", None)
+            try:
+                song_service.validate_status_transition(current_status, status)
+            except song_service.InvalidStatusTransition:
+                logger.warning(
+                    "Unexpected song status transition: song_id=%s %s -> %s",
+                    song_id, current_status, status,
+                )
+            song.status = status
         if error_message is not None: song.error_message = error_message
         commit(db)
 
@@ -366,12 +450,72 @@ def has_active_jobs() -> bool:
     with _active_jobs_lock: return any(thread.is_alive() for thread in _active_jobs.values())
 
 
+def cancel_all_active_processing() -> int:
+    """Cooperatively cancel every song currently processing.
+
+    Used on app shutdown so a job gets a chance to reach a clean CANCELLED
+    state (and release its AI resources) instead of being killed mid-write
+    a moment later when Electron force-terminates the backend process.
+    """
+    with _active_jobs_lock:
+        song_ids = [song_id for song_id, thread in _active_jobs.items() if thread.is_alive()]
+    for song_id in song_ids: cancel_processing(song_id)
+    return len(song_ids)
+
+
+def start_accepting_jobs() -> None:
+    global _accepting_jobs
+    with _active_jobs_lock:
+        _accepting_jobs = True
+
+
+def stop_accepting_jobs() -> None:
+    global _accepting_jobs
+    with _active_jobs_lock:
+        _accepting_jobs = False
+
+
+def shutdown_active_processing(timeout: float = 15.0) -> dict[str, object]:
+    """Stop admission, cancel active jobs and wait for their finalizers.
+
+    The wait is bounded so a third-party AI call cannot deadlock application
+    shutdown. Any thread left after the deadline remains visible in the result
+    and in logs instead of being silently treated as successfully stopped.
+    """
+    stop_accepting_jobs()
+    with _active_jobs_lock:
+        active = {
+            song_id: thread
+            for song_id, thread in _active_jobs.items()
+            if thread.is_alive()
+        }
+    for song_id in active:
+        try:
+            cancel_processing(song_id)
+        except Exception:
+            logger.exception("Could not request cancellation for %s", song_id)
+
+    deadline = time.monotonic() + max(0.0, timeout)
+    for thread in active.values():
+        if thread is threading.current_thread():
+            continue
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    lingering = [song_id for song_id, thread in active.items() if thread.is_alive()]
+    if lingering:
+        logger.error("AI jobs exceeded shutdown deadline: %s", ", ".join(lingering))
+    return {
+        "requested": len(active),
+        "finished": len(active) - len(lingering),
+        "lingering": lingering,
+    }
+
+
 def _release_active_job(song_id: str) -> None:
     with _active_jobs_lock:
         if _active_jobs.get(song_id) is threading.current_thread(): _active_jobs.pop(song_id, None)
 
 
-def _job_entrypoint(song_id: str, target) -> None:
+def _job_entrypoint(song_id: str, target, storage_reservation=None) -> None:
     try:
         target(song_id)
     finally:
@@ -395,15 +539,22 @@ def _job_entrypoint(song_id: str, target) -> None:
         torch = sys.modules.get("torch")
         with contextlib.suppress(AttributeError, RuntimeError):
             if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
+        if storage_reservation is not None:
+            storage_reservation.release()
 
 
-def _start_background_job(song_id: str, target) -> bool:
+def _start_background_job(song_id: str, target, *, storage_reservation=None) -> bool:
     with _active_jobs_lock:
+        if not _accepting_jobs:
+            if storage_reservation is not None: storage_reservation.release()
+            return False
         _cancelled_jobs.discard(song_id)
-        if is_processing(song_id): return False
+        if is_processing(song_id):
+            if storage_reservation is not None: storage_reservation.release()
+            return False
         thread = threading.Thread(
             target=_job_entrypoint,
-            args=(song_id, target),
+            args=(song_id, target, storage_reservation),
             daemon=True,
         )
         _active_jobs[song_id] = thread
@@ -411,17 +562,42 @@ def _start_background_job(song_id: str, target) -> bool:
             thread.start()
         except Exception:
             _active_jobs.pop(song_id, None)
+            if storage_reservation is not None: storage_reservation.release()
             raise
         return True
 
 
 def start_processing(song_id: str, processing_mode: str = "auto") -> bool:
+    paths = _load_job_paths(song_id)
+    reservation = None
+    if paths is not None:
+        source_path, out_dir = paths
+        reservation = storage_budget_service.reserve(
+            "song_processing",
+            out_dir,
+            storage_budget_service.processing_bytes(Path(source_path)),
+        )
     return _start_background_job(
-        song_id, lambda current_song_id: _run_job(current_song_id, processing_mode)
+        song_id,
+        lambda current_song_id: _run_job(current_song_id, processing_mode),
+        storage_reservation=reservation,
     )
 
 
-def start_reprocessing(song_id: str) -> bool: return _start_background_job(song_id, _run_reprocessing)
+def start_reprocessing(song_id: str) -> bool:
+    paths = _load_job_paths(song_id)
+    reservation = None
+    if paths is not None:
+        _source_path, out_dir = paths
+        vocals = out_dir / "vocals.flac"
+        reservation = storage_budget_service.reserve(
+            "song_reprocessing",
+            out_dir,
+            storage_budget_service.processing_bytes(vocals, reuse_vocals=True),
+        )
+    return _start_background_job(
+        song_id, _run_reprocessing, storage_reservation=reservation
+    )
 
 
 def cancel_processing(song_id: str) -> bool:
@@ -524,9 +700,9 @@ def _format_processing_error(exc: BaseException) -> str:
     return f"{error_type}: {message}" if message else error_type
 
 
-def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> None:
-    logger.error("Song processing failed: %s",
-                 _format_processing_error(exc), exc_info=exc)
+def _write_pipeline_error(song_id: str, capture: _ProgressCapture | None, exc: Exception) -> None:
+    logger.error("Song processing failed: song_id=%s error=%s",
+                 song_id, _format_processing_error(exc), exc_info=exc)
     if capture is None: return
     with contextlib.suppress(OSError, ValueError):
         capture.write(
@@ -548,9 +724,15 @@ def _create_ai_progress_callback(
     def on_ai_progress(stage: str, percent: float, detail: str) -> None:
         if _is_cancelled(song_id): raise ProcessingCancelled("Processing cancelled by user")
         bounded_percent, friendly = max(0.0, min(99.7, float(percent))), _AI_STAGE_PLAN.get(stage, (0, 0, 'Обрабатываем песню'))[2]
+        finished_stage = None
+        finished_elapsed = None
+        started_stage = False
         with _progress_runtime_lock:
             if (runtime := _progress_runtime.get(song_id)) is not None:
                 now = time.monotonic()
+                bounded_percent = max(
+                    bounded_percent, float(runtime.get("direct_percent", 0.0))
+                )
                 previous_stage = runtime.get("stage")
                 if previous_stage and previous_stage != stage:
                     completed = runtime.setdefault(
@@ -558,12 +740,31 @@ def _create_ai_progress_callback(
                     completed[previous_stage] = max(
                         0.0, now - float(runtime.get("stage_started_at", now))
                     )
-                if previous_stage != stage: runtime["stage_started_at"] = now
+                    finished_stage = previous_stage
+                    finished_elapsed = completed[previous_stage]
+                if previous_stage != stage:
+                    runtime["stage_started_at"] = now
+                    runtime["last_stage_log_at"] = now
+                    started_stage = True
                 runtime["stage"] = stage
                 runtime["direct_percent"] = bounded_percent
                 runtime["detail"] = friendly
         _update_progress(song_id, step_label=friendly, percent=bounded_percent)
         capture.write(f"[AI] {bounded_percent:5.1f}% {stage} · {detail}\n")
+        if finished_stage is not None:
+            logger.info(
+                "AI stage finished: song_id=%s stage=%s elapsed_sec=%.1f finished_at=%s",
+                song_id, finished_stage, finished_elapsed,
+                datetime.now().astimezone().isoformat(timespec="seconds"),
+            )
+        if started_stage:
+            expected = _AI_STAGE_PLAN.get(stage, (0, 10, friendly))[1]
+            estimated_finish = datetime.now().astimezone() + timedelta(seconds=expected)
+            logger.info(
+                "AI stage started: song_id=%s stage=%s expected_sec=%s estimated_finish=%s detail=%s",
+                song_id, stage, expected,
+                estimated_finish.isoformat(timespec="seconds"), friendly,
+            )
 
     return on_ai_progress
 
@@ -574,26 +775,43 @@ def _ensure_cover_extracted(source_path: str, out_dir: Path) -> None:
 
 
 def _acquire_processing_slot(song_id: str) -> bool:
-    global _processing_owner
+    # A strict single global owner meant a purely CPU-bound stage of one
+    # song (lyric search, librosa music analysis) could never run while any
+    # other song held the one slot for its GPU stage, even for a different
+    # user's unrelated song. Waiters still queue up and are admitted in
+    # FIFO order, but now up to max_concurrent_jobs songs can hold a slot at
+    # once, bounded so they don't outrun available GPU memory/compute.
     with _processing_condition:
         if song_id not in _processing_queue:
             _processing_queue.append(song_id)
-        while _processing_owner is not None or _processing_queue[0] != song_id:
-            if _is_cancelled(song_id):
+        try:
+            limit = ai_bridge.max_concurrent_jobs()
+            while len(_processing_active) >= limit or _processing_queue[0] != song_id:
+                if _is_cancelled(song_id):
+                    _processing_queue.remove(song_id)
+                    _processing_condition.notify_all()
+                    return False
+                _processing_condition.wait(timeout=0.2)
+            _processing_queue.pop(0)
+            _processing_active.add(song_id)
+            return True
+        except BaseException:
+            # song_id was appended to the shared _processing_queue above
+            # before anything here could fail (max_concurrent_jobs(),
+            # _is_cancelled(), or the wait itself). Without this, one
+            # transient failure left it stranded at the head of the queue
+            # forever -- every future call for every OTHER song loops
+            # forever on `_processing_queue[0] != song_id`, since nothing
+            # else would ever remove the stranded entry.
+            if song_id in _processing_queue:
                 _processing_queue.remove(song_id)
-                _processing_condition.notify_all()
-                return False
-            _processing_condition.wait(timeout=0.2)
-        _processing_queue.pop(0)
-        _processing_owner = song_id
-        return True
+            _processing_condition.notify_all()
+            raise
 
 
 def _release_processing_slot(song_id: str) -> None:
-    global _processing_owner
     with _processing_condition:
-        if _processing_owner == song_id:
-            _processing_owner = None
+        _processing_active.discard(song_id)
         _processing_condition.notify_all()
 
 
@@ -602,7 +820,9 @@ def _invoke_ai_pipeline(
     source_path: str,
     out_dir: Path,
     lyrics_path: Path | None,
-    searchable_title: str | None,
+    artist: str | None,
+    title: str | None,
+    genre: str | None,
     bpm_override: float | None,
     key_override: str | None,
     processing_mode: str,
@@ -615,20 +835,103 @@ def _invoke_ai_pipeline(
     cancelled = lambda: _is_cancelled(song_id)  # noqa: E731
     if reuse_vocals:
         return ai_bridge.reprocess_song(
-            out_dir, language=language, progress=progress, cancelled=cancelled
+            out_dir, artist=artist, title=title, language=language,
+            progress=progress, cancelled=cancelled,
         )
     return ai_bridge.process_song(
         source_path, out_dir, lyrics_path=lyrics_path,
-        title=searchable_title, bpm_override=bpm_override,
+        artist=artist, title=title, genre=genre, bpm_override=bpm_override,
         key_override=key_override, processing_mode=processing_mode,
         language=language, progress=progress, cancelled=cancelled,
     )
 
 
-def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
+def _complete_audio_media(
+    song_id: str,
+    out_dir: Path,
+    *,
+    artist: str | None,
+    title: str | None,
+    prepared: dict[str, object] | None = None,
+) -> None:
+    if not artist or not title:
+        raise ValueError("Для загрузки клипа нужны точные исполнитель и название")
+    if _is_cancelled(song_id):
+        raise ProcessingCancelled("Processing cancelled by user")
+    metadata_path = out_dir / "metadata.json"
+    metadata = _read_optional_generated_json(metadata_path, {})
+    expected_duration = None
+    if isinstance(metadata, dict):
+        try:
+            expected_duration = float(metadata.get("duration") or 0) or None
+        except (TypeError, ValueError):
+            expected_duration = None
+    _update_progress(
+        song_id,
+        step_label="Загружаем и проверяем клип",
+        percent=98.5,
+    )
+    media = prepared or metadata_enrichment_service.prepare_training_media(
+        title, artist, out_dir, expected_duration=expected_duration
+    )
+    if media.get("cover_status") != "ready" or not (out_dir / "cover.jpg").is_file():
+        raise ValueError("Не удалось загрузить и проверить обложку песни")
+    video_ready = media.get("video_status") == "ready" and (
+        metadata_enrichment_service.video_file_is_ready(
+            out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME,
+            expected_duration=expected_duration,
+            allow_extended_duration=bool(media.get("video_id")),
+        )
+    )
+    if not video_ready:
+        # No valid clip is a supported result. The dedicated media process has
+        # already finished at this point, so this cannot publish a partial
+        # download while it is still in progress.
+        (out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME).unlink(missing_ok=True)
+        (out_dir / metadata_enrichment_service.LOCAL_VIDEO_SOURCE_NAME).unlink(missing_ok=True)
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata["media"] = {
+        "cover_status": "ready",
+        "video_status": "ready" if video_ready else "fallback",
+        "video_id": media.get("video_id") if video_ready else None,
+    }
+    warnings = media.get("warnings")
+    metadata["warnings"] = list(warnings) if isinstance(warnings, list) else []
+    files = set(metadata.get("files", [])) if isinstance(metadata.get("files"), list) else set()
+    files.add("cover.jpg")
+    if video_ready:
+        files.update({"clip.mp4", "clip.source.json"})
+    else:
+        files.difference_update({"clip.mp4", "clip.source.json"})
+    metadata["files"] = sorted(files)
+    write_json(metadata_path, metadata)
+
+
+def _audio_artifacts_waiting_for_media(out_dir: Path) -> bool:
+    """Recognize an AI-complete job that failed only in optional clip media."""
+    metadata = _read_optional_generated_json(out_dir / "metadata.json", {})
+    media = metadata.get("media", {}) if isinstance(metadata, dict) else {}
+    if not isinstance(media, dict) or media.get("video_status") != "pending":
+        return False
+    try:
+        validate_audio_artifacts(out_dir)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
+
+
+def _finalize_processed_job(
+    song_id: str,
+    out_dir: Path,
+    *,
+    retain_source: bool = False,
+) -> None:
     try:
         if not _is_cancelled(song_id):
-            with song_service.library_write_lock(): _finalize_success(song_id, out_dir)
+            with song_service.library_write_lock():
+                _finalize_success(song_id, out_dir, retain_source=retain_source)
+            metadata_enrichment_service.enqueue(song_id)
     except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
         _update_progress(
             song_id,
@@ -637,11 +940,165 @@ def _finalize_processed_job(song_id: str, out_dir: Path) -> None:
         )
 
 
+def _source_unavailable_for_full_process(song_id: str) -> bool:
+    with _song_session(song_id) as (_db, song):
+        return song is not None and song_service.original_source_retired(song)
+
+
+def _reject_full_process_if_source_retired(song_id: str, *, reuse_vocals: bool) -> bool:
+    if reuse_vocals or not _source_unavailable_for_full_process(song_id): return False
+    _update_progress(
+        song_id,
+        status=models.SongStatus.ERROR,
+        error_message="Исходный файл песни был удалён после обработки — полная "
+        "повторная обработка недоступна. Используйте переобработку мелодии или "
+        "загрузите песню заново.",
+    )
+    return True
+
+
+def _log_processing_started(song_id: str, processing_mode: str, reuse_vocals: bool) -> None:
+    logger.info("Song processing started: song_id=%s mode=%s reuse_vocals=%s", song_id, processing_mode, reuse_vocals)
+
+
+def _log_processing_finished(song_id: str, started_at: float) -> None:
+    logger.info("Song processing finished: song_id=%s elapsed_sec=%.1f", song_id, time.monotonic() - started_at)
+
+
+def _run_symbolic_job(
+    song_id: str,
+    source_path: str,
+    out_dir: Path,
+    *,
+    reuse_existing_audio: bool = False,
+) -> None:
+    capture: _ProgressCapture | None = None
+    heartbeat_stop: threading.Event | None = None
+    heartbeat_thread: threading.Thread | None = None
+    slot_acquired = False
+    succeeded = False
+    started_at = time.monotonic()
+    try:
+        slot_acquired = _acquire_processing_slot(song_id)
+        if not slot_acquired:
+            return
+        _log_processing_started(song_id, "karaoke-file", False)
+        _update_progress(
+            song_id,
+            status=models.SongStatus.PROCESSING,
+            percent=0.0,
+            step_label="Подготавливаем karaoke-файл",
+        )
+        _begin_runtime_progress(song_id)
+        heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
+        capture = _create_progress_capture(song_id, out_dir)
+        progress = _create_ai_progress_callback(song_id, capture)
+        _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
+        model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
+        _configure_ai_runtime()
+        source = Path(source_path)
+        prepare = (
+            kfn_dataset_service.prepare_kfn_file
+            if source.suffix.casefold() == ".kfn"
+            else kar_dataset_service.prepare_kar_file
+        )
+        artist_override, title_override = _load_song_identity(song_id)
+        result = prepare(
+            source,
+            original_filename=_load_original_filename(song_id),
+            title_override=title_override,
+            artist_override=artist_override,
+            output_root=out_dir.parent,
+            target_dir=out_dir,
+            progress=progress,
+            cancelled=lambda: _is_cancelled(song_id),
+            reuse_existing_audio=reuse_existing_audio,
+        )
+        if result.get("status") != "ready" or result.get("stems_status") != "ready":
+            details = "; ".join(str(item) for item in result.get("warnings", []) if item)
+            raise ValueError(details or "Не удалось получить оригинал, голос и минусовку")
+        succeeded = True
+    except ProcessingCancelled:
+        _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
+        return
+    except Exception as exc:  # noqa: BLE001 - background worker boundary
+        if _is_cancelled(song_id):
+            _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
+            return
+        _write_pipeline_error(song_id, capture, exc)
+        _update_progress(
+            song_id,
+            status=models.SongStatus.ERROR,
+            error_message=_format_processing_error(exc),
+        )
+        return
+    finally:
+        cleanup_succeeded = False
+        try:
+            if capture is not None:
+                capture.close()
+            _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
+            _end_runtime_progress(song_id)
+            cleanup_succeeded = True
+        except Exception:
+            # See the identical comment in _run_job's finally block: without
+            # this, a cleanup failure here replaces whatever the try/except
+            # above already decided and skips _finalize_processed_job below,
+            # silently stranding the song's DB row at PROCESSING forever.
+            logger.exception("Song processing cleanup failed: song_id=%s", song_id)
+        finally:
+            if slot_acquired and (not succeeded or not cleanup_succeeded):
+                _release_processing_slot(song_id)
+
+    try:
+        _finalize_processed_job(song_id, out_dir, retain_source=True)
+    finally:
+        if slot_acquired:
+            _release_processing_slot(song_id)
+    _log_processing_finished(song_id, started_at)
+
+
+def _load_original_filename(song_id: str) -> str:
+    with _song_session(song_id) as (_db, song):
+        return str(getattr(song, "original_filename", "") or Path(song.source_path).name) if song else "song"
+
+
+def _load_song_identity(song_id: str) -> tuple[str | None, str | None]:
+    with _song_session(song_id) as (_db, song):
+        if song is None:
+            return None, None
+        artist = str(getattr(song, "artist", "") or "").strip() or None
+        title = str(getattr(song, "title", "") or "").strip() or None
+        return artist, title
+
+
+def _load_song_genre(song_id: str) -> str | None:
+    with _song_session(song_id) as (_db, song):
+        return (
+            str(getattr(song, "genre", "") or "").strip() or None
+            if song is not None else None
+        )
+
+
 def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool = False) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
+    if _reject_full_process_if_source_retired(song_id, reuse_vocals=reuse_vocals): return
     source_path, out_dir = paths
-    searchable_title = _load_searchable_title(song_id)
+    recover_orphaned_backups(out_dir)
+    if Path(source_path).suffix.casefold() in config.ALLOWED_KARAOKE_EXTENSIONS:
+        if reuse_vocals:
+            _run_symbolic_job(
+                song_id,
+                source_path,
+                out_dir,
+                reuse_existing_audio=True,
+            )
+        else:
+            _run_symbolic_job(song_id, source_path, out_dir)
+        return
+    artist, title = _load_song_identity(song_id)
+    genre = _load_song_genre(song_id)
     lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
 
     capture: _ProgressCapture | None = None
@@ -649,36 +1106,76 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
     heartbeat_thread: threading.Thread | None = None
     slot_acquired = False
     pipeline_succeeded = False
+    media_process: metadata_enrichment_service.TrainingMediaProcess | None = None
+    started_at = time.monotonic()
     try:
         slot_acquired = _acquire_processing_slot(song_id)
         if not slot_acquired: return
-        _update_progress(
-            song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
+        _log_processing_started(song_id, processing_mode, reuse_vocals)
+        _update_progress(song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
         _begin_runtime_progress(song_id)
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
-        _ensure_cover_extracted(source_path, out_dir)
-        _update_progress(
-            song_id, step_label="Проверка AI-моделей", percent=1.0)
-        model_install_service.ensure_ready_sync(
-            cancelled=lambda: _is_cancelled(song_id))
-
-        runtime_plan = _configure_ai_runtime()
-        capture.write(
-            f"[backend] AI build={AI_BUILD_ID} pipeline={KaraokePipeline.VERSION} "
-            f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
+        if not reuse_vocals and artist and title:
+            # Network media work is independent of GPU separation, lyric
+            # lookup and metadata lookup. Start it immediately so downloading
+            # a full clip does not extend the critical path at the end.
+            source_duration = None
+            with contextlib.suppress(RuntimeError, OSError, ValueError):
+                source_duration = float(sf.info(source_path).duration) or None
+            media_process = metadata_enrichment_service.start_training_media_process(
+                title,
+                artist,
+                out_dir,
+                expected_duration=source_duration,
+            )
+        resume_media_only = (
+            not reuse_vocals and _audio_artifacts_waiting_for_media(out_dir)
         )
-        capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
-        for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
+        result = None
+        if resume_media_only:
+            _update_progress(
+                song_id,
+                step_label="Повторно загружаем и проверяем клип",
+                percent=98.0,
+            )
+            capture.write(
+                "[backend] Valid AI artifacts found; retrying media only\n"
+            )
+        else:
+            _ensure_cover_extracted(source_path, out_dir)
+            _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
+            model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
 
-        result = _invoke_ai_pipeline(
-            song_id, source_path, out_dir, lyrics_path, searchable_title,
-            bpm_override, key_override, processing_mode, capture,
-            reuse_vocals=reuse_vocals,
-        )
+            runtime_plan = _configure_ai_runtime()
+            capture.write(
+                f"[backend] AI build={AI_BUILD_ID} pipeline={AudioPipelineV2.VERSION} "
+                f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
+            )
+            capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
+            for line in format_runtime_plan(runtime_plan):
+                capture.write(f"[backend] AI runtime: {line}\n")
+
+            with _limit_background_native_threads():
+                result = _invoke_ai_pipeline(
+                    song_id, source_path, out_dir, lyrics_path, artist, title, genre,
+                    bpm_override, key_override, processing_mode, capture,
+                    reuse_vocals=reuse_vocals,
+                )
+        if not reuse_vocals:
+            _complete_audio_media(
+                song_id,
+                out_dir,
+                artist=artist,
+                title=title,
+                prepared=(
+                    media_process.result(cancelled=lambda: _is_cancelled(song_id))
+                    if media_process else None
+                ),
+            )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
-            logger.warning("Song processing warning: %s", warning)
+            logger.warning("Song processing warning: song_id=%s warning=%s", song_id, warning)
         result_reports = getattr(result, "reports", ())
         _write_stage_reports(
             capture, result_reports if isinstance(result_reports, (list, tuple)) else ()
@@ -693,7 +1190,7 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
             _update_progress(
                 song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
-        _write_pipeline_error(capture, exc)
+        _write_pipeline_error(song_id, capture, exc)
         _update_progress(song_id, status=models.SongStatus.ERROR,
                          error_message=_format_processing_error(exc))
         return
@@ -705,15 +1202,30 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
                 lyrics_path.unlink(missing_ok=True)
             _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
             _end_runtime_progress(song_id)
+            if media_process is not None:
+                media_process.close()
             cleanup_succeeded = True
+        except Exception:
+            # An exception here (e.g. capture.close() on a full disk, or a
+            # transient Windows sharing violation unlinking lyrics_path) used
+            # to propagate straight out of this finally block, which REPLACES
+            # whatever the try/except above already decided (a normal return,
+            # or a CANCELLED/ERROR status already committed to the DB). On
+            # the success path in particular, that skipped
+            # _finalize_processed_job below entirely -- the song's DB row
+            # stayed at PROCESSING forever with no terminal status and no
+            # error_message, silently, since nothing calls logger.exception
+            # for an exception escaping a finally block this way.
+            logger.exception("Song processing cleanup failed: song_id=%s", song_id)
         finally:
             if slot_acquired and (not pipeline_succeeded or not cleanup_succeeded):
                 _release_processing_slot(song_id)
 
     try:
-        _finalize_processed_job(song_id, out_dir)
+        _finalize_processed_job(song_id, out_dir, retain_source=True)
     finally:
         if slot_acquired: _release_processing_slot(song_id)
+    _log_processing_finished(song_id, started_at)
 
 
 def _clear_generated_results(out_dir: Path) -> None:
@@ -729,9 +1241,14 @@ def _run_reprocessing(song_id: str) -> None:
     with _song_session(song_id) as (_db, song):
         if song is None: return
         out_dir = song_service.resolve_output_dir(song)
-        optimized = bool(getattr(song, "optimized", False))
-    output_root, target_dir = config.SONG_OUTPUT_DIR.resolve(), out_dir.resolve()
-    if target_dir.parent != output_root:
+    # A song's output_dir may live under a *historical* library root (the user
+    # changed the storage location after the song was created) rather than the
+    # current one — resolve_output_dir already trusts every root in
+    # SONG_LIBRARY_ROOTS for reads, so this ownership check must trust the same
+    # set, not just the current SONG_OUTPUT_DIR, or reprocessing would wrongly
+    # reject perfectly readable/playable historical-root songs.
+    target_dir = out_dir.resolve()
+    if target_dir.parent not in song_service.trusted_library_roots():
         _update_progress(
             song_id,
             status=models.SongStatus.ERROR,
@@ -739,9 +1256,8 @@ def _run_reprocessing(song_id: str) -> None:
         )
         return
     with song_service.song_content_lock(song_id):
-        cache_service.recover_optimization_state(out_dir, committed=optimized)
         _clear_generated_results(out_dir)
-        _run_job(song_id, reuse_vocals=True)
+    _run_job(song_id, reuse_vocals=True)
 
 
 def _read_optional_generated_json(path: Path, default):
@@ -753,6 +1269,13 @@ def _read_optional_generated_json(path: Path, default):
 
 def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     music = _read_optional_generated_json(out_dir / "lyricsSync.json", {})
+    generated = _read_optional_generated_json(out_dir / "metadata.json", {})
+    if (
+        not getattr(song, "genre", None)
+        and isinstance(generated, dict)
+        and str(generated.get("genre") or "").strip()
+    ):
+        song.genre = str(generated["genre"]).strip()
     if isinstance(music, dict):
         key_user_edited = getattr(
             song, "key_user_edited", getattr(
@@ -793,8 +1316,29 @@ def _persist_confirmed_identity(song: models.Song, out_dir: Path) -> None:
     write_json(path, payload)
 
 
-def _finalize_success(song_id: str, out_dir: Path) -> None:
+_MIN_ARTIFACT_DURATION_SEC = 0.02
+
+
+def _validate_artifact_audio(path: Path) -> None:
+    """Reject a processed output that exists but is empty/corrupt/undecodable.
+
+    A crash mid-write, a full disk, or a broken AI/ffmpeg step can all leave
+    an instrumental.flac/vocals.flac that passes a bare is_file() check but
+    has no real audio in it -- catch that here, before the song is marked
+    DONE, rather than leaving the user to discover it on first playback.
+    """
+    try:
+        info = sf.info(str(path))
+    except Exception as exc:
+        raise ValueError(f"{path.name} is not a valid audio file") from exc
+    if info.frames <= 0 or info.duration <= _MIN_ARTIFACT_DURATION_SEC:
+        raise ValueError(f"{path.name} has no usable audio duration")
+
+
+def _finalize_success(song_id: str, out_dir: Path, *, retain_source: bool = False) -> None:
     retired_source: Path | None = None
+    for name in ("instrumental.flac", "vocals.flac"):
+        _validate_artifact_audio(out_dir / name)
     with _song_session(song_id) as (db, song):
         if song is None: return
         song.output_dir = str(out_dir)
@@ -802,12 +1346,15 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         _persist_confirmed_identity(song, out_dir)
         _apply_generated_metadata(song, out_dir)
         instrumental = (out_dir / "instrumental.flac").resolve()
+        if (out_dir / metadata_enrichment_service.LOCAL_VIDEO_NAME).is_file():
+            song.video_url = metadata_enrichment_service.LOCAL_VIDEO_URL
         source_value = getattr(song, "source_path", None)
         if source_value and instrumental.is_file():
             source = song_service.resolve_source_path(song).resolve()
             if source.parent == out_dir.resolve() and source.name.startswith("source."):
                 song.source_path = str(instrumental)
-                retired_source = source
+                if not retain_source:
+                    retired_source = source
         song.status = models.SongStatus.DONE
         song.optimized = False
         song.progress_percent = 100.0

@@ -6,10 +6,14 @@ const api = vi.hoisted(() => ({
   startRecording: vi.fn(),
   pauseRecording: vi.fn(),
   resumeRecording: vi.fn(),
-  stopRecording: vi.fn()
+  syncRecording: vi.fn(),
+  updateRecordingControls: vi.fn(),
+  stopRecording: vi.fn(),
+  attachRoomAudio: vi.fn()
 }));
 vi.mock("../src/api/client", () => ({ api }));
 let useKaraokeTransport;
+let createRoomVoiceCapture;
 const media = () => ({
   currentTime: 4,
   duration: 100,
@@ -34,6 +38,7 @@ const createProps = (overrides = {}) => {
     isPlaying: false,
     recordingSessionId: null,
     musicVolume: 0.8,
+    speed: 1,
     vocalVolume: 0.7,
     microphoneVolume: 0.6,
     microphoneEffects: { reverb: 0.1, echo: 0.2, delay: 0.3 },
@@ -43,6 +48,7 @@ const createProps = (overrides = {}) => {
     syncSecondaryMedia: vi.fn(),
     setCurrentTime: vi.fn(),
     setIsPlaying: vi.fn(),
+    releaseMonitoring: vi.fn().mockResolvedValue(null),
     setRecordingError: vi.fn(),
     setRecordingSessionId: vi.fn(),
     setAnalysisRecordingId: vi.fn(),
@@ -51,29 +57,130 @@ const createProps = (overrides = {}) => {
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({ default: useKaraokeTransport } = await import("../src/pages/Karaoke/hooks/useKaraokeTransport"));
+  ({ default: useKaraokeTransport, createRoomVoiceCapture } = await import("../src/pages/Karaoke/hooks/useKaraokeTransport"));
   localStorage.clear();
   Object.values(api).forEach((mock) => mock.mockReset());
   api.startRecording.mockResolvedValue({ recording_session_id: "session" });
   api.pauseRecording.mockResolvedValue({});
   api.resumeRecording.mockResolvedValue({});
+  api.syncRecording.mockResolvedValue({ status: "synchronized" });
+  api.updateRecordingControls.mockResolvedValue({ status: "updated" });
   api.stopRecording.mockResolvedValue({ id: "recording" });
+  api.attachRoomAudio.mockResolvedValue({ id: "recording" });
+});
+afterEach(() => {
+  delete globalThis.MediaRecorder;
+  delete globalThis.AudioContext;
 });
 describe("karaoke transport", () => {
+  test("captures remote room voices and attaches them to the saved performance", async () => {
+    class Recorder extends EventTarget {
+      static isTypeSupported = () => true;
+      constructor(_stream, options) {
+        super();
+        this.mimeType = options.mimeType;
+        this.state = "inactive";
+      }
+      start() {
+        this.state = "recording";
+      }
+      pause() {
+        this.state = "paused";
+      }
+      resume() {
+        this.state = "recording";
+      }
+      stop() {
+        this.dispatchEvent(new MessageEvent("dataavailable", { data: new Blob(["duet"]) }));
+        this.state = "inactive";
+        this.dispatchEvent(new Event("stop"));
+      }
+    }
+    const outputTrack = { stop: vi.fn() };
+    class Context {
+      createMediaStreamDestination() {
+        return { stream: { getTracks: () => [outputTrack] } };
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn(), disconnect: vi.fn() };
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      close() {
+        return Promise.resolve();
+      }
+    }
+    globalThis.MediaRecorder = Recorder;
+    globalThis.AudioContext = Context;
+    const remote = { getAudioTracks: () => [{ readyState: "live" }] };
+    const capture = await createRoomVoiceCapture([remote], 4);
+    expect(capture.startPlaybackSec).toBe(4);
+    capture.pause();
+    capture.resume();
+    expect((await capture.stop()).size).toBeGreaterThan(0);
+
+    const props = createProps({
+      onlineRoom: {
+        room: { id: "room" },
+        syncCommand: vi.fn(),
+        roomCommand: null,
+        getRemoteVoiceStreams: () => [remote],
+        estimateRemoteVoiceLatency: () => Promise.resolve(0.08)
+      }
+    });
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await hook.result.current.togglePlay({ broadcast: false, forcePlaying: true });
+    await hook.result.current.stop({ broadcast: false });
+    expect(api.attachRoomAudio).toHaveBeenCalledWith("recording", expect.any(Blob), 4, 0.08);
+  });
   test("does not clean up a nonexistent recording session", async () => {
     const hook = renderHook(() => useKaraokeTransport(createProps()));
     hook.unmount();
     await act(async () => Promise.resolve());
     notCalled(api.stopRecording, api.pauseRecording);
   });
+  test("orders pause and resume for one session by call sequence, not network response timing", async () => {
+    const props = createProps({ recordingSessionId: "session" });
+    let resolvePause;
+    api.pauseRecording.mockImplementation(
+      () => new Promise((resolve) => { resolvePause = resolve; })
+    );
+    const { result } = renderHook(() => useKaraokeTransport(props));
+
+    const pausing = result.current.togglePlay({ forcePlaying: false });
+    await Promise.resolve();
+    expect(api.pauseRecording).toHaveBeenCalledWith("session");
+
+    const resuming = result.current.togglePlay({ forcePlaying: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    // A fast pause-then-resume tap must not let resume reach the backend
+    // before the pause it followed -- otherwise the session can end up
+    // paused server-side while the UI reports "recording" for the rest of
+    // the take, silently losing whatever the user sings next.
+    expect(api.resumeRecording).not.toHaveBeenCalled();
+
+    resolvePause({});
+    await pausing;
+    await resuming;
+    expect(api.resumeRecording).toHaveBeenCalledWith("session");
+    expect(api.pauseRecording.mock.invocationCallOrder[0]).toBeLessThan(
+      api.resumeRecording.mock.invocationCallOrder[0]
+    );
+  });
   test("starts all media and a new recording together", async () => {
-    const props = createProps();
+    const props = createProps({ speed: 1.25 });
     const { result } = renderHook(() => useKaraokeTransport(props));
     await expect(result.current.togglePlay()).resolves.toBe(true);
     expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
     expect(props.vocalsRef.current.play).toHaveBeenCalledOnce();
     expect(props.videoRef.current.play).toHaveBeenCalledOnce();
     expect(props.startMelodyGuide).toHaveBeenCalledOnce();
+    expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1.25);
+    expect(api.startRecording).toHaveBeenCalledWith(
+      "song", 4, 0.6400000000000001, 0.6, 0.1, 0.2, 0.3, true, undefined, 1.25, false
+    );
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(1, 4, true);
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(2, 4, true);
     verify([props.instrumentalRef.current.volume, "toBeCloseTo", 0.64], [props.vocalsRef.current.volume, "toBeCloseTo", 0.49]);
@@ -85,6 +192,111 @@ describe("karaoke transport", () => {
     );
     verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", expect.objectContaining({ action: "play", songId: "song" })]);
   });
+  test("opens microphone capture before the backing track emits its first frame", async () => {
+    vi.useFakeTimers();
+    let releaseRecording;
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseRecording = resolve;
+      })
+    );
+    const props = createProps({ onlineRoom: null });
+    const hook = renderHook(() => useKaraokeTransport(props));
+
+    const playback = hook.result.current.togglePlay({ forcePlaying: true });
+    await act(async () => Promise.resolve());
+    expect(releaseRecording).toBeTypeOf("function");
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(props.instrumentalRef.current.play).not.toHaveBeenCalled();
+
+    releaseRecording({ recording_session_id: "session" });
+    await expect(playback).resolves.toBe(true);
+    expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
+    expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1);
+    vi.useRealTimers();
+  });
+  test("updates every final-mix control when sliders change during an active take", async () => {
+    const props = createProps({
+      recordingSessionId: "session",
+      microphoneEffects: { reverb: 0.1, echo: 0.2, delay: 0.3, octave: 0 }
+    });
+    const hook = renderHook((current) => useKaraokeTransport(current), {
+      initialProps: props
+    });
+    await waitFor(() => expect(api.updateRecordingControls).toHaveBeenCalled());
+    api.updateRecordingControls.mockClear();
+
+    hook.rerender({
+      ...props,
+      musicVolume: 0.5,
+      microphoneVolume: 1.6,
+      microphoneEffects: { reverb: 0.6, echo: 0.5, delay: 0.4, octave: -0.5 }
+    });
+
+    await waitFor(() =>
+      expect(api.updateRecordingControls).toHaveBeenCalledWith("session", {
+        musicVolume: 0.25,
+        microphoneVolume: 1.6,
+        reverb: 0.6,
+        echo: 0.5,
+        delay: 0.4,
+        octave: -0.5
+      })
+    );
+  });
+  test("starts a new recording timeline segment when tempo changes", async () => {
+    const props = createProps({ recordingSessionId: "session", isPlaying: true, speed: 1 });
+    const hook = renderHook((current) => useKaraokeTransport(current), {
+      initialProps: props
+    });
+
+    hook.rerender({ ...props, speed: 1.2 });
+
+    await waitFor(() => expect(api.syncRecording).toHaveBeenCalledWith("session", 4, 1.2));
+  });
+  test("schedules room playback against the shared server clock", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    try {
+      const props = createProps({
+        onlineRoom: {
+          room: { id: "room" },
+          roomClockNow: () => Date.now(),
+          syncCommand: vi.fn(),
+          roomCommand: null
+        }
+      });
+      const hook = renderHook(() => useKaraokeTransport(props));
+      const playback = hook.result.current.togglePlay();
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(expect.objectContaining({ action: "play", executeAt: 1_450 }));
+      expect(props.instrumentalRef.current.play).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTimeAsync(450));
+      await expect(playback).resolves.toBe(true);
+      expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  test("broadcasts guest pause before a slow recording backend replies", async () => {
+    let finishPause;
+    api.pauseRecording.mockReturnValue(
+      new Promise((resolve) => {
+        finishPause = resolve;
+      })
+    );
+    const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
+    const hook = renderHook(() => useKaraokeTransport(props));
+    const pausing = hook.result.current.togglePlay();
+    try {
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(expect.objectContaining({ action: "pause", position: 4 }));
+      expect(props.navigate).not.toHaveBeenCalled();
+      expect(api.stopRecording).not.toHaveBeenCalled();
+    } finally {
+      finishPause({});
+      await pausing;
+      hook.unmount();
+    }
+  });
   test("pauses media and an active recording", async () => {
     const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
     const { result } = renderHook(() => useKaraokeTransport(props));
@@ -94,7 +306,7 @@ describe("karaoke transport", () => {
     verify([
       props.onlineRoom.syncCommand,
       "toHaveBeenCalledWith",
-      { type: "karaoke-player", action: "pause", songId: "song", position: 4 }
+      expect.objectContaining({ type: "karaoke-player", action: "pause", songId: "song", position: 4 })
     ]);
   });
   test("pauses without touching the recording API when no session exists", async () => {
@@ -193,6 +405,13 @@ describe("karaoke transport", () => {
     expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
     expect(props.setIsPlaying).toHaveBeenCalledWith(true);
   });
+  test("does not block resumed playback on a stalled optional video", async () => {
+    const props = createProps();
+    props.videoRef.current.play.mockReturnValue(new Promise(() => {}));
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
+    expect(props.setIsPlaying).toHaveBeenCalledWith(true);
+  });
   test("seeks, skips, stops and returns to the library", async () => {
     const props = createProps({ recordingSessionId: "existing" });
     const { result } = renderHook(() => useKaraokeTransport(props));
@@ -201,13 +420,14 @@ describe("karaoke transport", () => {
     verify([
       props.onlineRoom.syncCommand,
       "toHaveBeenLastCalledWith",
-      { type: "karaoke-player", action: "seek", songId: "song", position: 100 }
+      expect.objectContaining({ type: "karaoke-player", action: "seek", songId: "song", position: 100 })
     ]);
     act(() => result.current.skip(-10));
     expect(props.instrumentalRef.current.currentTime).toBe(0);
     await expect(result.current.stop()).resolves.toBe(true);
     expect(props.syncSecondaryMedia).toHaveBeenLastCalledWith(0, true);
     expect(props.setIsPlaying).toHaveBeenLastCalledWith(false);
+    expect(props.releaseMonitoring).toHaveBeenCalledOnce();
     calledWith([api.stopRecording, ["existing"]], [props.setAnalysisRecordingId, ["recording"]], [props.setRecordingSessionId, [null]]);
     props.onlineRoom.syncCommand.mockClear();
     await result.current.returnToLibrary();
@@ -228,7 +448,56 @@ describe("karaoke transport", () => {
     const props = createProps();
     const hook = renderHook(() => useKaraokeTransport(props));
     await expect(hook.result.current.stop()).resolves.toBe(true);
-    verify([props.onlineRoom.syncCommand, "toHaveBeenCalledWith", { type: "karaoke-player", action: "stop", songId: "song", position: 0 }]);
+    verify([
+      props.onlineRoom.syncCommand,
+      "toHaveBeenCalledWith",
+      expect.objectContaining({ type: "karaoke-player", action: "stop", songId: "song", position: 0 })
+    ]);
+  });
+  test("already-stopped room exit broadcasts library navigation without stopping twice", async () => {
+    const props = createProps();
+    const hook = renderHook(() => useKaraokeTransport(props));
+    await expect(hook.result.current.returnToLibrary({ alreadyStopped: true, analysisId: "recording-room" })).resolves.toBe(true);
+    expect(props.instrumentalRef.current.pause).not.toHaveBeenCalled();
+    expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith({ type: "open-library" });
+    expect(props.navigate).toHaveBeenCalledWith("/", {
+      replace: true,
+      state: { fromKaraokeFade: true, analysisRecordingId: "recording-room" }
+    });
+  });
+  test("back broadcasts library navigation before recording finalization completes", async () => {
+    let finishStop;
+    api.stopRecording.mockReturnValue(
+      new Promise((resolve) => {
+        finishStop = resolve;
+      })
+    );
+    const props = createProps({ isPlaying: true, recordingSessionId: "existing" });
+    const hook = renderHook(() => useKaraokeTransport(props));
+    const leaving = hook.result.current.returnToLibrary();
+    try {
+      expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith({ type: "open-library" });
+      expect(props.instrumentalRef.current.pause).toHaveBeenCalled();
+    } finally {
+      finishStop({ id: "recording" });
+      await leaving;
+      hook.unmount();
+    }
+    expect(props.navigate).toHaveBeenCalledWith("/");
+  });
+  test("coalesces concurrent stop() calls into a single run", async () => {
+    // A local stop click and a room-broadcast "stop" command can both call
+    // stop() at once (the room command deliberately bypasses the scene-flow
+    // handler's own mutex to react to a remote stop immediately). Without
+    // coalescing, both would independently release monitoring and race to
+    // finalize/navigate.
+    const props = createProps({ recordingSessionId: "existing" });
+    const { result } = renderHook(() => useKaraokeTransport(props));
+    const [first, second] = await Promise.all([result.current.stop(), result.current.stop()]);
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    expect(api.stopRecording).toHaveBeenCalledTimes(1);
+    expect(props.releaseMonitoring).toHaveBeenCalledTimes(1);
   });
   test("keeps a failed recording pending without blocking stop or exit", async () => {
     const props = createProps({ recordingSessionId: "existing" });
@@ -278,6 +547,63 @@ describe("karaoke transport", () => {
       }
     });
     await waitFor(() => expect(props.setIsPlaying).toHaveBeenCalledWith(true));
+  });
+  test("ignores a duplicate delivery of an already-applied room command", async () => {
+    const props = createProps();
+    const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: { type: "karaoke-player", songId: "song", action: "seek", position: 12, commandId: "cmd-1" }
+      }
+    });
+    expect(props.setCurrentTime).toHaveBeenCalledWith(12);
+    props.setCurrentTime.mockClear();
+
+    // Same commandId, a fresh object (a retried send or duplicate WS
+    // delivery would not reuse the same reference either) -- must not seek
+    // again.
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: { type: "karaoke-player", songId: "song", action: "seek", position: 12, commandId: "cmd-1" }
+      }
+    });
+    expect(props.setCurrentTime).not.toHaveBeenCalled();
+
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: { type: "karaoke-player", songId: "song", action: "seek", position: 30, commandId: "cmd-2" }
+      }
+    });
+    expect(props.setCurrentTime).toHaveBeenCalledWith(30);
+  });
+  test.each([undefined, 3000])("corrects synced position including sender transit (%s)", async (senderAge) => {
+    const props = createProps();
+    const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
+    const now = Date.now();
+    hook.rerender({
+      ...props,
+      onlineRoom: {
+        ...props.onlineRoom,
+        roomCommand: {
+          type: "karaoke-player",
+          songId: "song",
+          action: "sync",
+          position: 10,
+          commandId: "cmd-sync",
+          __serverSentAt: now - 2000,
+          positionAt: senderAge === undefined ? undefined : now - senderAge,
+          __receivedServerAt: now
+        }
+      }
+    });
+    // 10s position + ~2s measured delivery delay = seek to ~12s, not the raw 10s.
+    expect(props.instrumentalRef.current.currentTime).toBeCloseTo(senderAge === undefined ? 12 : 13, 0);
   });
   test("finishes an active session when the song changes or unmounts", async () => {
     const props = createProps({ recordingSessionId: "existing" });
@@ -332,7 +658,7 @@ describe("karaoke transport", () => {
     const starting = pauseHook.result.current.togglePlay({ forcePlaying: true });
     await act(async () => Promise.resolve());
     await pauseHook.result.current.togglePlay({ forcePlaying: false });
-    await expect(starting).resolves.toBe(true);
+    await expect(starting).resolves.toBe(false);
     releasePause({ recording_session_id: "late-pause" });
     await waitFor(() => expect(api.pauseRecording).toHaveBeenCalledWith("late-pause"));
     expect(api.stopRecording).not.toHaveBeenCalledWith("late-pause");
@@ -350,7 +676,7 @@ describe("karaoke transport", () => {
     const secondStart = stopHook.result.current.togglePlay({ forcePlaying: true });
     await act(async () => Promise.resolve());
     await stopHook.result.current.stop();
-    await expect(secondStart).resolves.toBe(true);
+    await expect(secondStart).resolves.toBe(false);
     releaseStop({ recording_session_id: "late-stop" });
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("late-stop"));
     calledWith([api.pauseRecording, ["late-stop"]], [stopProps.setRecordingSessionId, [null]]);
@@ -364,8 +690,9 @@ describe("karaoke transport", () => {
       })
     );
     const hook = renderHook(() => useKaraokeTransport(createProps()));
-    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
+    const playback = hook.result.current.togglePlay({ forcePlaying: true });
     hook.unmount();
+    await expect(playback).resolves.toBe(false);
     releaseStart({ recording_session_id: "late-unmount" });
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("late-unmount"));
   });
@@ -499,7 +826,7 @@ describe("karaoke transport", () => {
     await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     called(props.setRecordingError, props.instrumentalRef.current.play);
   });
-  test("does not block playback on a stalled recording start and settles it after stop", async () => {
+  test("does not start the backing track while recording startup is stalled", async () => {
     let releaseStart;
     api.startRecording.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -508,11 +835,12 @@ describe("karaoke transport", () => {
     );
     const props = createProps();
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
-    expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
+    const playback = hook.result.current.togglePlay({ forcePlaying: true });
     await waitFor(() => expect(releaseStart).toBeTypeOf("function"));
+    expect(props.instrumentalRef.current.play).not.toHaveBeenCalled();
     await hook.result.current.stop();
     releaseStart({ recording_session_id: "late" });
+    await expect(playback).resolves.toBe(false);
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("late"));
   });
   test("settles playback superseded by a later stop", async () => {
@@ -590,7 +918,7 @@ describe("karaoke transport", () => {
     });
     const oldPlayback = changing.result.current.togglePlay({ forcePlaying: true });
     changing.rerender({ ...createProps(), song: { id: "new-song" } });
-    await expect(oldPlayback).resolves.toBe(true);
+    await expect(oldPlayback).resolves.toBe(false);
     releaseOld({ recording_session_id: "old" });
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("old"));
   });
@@ -613,7 +941,7 @@ describe("karaoke transport", () => {
     const oldPlayback = hook.result.current.togglePlay({ forcePlaying: true });
     hook.rerender({ ...initial, song: { id: "new-song" } });
     const newPlayback = hook.result.current.togglePlay({ forcePlaying: true });
-    await expect(oldPlayback).resolves.toBe(true);
+    await expect(oldPlayback).resolves.toBe(false);
     releaseOld({ recording_session_id: "old" });
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("old"));
     const sharedNewPlayback = hook.result.current.togglePlay({ forcePlaying: true });

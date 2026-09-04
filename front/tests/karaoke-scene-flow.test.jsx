@@ -58,6 +58,23 @@ describe("karaoke scene flow", () => {
       [hook.result.current.sceneTransitioning, false]
     );
   });
+  test("treats a bailed-out (undefined) playback attempt as not started, restoring radio", async () => {
+    // togglePlay() resolves to undefined (not false) when it bails out early
+    // because the page had already unmounted mid-transition (e.g. the
+    // instrumental ref is gone) -- that must still count as "did not start"
+    // so radio playback paused for the intro gets turned back on, instead of
+    // being silently left off because `undefined !== false` looked truthy.
+    const input = props({ togglePlay: vi.fn().mockResolvedValue(undefined) });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    let result;
+    await act(async () => {
+      const pending = hook.result.current.handleTogglePlay();
+      await vi.runAllTimersAsync();
+      result = await pending;
+    });
+    expect(result).toBe(false);
+    expect(input.turnOnRadio).toHaveBeenCalledWith({ remember: false, fadeIn: true });
+  });
   test("transition guard rejects overlapping play and stop commands", async () => {
     const input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
@@ -209,6 +226,27 @@ describe("karaoke scene flow", () => {
     ]);
     expect(routeEvents).toContainEqual({ visible: true });
     window.removeEventListener("app:route-blackout", listener);
+  });
+  test("successful room stop returns the whole room to the library without stopping twice", async () => {
+    const returnToLibrary = vi.fn().mockResolvedValue(true);
+    const input = props({
+      analysisRecordingIdRef: { current: "recording-room" },
+      returnToLibrary
+    });
+    const hook = renderHook(() => useKaraokeSceneFlow(input));
+    let result;
+    await act(async () => {
+      const pending = hook.result.current.handleStop();
+      await vi.advanceTimersByTimeAsync(470);
+      result = await pending;
+    });
+    expect(result).toBe(true);
+    expect(input.stop).toHaveBeenCalledOnce();
+    expect(returnToLibrary).toHaveBeenCalledWith({
+      alreadyStopped: true,
+      analysisId: "recording-room"
+    });
+    expect(input.navigate).not.toHaveBeenCalled();
   });
   test("direct blackout navigation normalizes an absent analysis id", () => {
     const input = props();

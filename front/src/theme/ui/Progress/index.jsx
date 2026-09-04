@@ -21,11 +21,15 @@ export default function Progress({
       aria-valuemin={0}
       aria-valuemax={max}
       aria-valuenow={indeterminate ? undefined : value}
-      style={mergeSx({
-        "--progress-value":
-          indeterminate ? 0 : `${Math.max(0, Math.min(100, value / max * 100))}%`,
-        ...sx
-      }, style)}
+      style={mergeSx(
+        {
+          "--progress-value": indeterminate
+            ? 0
+            : `${Math.max(0, Math.min(100, (value / max) * 100))}%`,
+          ...sx
+        },
+        style
+      )}
       {...props}
     />
   );

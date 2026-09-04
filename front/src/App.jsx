@@ -1,5 +1,6 @@
 import { HashRouter } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
+import KeyboardLighting from "./components/KeyboardLighting";
 import { OnlineRoomDock } from "./components/OnlineRoomDock";
 import RoomRadioSync from "./components/RoomRadioSync";
 import BackendBootLoader from "./components/backend-boot-loader";
@@ -16,6 +17,7 @@ export default function App() {
             <AppLayout />
             <OnlineRoomDock />
             <RoomRadioSync />
+            <KeyboardLighting />
           </HashRouter>
         </ContextProviders>
       </BackendBootLoader>

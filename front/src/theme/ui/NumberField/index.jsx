@@ -1,3 +1,4 @@
+import { translateSaved as tr } from "../../../i18n/runtime";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { forwardRef, useRef } from "react";
 
@@ -57,7 +58,7 @@ const NumberField = forwardRef(function NumberField(
         size="sm"
         tabIndex={-1}
         disabled={disabled || readOnly}
-        aria-label="Увеличить значение"
+        aria-label={tr("common.number.increase")}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => changeBy(1)}
       >
@@ -70,7 +71,7 @@ const NumberField = forwardRef(function NumberField(
         size="sm"
         tabIndex={-1}
         disabled={disabled || readOnly}
-        aria-label="Уменьшить значение"
+        aria-label={tr("common.number.decrease")}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => changeBy(-1)}
       >

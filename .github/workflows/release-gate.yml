@@ -1,0 +1,75 @@
+name: Windows release gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - name: Install Python 3.12.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12.10
+          cache: pip
+          cache-dependency-path: backend/requirements-lock.txt
+      - name: Install Node.js 22.18.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: npm
+          cache-dependency-path: |
+            front/package-lock.json
+            cloudflare/package-lock.json
+      - name: Create isolated backend environment
+        shell: pwsh
+        run: |
+          python -m venv backend/venv
+          backend/venv/Scripts/python.exe -m pip install --disable-pip-version-check --prefer-binary --require-hashes --index-url https://pypi.org/simple -r backend/requirements-lock.txt
+      - name: Install frontend dependencies
+        shell: pwsh
+        working-directory: front
+        run: npm ci
+      - name: Install Cloudflare dependencies
+        shell: pwsh
+        working-directory: cloudflare
+        run: npm ci
+      - name: Verify release
+        shell: cmd
+        run: verify-release.bat
+      - name: Publish dependency audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audits-${{ github.run_id }}
+          path: generated/tests/security/*.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish current source audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-audits-${{ github.run_id }}
+          path: generated/audits/*.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish release SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-sbom-${{ github.run_id }}
+          path: generated/sbom/release.cdx.json
+          if-no-files-found: error
+          retention-days: 30

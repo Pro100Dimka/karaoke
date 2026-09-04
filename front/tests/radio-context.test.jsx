@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({ updateUiPreferences: vi.fn() }));
 vi.mock("../src/api/client", () => ({ api: mocks }));
 let RADIO_STATIONS;
 let RadioProvider;
+let calculateRadioLightingPulse;
 let calculateRadioSpectrum;
 let isAutoplayBlocked;
 let normalizeRadioSettings;
@@ -46,7 +47,7 @@ const installAudio = ({
 };
 beforeEach(async () => {
   vi.resetModules();
-  ({ RADIO_STATIONS, RadioProvider, calculateRadioSpectrum, isAutoplayBlocked, normalizeRadioSettings, useRadio } =
+  ({ RADIO_STATIONS, RadioProvider, calculateRadioLightingPulse, calculateRadioSpectrum, isAutoplayBlocked, normalizeRadioSettings, useRadio } =
     await import("../src/contexts/radio.jsx"));
   localStorage.clear();
   store({ stationId: "poptron", volume: 0.45, enabled: false });
@@ -77,26 +78,19 @@ afterEach(() => {
 });
 describe("radio context", () => {
   test("keeps the complete station catalog contract", () => {
-    verify([
-      RADIO_STATIONS,
-      "toEqual",
-      [
-        expect.objectContaining({
-          id: "poptron",
-          name: "SomaFM PopTron",
-          streams: ["https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3"]
-        }),
-        expect.objectContaining({
-          id: "indiepop",
-          name: "SomaFM Indie Pop Rocks",
-          streams: ["https://ice5.somafm.com/indiepop-128-mp3", "https://ice2.somafm.com/indiepop-128-mp3"]
-        }),
-        expect.objectContaining({ id: "beatblender", name: "SomaFM Beat Blender" }),
-        expect.objectContaining({ id: "groovesalad", name: "SomaFM Groove Salad" })
-      ]
-    ]);
-    RADIO_STATIONS.forEach(({ description, streams }) => {
-      verify([description, "not.toBe", ""], [streams, "toHaveLength", 2]);
+    expect(RADIO_STATIONS).toHaveLength(40);
+    const groups = Object.groupBy(RADIO_STATIONS, ({ group }) => group);
+    expect(Object.keys(groups)).toHaveLength(8);
+    Object.values(groups).forEach((stations) => expect(stations).toHaveLength(5));
+    expect(RADIO_STATIONS[0]).toEqual(
+      expect.objectContaining({
+        id: "poptron",
+        name: "SomaFM PopTron",
+        streams: ["https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3"]
+      })
+    );
+    RADIO_STATIONS.forEach(({ description, group, streams }) => {
+      verify([description, "not.toBe", ""], [group, "not.toBe", ""], [streams, "toHaveLength", 2]);
     });
   });
   test("normalizes settings and classifies autoplay failures", () => {
@@ -147,6 +141,35 @@ describe("radio context", () => {
       "toEqual",
       [0.293912156862745, 0.37304235294117644, 0.4747811764705881, 0.58, 0.5319487058823529, 0.20343215686274507, 0.5320533333333333, 0.58]
     ]);
+  });
+  test("detects kick, clap and hi-hat attacks instead of saturated radio loudness", () => {
+    const bed = Array(18).fill(0.82);
+    const hit = (from, to, amount) =>
+      bed.map((value, index) => (index >= from && index < to ? value + amount : value));
+    const kick = calculateRadioLightingPulse(hit(0, 6, 0.1), bed, 0.08);
+    const clap = calculateRadioLightingPulse(hit(6, 13, 0.08), bed, 0.08);
+    const tick = calculateRadioLightingPulse(hit(13, 18, 0.06), bed, 0.08);
+    const steady = calculateRadioLightingPulse(bed, bed, 0.8);
+
+    expect(kick).toBeGreaterThan(0.45);
+    expect(clap).toBeGreaterThan(0.45);
+    expect(tick).toBeGreaterThan(0.4);
+    expect(steady).toBeLessThan(0.8);
+    expect(steady).toBeGreaterThan(0);
+  });
+  test("forgets an old lighting hit before the next beat instead of building a bright bed", () => {
+    const bed = Array(18).fill(0.12);
+    const hit = bed.map((value, index) => (index < 6 ? value + 0.12 : value));
+    let pulse = calculateRadioLightingPulse(hit, bed, 0.04);
+    const peak = pulse;
+
+    for (let frame = 0; frame < 10; frame += 1) {
+      pulse = calculateRadioLightingPulse(bed, bed, pulse);
+    }
+
+    expect(peak).toBeGreaterThan(0.4);
+    expect(pulse).toBeLessThan(0.06);
+    expect(calculateRadioLightingPulse(hit, bed, pulse)).toBeGreaterThan(0.4);
   });
   test("requires the provider", () => {
     const { log, restore } = suppressWindowErrors();
@@ -282,6 +305,21 @@ describe("radio context", () => {
     verify([document.querySelector("audio").src, "toContain", "indiepop"], [hook.result.current.isPlaying, "toBe", true]);
     verify([mocks.updateUiPreferences, "toHaveBeenCalledWith", "radio", expect.objectContaining({ stationId: "indiepop" })]);
     expect(mocks.updateUiPreferences).toHaveBeenCalledTimes(1);
+  });
+  test("switching stations cancels an in-progress startup fade instead of leaking into the new station", async () => {
+    const hook = renderHook(() => useRadio(), { wrapper });
+    await act(async () => {
+      await hook.result.current.turnOn({ fadeIn: true, analyse: false });
+    });
+    expect(requestAnimationFrame).toHaveBeenCalled();
+    cancelAnimationFrame.mockClear();
+    act(() => hook.result.current.setStation("indiepop"));
+    // A fade cancels itself only when a NEW fade starts; switching stations
+    // here doesn't necessarily begin one (turnOn defaults fadeIn to false),
+    // so without an explicit cancel the stale rAF loop would keep nudging
+    // the new station's volume toward the OLD fade's target for its
+    // remaining duration -- heard as an unexplained dip-and-recover.
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
   });
   test("resumes the selected station when switching during loading", async () => {
     let resolveOld;

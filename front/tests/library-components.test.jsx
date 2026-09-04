@@ -2,6 +2,13 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
+import SongCoverArt from "../src/components/SongCoverArt.jsx";
+import LibraryActions from "../src/pages/Library/hero/actions.jsx";
+import LibraryHero from "../src/pages/Library/hero/index.jsx";
+import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
+import LibrarySongsGrid, { selectSongTransferStatus } from "../src/pages/Library/songs-grid/index.jsx";
+import { getProcessingSongs } from "../src/pages/Library/utils.js";
+import ProcessingSignal from "../src/theme/features/ProcessingSignal";
 import { called, same, verify } from "./helpers/assertions.mjs";
 
 const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: false }));
@@ -32,15 +39,10 @@ vi.mock("../src/components/AudioPlayer", () => ({
 vi.mock("../src/api/client", () => ({
   api: {
     getPerformanceFileUrl: (id) => `recording/${id}`,
-    getSongCoverUrl: (id) => `cover/${id}`
+    getSongCoverUrl: (id) => `cover/${id}`,
+    getAudioTrackUrl: (id, track) => `song/${id}/${track}`
   }
 }));
-import { ProcessingSignal, SongCoverArt } from "../src/pages/Library/components.jsx";
-import LibraryActions from "../src/pages/Library/hero/actions.jsx";
-import LibraryHero from "../src/pages/Library/hero/index.jsx";
-import { getProcessingFailureInfo, ProcessingModal, RecordingsModal } from "../src/pages/Library/modals.jsx";
-import LibrarySongsGrid from "../src/pages/Library/songs-grid/index.jsx";
-import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
   cleanup();
   mocks.noSettings = false;
@@ -63,13 +65,14 @@ test("library actions cover search, room, adding and file selection", async () =
     />
   );
   fireEvent.change(view.getByRole("textbox", { name: "Поиск" }), { target: { value: "song" } });
-  fireEvent.click(view.getByRole("button", { name: /Петь вместе|Співати разом/ }));
+  fireEvent.click(view.getByRole("button", { name: /Пить вместе|Співати разом/ }));
   fireEvent.click(view.getByRole("button", { name: /Добавить песню|Додати пісню/ }));
-  fireEvent.change(view.container.querySelector("input[type=file]"), {
+  fireEvent.change(view.container.querySelector('input[type=file][accept*=".mp3"]'), {
     target: { files: [new File(["audio"], "song.mp3", { type: "audio/mpeg" })] }
   });
   expect(setQuery).toHaveBeenCalledWith("song", expect.any(Object));
   called(onRoom, onAdd);
+  expect(view.container.querySelector("input[type=file]").accept).toContain(".kar");
   await waitFor(() => called(onFile));
   view.rerender(<LibraryActions canManageLibrary importing onAdd={onAdd} onOpenRoom={onRoom} query="" setQuery={setQuery} />);
 });
@@ -92,10 +95,12 @@ test("hero and cover reflect saved theme and song counts", () => {
   fireEvent.error(container.querySelector('img[src="cover/song"]'));
   expect(container.querySelector('img[src="cover/song"]')).toBeNull();
   expect(container.querySelector(".lucide-music2")).not.toBeNull();
+  expect(container.querySelectorAll(".library-song-cover__bar")).toHaveLength(16);
+  expect(container.querySelector(".library-song-cover__bar").style.animation).toContain("library-card-wave");
   mocks.noSettings = true;
   verify([() => render(<LibraryHero songCount={0} readyCount={0} />), "not.toThrow"]);
 });
-test("large song collections render through the window virtualizer", () => {
+test("large song collections render every library card", () => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   const songs = Array.from({ length: 60 }, (_, index) => ({
     id: `song-${index}`,
@@ -116,7 +121,7 @@ test("large song collections render through the window virtualizer", () => {
       reprocessSong: vi.fn()
     }
   };
-  const { container } = render(
+  const view = render(
     <LibrarySongsGrid
       state={state}
       fileImport={{ importFile: vi.fn(), importing: false }}
@@ -124,14 +129,27 @@ test("large song collections render through the window virtualizer", () => {
       recordings={{ setSong: vi.fn() }}
     />
   );
-  expect(container.querySelectorAll('[role="button"]').length).toBeGreaterThan(0);
-  expect(container.querySelectorAll('[role="button"]').length).toBeLessThan(songs.length);
+  expect(view.container.querySelectorAll(".library-song-card")).toHaveLength(songs.length);
+  expect(view.getAllByRole("button", { name: /Воспроизвести|Відтворити/ })).toHaveLength(songs.length);
+  expect(view.queryByRole("button", { name: /Song \d+/ })).toBeNull();
+});
+test("song card progress prefers the slowest real participant over the room placeholder", () => {
+  const statuses = [
+    { participantId: "room", songId: "song", stage: "waiting", percent: 0 },
+    { participantId: "guest-a", songId: "song", stage: "sending", percent: 47 },
+    { participantId: "guest-b", songId: "song", stage: "sending", percent: 22 },
+    { participantId: "guest-c", songId: "other", stage: "sending", percent: 5 }
+  ];
+  expect(selectSongTransferStatus(statuses, "song")).toEqual(statuses[2]);
+  expect(selectSongTransferStatus([...statuses, { songId: "song", stage: "error", percent: 0 }], "song").stage).toBe("error");
 });
 test("processing signal clamps progress and exposes an accessible value", () => {
   const { getByRole, rerender } = render(<ProcessingSignal progress={140} />);
   expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
   rerender(<ProcessingSignal progress="bad" compact />);
   expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+  rerender(<ProcessingSignal progress={15} url="audio-not-ready-yet" />);
+  expect(getByRole("progressbar").querySelector(".ui-waveform__fallback").style.display).toBe("block");
 });
 test("processing songs keep the active job before the stable queue", () => {
   const queuedA = { id: "a", status: "queued" };
@@ -217,6 +235,29 @@ test("processing modal covers active, complete, error and absent songs", () => {
   fireEvent.click(active.getByRole("button", { name: "Открыть журнал выполнения" }));
   expect(openApplicationLog).toHaveBeenCalledOnce();
   delete globalThis.electronAPI;
+});
+test("symbolic processing waits for downloaded audio before requesting its waveform", () => {
+  const props = {
+    onCancel: vi.fn(),
+    onClose: vi.fn(),
+    onOpenKaraoke: vi.fn()
+  };
+  const view = render(
+    <ProcessingModal
+      {...props}
+      song={{ id: "kar-song", title: "KAR", status: "processing", original_filename: "song.kar" }}
+      status={{ status: "processing", progress_percent: 8 }}
+    />
+  );
+  expect(view.container.querySelector(".ui-waveform__host").style.display).toBe("none");
+  view.rerender(
+    <ProcessingModal
+      {...props}
+      song={{ id: "kar-song", title: "KAR", status: "processing", original_filename: "song.kar" }}
+      status={{ status: "processing", progress_percent: 34 }}
+    />
+  );
+  expect(view.container.querySelector(".ui-waveform__host").style.display).toBe("block");
 });
 test("processing modal carousel changes only the viewed queued song", () => {
   const select = vi.fn();

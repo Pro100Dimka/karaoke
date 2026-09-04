@@ -42,13 +42,7 @@ const Primitive = forwardRef(function Primitive(
     ...(ml != null && { marginLeft: unit(ml) })
   };
 
-  return (
-    <Component
-      ref={ref}
-      style={{ ...spacing, ...sx, ...style }}
-      {...props}
-    />
-  );
+  return <Component ref={ref} style={{ ...spacing, ...sx, ...style }} {...props} />;
 });
 
 export default Primitive;

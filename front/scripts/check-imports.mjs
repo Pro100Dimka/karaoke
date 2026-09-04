@@ -14,7 +14,7 @@ function walk(directory) {
 }
 
 function resolveImport(sourceFile, specifier) {
-  const target = resolve(dirname(sourceFile), specifier);
+  const target = resolve(dirname(sourceFile), specifier.split(/[?#]/, 1)[0]);
   const candidates = [
     target,
     ...SOURCE_EXTENSIONS.map((extension) => `${target}${extension}`),

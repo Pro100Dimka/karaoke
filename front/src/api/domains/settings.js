@@ -37,6 +37,8 @@ export const settingsApi = {
       ...localPatch
     };
   },
+  getRemoteDiagnosticsPolicy: () => request("/settings/remote-diagnostics"),
+  deleteRemoteDiagnostics: () => request("/settings/remote-diagnostics", { method: "DELETE" }),
   getUiPreferences: () => request("/preferences"),
   updateUiPreferences
 };

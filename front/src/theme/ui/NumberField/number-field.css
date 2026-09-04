@@ -32,6 +32,9 @@
   .ui-number-field-step {
     appearance: none;
     inline-size: 100%;
+    display: flex;
+    justify-content: center;
+    text-align: center;
     min-inline-size: 0;
     min-block-size: 0;
     block-size: 100%;
@@ -62,8 +65,8 @@
   }
 
   .ui-number-field-step > svg {
-    inline-size: .75rem;
-    block-size: .75rem;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
   }
 
   @media (hover: hover) and (pointer: fine) {

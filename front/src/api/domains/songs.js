@@ -8,8 +8,24 @@ export const songsApi = {
     form.append("file", file);
     return request("/songs/identity", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
   },
+  prepareKarDataset: (files) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file);
+    return request("/songs/training/kar", {
+      method: "POST",
+      body: form,
+      timeoutMs: 2 * 60 * 60_000
+    });
+  },
   getSong: (id) => request(`/songs/${encodePathSegment(id)}`).then(normalizeSong),
   getSongRevision: (id) => request(`/songs/${encodePathSegment(id)}/revision`),
+  getSongRevisions: (ids) =>
+    request("/songs/revisions", { method: "POST", body: JSON.stringify({ song_ids: ids }) }),
+  resolveSongRevision: (revision) =>
+    request("/songs/revision/resolve", {
+      method: "POST",
+      body: JSON.stringify({ revision })
+    }),
   addSong: (file, title, artist = "") => {
     const form = new FormData();
     form.append("file", file);
@@ -55,6 +71,7 @@ export const songsApi = {
     createFileUrl(`/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`),
   getAudioTrackBlob: (id, track) =>
     requestBlob(`/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`),
+  getSongVideoUrl: (id) => createFileUrl(`/songs/${encodePathSegment(id)}/video`),
   exportSongPackage: (rawId, expectedRevision) => {
     const id = encodePathSegment(rawId);
     const query = expectedRevision

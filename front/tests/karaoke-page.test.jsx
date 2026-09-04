@@ -7,8 +7,15 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   songsPoll: { data: [] },
   listSongs: vi.fn(),
+  getSong: vi.fn(),
   result: { result: null, loading: false, error: null },
-  room: { room: null, participants: [], roomUi: {}, syncUi: vi.fn() },
+  room: {
+    room: null,
+    participants: [],
+    roomUi: {},
+    syncUi: vi.fn(),
+    setLocalMonitoring: vi.fn().mockResolvedValue(false)
+  },
   radio: {
     isPlaying: false,
     setRecordingActive: vi.fn(),
@@ -45,6 +52,7 @@ vi.mock("../src/hooks/usePolling", () => ({
 vi.mock("../src/api/client", () => ({
   api: {
     listSongs: mocks.listSongs,
+    getSong: mocks.getSong,
     listAudioOutputDevices: vi.fn(),
     getAudioSettings: vi.fn(),
     getSignalQuality: vi.fn(),
@@ -81,8 +89,10 @@ vi.mock("../src/pages/Karaoke/components/console", () => ({
         <button data-testid="preset" onClick={() => props.onApplyEffectPreset({ id: "hall", reverb: 0.4, echo: 0.2, delay: 0.1 })} />
         <button data-testid="monitor-off" onClick={() => props.onMonitoringChange(false)} />
         <button data-testid="effect" onClick={() => props.onEffectChange("echo", 0.6)} />
-        <button data-testid="commit" onClick={() => props.onMicrophoneCommit(0.9)} />
+        <button data-testid="effect-commit" onClick={() => props.onEffectCommit("echo", 0.6)} />
+        <button data-testid="commit" onClick={() => props.onVolumeCommit.microphone(0.9)} />
         <button data-testid="tempo" onClick={() => props.onTempoChange(-200)} />
+        <button data-testid="lyrics-offset" onClick={() => props.onLyricsOffsetChange(-4)} />
         <button data-testid="notes" onClick={props.onToggleNotes} />
         <button data-testid="lyrics" onClick={props.onToggleLyrics} />
         <button data-testid="auto-hide" onClick={() => props.onAutoHideChange(true)} />
@@ -164,11 +174,13 @@ beforeEach(() => {
   mocks.location = { state: { songId: "song" } };
   mocks.navigate.mockReset();
   mocks.songsPoll = { data: [song], error: null };
+  mocks.getSong.mockReset().mockResolvedValue(song);
   mocks.result = { result, loading: false, error: null };
   mocks.renderMedia = true;
   mocks.room.room = null;
   mocks.room.participants = [];
   mocks.room.syncUi.mockReset();
+  mocks.room.setLocalMonitoring.mockReset().mockResolvedValue(false);
   mocks.radio.isPlaying = false;
   Object.values(mocks.radio).forEach((value) => value?.mockClear?.());
   mocks.preferences = {
@@ -189,7 +201,9 @@ beforeEach(() => {
     autoHideConsole: false,
     setAutoHideConsole: vi.fn(),
     effectPreset: "studio",
-    setEffectPreset: vi.fn()
+    setEffectPreset: vi.fn(),
+    timingOffsets: {},
+    setTimingOffsets: vi.fn()
   };
   mocks.controls = {
     controlsVisible: true,
@@ -208,7 +222,8 @@ beforeEach(() => {
     monitoringEnabled: false,
     setMonitoringEnabled: vi.fn(),
     monitorInputDeviceId: null,
-    updateMicrophone: vi.fn()
+    updateMicrophone: vi.fn(),
+    updateMicrophoneEffects: vi.fn().mockResolvedValue({})
   };
   mocks.transport = {
     returnToLibrary: vi.fn(),
@@ -230,9 +245,10 @@ describe("karaoke page", () => {
     const page = render(<Karaoke onOpenAppSettings={appSettings} />);
     expect(page.getByTestId("stage")).not.toBeNull();
     same([mocks.stageProps.songId, "song"], [mocks.consoleProps.currentTempo, 120]);
+    same([mocks.consoleProps.lyricsOffset, 0], [mocks.stageProps.currentTime, 0]);
     fireEvent.mouseMove(page.container.querySelector('[data-role="karaoke"]'));
     fireEvent.click(page.getByTestId("preset"));
-    verify([mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"], [mocks.microphone.updateMicrophone, "toHaveBeenCalled"]);
+    verify([mocks.preferences.setEffectPreset, "toHaveBeenCalledWith", "hall"], [mocks.microphone.updateMicrophoneEffects, "toHaveBeenCalled"]);
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(mocks.startMonitoring).toHaveBeenCalled());
     expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(true);
@@ -259,6 +275,31 @@ describe("karaoke page", () => {
       cleanup();
     }
   });
+  test("applies and saves a per-song lyrics offset without moving media time", () => {
+    const timingKey = "song|120||0";
+    mocks.preferences.timingOffsets = { [timingKey]: -3 };
+    const page = render(<Karaoke />);
+    same([mocks.stageProps.currentTime, 0], [mocks.consoleProps.lyricsOffset, -3]);
+    same([mocks.stageProps.lyricsSync.words[0].start, -3], [mocks.stageProps.notes[0].start, -3]);
+    mocks.mediaSyncOptions.currentTimeRef.current = 5;
+    same([mocks.stageProps.currentTimeRef.current, 5], [mocks.mediaSyncOptions.currentTimeRef.current, 5]);
+    fireEvent.click(page.getByTestId("lyrics-offset"));
+    expect(mocks.preferences.setTimingOffsets).toHaveBeenCalledWith({ [timingKey]: -4 });
+  });
+  test("does not apply an embedded manual alignment twice", () => {
+    mocks.result.result = {
+      ...result,
+      lyrics_sync: {
+        ...result.lyrics_sync,
+        alignment: { offset_seconds: -3.029 }
+      }
+    };
+    render(<Karaoke />);
+    same([mocks.consoleProps.lyricsOffset, -3.029], [mocks.stageProps.currentTime, 0]);
+    same([mocks.stageProps.lyricsSync.words[0].start, 0], [mocks.stageProps.notes[0].start, 0]);
+    mocks.mediaSyncOptions.currentTimeRef.current = 5;
+    expect(mocks.stageProps.currentTimeRef.current).toBe(5);
+  });
   test("selects the first ready song when route state has no song id", () => {
     mocks.location = { state: null };
     mocks.songsPoll = {
@@ -267,6 +308,18 @@ describe("karaoke page", () => {
     };
     render(<Karaoke />);
     expect(mocks.stageProps.songId).toBe("song");
+  });
+  test("loads an explicitly routed transferred song when the shared list cache is stale", async () => {
+    const transferred = { ...song, id: "host-local-song", title: "Transferred" };
+    mocks.location = { state: { songId: transferred.id, autoPlay: true } };
+    mocks.songsPoll = { data: [song], error: null };
+    mocks.getSong.mockResolvedValueOnce(transferred);
+
+    const page = render(<Karaoke />);
+
+    await waitFor(() => expect(mocks.getSong).toHaveBeenCalledWith(transferred.id));
+    await waitFor(() => expect(mocks.stageProps.songId).toBe(transferred.id));
+    expect(page.container.querySelector('[data-role="karaoke"]')).not.toBeNull();
   });
   test("renders the no-ready-song message without route state", () => {
     mocks.location = { state: null };
@@ -292,13 +345,25 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("stop"));
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
-    verify([mocks.navigate, "toHaveBeenCalledWith", "/", expect.objectContaining({ replace: true })]);
+    expect(mocks.transport.returnToLibrary).toHaveBeenCalledWith({
+      alreadyStopped: true,
+      analysisId: null
+    });
   });
   test("syncs participant effects while a room is active", () => {
     mocks.room.room = { host: true };
     mocks.room.participants = [{ id: "guest" }];
     render(<Karaoke />);
-    verify([mocks.room.syncUi, "toHaveBeenCalledWith", { participantEffects: mocks.microphone.microphoneEffects }]);
+    verify([
+      mocks.room.syncUi,
+      "toHaveBeenCalledWith",
+      {
+        participantEffects: {
+          volume: mocks.microphone.microphoneVolume,
+          ...mocks.microphone.microphoneEffects
+        }
+      }
+    ]);
   });
   test("suspends radio only for an active recording during playback", async () => {
     render(<Karaoke />);
@@ -315,9 +380,26 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(page.container.querySelector("[role=alert]").textContent).toContain("monitor failed"));
   });
+  test("uses the low-latency room stream while an online room is active", async () => {
+    mocks.room.room = { host: true };
+    mocks.room.setLocalMonitoring.mockResolvedValueOnce(true);
+    const page = render(<Karaoke />);
+    fireEvent.click(page.getByTestId("monitor"));
+    await waitFor(() =>
+      expect(mocks.room.setLocalMonitoring).toHaveBeenCalledWith(true, {
+        volume: 0.5,
+        reverb: 0,
+        echo: 0,
+        delay: 0
+      })
+    );
+    expect(mocks.startMonitoring).not.toHaveBeenCalled();
+    expect(mocks.consoleProps.monitoringEnabled).toBe(true);
+  });
   test("wires all console mutations and stopping monitoring", async () => {
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("effect"));
+    fireEvent.click(page.getByTestId("effect-commit"));
     fireEvent.click(page.getByTestId("commit"));
     fireEvent.click(page.getByTestId("tempo"));
     fireEvent.click(page.getByTestId("notes"));
@@ -329,7 +411,7 @@ describe("karaoke page", () => {
     await waitFor(() => expect(mocks.stopMonitoring).toHaveBeenCalled());
     calledWith(
       [mocks.preferences.setEffectPreset, ["custom"]],
-      [mocks.microphone.updateMicrophone, [{ echo: 0.6 }]],
+      [mocks.microphone.updateMicrophoneEffects, [{ echo: 0.6 }]],
       [mocks.microphone.updateMicrophone, [{ volume: 0.9 }]],
       [mocks.preferences.setSpeed, [0.5]]
     );
@@ -339,6 +421,14 @@ describe("karaoke page", () => {
       [mocks.transport.seekTo, [2]],
       [mocks.transport.skip, [5]],
       [mocks.microphone.setMonitoringEnabled, [false]]
+    );
+  });
+  test("rolls an optimistic effect preset back when persistence fails", async () => {
+    mocks.microphone.updateMicrophoneEffects.mockResolvedValueOnce(null);
+    const page = render(<Karaoke />);
+    fireEvent.click(page.getByTestId("preset"));
+    await waitFor(() =>
+      expect(mocks.preferences.setEffectPreset).toHaveBeenLastCalledWith("studio")
     );
   });
   test("opens analysis result and handles every completion path", async () => {

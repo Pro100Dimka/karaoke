@@ -17,16 +17,39 @@ export const normalizeAudioVolume = (value) => {
   return 1;
 };
 export const formatAudioTime = (value) => formatClockTime(value, { padMinutes: true });
+const tryPlay = async (audio) => {
+  for (const key of ["defaultPlaybackRate", "playbackRate"]) {
+    try {
+      audio[key] = 1;
+    } catch {
+      // A restricted media implementation may expose this as read-only.
+    }
+  }
+  await Promise.resolve(audio.play());
+  return true;
+};
 export async function toggleAudioPlayback(audio) {
   if (!audio) return false;
   if (!audio.paused) {
     audio.pause();
     return false;
   }
+  // Audio players are never participant streams. Clear a stale global mute
+  // left by an earlier room session before starting a recording or preview.
+  audio.muted = false;
   try {
-    await audio.play();
+    await tryPlay(audio);
     return true;
   } catch {
-    return false;
+    // A freshly generated file can race Chromium's previous metadata request.
+    // Recreate the media pipeline once after an actual playback rejection.
+    try {
+      audio.pause?.();
+      audio.load?.();
+      await tryPlay(audio);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

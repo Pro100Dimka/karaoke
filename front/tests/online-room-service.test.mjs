@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-import { DEFAULT_SIGNALING_URL, OnlineRoomClient, createRoomId, normalizeRoomId } from "../src/services/onlineRoom.js";
+import {
+  DEFAULT_SIGNALING_URL,
+  OnlineRoomClient,
+  OnlineVoiceMesh,
+  createRoomId,
+  getOrCreateGuestSessionId,
+  normalizeRoomId,
+  shouldApplyRoomEvent
+} from "../src/services/onlineRoom.js";
 import { same, verify } from "./helpers/assertions.mjs";
 class FakeSocket {
   static CONNECTING = 0;
@@ -22,6 +30,8 @@ const installSocket = () => {
   FakeSocket.instances = [];
   globalThis.WebSocket = FakeSocket;
 };
+const admit = (socket, self = { id: "guest", role: "guest" }) =>
+  socket.onmessage({ data: JSON.stringify({ type: "room-state", self, participants: [self] }) });
 const loadOnlineRoomService = async () => {
   vi.resetModules();
   return import("../src/services/onlineRoom.js");
@@ -31,6 +41,74 @@ afterEach(() => {
   delete globalThis.WebSocket;
 });
 describe("online room service", () => {
+  test("temporary microphone suspension keeps room peers and file channels alive", async () => {
+    const track = { stop: vi.fn(), readyState: "live" };
+    const voice = new OnlineVoiceMesh({ send: vi.fn() });
+    voice.stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+    voice.effectsStream = voice.stream;
+    voice.peers.set("guest", { close: vi.fn() });
+    voice.transfers.channels.set("guest", { close: vi.fn() });
+
+    await voice.suspendMicrophone();
+
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(voice.stream).toBeNull();
+    expect(voice.peers.has("guest")).toBe(true);
+    expect(voice.transfers.hasChannel("guest")).toBe(true);
+  });
+  test("applies only the newest authoritative room epoch and sequence", () => {
+    const ordering = { roomEpoch: "", lastAppliedSequence: 0, snapshotVersion: 0 };
+    expect(
+      shouldApplyRoomEvent(ordering, {
+        type: "room-state",
+        roomEpoch: "epoch-2",
+        eventSequence: 10,
+        snapshotVersion: 4
+      })
+    ).toBe(true);
+    const events = [
+      { roomEpoch: "epoch-2", eventSequence: 12, snapshotVersion: 5 },
+      { roomEpoch: "epoch-2", eventSequence: 11, snapshotVersion: 4 },
+      { roomEpoch: "epoch-2", eventSequence: 12, snapshotVersion: 5 },
+      { roomEpoch: "epoch-1", eventSequence: 99, snapshotVersion: 99 },
+      { roomEpoch: "epoch-2", eventSequence: 13, snapshotVersion: 6 }
+    ];
+    expect(events.map((event) => shouldApplyRoomEvent(ordering, event))).toEqual([true, false, false, false, true]);
+    expect(ordering).toEqual({
+      roomEpoch: "epoch-2",
+      lastAppliedSequence: 13,
+      snapshotVersion: 6
+    });
+  });
+  test("adds the authoritative epoch and monotonic sender sequence to shared mutations", async () => {
+    installSocket();
+    const client = new OnlineRoomClient("ws://example.test/");
+    const connection = client.connect({ id: "ABCD", name: "Singer" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    socket.onmessage({
+      data: JSON.stringify({
+        type: "room-state",
+        roomEpoch: "epoch-current",
+        eventSequence: 8,
+        snapshotVersion: 3,
+        lastClientSequence: 20,
+        self: { id: "guest", role: "guest" },
+        participants: []
+      })
+    });
+    await connection;
+
+    expect(client.send("ui", { state: { query: "Queen" } })).toBe(true);
+    expect(JSON.parse(socket.send.mock.calls.at(-1)[0])).toEqual({
+      type: "ui",
+      roomEpoch: "epoch-current",
+      clientSequence: 21,
+      state: { query: "Queen" }
+    });
+    client.disconnect();
+  });
   test("loads deployment limits from the active module instance", async () => {
     const service = await loadOnlineRoomService();
     verify([service.DEFAULT_SIGNALING_URL, "toBe", "wss://karaoke-studio-online.pro100dimka-and.workers.dev"]);
@@ -39,8 +117,10 @@ describe("online room service", () => {
     const connection = client.connect({ id: "ABCD" });
     const socket = FakeSocket.instances[0];
     expect(new URL(socket.url).searchParams.get("name")).toBe(translateSaved("Гость"));
+    expect(new URL(socket.url).searchParams.get("v")).toBe(String(service.ROOM_PROTOCOL_VERSION));
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(client.send("message", { text: "x".repeat(1024) })).toBe(true);
     client.disconnect();
@@ -104,7 +184,11 @@ describe("online room service", () => {
     );
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    expect(new URL(socket.url).searchParams.has("hostToken")).toBe(false);
+    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({ type: "host-auth", hostToken: "" });
+    admit(socket, { id: "host", role: "host" });
     await expect(connection).resolves.toBe("ROOM-1");
+    listener.mockClear();
     socket.onopen();
     expect(() => socket.onerror(new Event("error"))).not.toThrow();
     socket.onmessage({ data: JSON.stringify({ type: "state" }) });
@@ -119,6 +203,96 @@ describe("online room service", () => {
     socket.onclose({ code: 1000 });
     expect(client.socket).toBeNull();
   });
+  test("estimates server time from a midpoint clock probe", async () => {
+    installSocket();
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const client = new OnlineRoomClient("ws://example.test/");
+    const connection = client.connect({ id: "ABCD" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    admit(socket);
+    await connection;
+    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
+      type: "ping",
+      clientTime: 1_000
+    });
+
+    now.mockReturnValue(1_100);
+    socket.onmessage({
+      data: JSON.stringify({ type: "pong", clientTime: 1_000, serverTime: 1_075 })
+    });
+    expect(client.serverNow()).toBe(1_125);
+    now.mockRestore();
+    client.disconnect();
+  });
+  test("keeps the lowest round-trip clock sample instead of adding WebSocket queue delay", async () => {
+    installSocket();
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const client = new OnlineRoomClient("ws://example.test/");
+    const connection = client.connect({ id: "ABCD" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    admit(socket);
+    await connection;
+
+    now.mockReturnValue(1_100);
+    socket.onmessage({
+      data: JSON.stringify({ type: "pong", clientTime: 1_000, serverTime: 1_075 })
+    });
+    expect(client.clockOffsetMs).toBe(25);
+
+    // This sample spent much longer queued and must not pull the shared
+    // playback clock away from the cleaner first measurement.
+    now.mockReturnValue(1_400);
+    socket.onmessage({
+      data: JSON.stringify({ type: "pong", clientTime: 1_200, serverTime: 1_280 })
+    });
+    expect(client.clockOffsetMs).toBe(25);
+
+    now.mockRestore();
+    client.disconnect();
+  });
+  test("getOrCreateGuestSessionId persists across calls but tolerates a missing storage", () => {
+    const store = new Map();
+    const fakeStorage = {
+      getItem: (key) => store.get(key) ?? null,
+      setItem: (key, value) => store.set(key, value)
+    };
+    const first = getOrCreateGuestSessionId(fakeStorage, { randomUUID: () => "generated-id" });
+    expect(first).toBe("generated-id");
+    // A second call reuses the persisted value instead of generating a new
+    // one -- this is what lets a reconnect within the same session claim
+    // back the same room participant id.
+    const second = getOrCreateGuestSessionId(fakeStorage, { randomUUID: () => "different-id" });
+    expect(second).toBe("generated-id");
+
+    // No storage available (privacy mode, restricted context) must not
+    // throw -- reconnect identity is a nice-to-have, not required.
+    expect(getOrCreateGuestSessionId(undefined, { randomUUID: () => "no-storage-id" })).toBe("no-storage-id");
+  });
+  test("only a guest connection carries a reconnect session id, never the host", async () => {
+    installSocket();
+    const client = new OnlineRoomClient();
+    const guestConnection = client.connect({ id: "ABCD" });
+    const guestSocket = FakeSocket.instances[0];
+    expect(new URL(guestSocket.url).searchParams.get("sessionId")).toBeTruthy();
+    guestSocket.readyState = FakeSocket.OPEN;
+    guestSocket.onopen();
+    admit(guestSocket);
+    await guestConnection;
+
+    const hostConnection = client.connect({ id: "EFGH", host: true, hostToken: "x".repeat(32) });
+    const hostSocket = FakeSocket.instances.at(-1);
+    expect(new URL(hostSocket.url).searchParams.has("sessionId")).toBe(false);
+    expect(new URL(hostSocket.url).searchParams.has("hostToken")).toBe(false);
+    hostSocket.readyState = FakeSocket.OPEN;
+    hostSocket.onopen();
+    expect(JSON.parse(hostSocket.send.mock.calls[0][0])).toEqual({ type: "host-auth", hostToken: "x".repeat(32) });
+    admit(hostSocket, { id: "host", role: "host" });
+    await hostConnection;
+  });
   test("uses the guest fallback, sends bounded objects and disconnects", async () => {
     installSocket();
     const client = new OnlineRoomClient();
@@ -129,6 +303,7 @@ describe("online room service", () => {
     expect(socket.send).not.toHaveBeenCalled();
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(client.send(" update ", { value: 1 })).toBe(true);
     expect(socket.send.mock.calls.map(([message]) => JSON.parse(message))).toContainEqual({
@@ -157,6 +332,7 @@ describe("online room service", () => {
     expect(new URL(longSocket.url).searchParams.get("name")).toBe(`A${"b".repeat(39)}`);
     longSocket.readyState = FakeSocket.OPEN;
     longSocket.onopen();
+    admit(longSocket);
     await longConnection;
     client.disconnect();
   });
@@ -167,6 +343,7 @@ describe("online room service", () => {
     const socket = FakeSocket.instances[0];
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
+    admit(socket);
     await connection;
     expect(client.send("x", { value: "я".repeat(130_000) })).toBe(true);
     expect(client.send("x", { value: "я".repeat(132_000) })).toBe(false);
@@ -229,6 +406,15 @@ describe("online room service", () => {
       FakeSocket.instances.at(-1).onclose(event);
       await expect(connection).rejects.toThrow(expectedError(detail));
     }
+  });
+  test("logs the WebSocket close code and reason for diagnostics", async () => {
+    installSocket();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const client = new OnlineRoomClient();
+    const connection = client.connect({ id: "ABCD" });
+    FakeSocket.instances.at(-1).onclose({ code: 4001, reason: "denied", wasClean: false });
+    await expect(connection).rejects.toThrow();
+    expect(error).toHaveBeenCalledWith("Room WebSocket closed", expect.objectContaining({ code: 4001, reason: "denied", wasClean: false }));
   });
   test("disconnect does not close sockets already closing or closed", async () => {
     installSocket();

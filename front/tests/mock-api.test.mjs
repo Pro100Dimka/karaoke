@@ -101,7 +101,10 @@ test("mock API implements the complete development contract", async () => {
   equal([(await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' })).buffer_size, 128]);
   for (const path of ["/audio/devices", "/audio/output-devices", "/audio/asio-drivers"]) deepEqual([await mockRequest(path), []]);
   equal([(await mockRequest("/audio/signal-quality")).rms_dbfs, -42]);
-  deepEqual([await mockRequest("/audio/direct-monitor/start"), { ok: true }]);
+  equal([(await mockRequest("/audio/direct-monitor/start")).monitoring_enabled, true]);
+  equal([(await mockRequest("/audio/direct-monitor/status")).state, "running"]);
+  equal([(await mockRequest("/audio/direct-monitor/stop")).monitoring_enabled, false]);
+  equal([(await mockRequest("/audio/direct-monitor/status")).state, "idle"]);
   equal([(await mockRequest("/recording/start")).recording_session_id, "mock-session-1"]);
   deepEqual(
     [await mockRequest("/recording/pause?session_id=x"), { ok: true }],
@@ -123,13 +126,21 @@ test("mock API implements the complete development contract", async () => {
     [(await mockRequest(`/recording/by-song/${MOCK_SONG_ID}`)).at(-1).id, retainedRecording.id],
     [await mockRequest(`/recording/${recording.id}`, { method: "DELETE" }), null]
   );
-  deepEqual([await mockRequest("/recording/library"), [retainedRecording]], [await mockRequest("/analysis/id/run"), { queued: true }]);
-  equal([(await mockRequest("/analysis/id")).accuracy_percent, 82]);
-  deepEqual(
-    [await mockRequest("/analysis/id"), { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }],
-    [await mockRequest("/models/whisper"), []]
-  );
-  equal([(await mockRequest("/models/whisper/base/download")).ok, true]);
+  deepEqual([await mockRequest("/recording/library"), [retainedRecording]]);
+  equal([(await mockRequest("/analysis/id/run")).overall_score_percent, 82.1]);
+  equal([(await mockRequest("/analysis/id")).pitch_accuracy_percent, 82]);
+  deepEqual([
+    await mockRequest("/analysis/id"),
+    {
+      pitch_accuracy_percent: 82,
+      rhythm_accuracy_percent: 76,
+      note_hold_percent: 88,
+      note_coverage_percent: 91,
+      overall_score_percent: 82.1,
+      mean_deviation_semitones: 0.32,
+      sections: []
+    }
+  ]);
   deepEqual(
     [
       await mockRequest("/diagnostics/ai-models"),

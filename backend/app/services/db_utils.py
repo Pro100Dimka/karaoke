@@ -18,5 +18,15 @@ def commit(db: Session) -> None:
 
 def commit_refresh(db: Session, instance: T) -> T:
     commit(db)
-    db.refresh(instance)
+    try:
+        db.refresh(instance)
+    except Exception:
+        # commit() already succeeded, so there's no pending write to lose --
+        # but db.refresh() issues its own SELECT, which can itself fail (e.g.
+        # the row was deleted by a concurrent request between this commit and
+        # the refresh) and leaves an un-rolled-back transaction open on the
+        # session. Without this, every later use of `db` on this request
+        # inherits that broken transaction state instead of a clean one.
+        db.rollback()
+        raise
     return instance

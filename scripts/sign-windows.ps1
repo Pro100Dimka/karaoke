@@ -1,12 +1,13 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string[]] $Path
+    [string[]] $Path,
+    [switch] $Required
 )
 
 $ErrorActionPreference = "Stop"
 $certificate = $env:ADVOICE_SIGN_PFX
 $password = $env:ADVOICE_SIGN_PASSWORD
-$required = $env:ADVOICE_REQUIRE_SIGNING -eq "1"
+$required = $Required -or $env:ADVOICE_REQUIRE_SIGNING -eq "1"
 
 if (-not $certificate) {
     if ($required) {

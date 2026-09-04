@@ -10,7 +10,11 @@ export const recordingsApi = {
     microphoneVolume = 1,
     reverb = 0,
     echo = 0,
-    delay = 0
+    delay = 0,
+    roomMode = false,
+    octave = 0,
+    playbackRate = 1,
+    voiceRelay = false
   ) =>
     request("/recording/start", {
       method: "POST",
@@ -21,7 +25,11 @@ export const recordingsApi = {
         microphone_volume: microphoneVolume,
         reverb,
         echo,
-        delay
+        delay,
+        octave,
+        playback_rate: playbackRate,
+        room_mode: roomMode,
+        voice_relay: voiceRelay
       })
     }),
   pauseRecording: (sessionId) =>
@@ -32,10 +40,38 @@ export const recordingsApi = {
     request(`/recording/resume?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
       method: "POST"
     }),
+  syncRecording: (sessionId, positionSec, playbackRate = 1) =>
+    request(
+      `/recording/sync?session_id=${encodeURIComponent(String(sessionId ?? ""))}&position_sec=${encodeURIComponent(String(positionSec ?? 0))}&playback_rate=${encodeURIComponent(String(playbackRate ?? 1))}`,
+      { method: "POST" }
+    ),
+  updateRecordingControls: (sessionId, controls) =>
+    request(`/recording/controls?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        music_volume: controls.musicVolume,
+        microphone_volume: controls.microphoneVolume,
+        reverb: controls.reverb,
+        echo: controls.echo,
+        delay: controls.delay,
+        octave: controls.octave
+      })
+    }),
   stopRecording: (sessionId) =>
     request(`/recording/stop?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
       method: "POST"
     }),
+  attachRoomAudio: (recordingId, blob, startPlaybackSec = 0, latencyCompensationSec = 0) => {
+    const form = new FormData();
+    form.append("file", blob, "room-voices.webm");
+    form.append("start_playback_sec", String(startPlaybackSec));
+    form.append("latency_compensation_sec", String(latencyCompensationSec));
+    return request(`/recording/${encodePathSegment(recordingId)}/room-audio`, {
+      method: "POST",
+      body: form,
+      timeoutMs: 5 * 60_000
+    });
+  },
   listRecordingsForSong: (songId) =>
     request(`/recording/by-song/${encodePathSegment(songId)}`).then((items) =>
       Array.isArray(items) ? items.map(normalizeRecording) : []
@@ -48,6 +84,9 @@ export const recordingsApi = {
   getRecordingFileUrl: (id) => createFileUrl(`/recording/${encodePathSegment(id)}/file`),
   getPerformanceFileUrl: (id) => createFileUrl(`/recording/${encodePathSegment(id)}/performance`),
   runAnalysis: (recordingId) =>
-    request(`/analysis/${encodePathSegment(recordingId)}/run`, { method: "POST" }),
+    request(`/analysis/${encodePathSegment(recordingId)}/run`, {
+      method: "POST",
+      timeoutMs: 10 * 60_000
+    }),
   getAnalysis: (recordingId) => request(`/analysis/${encodePathSegment(recordingId)}`)
 };

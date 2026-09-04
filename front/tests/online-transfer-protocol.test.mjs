@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-vi.mock("../src/i18n/runtime.js", () => ({ translateSaved: (value) => value }));
 
 const loadProtocol = () => import("../src/services/onlineVoiceTransferProtocol.js");
 

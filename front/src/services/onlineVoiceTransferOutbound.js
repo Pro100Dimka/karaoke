@@ -4,22 +4,32 @@ import {
   cancelOutboundTransferById,
   sendTransferStatus,
   TRANSFER_LIMITS,
+  TRANSFER_CHUNK_BYTES,
+  TRANSFER_STAGES,
   TRANSFER_TIMEOUTS,
+  digestHex,
+  hashChunkManifest,
   wait,
   waitAbortable
 } from "./onlineVoiceTransferProtocol";
 
 const CLOSED = new Set(["closing", "closed"]);
 const STALE_CONNECTING_MS = 8_000;
-const cancelledError = () => new Error(translateSaved("Передача файла отменена"));
-const isCancelled = (mesh, channel, lifecycle, active, signal) =>
+const cancelledError = () => new Error(translateSaved("room.fileTransferCanceled"));
+const isCancelled = (transfers, channel, lifecycle, active, signal) =>
   active.cancelled ||
   signal?.aborted ||
-  lifecycle !== mesh.lifecycleVersion ||
+  lifecycle !== transfers.lifecycleVersion ||
   channel.readyState !== "open";
 
-export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecycleVersion, signal) {
-  const lifecycle = lifecycleVersion ?? mesh.lifecycleVersion;
+export async function waitForDataChannel(
+  transfers,
+  participantId,
+  timeoutMs,
+  lifecycleVersion,
+  signal
+) {
+  const lifecycle = lifecycleVersion ?? transfers.lifecycleVersion;
   const numericTimeout = Number(timeoutMs ?? 15_000);
   const timeout = Number.isFinite(numericTimeout)
     ? Math.max(0, Math.min(60_000, numericTimeout))
@@ -27,21 +37,22 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
   const startedAt = Date.now();
   let connectingSince = null;
   while (Date.now() - startedAt < timeout) {
-    if (signal?.aborted || lifecycle !== mesh.lifecycleVersion) throw cancelledError();
-    const channel = mesh.channels.get(participantId);
+    if (signal?.aborted || lifecycle !== transfers.lifecycleVersion) throw cancelledError();
+    const channel = transfers.channels.get(participantId);
     if (channel?.readyState === "open") return channel;
     if (CLOSED.has(channel?.readyState)) {
-      if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
-      if (!mesh.peers.has(participantId))
-        throw new Error(translateSaved("Канал передачи песни закрыт"));
+      if (transfers.channels.get(participantId) === channel)
+        transfers.channels.delete(participantId);
+      if (!transfers.hasPeer(participantId))
+        throw new Error(translateSaved("room.theSongTransmissionChannelIsClosed"));
       connectingSince = null;
     } else if (channel?.readyState === "connecting") {
       connectingSince ??= Date.now();
       if (Date.now() - connectingSince >= STALE_CONNECTING_MS) {
         // A failed SDP negotiation can leave a channel stuck in `connecting` forever.
         // Drop only that unopened channel and renegotiate; never touch an open transfer.
-        if (mesh.channels.get(participantId) === channel) {
-          mesh.channels.delete(participantId);
+        if (transfers.channels.get(participantId) === channel) {
+          transfers.channels.delete(participantId);
           channel.close?.();
         }
         connectingSince = null;
@@ -50,18 +61,20 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
       connectingSince = null;
     }
 
-    if (!mesh.channels.get(participantId) && mesh.peers.has(participantId)) {
+    if (!transfers.channels.get(participantId) && transfers.hasPeer(participantId)) {
       // eslint-disable-next-line no-await-in-loop
-      await mesh.invite(participantId).catch(() => false);
+      await transfers.invite(participantId).catch(() => false);
     }
     // eslint-disable-next-line no-await-in-loop
     await waitAbortable(50, signal);
   }
   if (signal?.aborted) throw cancelledError();
-  throw new Error(translateSaved("Канал передачи песни не готов"));
+  throw new Error(translateSaved("room.theSongTransmissionChannelIsNotReady"));
 }
 
-const transferMetadata = (transferId, blob, metadata) => ({
+const canHashChunks = () => typeof globalThis.crypto?.subtle?.digest === "function";
+const isResumableSong = (metadata) => metadata?.resumable === true && canHashChunks();
+const transferMetadata = (transferId, blob, metadata, resumable) => ({
   type: "file-start",
   transferId,
   size: blob.size,
@@ -73,10 +86,15 @@ const transferMetadata = (transferId, blob, metadata) => ({
     typeof metadata?.filename === "string"
       ? metadata.filename.slice(0, TRANSFER_LIMITS.filename)
       : undefined,
-  mimeType: (blob.type || "application/octet-stream").slice(0, 255)
+  mimeType: (blob.type || "application/octet-stream").slice(0, 255),
+  ...(resumable ? { chunkSize: TRANSFER_CHUNK_BYTES } : {})
 });
 
-function createPending(mesh, store, transferId, participantId, channel, timeout, message) {
+async function chunkDigest(chunk) {
+  return digestHex(chunk);
+}
+
+function createPending(transfers, store, transferId, participantId, channel, timeout, message) {
   return new Promise((resolve, reject) => {
     const timer = globalThis.setTimeout(() => {
       store.delete(transferId);
@@ -86,9 +104,10 @@ function createPending(mesh, store, transferId, participantId, channel, timeout,
   });
 }
 
-async function reserveCredit(mesh, transferId, bytes) {
-  const flow = mesh.pendingTransferCredits.get(transferId);
+async function reserveCredit(transfers, transferId, bytes) {
+  const flow = transfers.pendingTransferCredits.get(transferId);
   if (!flow) throw cancelledError();
+  if (flow.error) throw flow.error;
   if (flow.available >= bytes) {
     flow.available -= bytes;
     return;
@@ -98,23 +117,27 @@ async function reserveCredit(mesh, transferId, bytes) {
     waiter.timer = globalThis.setTimeout(() => {
       const index = flow.waiters.indexOf(waiter);
       if (index >= 0) flow.waiters.splice(index, 1);
-      reject(new Error(translateSaved("Получатель слишком медленно сохраняет песню")));
+      reject(new Error(translateSaved("room.receiverIsSavingTheSongTooSlowly")));
     }, TRANSFER_TIMEOUTS.stall);
     flow.waiters.push(waiter);
   });
 }
 
-async function streamFile(mesh, transfer, blob, metadata, signal) {
+async function streamFile(transfers, transfer, blob, metadata, signal, resumeOffset = 0) {
   const { active, channel, lifecycle, participantId, transferId } = transfer;
-  const cancelled = () => isCancelled(mesh, channel, lifecycle, active, signal);
-  mesh.emitTransferProgress(participantId, "sending", 0, metadata);
-  const chunkSize = 32 * 1024;
+  const cancelled = () => isCancelled(transfers, channel, lifecycle, active, signal);
+  transfers.emitTransferProgress(participantId, TRANSFER_STAGES.SENDING, 0, metadata);
+  const chunkSize = TRANSFER_CHUNK_BYTES;
   let lastProgressAt = Date.now();
-  for (let offset = 0; offset < blob.size; offset += chunkSize) {
+  const safeResumeOffset =
+    Number.isSafeInteger(resumeOffset) && resumeOffset >= 0 && resumeOffset <= blob.size
+      ? resumeOffset
+      : 0;
+  for (let offset = safeResumeOffset; offset < blob.size; offset += chunkSize) {
     while (channel.bufferedAmount > 512 * 1024) {
       if (cancelled()) throw cancelledError();
       if (Date.now() - lastProgressAt > TRANSFER_TIMEOUTS.stall)
-        throw new Error(translateSaved("Передача песни остановилась: нет ответа от участника"));
+        throw new Error(translateSaved("room.songTransferStoppedTheParticipantIsNotResponding"));
       // eslint-disable-next-line no-await-in-loop
       await wait(20);
     }
@@ -123,20 +146,35 @@ async function streamFile(mesh, transfer, blob, metadata, signal) {
     const chunk = await blob.slice(offset, offset + chunkSize).arrayBuffer();
     if (cancelled()) throw cancelledError();
     // eslint-disable-next-line no-await-in-loop
-    await reserveCredit(mesh, transferId, chunk.byteLength);
+    await reserveCredit(transfers, transferId, chunk.byteLength);
     if (cancelled()) throw cancelledError();
+    // eslint-disable-next-line no-await-in-loop
+    if (active.resumable) {
+      // eslint-disable-next-line no-await-in-loop
+      const sha256 = await chunkDigest(chunk);
+      active.chunkHashes.set(offset, sha256);
+      channel.send(
+        JSON.stringify({
+          type: "file-chunk",
+          transferId,
+          offset,
+          size: chunk.byteLength,
+          sha256
+        })
+      );
+    }
     channel.send(chunk);
     lastProgressAt = Date.now();
-    mesh.emitTransferProgress(
+    transfers.emitTransferProgress(
       participantId,
-      "sending",
+      TRANSFER_STAGES.SENDING,
       Math.min(99, Math.floor((Math.min(offset + chunkSize, blob.size) / blob.size) * 100)),
       metadata
     );
   }
 }
 
-export async function sendFile(mesh, participantId, blob, metadata = {}, options = {}) {
+export async function sendFile(transfers, participantId, blob, metadata = {}, options = {}) {
   const BlobClass = globalThis.Blob;
   if (
     typeof participantId !== "string" ||
@@ -145,11 +183,11 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     typeof BlobClass !== "function" ||
     !(blob instanceof BlobClass)
   )
-    throw new TypeError(translateSaved("Для передачи нужны участник и файл"));
+    throw new TypeError(translateSaved("room.toTransferYouNeedAParticipantAndAFile"));
   if (blob.size > TRANSFER_LIMITS.fileBytes)
-    throw new RangeError(translateSaved("Файл слишком большой для передачи через комнату"));
+    throw new RangeError(translateSaved("room.theFileIsTooLargeToTransmitAcrossThe"));
 
-  const lifecycle = mesh.lifecycleVersion;
+  const lifecycle = transfers.lifecycleVersion;
   const transferId = generateId();
   const controller = typeof AbortController === "function" ? new AbortController() : null;
   const active = {
@@ -157,81 +195,126 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     channel: null,
     commandId: metadata?.commandId,
     controller,
-    cancelled: false
+    cancelled: false,
+    resumable: isResumableSong(metadata),
+    chunkHashes: new Map()
   };
-  mesh.outboundTransfers.set(transferId, active);
+  transfers.outboundTransfers.set(transferId, active);
   const abort = () => {
     active.cancelled = true;
     controller?.abort?.();
     if (active.channel?.readyState === "open")
       sendTransferStatus(active.channel, { type: "file-cancel", transferId });
-    cancelOutboundTransferById(mesh, transferId, cancelledError());
+    cancelOutboundTransferById(transfers, transferId, cancelledError());
   };
   if (options.signal?.aborted) abort();
   else options.signal?.addEventListener?.("abort", abort, { once: true });
 
-  let channel;
-  let admission;
-  let confirmation;
   try {
-    channel = await mesh.waitForDataChannel(
-      participantId,
-      15_000,
-      lifecycle,
-      controller?.signal || options.signal
-    );
-    active.channel = channel;
-    if (channel.readyState !== "open")
-      throw new Error(translateSaved("Канал передачи песни закрыт"));
-    if (isCancelled(mesh, channel, lifecycle, active, options.signal)) throw cancelledError();
-    admission = createPending(
-      mesh,
-      mesh.pendingTransferAdmissions,
-      transferId,
-      participantId,
-      channel,
-      TRANSFER_TIMEOUTS.admission,
-      "Получатель не подтвердил готовность принять песню"
-    );
-    channel.send(JSON.stringify(transferMetadata(transferId, blob, metadata)));
-    if (isCancelled(mesh, channel, lifecycle, active, options.signal)) throw cancelledError();
-    const ready = await admission;
-    const windowBytes = Number(ready?.windowBytes);
-    mesh.pendingTransferCredits.set(transferId, {
-      participantId,
-      channel,
-      available:
-        Number.isFinite(windowBytes) && windowBytes > 0
-          ? Math.min(TRANSFER_LIMITS.pendingWriteBytes, windowBytes)
-          : TRANSFER_LIMITS.pendingWriteBytes,
-      waiters: []
-    });
-    await streamFile(
-      mesh,
-      { active, channel, lifecycle, participantId, transferId },
-      blob,
-      metadata,
-      options.signal
-    );
-    if (isCancelled(mesh, channel, lifecycle, active, options.signal)) throw cancelledError();
-    confirmation = createPending(
-      mesh,
-      mesh.pendingTransferConfirmations,
-      transferId,
-      participantId,
-      channel,
-      TRANSFER_TIMEOUTS.confirmation,
-      "Участник не подтвердил получение песни"
-    );
-    channel.send(JSON.stringify({ type: "file-end", transferId }));
-    await confirmation;
-    mesh.emitTransferProgress(participantId, "complete", 100, metadata);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      let admission;
+      let confirmation;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const channel = await transfers.waitForDataChannel(
+          participantId,
+          15_000,
+          lifecycle,
+          controller?.signal || options.signal
+        );
+        active.channel = channel;
+        if (channel.readyState !== "open")
+          throw new Error(translateSaved("room.theSongTransmissionChannelIsClosed"));
+        if (isCancelled(transfers, channel, lifecycle, active, options.signal))
+          throw cancelledError();
+        admission = createPending(
+          transfers,
+          transfers.pendingTransferAdmissions,
+          transferId,
+          participantId,
+          channel,
+          TRANSFER_TIMEOUTS.admission,
+          "room.receiverDidNotConfirmReadinessToReceiveTheSong"
+        );
+        channel.send(
+          JSON.stringify(transferMetadata(transferId, blob, metadata, active.resumable))
+        );
+        if (isCancelled(transfers, channel, lifecycle, active, options.signal))
+          throw cancelledError();
+        // eslint-disable-next-line no-await-in-loop
+        const ready = await admission;
+        const windowBytes = Number(ready?.windowBytes);
+        transfers.pendingTransferCredits.set(transferId, {
+          participantId,
+          channel,
+          available:
+            Number.isFinite(windowBytes) && windowBytes > 0
+              ? Math.min(TRANSFER_LIMITS.pendingWriteBytes, windowBytes)
+              : TRANSFER_LIMITS.pendingWriteBytes,
+          waiters: [],
+          error: null
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await streamFile(
+          transfers,
+          { active, channel, lifecycle, participantId, transferId },
+          blob,
+          metadata,
+          options.signal,
+          Number(ready?.resumeOffset) || 0
+        );
+        const streamError = transfers.pendingTransferCredits.get(transferId)?.error;
+        if (streamError) throw streamError;
+        if (isCancelled(transfers, channel, lifecycle, active, options.signal))
+          throw cancelledError();
+        confirmation = createPending(
+          transfers,
+          transfers.pendingTransferConfirmations,
+          transferId,
+          participantId,
+          channel,
+          TRANSFER_TIMEOUTS.confirmation,
+          "room.theParticipantDidNotConfirmReceivingTheSong"
+        );
+        const manifestHash = active.resumable
+          ? // eslint-disable-next-line no-await-in-loop
+            await hashChunkManifest(active.chunkHashes)
+          : undefined;
+        channel.send(
+          JSON.stringify({
+            type: "file-end",
+            transferId,
+            ...(manifestHash ? { manifestHash } : {})
+          })
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await confirmation;
+        transfers.emitTransferProgress(participantId, TRANSFER_STAGES.COMPLETE, 100, metadata);
+        return;
+      } catch (error) {
+        admission?.catch(() => {});
+        confirmation?.catch(() => {});
+        cancelOutboundTransferById(transfers, transferId, error);
+        transfers.pendingTransferCredits.delete(transferId);
+        const retryable =
+          active.resumable && (active.channel?.readyState !== "open" || error?.retryable === true);
+        if (
+          attempt >= 3 ||
+          !retryable ||
+          active.cancelled ||
+          options.signal?.aborted ||
+          lifecycle !== transfers.lifecycleVersion
+        )
+          throw error;
+        transfers.emitTransferProgress(participantId, TRANSFER_STAGES.WAITING, 0, metadata);
+        // eslint-disable-next-line no-await-in-loop
+        await waitAbortable(250, controller?.signal || options.signal);
+      }
+    }
   } finally {
-    admission?.catch(() => {});
-    confirmation?.catch(() => {});
-    cancelOutboundTransferById(mesh, transferId, cancelledError());
-    mesh.pendingTransferCredits.delete(transferId);
-    mesh.outboundTransfers.delete(transferId);
+    cancelOutboundTransferById(transfers, transferId, cancelledError());
+    transfers.pendingTransferCredits.delete(transferId);
+    transfers.outboundTransfers.delete(transferId);
     options.signal?.removeEventListener?.("abort", abort);
   }
 }

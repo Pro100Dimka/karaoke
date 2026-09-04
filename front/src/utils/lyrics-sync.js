@@ -1,4 +1,34 @@
 const finite = (value) => Number.isFinite(Number(value));
+const shiftedTime = (value, offset) =>
+  finite(value) ? Math.round((Number(value) + offset) * 1000) / 1000 : value;
+
+export function shiftLyricsSync(lyricsSync, offsetSeconds = 0) {
+  const offset = Number(offsetSeconds);
+  if (!lyricsSync || !Number.isFinite(offset) || offset === 0) return lyricsSync;
+  return {
+    ...lyricsSync,
+    words: (lyricsSync.words ?? []).map((word) => ({
+      ...word,
+      start: shiftedTime(word.start, offset),
+      end: shiftedTime(word.end, offset),
+      notes: Array.isArray(word.notes)
+        ? word.notes.map((note) => ({
+            ...note,
+            start: shiftedTime(note.start, offset),
+            end: shiftedTime(note.end, offset)
+          }))
+        : word.notes,
+      syllables: Array.isArray(word.syllables)
+        ? word.syllables.map((syllable) => ({
+            ...syllable,
+            start: shiftedTime(syllable.start, offset),
+            end: shiftedTime(syllable.end, offset)
+          }))
+        : word.syllables
+    }))
+  };
+}
+
 export function flattenLyricsNotes(lyricsSync) {
   const canonical = new Map();
   for (const [wordIndex, word] of (lyricsSync?.words ?? []).entries()) {
@@ -27,7 +57,16 @@ const fill = (interval, currentTime) => {
   if (![from, to, now].every(Number.isFinite) || to <= from || now <= from) return 0;
   return now >= to ? 100 : ((now - from) / (to - from)) * 100;
 };
-export function mergeAdjacentLyricsNotes(word) {
+// The result depends only on word.start/end/notes, not on currentTime, but
+// callers invoke this once per visible word on every animation frame (up to
+// ~60 times a second) to compute a fill percentage. Word objects are stable
+// references from the parsed lyrics sync data between renders, so caching by
+// identity avoids re-running the map/filter/sort/reduce chain every frame
+// for a word whose timing hasn't changed; a WeakMap lets stale entries be
+// collected automatically once a word is no longer referenced.
+const mergedNotesCache = new WeakMap();
+
+function computeMergedLyricsNotes(word) {
   const [start, end] = [word?.start, word?.end].map(Number);
   if (!finite(start) || !finite(end) || end <= start) return [];
   return (Array.isArray(word?.notes) ? word.notes : [])
@@ -55,8 +94,20 @@ export function mergeAdjacentLyricsNotes(word) {
       return merged;
     }, []);
 }
+
+export function mergeAdjacentLyricsNotes(word) {
+  if (!word || typeof word !== "object") return computeMergedLyricsNotes(word);
+  const cached = mergedNotesCache.get(word);
+  if (cached) return cached;
+  const result = computeMergedLyricsNotes(word);
+  mergedNotesCache.set(word, result);
+  return result;
+}
 export function lyricsNoteFillPercent(word, currentTime) {
   const notes = mergeAdjacentLyricsNotes(word);
   const interval = notes.length ? { start: notes[0].start, end: notes.at(-1).end } : word;
   return fill(interval, currentTime);
+}
+export function lyricsSyllableFillPercent(syllable, currentTime) {
+  return fill(syllable, currentTime);
 }

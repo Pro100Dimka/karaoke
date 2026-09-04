@@ -57,7 +57,7 @@ def test_duplex_output_uses_same_host_api(monkeypatch):
     assert audio_service._matching_output_for_input(0, None) == 2
 
 
-def test_wasapi_candidates_end_with_host_neutral_fallback():
+def test_wasapi_has_no_host_neutral_fallback():
     candidates = monitor_worker._stream_candidates(
         {
             "sample_rate": 48_000,
@@ -65,15 +65,21 @@ def test_wasapi_candidates_end_with_host_neutral_fallback():
             "input_device_id": 1,
             "output_device_id": 2,
             "blocksize": 64,
-            "wasapi_exclusive": True,
+            "wasapi_mode": "shared",
         }
     )
 
-    assert (candidates[0]['blocksize'] == 64) and ('extra_settings' in candidates[0]) and ('extra_settings' not in candidates[-1]) and (Path(config.FFMPEG_EXE).name.casefold() in {'ffmpeg', 'ffmpeg.exe'})
+    assert (
+        candidates[0]["blocksize"] == 64
+        and candidates[0]["latency"] == 64 / 48_000
+        and "extra_settings" in candidates[0]
+        and len(candidates) == 1
+        and Path(config.FFMPEG_EXE).name.casefold() in {"ffmpeg", "ffmpeg.exe"}
+    )
 
 
-def test_recording_falls_back_from_duplex_to_plain_microphone(monkeypatch):
+def test_recording_keeps_selected_microphone_monitor_and_buffer(monkeypatch):
     patch_attrs(monkeypatch, recording_service.sd, query_devices=lambda *_args, **_kwargs: {'default_samplerate': 48000})
     attempts = recording_service._capture_attempts(7, 9, 44_100, 64, True)
 
-    assert ((attempts[0], attempts[1]) == ((7, 9, 44100, 64, True, 'low'), (7, None, 44100, 0, False, 'high'))) and ((7, None, 48000, 0, False, 'high') in attempts) and (attempts[-1][0] is None)
+    assert attempts == [(7, 9, 44100, 64, True, 64 / 44100)]

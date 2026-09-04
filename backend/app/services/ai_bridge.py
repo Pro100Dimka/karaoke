@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from AI.artifacts import recover_orphaned_backups as _recover_orphaned_backups
 from AI.lyrics_document import flatten_word_notes, validate_lyrics_document
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
@@ -16,13 +17,20 @@ ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 
 
+def recover_generated_artifacts(output_dir: str | Path) -> list[Path]:
+    """Recover interrupted AI artifact publication behind the app service boundary."""
+    return _recover_orphaned_backups(Path(output_dir))
+
+
 def process_song(
     source_path: str | Path,
     output_dir: str | Path,
     *,
     language: str | None = None,
     lyrics_path: str | Path | None = None,
+    artist: str | None = None,
     title: str | None = None,
+    genre: str | None = None,
     bpm_override: float | None = None,
     key_override: str | None = None,
     processing_mode: str = "auto",
@@ -34,7 +42,9 @@ def process_song(
         output_dir=output_dir,
         language=language,
         lyrics_path=lyrics_path,
+        artist=artist,
         title=title,
+        genre=genre,
         bpm_override=bpm_override,
         key_override=key_override,
         processing_mode=processing_mode,
@@ -50,6 +60,24 @@ def reprocess_song(output_dir: str | Path, **options):
 
 def release_ai_resources() -> None:
     reset_ai_service()
+
+
+def separate_training_stems(
+    source_path: str | Path,
+    vocals_path: str | Path,
+    instrumental_path: str | Path,
+) -> None:
+    """Create unprocessed training stems using the fastest separator profile."""
+    get_ai_service().separate_stems(
+        source_path,
+        vocals_path,
+        instrumental_path,
+        processing_mode="fast",
+    )
+
+
+def max_concurrent_jobs() -> int:
+    return get_ai_service().config.max_concurrent_jobs
 
 
 
@@ -87,8 +115,8 @@ def get_karaoke_lyrics(output_dir: str | Path) -> dict[str, Any]:
         return {}
 
 
-def get_vocal_notes(output_dir: str | Path) -> list[dict[str, Any]]:
-    lyrics = get_karaoke_lyrics(output_dir)
+def get_vocal_notes(output_dir: str | Path, lyrics: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    if lyrics is None: lyrics = get_karaoke_lyrics(output_dir)
     return flatten_word_notes(lyrics) if lyrics else []
 
 
@@ -100,12 +128,12 @@ def get_syllables(_output_dir: str | Path) -> list[dict[str, Any]]:
     return []
 
 
-def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
-    lyrics = get_karaoke_lyrics(output_dir)
+def get_karaoke_timeline(output_dir: str | Path, lyrics: dict[str, Any] | None = None) -> dict[str, Any]:
+    if lyrics is None: lyrics = get_karaoke_lyrics(output_dir)
     return {
         "duration": lyrics.get("duration", 0.0),
         "words": lyrics.get("words", []),
-        "notes": get_vocal_notes(output_dir),
+        "notes": get_vocal_notes(output_dir, lyrics),
     }
 
 

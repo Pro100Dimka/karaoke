@@ -36,4 +36,20 @@ describe("theme select", () => {
     fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
     expect(screen.queryByRole("listbox")).toBeNull();
   });
+
+  test("renders grouped options like an autocomplete catalog", () => {
+    render(
+      <Select
+        value="rock-1"
+        options={[
+          { value: "rock-1", label: "Rock One", group: "Rock" },
+          { value: "rock-2", label: "Rock Two", group: "Rock" },
+          { value: "pop-1", label: "Pop One", group: "Pop" }
+        ]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Rock One/ }));
+    expect([...document.querySelectorAll(".ui-select-group")].map(({ textContent }) => textContent)).toEqual(["Rock", "Pop"]);
+    expect(screen.getAllByRole("option")).toHaveLength(3);
+  });
 });

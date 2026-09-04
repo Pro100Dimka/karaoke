@@ -1,74 +1,176 @@
 /* @vitest-environment jsdom */
-import { render } from "@testing-library/react";
-import { beforeAll, expect, test, vi } from "vitest";
+import fs from "node:fs";
+import { act, render } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
 import { QuantumFieldBackdrop as LibraryBackdrop } from "../src/pages/Library/animated-backdrop/index.js";
-// jsdom implements neither WebGL nor 2D canvas contexts without the native
-// "canvas" package, and has no GPU to actually run post-processing passes
-// on. None of that is what these tests check (they only check the static
-// wrapper <div> theme/a11y attributes rendered synchronously, before any of
-// this ever runs) -- so the renderer, the flare texture's 2D context, and
-// the post-processing pipeline are all stubbed out as harmless no-ops, and
-// everything else in "three" stays real.
-// A constructor that answers any method call or property read with another
-// instance of itself, so passes/composers can be chained and called however
-// this component likes without ever needing to know their real API.
-function NoopEffect() {
-  return new Proxy(() => new NoopEffect(), {
-    get: (target, prop) => {
-      if (prop === "then" || typeof prop === "symbol") return undefined;
-      if (!(prop in target)) target[prop] = new NoopEffect();
-      return target[prop];
-    }
-  });
-}
-beforeAll(() => {
-  HTMLCanvasElement.prototype.getContext = () => ({
-    createRadialGradient: () => ({ addColorStop: () => {} }),
-    fillRect: () => {},
-    fillStyle: null
-  });
-});
-vi.mock("three", async (importOriginal) => ({
-  ...(await importOriginal()),
-  WebGLRenderer: class {
-    domElement = document.createElement("canvas");
-    setPixelRatio() {}
-    setSize() {}
-    setClearColor() {}
-    render() {}
-    dispose() {}
-  }
-}));
-vi.mock("three/addons/postprocessing/AfterimagePass.js", () => ({
-  AfterimagePass: NoopEffect
-}));
-vi.mock("three/addons/postprocessing/EffectComposer.js", () => ({ EffectComposer: NoopEffect }));
-vi.mock("three/addons/postprocessing/OutputPass.js", () => ({ OutputPass: NoopEffect }));
-vi.mock("three/addons/postprocessing/RenderPass.js", () => ({ RenderPass: NoopEffect }));
-vi.mock("three/addons/postprocessing/ShaderPass.js", () => ({ ShaderPass: NoopEffect }));
-vi.mock("three/addons/postprocessing/UnrealBloomPass.js", () => ({ UnrealBloomPass: NoopEffect }));
+
 test("library backdrop is decorative and cannot intercept controls", () => {
   const { container } = render(<LibraryBackdrop />);
   const backdrop = container.firstElementChild;
   expect(backdrop.getAttribute("aria-hidden")).toBe("true");
   expect(backdrop.style.position).toBe("fixed");
   expect(backdrop.style.pointerEvents).toBe("none");
+  expect(backdrop.style.mixBlendMode).toBe("normal");
+  expect(backdrop.style.filter).toBe("none");
 });
 
-test("library backdrop cleans up its window resize listener on unmount", () => {
-  // jsdom's CSS engine doesn't understand color-mix(), the CSS function
-  // this component uses to read the theme's colors, so that part can't be
-  // verified through a rendered style string here -- what's left to check
-  // (and matters just as much) is that the one thing it does listen for at
-  // the window level, its resize handler for the canvas, doesn't leak past
-  // unmount.
+test("stays hidden until the runtime confirms QFT_READY, then fades in", () => {
+  // A freshly created iframe document paints the browser's own opaque white
+  // default background for a moment before its own transparent html/body
+  // style takes effect. On this fixed, full-viewport layer that white used
+  // to cover the real backdrop image underneath for a beat on every mount
+  // (app startup, and every time Library remounts after returning from
+  // Karaoke) -- it must stay invisible until the runtime says it's ready.
+  const { container } = render(<LibraryBackdrop />);
+  const backdrop = container.firstElementChild;
+  const frame = container.querySelector("iframe");
+  expect(backdrop.style.opacity).toBe("0");
+
+  act(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", { data: { type: "QFT_READY" }, source: frame.contentWindow })
+    );
+  });
+
+  expect(backdrop.style.opacity).toBe("1");
+});
+
+test("library backdrop keeps its packaged runtime URL stable and query-free", () => {
+  const { container, rerender } = render(<LibraryBackdrop />);
+  const source = container.querySelector("iframe").srcdoc;
+  expect(source).toMatch(/<script type="module" src="[^"]*qftRuntime[^"]*"><\/script>/);
+  expect(source).not.toMatch(/[?&]v=29/);
+  rerender(<LibraryBackdrop />);
+  expect(container.querySelector("iframe").srcdoc).toBe(source);
+});
+
+test("library backdrop keeps black WebGL pixels transparent over the theme artwork", () => {
+  const runtime = fs.readFileSync("src/pages/Library/animated-backdrop/qftRuntime.js", "utf8");
+  const component = fs.readFileSync("src/pages/Library/animated-backdrop/QuantumFieldBackdrop.jsx", "utf8");
+  expect(runtime).toContain("float overlayAlpha = clamp(visibleLight * 1.35, 0.0, 1.0);");
+  expect(runtime).not.toContain("gl_FragColor = vec4(detailLift, 1.0);");
+  expect(runtime).toContain("themeBackdrop.style.backgroundImage = backgroundImage;");
+  expect(runtime).toContain("element.style.backgroundColor = backgroundColor;");
+  expect(runtime).toContain("backdropTargetX");
+  expect(component).toContain("dark.webp?inline");
+  expect(component).toContain('backgroundImage: `url("${THEME_BACKDROPS[theme]');
+  expect(component).not.toContain("getComputedStyle(themeBackground).backgroundImage");
+});
+
+test("library backdrop forwards pointer movement to the visualizer runtime", () => {
+  const scheduledFrames = [];
+  const requestFrame = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((callback) => {
+      scheduledFrames.push(callback);
+      return scheduledFrames.length;
+    });
+  const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+  try {
+    const { container, unmount } = render(<LibraryBackdrop />);
+    const frame = container.querySelector("iframe");
+    const postMessage = vi.spyOn(frame.contentWindow, "postMessage");
+
+    act(() => {
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 256, clientY: 192 }));
+      scheduledFrames.at(-1)?.(16);
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: "QFT_POINTER",
+        x: (256 / window.innerWidth) * 2 - 1,
+        y: (192 / window.innerHeight) * 2 - 1
+      },
+      "*"
+    );
+    unmount();
+  } finally {
+    requestFrame.mockRestore();
+    cancelFrame.mockRestore();
+  }
+});
+
+test("library backdrop watches the theme attribute instead of polling it every frame", () => {
+  // Regression test: updateTheme() used to run inside the rAF loop, reading
+  // documentElement's data-theme attribute up to 60 times a second just to
+  // catch the rare case where the user actually toggles it. A
+  // MutationObserver reacts to that attribute changing instead, so this
+  // checks the observer is wired to the right target/attribute and torn
+  // down on unmount, without needing to reach into the (mocked) WebGL scene.
+  const observe = vi.fn();
+  const disconnect = vi.fn();
+  const OriginalMutationObserver = globalThis.MutationObserver;
+  class FakeMutationObserver {
+    observe(...args) {
+      observe(...args);
+    }
+
+    disconnect() {
+      disconnect();
+    }
+  }
+  globalThis.MutationObserver = FakeMutationObserver;
+  try {
+    const { unmount } = render(<LibraryBackdrop />);
+    expect(observe).toHaveBeenCalledWith(
+      document.documentElement,
+      expect.objectContaining({ attributes: true, attributeFilter: ["data-theme"] })
+    );
+    unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+  } finally {
+    globalThis.MutationObserver = OriginalMutationObserver;
+  }
+});
+
+test("library backdrop cleans up its window message listener on unmount", () => {
   const add = vi.spyOn(window, "addEventListener");
   const remove = vi.spyOn(window, "removeEventListener");
   const { unmount } = render(<LibraryBackdrop />);
-  const resizeCall = add.mock.calls.find(([type]) => type === "resize");
-  expect(resizeCall).toBeDefined();
+  const messageCall = add.mock.calls.find(([type]) => type === "message");
+  expect(messageCall).toBeDefined();
   unmount();
-  expect(remove).toHaveBeenCalledWith("resize", resizeCall[1]);
+  expect(remove).toHaveBeenCalledWith("message", messageCall[1]);
   add.mockRestore();
   remove.mockRestore();
+});
+
+test("library backdrop explicitly disposes iframe audio, RAF and WebGL resources", () => {
+  const runtime = fs.readFileSync("src/pages/Library/animated-backdrop/qftRuntime.js", "utf8");
+  const { container, unmount } = render(<LibraryBackdrop />);
+  const frame = container.querySelector("iframe");
+  const postMessage = vi.spyOn(frame.contentWindow, "postMessage");
+
+  unmount();
+
+  expect(postMessage).toHaveBeenCalledWith({ type: "QFT_DISPOSE" }, "*");
+  expect(runtime).toContain("window.__QFT_DISPOSE__ = dispose;");
+  expect(runtime).toContain("AUDIO.ctx?.close?.()");
+  expect(runtime).toContain("renderer.forceContextLoss?.()");
+  expect(runtime).toContain("cancelAnimationFrame(id)");
+  expect(runtime).toContain("target.removeEventListener?.(type, handler, options)");
+});
+
+test("library backdrop releases its microphone and WebGL iframe while the app is minimized", () => {
+  let notify;
+  globalThis.electronAPI = {
+    isElectron: true,
+    onHardwareSuspensionChange: (callback) => {
+      notify = callback;
+      return () => {};
+    }
+  };
+  const { container } = render(<LibraryBackdrop />);
+  const frame = container.querySelector("iframe");
+  const postMessage = vi.spyOn(frame.contentWindow, "postMessage");
+
+  act(() => notify(true));
+  expect(postMessage).toHaveBeenCalledWith({ type: "QFT_DISPOSE" }, "*");
+  expect(container.querySelector("iframe")).toBeNull();
+
+  act(() => notify(false));
+  expect(container.querySelector("iframe")).not.toBeNull();
+  delete globalThis.electronAPI;
 });

@@ -85,7 +85,10 @@ describe("library domain utilities", () => {
     assert.deepEqual(getLocalVisibleSongs(local, new Set(["hidden"])), [{ id: "local" }]);
     assert.deepEqual(getLocalVisibleSongs(null), []);
     assert.deepEqual(resolveVisibleSongs({ localSongs: local, room: null }), local);
-    assert.deepEqual(resolveVisibleSongs({ localSongs: local, room: { host: true } }), local);
+    assert.deepEqual(resolveVisibleSongs({ localSongs: local, room: { host: true, selfId: "host" } }), [
+      { id: "local", __roomLocal: true, __roomOwnerId: "host" },
+      { id: "hidden", __roomLocal: true, __roomOwnerId: "host" }
+    ]);
     const one = { id: "one", title: "first" };
     const duplicate = { id: "one", title: "duplicate" };
     const two = { id: "two" };
@@ -96,10 +99,18 @@ describe("library domain utilities", () => {
         roomSongs: [duplicate, two, null],
         roomSongsByParticipant: { a: [one], b: "bad" }
       }),
-      [one, two]
+      [
+        { id: "local", __roomLocal: true, __roomOwnerId: undefined },
+        { id: "hidden", __roomLocal: true, __roomOwnerId: undefined },
+        duplicate,
+        two
+      ]
     );
     const guest = { localSongs: local, room: { host: false }, roomSongs: [] };
-    assert.deepEqual(resolveVisibleSongs(guest), local);
+    assert.deepEqual(resolveVisibleSongs(guest), [
+      { id: "local", __roomLocal: true, __roomOwnerId: undefined },
+      { id: "hidden", __roomLocal: true, __roomOwnerId: undefined }
+    ]);
   });
 
   test("searches all metadata case-insensitively", () => {

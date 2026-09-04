@@ -6,11 +6,15 @@ import "./index.css";
 import { queryClient } from "./query-client";
 import { installGlobalErrorReporting } from "./utils/error-reporter";
 import { applyPerformanceProfile } from "./utils/performance-profile";
+import * as platform from "./utils/platform";
 import { getSavedTheme, saveTheme } from "./utils/theme";
 
-document.documentElement.dataset.theme = window.electronAPI?.initialTheme
-  ? saveTheme(window.electronAPI.initialTheme)
-  : getSavedTheme();
+const electronTheme = platform.initialTheme();
+const initialTheme = electronTheme ? saveTheme(electronTheme) : getSavedTheme();
+document.documentElement.dataset.theme = initialTheme;
+const initialBackground = "var(--color-bg)";
+document.documentElement.style.backgroundColor = initialBackground;
+document.body.style.backgroundColor = initialBackground;
 applyPerformanceProfile(window);
 installGlobalErrorReporting();
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -20,3 +24,33 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+const waitForBackdrop = () =>
+  new Promise((resolve) => {
+    const value = getComputedStyle(document.documentElement).getPropertyValue("--bg-image");
+    const source = value.match(/url\((['"]?)(.*?)\1\)/)?.[2];
+    if (!source) {
+      resolve();
+      return;
+    }
+
+    const image = new Image();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve();
+    };
+    const timeout = setTimeout(finish, 3500);
+    image.onload = finish;
+    image.onerror = finish;
+    image.src = source;
+    image.decode?.().then(finish, () => {});
+  });
+
+// Electron keeps the native window hidden until the theme backdrop is decoded.
+// Two frames also let the browser commit the background before the first show.
+waitForBackdrop()
+  .then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  .then(() => platform.recordStartupMilestone("visual-ready"));

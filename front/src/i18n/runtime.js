@@ -1,8 +1,6 @@
 import { getSavedLanguage } from "../utils/language";
-import sourceMessages from "./source-messages.json" with { type: "json" };
-import { interpolate } from "./translate";
+import { messages } from "./messages";
+import { translate } from "./translate";
 
-export const translateSaved = (source, values = {}) => {
-  const language = getSavedLanguage();
-  return interpolate(sourceMessages?.[language]?.[source] ?? source, values);
-};
+export const translateSaved = (key, values = {}) =>
+  translate(messages, getSavedLanguage(), key, values);

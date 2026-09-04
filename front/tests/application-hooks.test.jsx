@@ -45,9 +45,14 @@ describe("application hooks", () => {
     [{ type: "start-karaoke", songId: "song-1" }, ["/karaoke", { state: { songId: "song-1", autoPlay: false, roomPrepared: true } }]],
     [{ type: "open-library" }, ["/"]]
   ])("routes room command %#", (roomCommand, expected) => {
+    // "start-karaoke" fades to black before navigating so guests get the same
+    // transition the host gets from Library; run the timer to completion.
+    vi.useFakeTimers();
     mocks.useOnlineRoom.mockReturnValue({ roomCommand });
     renderHook(() => useOnlineRoomNavigation());
+    vi.runAllTimers();
     expect(mocks.navigate).toHaveBeenCalledWith(...expected);
+    vi.useRealTimers();
   });
   test("ignores unknown or incomplete room commands", () => {
     mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "start-karaoke" } });

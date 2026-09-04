@@ -44,7 +44,7 @@ class SongOut(ORMModel, ProcessingState):
     output_dir: str | None = None
 
     key_override: str | None = None
-    tempo_override: int | None = None
+    tempo_override: float | None = None
     note_range_min: int | None = None
     note_range_max: int | None = None
     difficulty_override: str | None = None
@@ -63,6 +63,25 @@ class SongIdentityOut(BaseModel):
     cover_data_url: str | None = None
 
 
+class KarDatasetItemOut(BaseModel):
+    filename: str
+    status: Literal["ready", "review", "skipped", "error"]
+    dataset_dir: str | None = None
+    title: str | None = None
+    artist: str | None = None
+    word_count: int = 0
+    note_count: int = 0
+    preparation_mode: str | None = None
+    stems_status: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class KarDatasetBatchOut(BaseModel):
+    output_root: str
+    items: list[KarDatasetItemOut]
+
+
 class SongUpdate(BaseModel):
     """Все поля опциональны — PATCH-семантика, меняем только переданное."""
 
@@ -70,7 +89,7 @@ class SongUpdate(BaseModel):
     artist: str | None = Field(default=None, max_length=255)
     genre: str | None = Field(default=None, max_length=255)
     key_override: str | None = None
-    tempo_override: int | None = Field(default=None, gt=0)
+    tempo_override: float | None = Field(default=None, gt=0)
     note_range_min: int | None = Field(default=None, ge=0, le=127)
     note_range_max: int | None = Field(default=None, ge=0, le=127)
     difficulty_override: str | None = None
@@ -130,7 +149,33 @@ class ProcessingStatusOut(BaseModel):
     progress_percent: float
     progress_detail: str | None = None
     eta_seconds: int | None = None
+    stage: str | None = None
+    stage_elapsed_seconds: int | None = None
+    total_elapsed_seconds: int | None = None
+    estimated_finish_at: str | None = None
     error_message: str | None = None
+
+
+class SongRevisionsRequest(BaseModel):
+    song_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class SongRevisionResult(BaseModel):
+    song_id: str
+    revision: str | None = None
+    error: str | None = None
+
+
+class SongRevisionsOut(BaseModel):
+    revisions: list[SongRevisionResult]
+
+
+class SongRevisionResolveRequest(BaseModel):
+    revision: str = Field(min_length=71, max_length=71, pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class SongRevisionResolveOut(BaseModel):
+    song_id: str | None = None
 
 
 class SongEditorUpdate(BaseModel):
@@ -179,7 +224,16 @@ class RecordingOut(ORMModel):
     filename: str
     duration_sec: float | None = None
     sample_rate: int | None = None
+    playback_offset_sec: float = 0
     created_at: datetime
+
+    @field_validator("playback_offset_sec", mode="before")
+    @classmethod
+    def _default_playback_offset(cls, value: object) -> object:
+        # An unflushed ORM Recording (constructed without this column set
+        # explicitly, e.g. in tests) reports None rather than the column's
+        # SQL-side default until it's committed.
+        return 0 if value is None else value
 
 
 class RecordedSongOut(RecordingOut):
@@ -194,6 +248,23 @@ class RecordingStartRequest(BaseModel):
     reverb: float = Field(default=0, ge=0, le=1)
     echo: float = Field(default=0, ge=0, le=1)
     delay: float = Field(default=0, ge=0, le=1)
+    octave: float = Field(default=0, ge=-1, le=1)
+    playback_rate: float = Field(default=1, ge=0.5, le=1.5)
+    room_mode: bool = False
+    # Set when the frontend successfully connected to the Python monitor's
+    # audio relay (see app/routers/audio_relay.py) and intends to use it as
+    # the room's DSP source instead of its own local Web Audio graph. Only
+    # meaningful when room_mode is also True.
+    voice_relay: bool = False
+
+
+class RecordingControlsRequest(BaseModel):
+    music_volume: float = Field(ge=0, le=1)
+    microphone_volume: float = Field(ge=0, le=4)
+    reverb: float = Field(ge=0, le=1)
+    echo: float = Field(ge=0, le=1)
+    delay: float = Field(ge=0, le=1)
+    octave: float = Field(ge=-1, le=1)
 
 
 class RecordingStartOut(BaseModel):
@@ -212,6 +283,10 @@ class AnalysisOut(ORMModel):
     recording_id: str
     pitch_accuracy_percent: float | None = None
     mean_deviation_semitones: float | None = None
+    rhythm_accuracy_percent: float | None = None
+    note_hold_percent: float | None = None
+    note_coverage_percent: float | None = None
+    overall_score_percent: float | None = None
     sections: list[dict[str, Any]] | None = None
     created_at: datetime
 
@@ -225,10 +300,14 @@ class CacheSizeOut(BaseModel):
     total_bytes: int
     total_human: str
     breakdown: dict[str, int]
+    library_roots: list[dict[str, str | int]] = Field(default_factory=list)
+    diagnostics: list[str] = Field(default_factory=list)
 
 
 class FreeSpaceOut(BaseModel):
     free_bytes: int
+    reserved_bytes: int = 0
+    available_bytes: int = 0
     free_human: str
     total_bytes: int
     total_human: str
@@ -249,6 +328,8 @@ class OptimizeResultOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
     version: str
+    build_id: str
+    startup: dict[str, object] | None = None
 
 
 class PipelineHealthOut(BaseModel):
@@ -283,6 +364,7 @@ class AIModelsStatusOut(BaseModel):
 
 class VersionsOut(BaseModel):
     backend_version: str
+    build_id: str
     python_version: str
     components: dict[str, str | None]
 
@@ -341,6 +423,7 @@ class AudioSettingsOut(ORMModel):
     echo: float
     delay: float
     noise_suppression: float
+    octave: float
 
 
 class AudioSettingsUpdate(BaseModel):
@@ -357,6 +440,7 @@ class AudioSettingsUpdate(BaseModel):
     echo: float | None = Field(default=None, ge=0, le=1)
     delay: float | None = Field(default=None, ge=0, le=1)
     noise_suppression: float | None = Field(default=None, ge=0, le=1)
+    octave: float | None = Field(default=None, ge=-1, le=1)
 
 
 class SignalQualityOut(BaseModel):
