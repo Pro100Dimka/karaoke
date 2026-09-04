@@ -12,14 +12,11 @@ export const audioApi = {
   updateAudioSettings: (patch) =>
     request("/audio/settings", { method: "POST", body: JSON.stringify(patch) }),
   getDirectMonitorStatus: () => request("/audio/direct-monitor/status"),
-  startDirectMonitoring: ({ disabledEffects = false, wasapiMode } = {}) =>
-    request(
-      `/audio/direct-monitor/start?disabled_effects=${disabledEffects}${wasapiMode ? `&wasapi_mode=${encodeURIComponent(wasapiMode)}` : ""}`,
-      {
-        method: "POST",
-        timeoutMs: DIRECT_MONITOR_START_TIMEOUT_MS
-      }
-    ),
+  startDirectMonitoring: ({ disabledEffects = false } = {}) =>
+    request(`/audio/direct-monitor/start?disabled_effects=${disabledEffects}`, {
+      method: "POST",
+      timeoutMs: DIRECT_MONITOR_START_TIMEOUT_MS
+    }),
   stopDirectMonitoring: () => request("/audio/direct-monitor/stop", { method: "POST" }),
   setDirectMonitorDry: (enabled) =>
     request(`/audio/direct-monitor/dry?enabled=${enabled}`, { method: "POST" }),

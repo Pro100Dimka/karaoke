@@ -717,12 +717,9 @@ export const ukMessages = {
   "settings.audio.monitor.latency.label": "Затримка драйвера (вхід + вихід)",
   "settings.audio.monitor.fallback":
     "Драйвер перейшов у резервний режим. Затримка може збільшитися.",
-  "settings.audio.wasapiMode.label": "Ексклюзивний режим WASAPI",
   "settings.audio.wasapiMode.options.shared": "Спільний — звук інших програм доступний",
   "settings.audio.buffer_size.description":
     "Менший буфер — менша затримка, але вищий ризик тріску. Зміна буфера перезапускає прослуховування. Це не вимірювання повної затримки голосу.",
-  "settings.audio.wasapiMode.warning":
-    "Ексклюзивний режим повністю займає пристрій: може завадити запису, кімнаті та відтворенню мінусовки в інших програмах. Якщо драйвер відмовить — застосунок автоматично повернеться до звичайного (shared) режиму.",
   "settings.audio.monitor.retry.label": "Повторити підключення",
   "settings.audio.asioHelp.description":
     "Повторюються збої аудіо. Програма не виявила ASIO-драйверів. ASIO4ALL можна встановити самостійно; зниження затримки не гарантовано.",

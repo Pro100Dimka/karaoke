@@ -1,7 +1,7 @@
 import { Volume2 } from "lucide-react";
 import LiveSignalWaveform from "../../../components/LiveSignalWaveform";
 import { translateSaved } from "../../../i18n/runtime";
-import { Stack, Switch, Typography } from "../../../theme/ui";
+import { Stack, Switch } from "../../../theme/ui";
 
 export default function rows({ settings: { audio }, run, tr = translateSaved }) {
   const status = audio.monitorStatus;
@@ -68,6 +68,14 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
             disabled={audio.busy}
             onChange={() => run(() => audio.monitor())}
           />
+          {audio.values?.monitoring_enabled && (
+            <Switch
+              label={tr("settings.audio.dryMonitor.label")}
+              variant="plain"
+              checked={!!audio.dryMonitor}
+              onChange={() => run(() => audio.setDryMonitor(!audio.dryMonitor))}
+            />
+          )}
           <LiveSignalWaveform
             active={status?.state === "running"}
             level={audio.level}
@@ -77,7 +85,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       )
     },
     {
-      md: 6,
+      md: 4,
       type: "SelectField",
       tag: "audio.asio_driver_name",
       label: tr("settings.audio.audio_driver.label"),
@@ -85,7 +93,7 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       options: audio.options?.drivers ?? []
     },
     {
-      md: 6,
+      md: 4,
       type: "SelectField",
       tag: "audio.buffer_size",
       tooltip: tr("settings.audio.buffer_size.description"),
@@ -95,26 +103,6 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
         value,
         label: value
       }))
-    },
-    {
-      md: audio.wasapiExclusive ? 12 : 4,
-      showFor: audio.wasapiExclusiveAvailable,
-      render: () => (
-        <Stack>
-          <Switch
-            label={tr("settings.audio.wasapiMode.label")}
-            variant="plain"
-            checked={audio.wasapiExclusive}
-            disabled={audio.busy || !!audio.values?.monitoring_enabled}
-            onChange={() => audio.setWasapiExclusive((value) => !value)}
-          />
-          {audio.wasapiExclusive ? (
-            <Typography variant="caption" role="alert">
-              {tr("settings.audio.wasapiMode.warning")}
-            </Typography>
-          ) : null}
-        </Stack>
-      )
     },
     {
       type: "Label",

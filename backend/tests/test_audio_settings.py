@@ -239,7 +239,6 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
                 "delay": 0.0,
                 "octave": 0.0,
                 "noise_suppression": 0.35,
-            "wasapi_exclusive": False,
             "wasapi_mode": "shared",
             "native_shared": True,
             "input_device_name": "Selected microphone",

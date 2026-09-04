@@ -110,10 +110,9 @@ function useAudio(open) {
   }, [monitorStatus.data?.blocksize]);
   const [local, setLocal] = useState({});
   const [busy, setBusy] = useState(false);
-  // Exclusive WASAPI mode is intentionally session-only, never a saved
-  // default (see settings.audio.wasapiMode.warning) -- it resets to shared
-  // on every app restart and is only ever requested explicitly by the user.
-  const [wasapiExclusive, setWasapiExclusive] = useState(false);
+  // A momentary, unsaved check -- never carry a stale "on" across a
+  // stop/restart of monitoring itself.
+  const [dryMonitor, setDryMonitorState] = useState(false);
   const values = { ...settings.data, ...local };
   const asio = useOpenPoll(open, api.listAsioDrivers, POLL.devices, []);
   const fail = (key, error) => alert(tr(key, { 0: getErrorMessage(error) }));
@@ -140,18 +139,24 @@ function useAudio(open) {
       const enabled = !!values.monitoring_enabled && !retry;
       const saved = await (enabled
         ? api.stopDirectMonitoring()
-        : api.startDirectMonitoring({
-            disabledEffects: true,
-            wasapiMode: wasapiExclusive ? "exclusive" : "shared"
-          }));
+        : api.startDirectMonitoring({ disabledEffects: true }));
 
       merge({ monitoring_enabled: !enabled });
+      if (enabled) setDryMonitorState(false);
       emit(saved);
       await Promise.all([monitorStatus.refresh(), settings.refresh()]);
     } catch (error) {
       await fail("settings.couldNotChangeMonitoring", error);
     } finally {
       setBusy(false);
+    }
+  };
+  const setDryMonitor = async (value) => {
+    try {
+      const result = await api.setDirectMonitorDry(value);
+      setDryMonitorState(!!result?.dry_monitor);
+    } catch (error) {
+      await fail("settings.couldNotChangeMonitoring", error);
     }
   };
   const selectDriver = (name) =>
@@ -196,11 +201,8 @@ function useAudio(open) {
     monitorStatus: monitorStatus.data,
     monitorStatusError: monitorStatus.error,
     suggestAsio: false,
-    // Exclusive only ever applies through the WASAPI host (audio_driver
-    // "auto"); ASIO and MME have their own buffer paths and never see this.
-    wasapiExclusiveAvailable: !["asio", "mme"].includes(values.audio_driver),
-    wasapiExclusive,
-    setWasapiExclusive,
+    dryMonitor,
+    setDryMonitor,
     level: values.monitoring_enabled ? signalLevel(signal.data) : 0,
     options: {
       drivers: [

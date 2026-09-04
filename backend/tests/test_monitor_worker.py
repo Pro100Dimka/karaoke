@@ -99,54 +99,15 @@ def test_each_mode_uses_only_its_selected_configuration():
             assert candidates[0].get("_engine") != "wasapi-split"
 
 
-def test_exclusive_request_adds_a_leading_candidate_with_the_fallback_kept():
-    candidates = monitor_worker._stream_candidates({**options(), "wasapi_exclusive": True})
-    assert len(candidates) == 2
-    assert candidates[0]["_mode"] == "exclusive"
-    assert candidates[0]["blocksize"] == 64
-    sd = monitor_worker.sd
-    exclusive_bytes = sd._ffi.buffer(sd.WasapiSettings(exclusive=True)._streaminfo)[:]
-    assert all(sd._ffi.buffer(setting._streaminfo)[:] == exclusive_bytes for setting in candidates[0]["extra_settings"])
-    assert candidates[1]["_mode"] == "shared"
-    assert all(sd._ffi.buffer(setting._streaminfo)[:] != exclusive_bytes for setting in candidates[1]["extra_settings"])
-
-
-def test_exclusive_request_is_ignored_for_a_plain_non_wasapi_host():
-    candidates = monitor_worker._stream_candidates({**options(), "wasapi_mode": "plain", "wasapi_exclusive": True})
-    assert len(candidates) == 1
-    assert candidates[0]["_mode"] == "plain"
-
-
-def test_main_falls_back_to_shared_when_exclusive_negotiation_fails(monkeypatch, capsys):
-    configure_argv(monkeypatch, {**options(), "wasapi_exclusive": True})
-    monkeypatch.setattr(monitor_worker, "_running", False)
-    failed_exclusive = Mock()
-    failed_exclusive.start.side_effect = RuntimeError("device busy")
-    fallback_stream = Mock()
-    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(side_effect=[failed_exclusive, fallback_stream]))
-
-    assert monitor_worker.main() == 0
-    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert {"event": "fallback", "message": "device busy"} in events
-    assert events[-1]["event"] == "started"
-    failed_exclusive.abort.assert_called_once_with()
-    failed_exclusive.close.assert_called_once_with()
-    fallback_stream.start.assert_called_once_with()
-    # Both attempts request the same blocksize; only the WASAPI exclusive
-    # flag differs between them.
-    first_kwargs, second_kwargs = (call.kwargs for call in monitor_worker.sd.Stream.call_args_list)
-    assert first_kwargs["blocksize"] == second_kwargs["blocksize"] == 64
-
-
-def test_main_reports_a_hard_error_when_every_candidate_fails(monkeypatch, capsys):
-    configure_argv(monkeypatch, {**options(), "wasapi_exclusive": True})
+def test_main_reports_a_hard_error_when_the_only_candidate_fails(monkeypatch, capsys):
+    configure_argv(monkeypatch, options())
     monkeypatch.setattr(monitor_worker, "_running", False)
     always_fails = Mock()
     always_fails.start.side_effect = RuntimeError("no supported configuration")
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=always_fails))
 
     assert monitor_worker.main() == 1
-    assert monitor_worker.sd.Stream.call_count == 2
+    assert monitor_worker.sd.Stream.call_count == 1
     assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {
         "event": "error", "message": "no supported configuration"
     }

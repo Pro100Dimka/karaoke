@@ -24,7 +24,7 @@ def test_audio_router_forwards_devices_settings_and_selection(monkeypatch):
     update.assert_called_with(database, {"volume": 2.0}, background=True)
     assert (audio.start_direct_monitoring(database) is current) and (audio.stop_direct_monitoring(database) is current) and (audio.select_device(4, database) is current)
     assert audio.start_direct_monitoring(database, disabled_effects=True) is current
-    monitor.assert_any_call(database, True, disabled_effects=True, background=True, wasapi_mode=None)
+    monitor.assert_any_call(database, True, disabled_effects=True, background=True)
     update.assert_called_with(database, {"input_device_id": 4}, background=True)
 
 

@@ -89,7 +89,6 @@ _monitor_dry_bypass = False
 _MONITOR_START_TIMEOUT_SECONDS = 12.0
 logger = logging.getLogger(__name__)
 _monitor_control = MonitorControl(execution_lock=hardware_lock)
-_monitor_wasapi_mode = "shared"
 _requested_effects_disabled = False
 _hardware_suspended = False
 _known_device_names: dict[int, str] = {}
@@ -614,7 +613,7 @@ def update_settings(db: Session, patch: dict, *, background: bool = False) -> mo
 
 def set_monitoring_enabled(
     db: Session, enabled: bool, *, disabled_effects: bool = False,
-    background: bool = False, wasapi_mode: str | None = None,
+    background: bool = False,
 ) -> models.AudioSettings:
     global _monitor_effects_disabled
     settings = get_settings(db)
@@ -623,7 +622,7 @@ def set_monitoring_enabled(
     if background:
         settings.monitoring_enabled = enabled
         commit_refresh(db, settings)
-        request_monitoring(settings, disabled_effects=disabled_effects, wasapi_mode=wasapi_mode)
+        request_monitoring(settings, disabled_effects=disabled_effects)
         return settings
     _monitor_effects_disabled = bool(disabled_effects) if enabled else False
     if previous == enabled:
@@ -652,21 +651,16 @@ def set_monitoring_enabled(
 
 
 def request_monitoring(
-    settings, *, disabled_effects=None, wasapi_mode=None, adopt_driver_buffer: bool = False
+    settings, *, disabled_effects=None, adopt_driver_buffer: bool = False
 ) -> None:
-    global _monitor_wasapi_mode, _requested_effects_disabled
+    global _requested_effects_disabled
     if _hardware_suspended:
         _monitor_control.cancel()
         return
-    if wasapi_mode is not None:
-        if wasapi_mode not in {"shared", "exclusive"}:
-            raise RuntimeError("Unsupported WASAPI mode")
-        _monitor_wasapi_mode = wasapi_mode
     snapshot = SimpleNamespace(**{
         field: getattr(settings, field, None)
         for field in _MONITOR_RESTART_FIELDS | _LIVE_UPDATE_FIELDS | {"monitoring_enabled"}
     })
-    mode = _monitor_wasapi_mode
     if disabled_effects is not None:
         _requested_effects_disabled = bool(disabled_effects)
     effects_disabled = _requested_effects_disabled
@@ -674,7 +668,6 @@ def request_monitoring(
     def apply():
         global _monitor_effects_disabled
         _monitor_effects_disabled = effects_disabled if snapshot.monitoring_enabled else False
-        snapshot.wasapi_mode = mode
         configure_monitoring(snapshot, adopt_driver_buffer=adopt_driver_buffer)
 
     _monitor_control.submit(
@@ -685,10 +678,6 @@ def request_monitoring(
 
 def monitoring_status() -> dict:
     return _monitor_control.snapshot()
-
-
-def monitoring_mode() -> str:
-    return _monitor_wasapi_mode
 
 
 def recording_monitor_mode(device_id):
@@ -916,16 +905,6 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
         raise RuntimeError("No output device is available for microphone monitoring")
     gain = max(0.0, min(4.0, settings.volume))
     wasapi = "wasapi" in _host_api_name(input_info).casefold()
-    # settings.wasapi_mode is set only on the SimpleNamespace snapshot built by
-    # request_monitoring (see apply()'s `snapshot.wasapi_mode = mode`); callers
-    # that pass a real, DB-bound AudioSettings row here (recording.py starting
-    # a take, entering a room) have no such column -- it is intentionally not
-    # persisted (never a saved default, see the wasapiMode UI warning). Fall
-    # back to the last mode the user actually requested this run, so opting
-    # into exclusive from the Settings preview also applies to recording and
-    # rooms started afterwards, without surviving an app restart.
-    requested_mode = getattr(settings, "wasapi_mode", None) or _monitor_wasapi_mode
-    exclusive_requested = wasapi and requested_mode == "exclusive"
     wasapi_mode = "shared" if wasapi else "plain"
     _monitor_control.publish(
         input_device=str(input_info.get("name", "")), output_device=str(output_info.get("name", "")),
@@ -949,7 +928,6 @@ def _start_shared_monitor(settings, *, driver: str) -> None:
         "noise_suppression": clamp01(
             settings.noise_suppression if settings.noise_suppression is not None else 0.35
         ),
-        "wasapi_exclusive": exclusive_requested,
         "wasapi_mode": wasapi_mode,
     }
     if wasapi:
@@ -1120,10 +1098,10 @@ def _launch_monitor_process(
             if event == "started":
                 # The ASIO bridge's "started" event uses driver/buffer_size/
                 # latency_source keys; the WASAPI worker's uses
-                # engine/blocksize/latency/exclusive. Fall back across both
-                # schemas so this line reports real values for either,
-                # instead of silently logging None for whichever one is not
-                # currently running.
+                # engine/blocksize/latency. Fall back across both schemas so
+                # this line reports real values for either, instead of
+                # silently logging None for whichever one is not currently
+                # running.
                 #
                 # For the native WASAPI engine specifically, "blocksize" is
                 # just the requested value echoed back (see Info.blocksize in
@@ -1134,7 +1112,7 @@ def _launch_monitor_process(
                 # that so this line reports what really applied, not just
                 # what was asked for.
                 logger.info(
-                    "Audio monitor started: driver=%s buffer_size=%s sample_rate=%s latency=%s exclusive=%s",
+                    "Audio monitor started: driver=%s buffer_size=%s sample_rate=%s latency=%s",
                     message.get("driver", message.get("engine")),
                     message.get(
                         "buffer_size",
@@ -1142,7 +1120,6 @@ def _launch_monitor_process(
                     ),
                     message.get("sample_rate"),
                     message.get("latency", message.get("latency_source")),
-                    message.get("exclusive"),
                 )
                 if on_buffer_negotiated is not None:
                     negotiated = message.get("buffer_size")

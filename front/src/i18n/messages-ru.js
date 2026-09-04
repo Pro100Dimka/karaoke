@@ -720,11 +720,8 @@ export const ruMessages = {
   "settings.audio.monitor.latency.label": "Задержка драйвера (вход + выход)",
   "settings.audio.monitor.fallback":
     "Драйвер перешёл на резервный режим. Задержка может увеличиться.",
-  "settings.audio.wasapiMode.label": "Эксклюзивный режим WASAPI",
   "settings.audio.wasapiMode.options.shared": "Windows Driver",
   "settings.audio.buffer_size.description": "Меньше буфер — ниже задержка, выше риск треска.",
-  "settings.audio.wasapiMode.warning":
-    "Эксклюзивный режим полностью занимает устройство: может помешать записи, комнате и воспроизведению минусовки в других программах. Если драйвер откажет — приложение автоматически вернётся к обычному (shared) режиму.",
   "settings.audio.monitor.retry.label": "Повторить подключение",
   "settings.audio.asioHelp.description":
     "Повторяются сбои аудио. Приложение не обнаружило ASIO-драйверов. ASIO4ALL можно установить самостоятельно; снижение задержки не гарантируется.",

@@ -48,11 +48,11 @@ _live_params = {
 
 
 def _stream_candidates(options: dict) -> list[dict]:
-    """No buffer or rate fallback. The only fallback is mode: an explicitly
-    requested exclusive-mode attempt (PortAudio-negotiated, see WasapiSettings
-    below) is tried first and, on any failure to open it, main() falls back
-    to the same shared/plain configuration used when exclusive was never
-    requested at all -- never a hard error just because exclusive failed.
+    """No buffer or rate fallback -- the requested blocksize/sample rate are
+    used as-is. Every monitoring path (solo, recording, room) always opens
+    the device in shared mode, never exclusive: exclusive mode seizes the
+    device from every other app (and every other stream in this app), which
+    this project deliberately never asks for.
     """
     rate = float(options["sample_rate"])
     blocksize = int(options["blocksize"])
@@ -74,21 +74,7 @@ def _stream_candidates(options: dict) -> list[dict]:
         )
         if options.get("native_shared"):
             fallback["_engine"] = "wasapi-native-shared"
-    if mode != "shared" or not options.get("wasapi_exclusive"):
-        return [fallback]
-    # Exclusive mode seizes the device; it never goes through the native DLL
-    # (shared-mode only, see monitor.cpp), only through PortAudio's own
-    # WASAPI exclusive negotiation. Same requested buffer/rate as the
-    # fallback, so a failure here is purely about mode, not about a
-    # different buffer size being rejected.
-    exclusive = {
-        "samplerate": rate, "blocksize": blocksize, "latency": blocksize / rate,
-        "channels": (1, int(options["output_channels"])),
-        "device": (int(options["input_device_id"]), int(options["output_device_id"])),
-        "_mode": "exclusive",
-        "extra_settings": (sd.WasapiSettings(exclusive=True), sd.WasapiSettings(exclusive=True)),
-    }
-    return [exclusive, fallback]
+    return [fallback]
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
 
@@ -97,7 +83,6 @@ def _stream_diagnostics(stream, candidate, options, mode):
     result = {
         "blocksize": candidate.get("blocksize", 0), "sample_rate": candidate.get("samplerate", options["sample_rate"]),
         "latency": candidate.get("latency", "low"), "mode": mode,
-        "exclusive": mode == "exclusive",
         "engine": "wasapi-split" if isinstance(stream, WasapiMonitorStream) else "duplex",
     }
     # WASAPI PortAudio derives these estimates from allocated buffer capacity,

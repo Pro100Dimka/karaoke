@@ -1,7 +1,5 @@
 """Микрофон и звук."""
 
-from typing import Literal
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -39,14 +37,9 @@ def update_settings(patch: schemas.AudioSettingsUpdate, db: Session = Depends(ge
 
 
 @router.post("/direct-monitor/start", response_model=schemas.AudioSettingsOut, status_code=202)
-def start_direct_monitoring(
-    db: Session = Depends(get_db), disabled_effects: bool = False,
-    wasapi_mode: Literal["shared", "exclusive"] | None = None,
-):
+def start_direct_monitoring(db: Session = Depends(get_db), disabled_effects: bool = False):
     with http_error(RuntimeError, 503):
-        return audio_service.set_monitoring_enabled(
-            db, True, disabled_effects=disabled_effects, background=True, wasapi_mode=wasapi_mode,
-        )
+        return audio_service.set_monitoring_enabled(db, True, disabled_effects=disabled_effects, background=True)
 
 
 @router.post("/direct-monitor/stop", response_model=schemas.AudioSettingsOut)

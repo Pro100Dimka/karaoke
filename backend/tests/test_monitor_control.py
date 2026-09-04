@@ -22,7 +22,6 @@ def control(monkeypatch):
     monkeypatch.setattr(audio_service, "_monitor_reader", None)
     monkeypatch.setattr(audio_service, "_monitor_effects_disabled", False)
     monkeypatch.setattr(audio_service, "_requested_effects_disabled", False)
-    monkeypatch.setattr(audio_service, "_monitor_wasapi_mode", "shared")
     yield instance
     instance.cancel()
 
@@ -84,10 +83,9 @@ def test_legacy_http_auto_buffer_cannot_override_saved_buffer(monkeypatch):
     db = Mock()
     app.dependency_overrides[get_db] = lambda: db
     with TestClient(app) as client:
-        response = client.post("/audio/direct-monitor/start?auto_buffer=true&wasapi_mode=shared")
+        response = client.post("/audio/direct-monitor/start?auto_buffer=true")
     assert response.status_code == 202
-    start.assert_called_once_with(db, True, disabled_effects=False, background=True,
-                                  wasapi_mode="shared")
+    start.assert_called_once_with(db, True, disabled_effects=False, background=True)
 
 
 def test_hardware_suspend_releases_monitor_without_changing_saved_preference(monkeypatch):
@@ -310,19 +308,18 @@ def test_cancelled_launch_does_not_spawn_a_process(control, monkeypatch, tmp_pat
     launch.assert_not_called()
 
 
-def test_wasapi_shared_without_exclusive_and_with_correct_labels(monkeypatch):
+def test_wasapi_always_opens_shared_with_correct_labels(monkeypatch):
     monkeypatch.setattr(monitor_worker.sd, "WasapiSettings", lambda **kwargs: kwargs)
     base = {"sample_rate": 48000, "output_channels": 2, "input_device_id": 0,
             "output_device_id": 1, "blocksize": 128, "wasapi_mode": "shared"}
     candidates = monitor_worker._stream_candidates(base)
     assert len(candidates) == 1
-    shared = monitor_worker._stream_candidates({**base, "wasapi_mode": "shared"})[0]
+    shared = candidates[0]
     assert shared["extra_settings"] == ({"exclusive": False, "auto_convert": True}, {"exclusive": False, "auto_convert": True})
     for mode in ("exclusive", "input-exclusive"):
         with pytest.raises(ValueError, match="Unsupported WASAPI mode"):
             monitor_worker._stream_candidates({**base, "wasapi_mode": mode})
     details = monitor_worker._stream_diagnostics(SimpleNamespace(latency=(.004, .006)), shared, base, "shared")
-    assert details["exclusive"] is False
     assert details["input_latency_ms"] == 4 and details["output_latency_ms"] == 6
 
 
