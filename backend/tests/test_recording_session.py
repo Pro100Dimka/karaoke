@@ -728,7 +728,15 @@ def test_create_performance_mix_resolves_path_ffmpeg_and_falls_back_to_wav(monke
     assert second[0] == str(executable) and second[-1].endswith("-performance.wav")
     filters = second[second.index("-filter_complex") + 1]
     assert "volume=1.650000[performer-final]" in filters
-    assert "aecho" not in filters and "alimiter" not in filters and "acompressor" not in filters
+    # reverb=0.5 does apply now (see _performance_mix_command), on a
+    # separate split-off "wet" copy of the voice, not on the dry
+    # [performer-final] branch asserted above -- gate/compressor/limiter are
+    # still never applied to the offline mix at all (see the "raw voice
+    # timing" test/comment on why).
+    assert "aecho" in filters
+    dry_chain = next(part for part in filters.split(";") if part.endswith("[performer-final]"))
+    assert "aecho" not in dry_chain
+    assert "alimiter" not in filters and "acompressor" not in filters
 
 
 def test_create_performance_mix_skips_missing_instrumental(monkeypatch, tmp_path):

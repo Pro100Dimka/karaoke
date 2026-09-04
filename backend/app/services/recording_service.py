@@ -1022,13 +1022,33 @@ def _performance_mix_command(
         ]
         music_label = "music"
     final_voice_gain = max(0.0, min(4.0, float(voice_gain))) * 1.65
+    # Reverb/echo/delay are built on a SEPARATE copy of the voice split off
+    # here, never chained onto the dry branch below -- so the dry branch's
+    # own timing is completely unaffected (see the comment on it) and the
+    # effected copy is an additional layer added into the mix, not a
+    # replacement for the dry one.
+    wet_source, wet_filters = "performer0-wet", []
+    for name in ("reverb", "echo", "delay"):
+        wet_target = f"performer0-wet-{name}"
+        stage = _effect_filter(name, (effects or {}).get(name, 0.0), wet_source, wet_target)
+        if stage is None: continue
+        wet_filters.append(stage)
+        wet_source = wet_target
+    dry_source = "performer0"
+    if wet_filters:
+        dry_source = "performer0-dry"
+        filters.append(f"[performer0]asplit=2[{dry_source}][performer0-wet]")
+        filters.extend(wet_filters)
+        filters.append(f"[{wet_source}]volume={final_voice_gain:.6f}[performer-wet-final]")
     # Keep the captured microphone timeline sample-for-sample. Filters with
     # lookahead (especially the limiter/compressor chain) delayed only the
     # voice by about 10 ms while the instrumental stayed at zero. A scalar
     # gain changes level only and therefore preserves the raw timing.
-    filters.append(f"[performer0]volume={final_voice_gain:.6f}[performer-final]")
+    filters.append(f"[{dry_source}]volume={final_voice_gain:.6f}[performer-final]")
+    mix_inputs = [music_label, "performer-final", *(["performer-wet-final"] if wet_filters else [])]
     filters.append(
-        f"[{music_label}][performer-final]amix=inputs=2:duration=first:normalize=0[mix]"
+        "".join(f"[{label}]" for label in mix_inputs)
+        + f"amix=inputs={len(mix_inputs)}:duration=first:normalize=0[mix]"
     )
     codec = ["-c:a", "pcm_s24le"] if destination.suffix.casefold() == ".wav" else [
         "-c:a", "libmp3lame", "-b:a", "320k"

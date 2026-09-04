@@ -200,7 +200,15 @@ def test_performance_mix_command_contains_raw_timing_and_lossy_output(tmp_path):
     assert (command[command.index('-ss') + 1] == '1.250') and (command[command.index('-t') + 1] == '12.500')
     filters = command[command.index("-filter_complex") + 1]
     assert ('volume=0.800000' in filters) and ('volume=1.650000' in filters)
-    assert 'aecho' not in filters
+    # reverb is applied on a separate split-off copy of the voice ("wet"),
+    # mixed in alongside the untouched dry [performer-final] branch below --
+    # not chained into [performer-final] itself, so that branch's own timing
+    # stays exactly as it was (see the comment at its call site). "unknown"
+    # is silently ignored, matching _effect_filter's contract.
+    assert "aecho" in filters
+    dry_chain = next(part for part in filters.split(";") if part.endswith("[performer-final]"))
+    assert "aecho" not in dry_chain
+    assert "amix=inputs=3" in filters
     assert command[-4:] == ['libmp3lame', '-b:a', '320k', str(tmp_path / 'mix.mp3')]
 
     wav_command = recording_service._performance_mix_command(
