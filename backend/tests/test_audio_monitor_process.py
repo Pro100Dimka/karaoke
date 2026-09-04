@@ -24,10 +24,15 @@ def test_stop_monitoring_handles_idle_finished_and_running_processes(monkeypatch
     patch_attrs(monkeypatch, audio_service, _monitor_process=None, _monitor_reader=None)
     audio_service.stop_monitoring()
 
-    finished = process(poll=0)
-    monkeypatch.setattr(audio_service, "_monitor_process", finished)
+    finished, finished_reader = process(poll=0), Mock()
+    patch_attrs(monkeypatch, audio_service, _monitor_process=finished, _monitor_reader=finished_reader)
     audio_service.stop_monitoring()
     finished.terminate.assert_not_called()
+    # A worker that already exited on its own (driver crash, unplugged
+    # device) still needs its pipes closed and reader joined -- an earlier
+    # bug returned right after the poll() check and skipped this entirely.
+    assert finished.stdout.closed
+    finished_reader.join.assert_called_once_with(timeout=1.0)
 
     running, reader = process(poll=None), Mock()
     patch_attrs(monkeypatch, audio_service, _monitor_process=running, _monitor_reader=reader)

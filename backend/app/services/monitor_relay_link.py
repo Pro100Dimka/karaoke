@@ -40,6 +40,15 @@ class RelayLink:
         self._closed = False
         self._socket: socket.socket | None = None
         self._connect_timeout = connect_timeout
+        # Guards the _closed/_socket handoff between _connect_and_run (which
+        # sets _socket once connected) and close() (which reads it to close
+        # the real socket). Without this, both sides can each observe the
+        # other's stale pre-write state and conclude "the other one will
+        # close it" -- close() sees _socket still None and does nothing,
+        # _connect_and_run sees _closed still False, publishes _socket, then
+        # reads the sentinel close() already queued and returns without ever
+        # closing the socket it just opened.
+        self._state_lock = threading.Lock()
         threading.Thread(target=self._connect_and_run, args=(port,), daemon=True).start()
 
     @property
@@ -83,11 +92,12 @@ class RelayLink:
         except OSError:
             return
         sock.settimeout(None)
-        if self._closed:
-            with contextlib.suppress(OSError):
-                sock.close()
-            return
-        self._socket = sock
+        with self._state_lock:
+            if self._closed:
+                with contextlib.suppress(OSError):
+                    sock.close()
+                return
+            self._socket = sock
         while True:
             item = self._queue.get()
             if item is None:
@@ -98,9 +108,11 @@ class RelayLink:
                 return
 
     def close(self) -> None:
-        self._closed = True
+        with self._state_lock:
+            self._closed = True
+            sock = self._socket
         with contextlib.suppress(queue.Full):
             self._queue.put_nowait(None)
-        if self._socket is not None:
+        if sock is not None:
             with contextlib.suppress(OSError):
-                self._socket.close()
+                sock.close()

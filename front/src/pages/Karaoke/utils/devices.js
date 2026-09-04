@@ -1,82 +1,74 @@
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as t } from "../../../i18n/runtime";
+
+const INPUT_AUXILIARY =
+  /sound mapper|primary sound capture|первичн(?:ый|ий).*драйвер.*запис|loop[ -]?back|stereo mix|what u hear|s\/?pdif|adat/i;
+const OUTPUT_AUXILIARY =
+  /sound mapper|primary sound driver|первичн(?:ый|ий).*звуков.*драйвер|первичн(?:ое|ий).*устройств.*вывод/i;
+const HOST_SUFFIX = /\s+\[(?:MME|ASIO|Windows (?:WASAPI|DirectSound|WDM-KS))\]\s*$/i;
+const HOSTS = ["wasapi", "asio", "directsound", "mme", "wdm-ks"];
+const list = (value) => (Array.isArray(value) ? value.filter(Boolean) : []);
+const host = (device) => String(device?.host_api || "").toLowerCase();
+const selectedIndex = (value) => {
+  const index = Number(value);
+  return value != null && value !== "" && Number.isInteger(index) ? index : null;
+};
+const normalize = (device) => ({
+  ...device,
+  index: Number(device?.index),
+  name: String(device?.name || device?.label || "").trim().replace(HOST_SUFFIX, "").trim()
+});
+const hostPriority = (device) => {
+  const value = host(device);
+  const index = HOSTS.findIndex((name) => value.includes(name));
+  return index < 0 ? HOSTS.length : index;
+};
+
+function addBest(choices, device, selected) {
+  const key = device.name.toLocaleLowerCase() || `device-${device.index}`;
+  const current = choices.get(key);
+  const isSelected = device.index === selected;
+  const currentSelected = current?.index === selected;
+  if (!current || isSelected || (!currentSelected && hostPriority(device) < hostPriority(current))) {
+    choices.set(key, device);
+  }
+}
 
 function mapDeviceOptions(devices, getValue, fallbackLabel) {
   const seen = new Set();
-  // Stryker disable next-line ArrayDeclaration: injected primitive is filtered.
-  return (Array.isArray(devices) ? devices : [])
-    .filter(Boolean)
+  return list(devices)
     .map((device) => ({
       value: getValue(device),
       label: device.name || device.label || fallbackLabel
     }))
-    .filter((option) => {
-      if (option.value == null || option.value === "" || seen.has(option.value)) {
-        return false;
-      }
-      seen.add(option.value);
+    .filter(({ value }) => {
+      if (value == null || value === "" || seen.has(value)) return false;
+      seen.add(value);
       return true;
     });
 }
-export function createIndexedDeviceOptions(
-  devices,
-  defaultLabel = translateSaved("library.sort.relevance")
-) {
+
+export function createIndexedDeviceOptions(devices, defaultLabel = t("library.sort.relevance")) {
   return [
     { value: "", label: defaultLabel },
-    ...mapDeviceOptions(devices, (device) => device.index, translateSaved("karaoke.device"))
+    ...mapDeviceOptions(devices, ({ index }) => index, t("karaoke.device"))
   ];
-}
-
-const INPUT_AUXILIARY_PATTERN =
-  /sound mapper|primary sound capture|первичн(?:ый|ий).*драйвер.*запис|loop[ -]?back|stereo mix|what u hear|s\/?pdif|adat/i;
-const OUTPUT_AUXILIARY_PATTERN =
-  /sound mapper|primary sound driver|первичн(?:ый|ий).*звуков.*драйвер|первичн(?:ое|ий).*устройств.*вывод/i;
-const HOST_SUFFIX_PATTERN = /\s+\[(?:MME|ASIO|Windows (?:WASAPI|DirectSound|WDM-KS))\]\s*$/i;
-
-function hostPriority(device) {
-  const host = String(device?.host_api || "").toLowerCase();
-  if (host.includes("wasapi")) return 0;
-  if (host.includes("asio")) return 1;
-  if (host.includes("directsound")) return 2;
-  if (host.includes("mme")) return 3;
-  if (host.includes("wdm-ks")) return 4;
-  return 5;
 }
 
 export function createInputDeviceOptions(
   devices,
   selectedDeviceId,
-  defaultLabel = translateSaved("library.sort.relevance")
+  defaultLabel = t("library.sort.relevance")
 ) {
-  const selected = Number(selectedDeviceId);
-  const hasSelected =
-    selectedDeviceId !== null && selectedDeviceId !== "" && Number.isInteger(selected);
+  const selected = selectedIndex(selectedDeviceId);
   const choices = new Map();
 
-  (Array.isArray(devices) ? devices : []).filter(Boolean).forEach((device) => {
-    const index = Number(device?.index);
-    if (!Number.isInteger(index)) return;
-    const fullName = String(device?.name || device?.label || "").trim();
-    const label = fullName.replace(HOST_SUFFIX_PATTERN, "").trim();
-    const isSelected = hasSelected && index === selected;
-    const isAuxiliary =
-      INPUT_AUXILIARY_PATTERN.test(label) ||
-      String(device?.host_api || "")
-        .toLowerCase()
-        .includes("wdm-ks");
-    if (isAuxiliary && !isSelected) return;
-
-    const key = label.toLocaleLowerCase() || `device-${index}`;
-    const current = choices.get(key);
-    const currentSelected = hasSelected && Number(current?.index) === selected;
-    if (
-      !current ||
-      isSelected ||
-      (!currentSelected && hostPriority(device) < hostPriority(current))
-    ) {
-      choices.set(key, { ...device, index, name: label || translateSaved("karaoke.device") });
-    }
-  });
+  for (const source of list(devices)) {
+    const device = normalize(source);
+    if (!Number.isInteger(device.index)) continue;
+    const auxiliary = INPUT_AUXILIARY.test(device.name) || host(device).includes("wdm-ks");
+    if (auxiliary && device.index !== selected) continue;
+    addBest(choices, { ...device, name: device.name || t("karaoke.device") }, selected);
+  }
 
   return createIndexedDeviceOptions([...choices.values()], defaultLabel);
 }
@@ -85,87 +77,46 @@ export function createOutputDeviceOptions(
   devices,
   selectedDeviceId,
   driver = "auto",
-  defaultLabel = translateSaved("karaoke.systemDevice")
+  defaultLabel = t("karaoke.systemDevice")
 ) {
-  const selected = Number(selectedDeviceId);
-  const hasSelected =
-    selectedDeviceId !== null && selectedDeviceId !== "" && Number.isInteger(selected);
-  const candidates = (Array.isArray(devices) ? devices : [])
-    .filter(Boolean)
-    .map((device) => {
-      const index = Number(device?.index);
-      const fullName = String(device?.name || device?.label || "").trim();
-      return {
-        ...device,
-        index,
-        name: fullName.replace(HOST_SUFFIX_PATTERN, "").trim()
-      };
-    })
+  const selected = selectedIndex(selectedDeviceId);
+  const candidates = list(devices)
+    .map(normalize)
     .filter(
       (device) =>
         Number.isInteger(device.index) &&
         Number(device?.max_output_channels ?? 1) > 0 &&
-        !OUTPUT_AUXILIARY_PATTERN.test(device.name) &&
-        !String(device?.host_api || "")
-          .toLowerCase()
-          .includes("wdm-ks")
+        !OUTPUT_AUXILIARY.test(device.name) &&
+        !host(device).includes("wdm-ks")
     );
-
-  const requestedHost = driver === "asio" ? "asio" : "wasapi";
-  const preferredHost = candidates.some((device) =>
-    String(device?.host_api || "")
-      .toLowerCase()
-      .includes(requestedHost)
-  )
-    ? requestedHost
-    : ["wasapi", "asio", "directsound", "mme"].find((host) =>
-        candidates.some((device) =>
-          String(device?.host_api || "")
-            .toLowerCase()
-            .includes(host)
-        )
-      );
-
+  const requested = driver === "asio" ? "asio" : "wasapi";
+  const preferred = [requested, ...HOSTS.filter((name) => name !== requested)].find((name) =>
+    candidates.some((device) => host(device).includes(name))
+  );
   const choices = new Map();
-  candidates.forEach((device) => {
-    const host = String(device?.host_api || "").toLowerCase();
-    const isSelected =
-      hasSelected && device.index === selected && (driver !== "asio" || host.includes("asio"));
-    if (preferredHost && !host.includes(preferredHost) && !isSelected) return;
 
-    const key = device.name.toLocaleLowerCase() || `device-${device.index}`;
-    const current = choices.get(key);
-    const currentSelected = hasSelected && Number(current?.index) === selected;
-    if (
-      !current ||
-      isSelected ||
-      (!currentSelected && hostPriority(device) < hostPriority(current))
-    ) {
-      choices.set(key, {
-        ...device,
-        name: device.name || translateSaved("karaoke.device")
-      });
-    }
-  });
+  for (const device of candidates) {
+    const isSelected = device.index === selected && (driver !== "asio" || host(device).includes("asio"));
+    if (preferred && !host(device).includes(preferred) && !isSelected) continue;
+    addBest(choices, { ...device, name: device.name || t("karaoke.device") }, selected);
+  }
 
   return createIndexedDeviceOptions([...choices.values()], defaultLabel);
 }
+
 export function createBrowserDeviceOptions(
   devices,
   fallbackLabel,
-  defaultLabel = translateSaved("karaoke.systemDefault")
+  defaultLabel = t("karaoke.systemDefault")
 ) {
   return [
     { value: "default", label: defaultLabel },
-    ...mapDeviceOptions(devices, (device) => device.deviceId, fallbackLabel)
+    ...mapDeviceOptions(devices, ({ deviceId }) => deviceId, fallbackLabel)
   ];
 }
+
 export function createBufferSizeOptions(values = [32, 64, 128, 256, 512]) {
-  // Stryker disable next-line ArrayDeclaration: injected primitive becomes NaN.
-  return [...new Set((Array.isArray(values) ? values : []).map(Number))]
+  return [...new Set(list(values).map(Number))]
     .filter((value) => Number.isInteger(value) && value > 0)
-    .map((value) => ({
-      value,
-      label: `${value} samples`
-    }));
+    .map((value) => ({ value, label: `${value} samples` }));
 }

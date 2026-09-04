@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+import logging
 import os
 import shutil
 import time
@@ -13,6 +14,8 @@ from pathlib import Path
 QuarantineMap = dict[Path, Path]
 
 _WINDOWS_SHARING_ERRORS = {5, 32, 33}
+
+logger = logging.getLogger(__name__)
 
 
 def _replace_with_retry(source: Path, destination: Path, *, attempts: int = 10) -> None:
@@ -49,9 +52,24 @@ def quarantine_paths(paths: Iterable[Path]) -> QuarantineMap:
 
 
 def restore_quarantined_paths(quarantined: QuarantineMap) -> None:
-    """Restore quarantined paths in reverse order."""
+    """Restore quarantined paths in reverse order.
+
+    Callers use this to undo quarantine_paths() after some later step (e.g. a
+    DB commit) failed -- but nothing else in this module holds a lock across
+    that window, so something else can legitimately recreate a path at its
+    original location while it's quarantined (e.g. a fresh upload landing on
+    the same output path during the failure this exists to recover from). A
+    path like that is left alone rather than silently overwritten; the
+    quarantined copy stays in its temporary location instead of being lost.
+    """
     for original, temporary in reversed(tuple(quarantined.items())):
-        if temporary.exists(): _replace_with_retry(temporary, original)
+        if not temporary.exists(): continue
+        if original.exists():
+            logger.warning(
+                "Not restoring quarantined path %s: something exists there again", original,
+            )
+            continue
+        _replace_with_retry(temporary, original)
 
 
 def purge_quarantined_paths(quarantined: QuarantineMap) -> None:

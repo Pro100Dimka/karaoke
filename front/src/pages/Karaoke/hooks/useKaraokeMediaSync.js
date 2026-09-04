@@ -7,9 +7,8 @@ import {
   normalizePlaybackRate
 } from "../utils/transport";
 
-const REACT_SYNC_MS = 100;
-const SECONDARY_SYNC_MS = 450;
 const safe = (task) => Promise.resolve().then(task).catch(() => {});
+const now = () => globalThis.performance?.now?.() ?? Date.now();
 
 export default function useKaraokeMediaSync({
   currentTimeRef,
@@ -31,15 +30,14 @@ export default function useKaraokeMediaSync({
   vocalVolume,
   vocalsRef
 }) {
-  const lastSecondarySync = useRef(0);
-  const lastReactSync = useRef(0);
+  const syncAt = useRef({ react: 0, secondary: 0 });
 
   const syncSecondaryMedia = useCallback(
     (position, force = false) => {
-      const baseRate = normalizePlaybackRate(speed);
+      const rate = normalizePlaybackRate(speed);
 
-      [vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
-        if (!Number.isFinite(media.duration) || media.duration <= 0) return;
+      for (const media of [vocalsRef.current, videoRef.current]) {
+        if (!media || !Number.isFinite(media.duration) || media.duration <= 0) continue;
 
         const target = getSecondaryMediaPosition(position, media.duration);
         const drift = media.currentTime - target;
@@ -47,76 +45,50 @@ export default function useKaraokeMediaSync({
 
         try {
           if (correction === "hard") media.currentTime = target;
-          media.playbackRate =
-            correction === "soft" || correction === "strong"
-              ? driftCorrectedRate(baseRate, drift, correction)
-              : baseRate;
+          media.playbackRate = ["soft", "strong"].includes(correction)
+            ? driftCorrectedRate(rate, drift, correction)
+            : rate;
         } catch {
-          // source may be replaced while syncing
+          // Media can disappear while its source is being replaced.
         }
-      });
+      }
     },
     [speed, videoRef, vocalsRef]
   );
 
   useEffect(() => {
-    let detach;
-    let cancelRetry = () => {};
+    const audio = instrumentalRef.current;
+    if (!audio) return;
 
-    const attach = () => {
-      const instrumental = instrumentalRef.current;
-      if (!instrumental) {
-        if (globalThis.requestAnimationFrame) {
-          const frame = requestAnimationFrame(attach);
-          cancelRetry = () => cancelAnimationFrame(frame);
-        } else {
-          const timer = setTimeout(attach, 16);
-          cancelRetry = () => clearTimeout(timer);
-        }
-        return;
-      }
-
-      const metadata = () => {
-        const value = Number(instrumental.duration);
-        setDuration(Number.isFinite(value) ? Math.max(0, value) : 0);
-      };
-      const timeUpdate = () => {
-        const value = Number(instrumental.currentTime);
-        if (!Number.isFinite(value) || value < 0) return;
-        currentTimeRef.current = value;
-        setCurrentTime(value);
-      };
-      const ended = () => {
-        if (onPlaybackEndedRef.current) {
-          safe(onPlaybackEndedRef.current);
-          return;
-        }
-        vocalsRef.current?.pause();
-        videoRef.current?.pause();
-        silenceMelodyGuide();
-        setIsPlaying(false);
-      };
-
-      ["loadedmetadata", "durationchange"].forEach((event) =>
-        instrumental.addEventListener(event, metadata)
-      );
-      instrumental.addEventListener("ended", ended);
-      instrumental.addEventListener("timeupdate", timeUpdate);
-      metadata();
-
-      detach = () => {
-        ["loadedmetadata", "durationchange"].forEach((event) =>
-          instrumental.removeEventListener(event, metadata)
-        );
-        instrumental.removeEventListener("ended", ended);
-        instrumental.removeEventListener("timeupdate", timeUpdate);
-      };
+    const syncDuration = () => {
+      const value = Number(audio.duration);
+      setDuration(Number.isFinite(value) ? Math.max(0, value) : 0);
+    };
+    const syncTime = () => {
+      const value = Number(audio.currentTime);
+      if (!Number.isFinite(value) || value < 0) return;
+      currentTimeRef.current = value;
+      setCurrentTime(value);
+    };
+    const ended = () => {
+      if (onPlaybackEndedRef.current) return safe(onPlaybackEndedRef.current);
+      vocalsRef.current?.pause();
+      videoRef.current?.pause();
+      silenceMelodyGuide();
+      setIsPlaying(false);
     };
 
-    attach();
+    audio.addEventListener("loadedmetadata", syncDuration);
+    audio.addEventListener("durationchange", syncDuration);
+    audio.addEventListener("timeupdate", syncTime);
+    audio.addEventListener("ended", ended);
+    syncDuration();
+
     return () => {
-      cancelRetry();
-      detach?.();
+      audio.removeEventListener("loadedmetadata", syncDuration);
+      audio.removeEventListener("durationchange", syncDuration);
+      audio.removeEventListener("timeupdate", syncTime);
+      audio.removeEventListener("ended", ended);
     };
   }, [
     currentTimeRef,
@@ -135,23 +107,21 @@ export default function useKaraokeMediaSync({
     if (!isPlaying || !globalThis.requestAnimationFrame) return;
 
     let frame;
-    let active = true;
     const update = () => {
-      if (!active) return;
-
       const position = Number(instrumentalRef.current?.currentTime);
+
       if (Number.isFinite(position) && position >= 0) {
         currentTimeRef.current = position;
         updateMelodyGuide(position);
+        const time = now();
 
-        const now = globalThis.performance?.now?.() ?? Date.now();
-        if (now - lastReactSync.current >= REACT_SYNC_MS) {
+        if (time - syncAt.current.react >= 100) {
           setCurrentTime(position);
-          lastReactSync.current = now;
+          syncAt.current.react = time;
         }
-        if (now - lastSecondarySync.current >= SECONDARY_SYNC_MS) {
+        if (time - syncAt.current.secondary >= 450) {
           syncSecondaryMedia(position);
-          lastSecondarySync.current = now;
+          syncAt.current.secondary = time;
         }
       }
 
@@ -165,9 +135,7 @@ export default function useKaraokeMediaSync({
 
       currentTimeRef.current = position;
       setCurrentTime(position);
-      const now = globalThis.performance?.now?.() ?? Date.now();
-      lastReactSync.current = now;
-      lastSecondarySync.current = now;
+      syncAt.current.react = syncAt.current.secondary = now();
       syncSecondaryMedia(position, true);
     };
 
@@ -175,35 +143,33 @@ export default function useKaraokeMediaSync({
     frame = requestAnimationFrame(update);
 
     return () => {
-      active = false;
       cancelAnimationFrame(frame);
       globalThis.document?.removeEventListener?.("visibilitychange", resync);
     };
   }, [currentTimeRef, instrumentalRef, isPlaying, setCurrentTime, syncSecondaryMedia, updateMelodyGuide]);
 
   useEffect(() => {
-    if (instrumentalRef.current) instrumentalRef.current.volume = playbackGain(musicVolume);
-  }, [instrumentalRef, musicVolume]);
+    const instrumental = instrumentalRef.current;
+    const vocals = vocalsRef.current;
+    const rate = normalizePlaybackRate(speed);
 
-  useEffect(() => {
-    if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);
-  }, [vocalVolume, vocalsRef]);
+    if (instrumental) instrumental.volume = playbackGain(musicVolume);
+    if (vocals) vocals.volume = playbackGain(vocalVolume);
+
+    for (const media of [instrumental, vocals, videoRef.current]) {
+      if (!media) continue;
+      try {
+        media.playbackRate = rate;
+      } catch {
+        // Detached media can reject rate changes.
+      }
+    }
+  }, [instrumentalRef, musicVolume, speed, videoRef, vocalVolume, vocalsRef]);
 
   useEffect(() => {
     if (isPlaying && melodyVolume > 0) safe(startMelodyGuide);
     else silenceMelodyGuide();
   }, [isPlaying, keyShift, melodyVolume, silenceMelodyGuide, startMelodyGuide]);
-
-  useEffect(() => {
-    const rate = normalizePlaybackRate(speed);
-    [instrumentalRef.current, vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
-      try {
-        media.playbackRate = rate;
-      } catch {
-        // detached media can reject rate changes
-      }
-    });
-  }, [instrumentalRef, speed, videoRef, vocalsRef]);
 
   return { syncSecondaryMedia };
 }

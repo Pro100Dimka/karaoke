@@ -5,7 +5,7 @@ import useSongCover from "../../../hooks/useSongCover";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { Box, Stack, Typography, Waveform } from "../../../theme/ui";
 import * as platform from "../../../utils/platform";
-import { formatTime } from "../utils/format";
+import { formatClockTime as formatTime } from "../../../utils/time-format";
 
 export default function SongStrip({ song, currentTime, duration, onSeek, disablelabel }) {
   const cover = useSongCover(song?.id, `${song?.updated_at ?? ""}:${song?.status ?? ""}`);

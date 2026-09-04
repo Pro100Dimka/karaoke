@@ -35,14 +35,14 @@ export default function useKaraokeRoomPreferences({ preferences, room, roomUi, s
   }, [onReceive, room?.host, room?.id, room?.selfId]);
 
   useEffect(() => {
-    if (!room || !roomUi?.karaoke) return;
+    if (!room || room.host || !roomUi?.karaoke) return;
 
     const remote = valuesOf(roomUi.karaoke);
     if (channel.current.receiveState(remote, localRef.current)) onReceive?.(remote);
   }, [onReceive, room?.host, room?.id, roomUi?.__eventId, roomUi?.karaoke]);
 
   useEffect(() => {
-    if (!room || typeof syncUi !== "function" || !channel.current.shouldSend(local)) return;
+    if (!room?.host || typeof syncUi !== "function" || !channel.current.shouldSend(local)) return;
     Promise.resolve().then(() => syncUi({ karaoke: local })).catch(() => {});
   }, [local, room, syncUi]);
 }

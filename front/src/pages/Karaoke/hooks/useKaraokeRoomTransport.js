@@ -5,6 +5,7 @@ import { createPlayerSyncCommand } from "../utils/transport";
 import { formatError } from "../utils/recordingSession";
 
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+const number = (value) => (value == null || value === "" ? NaN : Number(value));
 
 export default function useKaraokeRoomTransport({
   onlineRoom,
@@ -17,9 +18,7 @@ export default function useKaraokeRoomTransport({
   togglePlay,
   setRecordingError
 }) {
-  const room = onlineRoom?.room;
-  const syncCommand = onlineRoom?.syncCommand;
-  const clockNow = onlineRoom?.roomClockNow;
+  const { room, syncCommand, roomClockNow, roomCommand: command } = onlineRoom || {};
   const channel = useRef(createRoomSyncChannel());
   const seekRef = useLatestRef(seekTo);
   const stopRef = useLatestRef(stop);
@@ -48,32 +47,27 @@ export default function useKaraokeRoomTransport({
     channel.current = createRoomSyncChannel();
   }, [room?.id, songId]);
 
-  const command = onlineRoom?.roomCommand;
   useEffect(() => {
+    const audio = instrumentalRef.current;
     if (
       room?.host ||
       command?.type !== "karaoke-player" ||
       !command.commandId ||
       !sameId(command.songId, songId) ||
-      !instrumentalRef.current ||
+      !audio ||
       !channel.current.acceptCommand(command.commandId)
     ) {
       return;
     }
 
-    const position = Number(command.position);
-    const sampledAt = Number(command.positionAt);
-    const sentAt =
-      command.positionAt != null && Number.isFinite(sampledAt)
-        ? sampledAt
-        : Number(command.__serverSentAt);
-    const receivedAt = Number(command.__receivedServerAt);
-    const executeAt = Number(command.executeAt);
-    const serverNow = typeof clockNow === "function" ? Number(clockNow()) : receivedAt;
+    const position = number(command.position);
+    const sampledAt = number(command.positionAt);
+    const sentAt = Number.isFinite(sampledAt) ? sampledAt : number(command.__serverSentAt);
+    const receivedAt = number(command.__receivedServerAt);
+    const executeAt = number(command.executeAt);
+    const serverNow = typeof roomClockNow === "function" ? number(roomClockNow()) : receivedAt;
     const delivery =
-      ["play", "sync"].includes(command.action) &&
-      Number.isFinite(sentAt) &&
-      Number.isFinite(receivedAt)
+      ["play", "sync"].includes(command.action) && Number.isFinite(sentAt) && Number.isFinite(receivedAt)
         ? Math.max(0, (receivedAt - sentAt) / 1000)
         : 0;
     const late =
@@ -82,10 +76,7 @@ export default function useKaraokeRoomTransport({
         : delivery;
     const target = position + late;
 
-    if (
-      Number.isFinite(target) &&
-      (command.action !== "sync" || Math.abs(instrumentalRef.current.currentTime - target) > 0.04)
-    ) {
+    if (Number.isFinite(target) && (command.action !== "sync" || Math.abs(audio.currentTime - target) > 0.04)) {
       seekRef.current?.(target, { broadcast: false });
     }
 
@@ -98,47 +89,29 @@ export default function useKaraokeRoomTransport({
         return stopped;
       }
     };
-    const action = Object.hasOwn(actions, command.action) ? actions[command.action] : null;
-    if (!action) return;
+    if (!Object.hasOwn(actions, command.action)) return;
 
     const run = () =>
       Promise.resolve()
-        .then(action)
-        .catch((error) =>
-          setRecordingError(formatError("karaoke.failedToExecuteRoomCommand", error))
-        );
+        .then(actions[command.action])
+        .catch((error) => setRecordingError(formatError("karaoke.failedToExecuteRoomCommand", error)));
     const delay =
       command.action === "play" && Number.isFinite(executeAt) && Number.isFinite(serverNow)
         ? Math.max(0, executeAt - serverNow)
         : 0;
 
-    if (!delay) {
-      run();
-      return;
-    }
+    if (!delay) return void run();
 
     let executed = false;
     const timer = setTimeout(() => {
       executed = true;
       run();
     }, delay);
-
     return () => {
       clearTimeout(timer);
       if (!executed) channel.current.cancelCommand(command.commandId);
     };
-  }, [
-    clockNow,
-    command,
-    instrumentalRef,
-    navigate,
-    room?.host,
-    seekRef,
-    setRecordingError,
-    songId,
-    stopRef,
-    toggleRef
-  ]);
+  }, [command, instrumentalRef, navigate, room?.host, roomClockNow, seekRef, setRecordingError, songId, stopRef, toggleRef]);
 
   return broadcast;
 }

@@ -236,6 +236,9 @@ def test_recording_actions_and_stop_error_mapping(monkeypatch):
     assert recording.sync_recording("session", 3.25) == {"status": "synchronized"}
     recording.recording_service.sync_recording.assert_called_once_with("session", 3.25, 1)
 
+    for kwargs in ({"position_sec": -0.01}, {"position_sec": 1, "playback_rate": 0.49}, {"position_sec": 1, "playback_rate": 1.51}):
+        assert_http_status(422, lambda kwargs=kwargs: recording.sync_recording("session", **kwargs))
+
     database, saved = Mock(), object()
     stop = Mock(return_value=saved)
     monkeypatch.setattr(recording.recording_service, "stop_recording", stop)

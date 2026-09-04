@@ -857,6 +857,15 @@ def stop_recording(session_id: str) -> models.Recording:
                 )
                 db.add(recording)
                 commit_refresh(db, recording)
+                # commit_refresh's db.commit() expires every object still
+                # attached to this session (SQLAlchemy's expire_on_commit
+                # default), song included -- not just recording, which
+                # commit_refresh itself explicitly re-loads via db.refresh().
+                # _create_performance_mix_safely below runs after db.close(),
+                # so without this, its first touch of song.output_dir raises
+                # DetachedInstanceError (silently swallowed there), and the
+                # performance mix is never produced.
+                db.refresh(song)
             except Exception:
                 db.rollback()
                 out_path.unlink(missing_ok=True)

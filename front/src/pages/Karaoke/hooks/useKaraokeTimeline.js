@@ -2,8 +2,14 @@ import { useMemo } from "react";
 import { flattenLyricsNotes, shiftLyricsSync } from "../../../utils/lyrics-sync";
 import { clamp } from "../../../utils/math";
 import { transposeKey } from "../utils/data";
-import { formatCompactKey } from "../utils/display";
 import useMelodyGuide from "./useMelodyGuide";
+
+const formatKey = (key) =>
+  String(key || "—")
+    .replace(/\s*(major|maj)\b/gi, "maj")
+    .replace(/\s*(minor|min)\b/gi, "m")
+    .replace(/\s/g, "")
+    .replace(/mmaj$/i, "maj");
 
 export default function useKaraokeTimeline({
   song,
@@ -37,7 +43,7 @@ export default function useKaraokeTimeline({
   const baseTempo = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
   const currentTempo = Math.max(1, Math.round(baseTempo * (Number(speed) || 1)));
   const compactKey = lyricsSync?.key
-    ? formatCompactKey(transposeKey(lyricsSync.key, keyShift))
+    ? formatKey(transposeKey(lyricsSync.key, keyShift))
     : "";
 
   return {

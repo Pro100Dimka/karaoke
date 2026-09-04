@@ -1,4 +1,4 @@
-import { memo, useContext, useEffect, useRef, useState } from "react";
+import { memo, useContext, useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { AppSettingsContext } from "../../contexts/app-settings";
 import { observeLightingMedia } from "../../services/keyboardLighting";
@@ -15,25 +15,26 @@ function useTrack(songId, track) {
   const [blobUrl, setBlobUrl] = useState("");
 
   useEffect(() => {
-    if (desktop || !songId) {
-      setBlobUrl("");
-      return;
-    }
+    if (desktop || !songId) return setBlobUrl("");
 
     let active = true;
     let url;
     let file;
-
     setBlobUrl("");
 
     api
       .getAudioTrackBlob(songId, track)
       .then((blob) => {
         file = blob;
-        if (!active) return cleanup(file);
-
-        url = URL.createObjectURL(blob);
-        setBlobUrl(url);
+        if (!active) return cleanup(blob);
+        try {
+          url = URL.createObjectURL(blob);
+          setBlobUrl(url);
+        } catch {
+          cleanup(blob);
+          file = null;
+          if (active) setBlobUrl("");
+        }
       })
       .catch(() => active && setBlobUrl(""));
 
@@ -50,36 +51,33 @@ function useTrack(songId, track) {
 function AudioTrack({ audioRef, songId, track, volume }) {
   const settings = useContext(AppSettingsContext)?.settings;
   const src = useTrack(songId, track);
-  const ref = useRef(null);
 
   useEffect(() => {
-    if (ref.current) ref.current.volume = playbackGain(volume);
-  }, [volume]);
+    const audio = audioRef.current;
+    if (audio) audio.volume = playbackGain(volume);
+  }, [audioRef, src, volume]);
 
   useEffect(() => {
+    const audio = audioRef.current;
     if (
+      audio &&
       track === "instrumental" &&
       settings?.keyboard_lighting_enabled &&
       settings?.keyboard_lighting_mode === "music"
     ) {
-      return observeLightingMedia(ref.current);
+      return observeLightingMedia(audio);
     }
-  }, [src, track, settings?.keyboard_lighting_enabled, settings?.keyboard_lighting_mode]);
+  }, [audioRef, src, track, settings?.keyboard_lighting_enabled, settings?.keyboard_lighting_mode]);
 
-  useEffect(
-    () => () => {
-      ref.current?.pause();
-    },
-    []
-  );
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => audio?.pause();
+  }, [audioRef]);
 
   return (
     <Box
       as="audio"
-      ref={(node) => {
-        ref.current = node;
-        if (audioRef) audioRef.current = node;
-      }}
+      ref={audioRef}
       src={src || undefined}
       crossOrigin="anonymous"
       preload="auto"
@@ -102,22 +100,12 @@ function KaraokeMedia({
 }) {
   const [clipFailed, setClipFailed] = useState(false);
   const songId = song?.id;
-  const clipSource = songId && song?.video_url === "local:clip" ? api.getSongVideoUrl(songId) : "";
+  const clip = songId && song.video_url === "local:clip" ? api.getSongVideoUrl(songId) : "";
 
   useEffect(() => {
     setClipFailed(false);
     onClipAvailabilityChange(false);
-  }, [clipSource, onClipAvailabilityChange]);
-
-  const activateClip = (event) => {
-    const video = event.currentTarget;
-
-    video.playbackRate = normalizePlaybackRate(speed);
-    syncSecondaryMedia?.(instrumentalRef.current?.currentTime || 0, true);
-    onClipAvailabilityChange(true);
-
-    if (isPlaying) Promise.resolve().then(() => video.play()).catch(noop);
-  };
+  }, [clip, onClipAvailabilityChange]);
 
   return (
     <>
@@ -125,25 +113,25 @@ function KaraokeMedia({
         [
           ["instrumental", instrumentalRef, musicVolume],
           ["vocals", vocalsRef, vocalVolume]
-        ].map(([track, audioRef, volume]) => (
-          <AudioTrack
-            key={`${songId}:${track}`}
-            audioRef={audioRef}
-            songId={songId}
-            track={track}
-            volume={volume}
-          />
+        ].map(([track, ref, volume]) => (
+          <AudioTrack key={track} audioRef={ref} songId={songId} track={track} volume={volume} />
         ))}
 
-      {clipSource && !clipFailed && (
+      {clip && !clipFailed && (
         <Box
           as="video"
           ref={videoRef}
-          src={clipSource}
+          src={clip}
           preload="auto"
           muted
           playsInline
-          onLoadedData={activateClip}
+          onLoadedData={(event) => {
+            const video = event.currentTarget;
+            video.playbackRate = normalizePlaybackRate(speed);
+            syncSecondaryMedia?.(instrumentalRef.current?.currentTime || 0, true);
+            onClipAvailabilityChange(true);
+            if (isPlaying) Promise.resolve().then(() => video.play()).catch(noop);
+          }}
           onError={() => {
             setClipFailed(true);
             onClipAvailabilityChange(false);

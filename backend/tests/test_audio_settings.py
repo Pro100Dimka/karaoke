@@ -379,10 +379,18 @@ def test_signal_quality_uses_monitor_or_direct_capture(monkeypatch):
     patch_attrs(monkeypatch, audio_service, _monitor_process=live, _monitor_signal={'rms_db': -12.0, 'clipping': False, 'silent': False})
     assert audio_service.check_signal_quality(None)["rms_db"] == -12
 
-    dead = Mock()
+    dead, dead_reader = Mock(), Mock()
     dead.poll.return_value = 1
-    monkeypatch.setattr(audio_service, "_monitor_process", dead)
+    patch_attrs(monkeypatch, audio_service, _monitor_process=dead, _monitor_reader=dead_reader)
     assert (audio_service.check_signal_quality(None, monitoring_expected=True)['silent'] is True) and (audio_service._monitor_process is None)
+    # A worker discovered dead here (poll() != None) has nothing else to
+    # close its pipes/join its reader -- unlike the ordinary stop path, this
+    # is the only place that ever notices it died, so it must clean up
+    # itself instead of just dropping the _monitor_process reference.
+    dead.stdout.close.assert_called_once_with()
+    dead.stdin.close.assert_called_once_with()
+    dead_reader.join.assert_called_once_with(timeout=1.0)
+    assert audio_service._monitor_reader is None
 
     monkeypatch.setattr(audio_service, "_monitor_process", None)
     patch_attrs(monkeypatch, audio_service.sd, rec=Mock(return_value=np.array([[0.5], [-0.5]], dtype=np.float32)), wait=Mock())

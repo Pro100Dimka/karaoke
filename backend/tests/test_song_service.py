@@ -269,6 +269,23 @@ def test_create_song_persists_bytes_and_cleans_commit_failure(monkeypatch, tmp_p
     assert not (tmp_path / "custom/source.wav").exists()
 
 
+def test_create_song_cleans_up_when_cover_extraction_fails_before_any_commit_attempt(monkeypatch, tmp_path):
+    # Regression test: write_source()/extract_embedded_cover() used to run
+    # outside the cleanup try/except entirely (only commit_refresh's failure
+    # was covered, see the sibling test above) -- a failure extracting the
+    # cover (e.g. a disk-full error right after the source file itself was
+    # written) left the source file and its output_dir orphaned on disk with
+    # no DB row, and the slug permanently "taken" for every retry.
+    patch_many(monkeypatch, (song_service.config, "SONG_OUTPUT_DIR", tmp_path), (song_service, "_slug_exists", Mock(return_value=False)))
+    monkeypatch.setattr(song_service, "extract_embedded_cover", Mock(side_effect=OSError("disk full")))
+    database = Mock()
+
+    raises(OSError, lambda: song_service.create_song(database, "Broken", "song.wav", b"audio"), match="disk full")
+
+    assert not (tmp_path / "broken").exists()
+    database.add.assert_not_called()
+
+
 def test_duplicate_identity_is_unicode_and_case_insensitive_but_artist_specific():
     # _find_duplicate selects only (id, artist, title) instead of full Song
     # rows, then fetches the matched row by id via db.get -- see its

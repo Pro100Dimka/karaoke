@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 
+const safe = (task) => Promise.resolve().then(task).catch(() => {});
 const publishRoute = (deviceId = "") =>
   globalThis.dispatchEvent?.(
     new CustomEvent("audio-output-route-changed", { detail: { deviceId } })
@@ -19,16 +20,13 @@ export default function useAudioOutputRouting({
 }) {
   useEffect(() => {
     if (audioDriver !== "asio" || String(audioSettings?.output_device_id ?? "").trim()) return;
-
     const device = findDriverOutputDevice(directOutputDevices, audioSettings?.asio_driver_name);
     if (!device || String(directOutputDeviceId) === String(device.index)) return;
 
-    Promise.resolve()
-      .then(() => updateMicrophone({ output_device_id: device.index }))
-      .then((updated) => {
-        if (updated) setDirectOutputDeviceId(updated.output_device_id ?? device.index);
-      })
-      .catch(() => {});
+    safe(async () => {
+      const updated = await updateMicrophone({ output_device_id: device.index });
+      if (updated) setDirectOutputDeviceId(updated.output_device_id ?? device.index);
+    });
   }, [
     audioDriver,
     audioSettings?.asio_driver_name,
@@ -41,39 +39,29 @@ export default function useAudioOutputRouting({
 
   useEffect(() => {
     let active = true;
-    const media = () => [instrumentalRef.current, vocalsRef.current, videoRef.current].filter(Boolean);
     const route = (deviceId = "") => {
       if (!active) return;
       publishRoute(deviceId);
-      media().forEach((element) => {
-        if (typeof element.setSinkId === "function") {
-          Promise.resolve().then(() => element.setSinkId(deviceId)).catch(() => {});
-        }
-      });
+      for (const media of [instrumentalRef.current, vocalsRef.current, videoRef.current]) {
+        if (typeof media?.setSinkId === "function") safe(() => media.setSinkId(deviceId));
+      }
     };
 
-    if (directOutputDeviceId == null || directOutputDeviceId === "") {
-      route();
-      return () => {
-        active = false;
-      };
-    }
-
     const selected = (Array.isArray(directOutputDevices) ? directOutputDevices : []).find(
-      (device) => String(device?.index) === String(directOutputDeviceId)
+      ({ index }) => String(index) === String(directOutputDeviceId)
     );
     const devices = globalThis.navigator?.mediaDevices;
-    if (!selected || typeof devices?.enumerateDevices !== "function") {
-      route();
-      return () => {
-        active = false;
-      };
-    }
 
-    devices
-      .enumerateDevices()
-      .then((entries) => route(findMatchingBrowserOutput(entries, selected)?.deviceId || ""))
-      .catch(() => route());
+    if (directOutputDeviceId == null || directOutputDeviceId === "" || !selected) {
+      route();
+    } else if (typeof devices?.enumerateDevices === "function") {
+      devices
+        .enumerateDevices()
+        .then((entries) => route(findMatchingBrowserOutput(entries, selected)?.deviceId || ""))
+        .catch(() => route());
+    } else {
+      route();
+    }
 
     return () => {
       active = false;

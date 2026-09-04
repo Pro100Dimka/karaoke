@@ -13,9 +13,13 @@ const COLORS = {
   success: ["--color-success", "#32e9a0"],
   text: ["--color-text", "#fff"]
 };
-const FALLBACK_PALETTE = Object.fromEntries(
-  Object.entries(COLORS).map(([key, [, fallback]]) => [key, fallback])
-);
+const paletteOf = (style) =>
+  Object.fromEntries(
+    Object.entries(COLORS).map(([key, [name, fallback]]) => [
+      key,
+      style?.getPropertyValue(name).trim() || fallback
+    ])
+  );
 const timeOf = (ref, value = 0) => Number(ref?.current ?? value) || 0;
 const midiOf = (value) => {
   if (value == null || value === "") return null;
@@ -24,26 +28,13 @@ const midiOf = (value) => {
 };
 
 function usePianoView(root) {
-  const [view, setView] = useState({ size: PIANO_ROLL_VIEW, palette: FALLBACK_PALETTE });
+  const [view, setView] = useState(() => ({ size: PIANO_ROLL_VIEW, palette: paletteOf() }));
 
   useLayoutEffect(() => {
     const element = root.current;
     if (!element) return;
 
-    const updatePalette = () => {
-      const style = globalThis.getComputedStyle?.(element);
-      if (!style) return;
-      setView((view) => ({
-        ...view,
-        palette: Object.fromEntries(
-          Object.entries(COLORS).map(([key, [name, fallback]]) => [
-            key,
-            style.getPropertyValue(name).trim() || fallback
-          ])
-        )
-      }));
-    };
-    const updateSize = ({ width, height }) => {
+    const setSize = ({ width, height }) => {
       if (!width || !height) return;
       setView((view) =>
         view.size.width === width && view.size.height === height
@@ -51,18 +42,20 @@ function usePianoView(root) {
           : { ...view, size: { width, height } }
       );
     };
+    const setPalette = () =>
+      setView((view) => ({ ...view, palette: paletteOf(globalThis.getComputedStyle?.(element)) }));
 
-    updatePalette();
-    updateSize(element.getBoundingClientRect());
+    setSize(element.getBoundingClientRect());
+    setPalette();
 
     const resize = globalThis.ResizeObserver
-      ? new ResizeObserver(([entry]) => updateSize(entry.contentRect))
+      ? new ResizeObserver(([entry]) => setSize(entry.contentRect))
       : null;
-    const theme = globalThis.MutationObserver ? new MutationObserver(updatePalette) : null;
-
+    const theme = globalThis.MutationObserver ? new MutationObserver(setPalette) : null;
     resize?.observe(element);
-    if (theme && globalThis.document?.documentElement) {
-      theme.observe(document.documentElement, {
+    const documentRoot = globalThis.document?.documentElement;
+    if (theme && documentRoot) {
+      theme.observe(documentRoot, {
         attributes: true,
         attributeFilter: ["data-theme", "class", "style"]
       });
@@ -99,7 +92,6 @@ function PianoRoll({
 
   useLayoutEffect(() => {
     if (USE_PIXI) return;
-
     const element = canvas.current;
     const context = element?.getContext("2d");
     if (!context) return;
@@ -108,12 +100,8 @@ function PianoRoll({
       const ratio = globalThis.devicePixelRatio || 1;
       const width = Math.round(view.size.width * ratio);
       const height = Math.round(view.size.height * ratio);
-
-      if (element.width !== width || element.height !== height) {
-        element.width = width;
-        element.height = height;
-      }
-
+      if (element.width !== width) element.width = width;
+      if (element.height !== height) element.height = height;
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       drawPianoRoll(
         context,
@@ -131,7 +119,6 @@ function PianoRoll({
       draw(timeOf(currentTimeRef));
       animation = requestAnimationFrame(render);
     };
-
     animation = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animation);
   }, [normalized, range, view, sung, isPitchDetected, isPlaying, currentTime, currentTimeRef]);
@@ -171,22 +158,10 @@ function PianoRoll({
             />
           </Suspense>
         ) : (
-          <Box
-            as="canvas"
-            ref={canvas}
-            sx={{ display: "block", inlineSize: "100%", blockSize: "100%" }}
-          />
+          <Box as="canvas" ref={canvas} sx={{ display: "block", width: "100%", height: "100%" }} />
         )}
       </Box>
-
-      <Box
-        sx={{
-          position: "absolute",
-          inset: "0 auto 0 0",
-          inlineSize: `${frame.keyboard}px`,
-          pointerEvents: "none"
-        }}
-      >
+      <Box sx={{ position: "absolute", inset: "0 auto 0 0", width: frame.keyboard, pointerEvents: "none" }}>
         <PianoKeyboard
           height={frame.height}
           minMidi={frame.min}

@@ -1,22 +1,30 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import useMountedRef from "../../../hooks/useMountedRef";
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as t } from "../../../i18n/runtime";
 import { playbackGain } from "../utils/data";
 import {
-  pendingRecordingIds,
   finalizeRecording,
-  rememberPending,
   forgetPending,
-  formatError
+  formatError,
+  pendingRecordingIds,
+  rememberPending
 } from "../utils/recordingSession";
 
-const MISSING_RECORDING_ID = "karaoke.backendDidNotReturnPostId";
-const enqueue = (queue, task) => {
-  const next = queue.current.then(task, task);
-  queue.current = next.catch(() => {});
-  return next;
-};
+const MISSING_ID = "karaoke.backendDidNotReturnPostId";
+const noop = () => {};
+
+function useQueue() {
+  const queue = useRef(Promise.resolve());
+  const run = useCallback((task) => {
+    const next = queue.current.then(task, task);
+    queue.current = next.catch(noop);
+    return next;
+  }, []);
+  const flush = useCallback(() => queue.current.catch(noop), []);
+  return [run, flush];
+}
+
 export default function useKaraokeRecording({
   song,
   onlineRoom,
@@ -25,8 +33,6 @@ export default function useKaraokeRecording({
   speed,
   microphoneVolume,
   microphoneEffects,
-  recordingSessionId,
-  setRecordingSessionId,
   setRecordingError,
   setAnalysisRecordingId,
   operationRef,
@@ -34,54 +40,63 @@ export default function useKaraokeRecording({
   roomCaptureRef
 }) {
   const mounted = useMountedRef();
-  const sessionRef = useRef(recordingSessionId);
-  const pendingRecordingStartRef = useRef(null);
-  const previousSpeedRef = useRef(speed);
-  // Pause/resume for one session must apply on the backend in the order the
-  // user actually pressed them, not in whichever order the two network
-  // responses happen to land -- otherwise a fast pause-then-resume can have
-  // resume apply first, leaving the backend paused while the UI reports
-  // "recording" for the rest of the take.
-  const recordingRequestQueueRef = useRef(Promise.resolve());
-  const recordingControlsQueueRef = useRef(Promise.resolve());
-  const queueRecordingRequest = useCallback((task) => enqueue(recordingRequestQueueRef, task), []);
-  const flushRecordingRequests = useCallback(
-    () => recordingRequestQueueRef.current.catch(() => {}),
-    []
+  const [recordingSessionId, setRecordingSessionId] = useState(null);
+  const sessionRef = useRef(null);
+  const pendingStartRef = useRef(null);
+  const previousSpeed = useRef(speed);
+  const [queueRequest, flushRequests] = useQueue();
+  const [queueControls, flushControls] = useQueue();
+
+  const setSession = useCallback(
+    (id) => {
+      sessionRef.current = id;
+      if (mounted.current) setRecordingSessionId(id);
+    },
+    [mounted]
   );
+
   const syncRecording = useCallback(
-    (id, position, rate) => queueRecordingRequest(() => api.syncRecording(id, position, rate)),
-    [queueRecordingRequest]
-  );
-  const queueRecordingControls = useCallback((task) => enqueue(recordingControlsQueueRef, task), []);
-  const flushRecordingControls = useCallback(
-    () => recordingControlsQueueRef.current.catch(() => {}),
-    []
+    (id, position, rate) => queueRequest(() => api.syncRecording(id, position, rate)),
+    [queueRequest]
   );
   const flushRecording = useCallback(
-    () => Promise.all([flushRecordingRequests(), flushRecordingControls()]),
-    [flushRecordingControls, flushRecordingRequests]
+    () => Promise.all([flushRequests(), flushControls()]),
+    [flushControls, flushRequests]
   );
-  const finalizeAfterQueues = useCallback(
-    (id) => flushRecording().then(() => finalizeRecording(id)),
-    [flushRecording]
+
+  const clearSession = useCallback(
+    (id, forget = true) => {
+      if (sessionRef.current !== id) return;
+      if (forget) forgetPending(id);
+      setSession(null);
+    },
+    [setSession]
   );
-  useEffect(() => {
-    sessionRef.current = recordingSessionId;
-  }, [recordingSessionId]);
+
+  const discardSession = useCallback(
+    async (id) => {
+      if (!id) return;
+      await flushRecording();
+      const { error } = await finalizeRecording(id);
+      if (!error) clearSession(id);
+    },
+    [clearSession, flushRecording]
+  );
 
   useEffect(() => {
-    const previous = previousSpeedRef.current;
-    previousSpeedRef.current = speed;
-    const instrumental = instrumentalRef.current;
-    if (previous === speed || !recordingSessionId || !instrumental) return;
-    syncRecording(recordingSessionId, instrumental.currentTime, speed).catch(() => {});
+    const previous = previousSpeed.current;
+    previousSpeed.current = speed;
+    const audio = instrumentalRef.current;
+    if (previous !== speed && recordingSessionId && audio) {
+      syncRecording(recordingSessionId, audio.currentTime, speed).catch(noop);
+    }
   }, [instrumentalRef, recordingSessionId, speed, syncRecording]);
 
   useEffect(() => {
-    if (!recordingSessionId) return undefined;
-    let current = true;
-    queueRecordingControls(() =>
+    if (!recordingSessionId) return;
+    let active = true;
+
+    queueControls(() =>
       api.updateRecordingControls(recordingSessionId, {
         musicVolume: playbackGain(musicVolume),
         microphoneVolume,
@@ -91,12 +106,13 @@ export default function useKaraokeRecording({
         octave: microphoneEffects.octave ?? 0
       })
     ).catch((error) => {
-      if (current && sessionRef.current === recordingSessionId) {
+      if (active && sessionRef.current === recordingSessionId) {
         setRecordingError(formatError("settings.couldNotSaveAudioSettings", error));
       }
     });
+
     return () => {
-      current = false;
+      active = false;
     };
   }, [
     microphoneEffects.delay,
@@ -105,7 +121,7 @@ export default function useKaraokeRecording({
     microphoneEffects.reverb,
     microphoneVolume,
     musicVolume,
-    queueRecordingControls,
+    queueControls,
     recordingSessionId,
     setRecordingError
   ]);
@@ -113,54 +129,39 @@ export default function useKaraokeRecording({
   useEffect(() => {
     let active = true;
     beginOperation();
+
     pendingRecordingIds().forEach((id) => {
       finalizeRecording(id)
         .then(({ recording }) => {
           if (active && mounted.current && recording?.id) setAnalysisRecordingId(recording.id);
         })
-        .catch(() => {});
+        .catch(noop);
     });
+
     return () => {
       active = false;
       beginOperation();
-      const roomCapture = roomCaptureRef.current;
+      const capture = roomCaptureRef.current;
       roomCaptureRef.current = null;
-      Promise.resolve()
-        .then(() => roomCapture?.stop?.())
-        .catch(() => {});
-      const pendingStart = pendingRecordingStartRef.current;
-      if (pendingStart && pendingStart.songId === song?.id) pendingStart.settle = "stop";
+      Promise.resolve().then(() => capture?.stop?.()).catch(noop);
+
+      const pending = pendingStartRef.current;
+      if (pending?.songId === song?.id) pending.settle = "stop";
+
       const id = sessionRef.current;
-      sessionRef.current = null;
-      if (id) {
-        if (mounted.current) setRecordingSessionId(null);
-        Promise.resolve(finalizeAfterQueues(id)).catch(() => {});
-      }
+      setSession(null);
+      if (!id) return;
+      flushRecording().then(() => finalizeRecording(id)).catch(noop);
     };
   }, [
     beginOperation,
-    finalizeAfterQueues,
+    flushRecording,
     mounted,
     roomCaptureRef,
     setAnalysisRecordingId,
-    setRecordingSessionId,
+    setSession,
     song?.id
   ]);
-
-  const clearSession = (id, forget = true) => {
-    if (sessionRef.current !== id) return;
-    sessionRef.current = null;
-    if (forget) forgetPending(id);
-    if (mounted.current) setRecordingSessionId(null);
-  };
-
-  const discardSession = async (id) => {
-    if (!id) return;
-    const { error } = await finalizeRecording(id);
-    if (!error) clearSession(id);
-  };
-
-  const pauseRecording = (id) => queueRecordingRequest(() => api.pauseRecording(id));
 
   const startRecording = async () => {
     const { recording_session_id: id } =
@@ -177,66 +178,63 @@ export default function useKaraokeRecording({
         speed,
         Boolean(onlineRoom?.voiceRef?.current?.usingRelay)
       )) || {};
-    if (!id) throw new Error(translateSaved(MISSING_RECORDING_ID));
+
+    if (!id) throw new Error(t(MISSING_ID));
     rememberPending(id);
     return id;
   };
 
-  const getPendingRecordingStart = (operation) => {
-    const { current } = pendingRecordingStartRef;
+  const getPendingStart = (operation) => {
+    const current = pendingStartRef.current;
     if (current?.songId === song.id) {
       current.latestOperation = operation;
       current.settle = null;
       return current;
     }
-    const entry = {
+
+    const pending = {
       songId: song.id,
       latestOperation: operation,
-      settle: null,
-      promise: null
+      settle: null
     };
-    entry.promise = startRecording().finally(() => {
-      if (pendingRecordingStartRef.current === entry) pendingRecordingStartRef.current = null;
+    pending.promise = startRecording().finally(() => {
+      if (pendingStartRef.current === pending) pendingStartRef.current = null;
     });
-    pendingRecordingStartRef.current = entry;
-    return entry;
+    pendingStartRef.current = pending;
+    return pending;
   };
 
   const runRecording = async (operation) => {
     let id = sessionRef.current;
-    let pendingStart = null;
+    let pending;
+
     try {
       if (id) {
         rememberPending(id);
-        await queueRecordingRequest(() => api.resumeRecording(id));
+        await queueRequest(() => api.resumeRecording(id));
       } else {
-        pendingStart = getPendingRecordingStart(operation);
-        id = await pendingStart.promise;
+        pending = getPendingStart(operation);
+        id = await pending.promise;
       }
+
       if (operation !== operationRef.current) {
-        if (pendingStart && pendingStart.latestOperation !== operation) return null;
-        if (pendingStart?.settle === "pause") {
-          await queueRecordingRequest(() => api.pauseRecording(id)).catch(() => {});
-          sessionRef.current = id;
-          if (mounted.current) setRecordingSessionId(id);
+        if (pending?.latestOperation !== operation && pending) return null;
+        if (pending?.settle === "pause") {
+          await queueRequest(() => api.pauseRecording(id)).catch(noop);
+          setSession(id);
           return null;
         }
         await discardSession(id);
-        if (pendingStart?.settle === "stop" && mounted.current) setRecordingSessionId(null);
+        if (pending?.settle === "stop") setSession(null);
         return null;
       }
-      sessionRef.current = id;
-      if (mounted.current) {
-        setRecordingSessionId(id);
-        setRecordingError(null);
-      }
+
+      setSession(id);
+      if (mounted.current) setRecordingError(null);
       return id;
     } catch (error) {
       if (operation !== operationRef.current) return null;
-      if (id) {
-        const { error: finalizeError } = await finalizeRecording(id);
-        if (!finalizeError) clearSession(id);
-      }
+      if (id) await discardSession(id);
       if (mounted.current) {
         setRecordingError(
           formatError("karaoke.recordingIsNotAvailableKaraokeWillContinueToWork", error)
@@ -247,12 +245,13 @@ export default function useKaraokeRecording({
   };
 
   return {
+    recordingSessionId,
     sessionRef,
-    pendingRecordingStartRef,
+    pendingRecordingStartRef: pendingStartRef,
     clearSession,
     discardSession,
     runRecording,
-    pauseRecording,
+    pauseRecording: (id) => queueRequest(() => api.pauseRecording(id)),
     syncRecording,
     flushRecording
   };

@@ -59,6 +59,43 @@ def test_text_tail_respects_line_and_byte_limits(tmp_path):
     assert (read_text_tail(path, max_lines=2) == ['three', 'four']) and (read_text_tail(path, max_lines=10, max_bytes=6) == ['four']) and (read_text_tail(path, max_lines=10, max_bytes=5) == ['four']) and (read_text_tail(path, max_lines=0) == []) and (read_text_tail(path, max_bytes=0) == [])
 
 
+def test_text_tail_keeps_a_real_blank_line_landing_exactly_at_the_truncation_boundary(tmp_path):
+    # Regression test: when truncation happens to land exactly at a clean
+    # line boundary (the byte right before `start` is itself a real
+    # newline), the leading element splitlines() produces -- even an empty
+    # one -- is genuine file content, not a truncation artifact, and must be
+    # kept. An earlier extra condition dropped it anyway whenever the read
+    # itself happened to start with a newline byte, without checking
+    # whether the boundary was actually clean, silently eating a real blank
+    # line that sat exactly at the truncation point.
+    path = tmp_path / "log.txt"
+    # newline="" disables Python's platform line-ending translation so this
+    # is exactly 23 bytes of "\n", not "\r\n", regardless of host OS.
+    with open(path, "w", encoding="utf-8", newline="") as stream:
+        stream.write("AAAAAAAAAA\n\nBBBBBBBBBB\n")
+
+    # start = max(0, 23 - 12) = 11, landing exactly on the blank line's own
+    # newline; the byte before it (position 10) is the newline ending
+    # "AAAAAAAAAA", so this is a clean boundary -- the blank line is real.
+    assert read_text_tail(path, max_bytes=11, max_lines=100) == ["", "BBBBBBBBBB"]
+
+
+def test_text_tail_drops_a_line_fragment_split_across_a_windows_crlf(tmp_path):
+    # A truncation boundary landing between the "\r" and "\n" of one CRLF
+    # terminator is the one case where "previous is a newline byte" must
+    # NOT be treated as a clean boundary: splitlines() sees a phantom empty
+    # first line that is really just the second half of the same line break
+    # that already ended the previous (truncated-away) line, not a genuine
+    # blank line in the file.
+    path = tmp_path / "log.txt"
+    with open(path, "w", encoding="utf-8", newline="") as stream:
+        stream.write("one\r\ntwo\r\nthree\r\nfour\r\n")
+
+    # start = max(0, 23 - 7) = 16, landing exactly on the "\n" half of
+    # "three"'s "\r\n" terminator; previous (position 15) is "\r".
+    assert read_text_tail(path, max_bytes=6, max_lines=100) == ["four"]
+
+
 @pytest.mark.parametrize(
     ("value", "default", "expected"),
     [
@@ -88,6 +125,30 @@ def test_quarantine_can_restore_or_purge_files_and_directories(tmp_path):
     quarantined = quarantine_paths([file_path, directory])
     purge_quarantined_paths(quarantined)
     assert not any(path.exists() for path in quarantined.values())
+
+
+def test_restore_quarantined_paths_does_not_clobber_a_path_recreated_in_the_meantime(tmp_path, caplog):
+    # Regression test: restore_quarantined_paths() is the rollback path used
+    # after some later step (a DB commit) failed -- nothing quarantine_paths/
+    # restore_quarantined_paths do holds a lock across that window, so
+    # something else can legitimately recreate a path at its original
+    # location while it's quarantined (e.g. a fresh upload landing on the
+    # same output path). It used to always call source.replace(destination)
+    # unconditionally, silently destroying that new file.
+    path = tmp_path / "file.txt"
+    path.write_text("original", encoding="utf-8")
+    quarantined = quarantine_paths([path])
+    assert not path.exists()
+
+    path.write_text("recreated by someone else", encoding="utf-8")
+    with caplog.at_level("WARNING"):
+        restore_quarantined_paths(quarantined)
+
+    assert path.read_text(encoding="utf-8") == "recreated by someone else"
+    assert any("Not restoring" in record.getMessage() for record in caplog.records)
+    # The quarantined copy is not lost, just left in its temporary location.
+    temporary = quarantined[path]
+    assert temporary.exists() and temporary.read_text(encoding="utf-8") == "original"
 
 
 def test_quarantine_rolls_back_when_a_later_move_fails(monkeypatch, tmp_path):

@@ -17,7 +17,9 @@ const DEFAULT_RUNTIME = {
   outputDeviceId: "",
   monitoringEnabled: false
 };
-const has = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+const has = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+const notify = (detail) =>
+  globalThis.dispatchEvent?.(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
 
 export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [runtime, setRuntime] = useState(DEFAULT_RUNTIME);
@@ -26,8 +28,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     () => getAudioPreferences().monitorInputDeviceId || "default"
   );
   const confirmedEffects = useRef(DEFAULT_EFFECTS);
-  const effectSequence = useRef(0);
-  const pendingEffects = useRef(0);
+  const sequence = useRef(0);
+  const pending = useRef(0);
   const reportedMonitorError = useRef(null);
   const mounted = useMountedRef();
   const { run: enqueue } = useAsyncQueue();
@@ -52,31 +54,22 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     if (!settings) return;
     const next = normalizeAudioRuntimeSettings(settings);
 
-    setRuntime((current) =>
-      partial
-        ? {
-            volume: has(settings, "volume") ? next.volume : current.volume,
-            audioDriver: has(settings, "audio_driver") ? next.audioDriver : current.audioDriver,
-            outputDeviceId: has(settings, "output_device_id")
-              ? next.outputDeviceId
-              : current.outputDeviceId,
-            monitoringEnabled: has(settings, "monitoring_enabled")
-              ? next.monitoringEnabled
-              : current.monitoringEnabled
-          }
-        : {
-            volume: next.volume,
-            audioDriver: next.audioDriver,
-            outputDeviceId: next.outputDeviceId,
-            monitoringEnabled: next.monitoringEnabled
-          }
-    );
+    setRuntime((current) => {
+      if (!partial) return next;
+      return {
+        volume: has(settings, "volume") ? next.volume : current.volume,
+        audioDriver: has(settings, "audio_driver") ? next.audioDriver : current.audioDriver,
+        outputDeviceId: has(settings, "output_device_id") ? next.outputDeviceId : current.outputDeviceId,
+        monitoringEnabled: has(settings, "monitoring_enabled")
+          ? next.monitoringEnabled
+          : current.monitoringEnabled
+      };
+    });
   }, []);
 
   useEffect(() => {
     const status = directMonitor.data;
     if (status?.state !== "error") return;
-
     const key = status.request_id ?? status.error;
     if (reportedMonitorError.current === key) return;
     reportedMonitorError.current = key;
@@ -93,17 +86,16 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   }, []);
 
   useEffect(() => {
-    const sync = (event) => {
-      const detail = event.detail;
+    const sync = ({ detail }) => {
       if (!detail) return;
-
       applyRuntime(detail, true);
       if (!EFFECT_KEYS.some((key) => has(detail, key))) return;
 
       const effects = normalizeAudioEffects({ ...confirmedEffects.current, ...detail });
+      const id = Number(detail.__microphoneEffectSequence) || 0;
+      if (!id && pending.current) return;
       confirmedEffects.current = effects;
-      const sequence = Number(detail.__microphoneEffectSequence) || 0;
-      if (!sequence || sequence === effectSequence.current) setMicrophoneEffects(effects);
+      if (!id || id === sequence.current) setMicrophoneEffects(effects);
     };
 
     globalThis.addEventListener?.(AUDIO_SETTINGS_CHANGED_EVENT, sync);
@@ -113,12 +105,11 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   useEffect(() => {
     if (!audioSettings) return;
     applyRuntime(audioSettings);
+    if (pending.current) return;
 
-    if (!pendingEffects.current) {
-      const effects = normalizeAudioEffects(audioSettings);
-      confirmedEffects.current = effects;
-      setMicrophoneEffects(effects);
-    }
+    const effects = normalizeAudioEffects(audioSettings);
+    confirmedEffects.current = effects;
+    setMicrophoneEffects(effects);
   }, [applyRuntime, audioSettings]);
 
   const updateMicrophone = useCallback(
@@ -126,9 +117,7 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       enqueue(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          globalThis.dispatchEvent?.(
-            new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail: updated })
-          );
+          notify(updated);
           return updated;
         } catch (error) {
           if (mounted.current) reportError(error);
@@ -138,49 +127,43 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     [enqueue, mounted, reportError]
   );
 
-  const setMicrophoneVolume = useCallback(
-    (volume) => setRuntime((state) => ({ ...state, volume })),
-    []
-  );
-  const setDirectOutputDeviceId = useCallback(
-    (outputDeviceId) => setRuntime((state) => ({ ...state, outputDeviceId })),
-    []
-  );
-  const setMonitoringEnabled = useCallback(
-    (monitoringEnabled) =>
-      setRuntime((state) => ({ ...state, monitoringEnabled: !!monitoringEnabled })),
-    []
-  );
-
   const updateMicrophoneEffects = useCallback(
     (patch) => {
-      const sequence = ++effectSequence.current;
-      pendingEffects.current += 1;
-      setMicrophoneEffects((effects) => normalizeAudioEffects({ ...effects, ...patch }));
+      const id = ++sequence.current;
+      pending.current += 1;
+      setMicrophoneEffects((current) => normalizeAudioEffects({ ...current, ...patch }));
 
       return enqueue(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          const effects = normalizeAudioEffects({ ...confirmedEffects.current, ...updated });
-          confirmedEffects.current = effects;
-          globalThis.dispatchEvent?.(
-            new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, {
-              detail: { ...updated, __microphoneEffectSequence: sequence }
-            })
-          );
+          confirmedEffects.current = normalizeAudioEffects({ ...confirmedEffects.current, ...updated });
+          notify({ ...updated, __microphoneEffectSequence: id });
           return updated;
         } catch (error) {
-          if (mounted.current && sequence === effectSequence.current) {
-            setMicrophoneEffects(confirmedEffects.current);
+          if (mounted.current) {
+            if (id === sequence.current) setMicrophoneEffects(confirmedEffects.current);
+            reportError(error);
           }
-          if (mounted.current) reportError(error);
           return null;
         } finally {
-          pendingEffects.current = Math.max(0, pendingEffects.current - 1);
+          pending.current = Math.max(0, pending.current - 1);
         }
       });
     },
     [enqueue, mounted, reportError]
+  );
+
+  const setMicrophoneVolume = useCallback(
+    (volume) => setRuntime((current) => ({ ...current, volume })),
+    []
+  );
+  const setDirectOutputDeviceId = useCallback(
+    (outputDeviceId) => setRuntime((current) => ({ ...current, outputDeviceId })),
+    []
+  );
+  const setMonitoringEnabled = useCallback(
+    (monitoringEnabled) => setRuntime((current) => ({ ...current, monitoringEnabled: !!monitoringEnabled })),
+    []
   );
 
   return {

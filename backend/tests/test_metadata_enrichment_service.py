@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, call
 
 from app.services import metadata_enrichment_service as metadata
-from tests._shared import patch_attrs
+from tests._shared import patch_attrs, raises
 
 
 def test_itunes_lookup_returns_the_first_catalog_genre(monkeypatch):
@@ -336,7 +336,6 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
     monkeypatch.setattr(metadata.repositories, "get_song", Mock(return_value=song))
     invalidate = Mock()
     monkeypatch.setattr(metadata.revision_cache, "invalidate", invalidate)
-    monkeypatch.setattr(metadata, "_active", {"song"})
 
     metadata.enrich_song("song")
 
@@ -349,7 +348,23 @@ def test_enrichment_persists_missing_metadata(monkeypatch):
     assert metadata.commit.call_args_list == [call(database), call(database)]
     assert invalidate.call_args_list == [call(song), call(song)]
     assert database.close.call_count == 2
-    assert "song" not in metadata._active
+
+
+def test_run_enrichment_always_clears_the_admission_marker(monkeypatch):
+    # enrich_song() has several early-return paths (no video found is the
+    # common case without a configured video source) that never reach a
+    # trailing "discard from _active" statement -- that responsibility now
+    # lives in _run_enrichment's finally, which must run it regardless of
+    # how enrich_song exits: normally, via an early return, or via an
+    # exception escaping it.
+    monkeypatch.setattr(metadata, "_active", {"no-video", "boom"})
+    monkeypatch.setattr(metadata, "enrich_song", Mock(return_value=None))
+    metadata._run_enrichment("no-video")
+    assert "no-video" not in metadata._active
+
+    monkeypatch.setattr(metadata, "enrich_song", Mock(side_effect=RuntimeError("boom")))
+    raises(RuntimeError, lambda: metadata._run_enrichment("boom"), match="boom")
+    assert "boom" not in metadata._active
 
 
 def test_enrichment_downloads_outside_song_lock_then_publishes_atomically(monkeypatch, tmp_path):

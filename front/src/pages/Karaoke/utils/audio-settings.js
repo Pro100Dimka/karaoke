@@ -16,7 +16,8 @@ function toBoolean(value) {
 }
 
 function normalizeDeviceId(value) {
-  return ["string", "number"].includes(typeof value) ? value : "";
+  if (typeof value === "string") return value;
+  return typeof value === "number" && Number.isFinite(value) ? value : "";
 }
 
 export function normalizeAudioEffects(settings) {

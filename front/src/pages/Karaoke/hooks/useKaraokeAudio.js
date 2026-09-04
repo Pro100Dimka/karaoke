@@ -8,15 +8,14 @@ import { queryKeys } from "../../../query-client";
 import { POLLING_INTERVALS } from "../../../runtime-config";
 import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../../utils/errors";
+import { createRoomSyncChannel } from "../../../services/roomSyncChannel";
 import { getMicrophoneLevel } from "../utils/transport";
 import useAudioOutputRouting from "./useAudioOutputRouting";
-import useKaraokeRoomEffects from "./useKaraokeRoomEffects";
 import useMicrophoneSettings from "./useMicrophoneSettings";
 
 const noop = () => {};
 const safe = (task) => Promise.resolve().then(task).catch(noop);
-const usePoll = (request, interval, queryKey) =>
-  usePolling(request, interval, [], { queryKey });
+const usePoll = (request, interval, queryKey) => usePolling(request, interval, [], { queryKey });
 const notify = (detail) =>
   globalThis.dispatchEvent?.(new CustomEvent(AUDIO_SETTINGS_CHANGED_EVENT, { detail }));
 
@@ -25,16 +24,16 @@ export default function useKaraokeAudio({
   instrumentalRef,
   vocalsRef,
   videoRef,
-  effectPreset,
   setEffectPreset
 }) {
   const { room, participants = [], setLocalMonitoring, syncUi } = onlineRoom;
   const mounted = useMountedRef();
-  const { run: queueMonitoring } = useAsyncQueue();
+  const { run: queue } = useAsyncQueue();
   const [error, setError] = useState(null);
   const [roomMonitoring, setRoomMonitoringState] = useState(false);
   const roomMonitoringRef = useRef(false);
   const effectMutation = useRef(0);
+  const roomEffects = useRef(createRoomSyncChannel());
 
   const { data: devices } = usePoll(api.listAudioOutputDevices, POLLING_INTERVALS.devices, [
     "audio-output-devices"
@@ -85,13 +84,15 @@ export default function useKaraokeAudio({
     [mounted, setMonitoringEnabled]
   );
 
-  useKaraokeRoomEffects({
-    room,
-    participantCount: participants.length,
-    syncUi,
-    volume: microphoneVolume,
-    effects: microphoneEffects
-  });
+  useEffect(() => {
+    roomEffects.current = createRoomSyncChannel();
+  }, [participants.length, room?.id, room?.selfId]);
+
+  useEffect(() => {
+    if (!room || typeof syncUi !== "function") return;
+    const state = { volume: microphoneVolume, ...microphoneEffects };
+    if (roomEffects.current.shouldSend(state)) safe(() => syncUi({ participantEffects: state }));
+  }, [microphoneEffects, microphoneVolume, participants.length, room, syncUi]);
 
   useAudioOutputRouting({
     audioDriver,
@@ -107,7 +108,7 @@ export default function useKaraokeAudio({
 
   const releaseMonitoring = useCallback(
     () =>
-      queueMonitoring(async () => {
+      queue(async () => {
         let failure;
         let settings = null;
 
@@ -118,7 +119,6 @@ export default function useKaraokeAudio({
             failure = error;
           }
         }
-
         if (monitoringRef.current) {
           try {
             settings = setNativeMonitoring(await api.stopDirectMonitoring());
@@ -130,23 +130,22 @@ export default function useKaraokeAudio({
         if (failure) throw failure;
         return settings;
       }),
-    [queueMonitoring, setLocalMonitoring, setNativeMonitoring, setRoomMonitoring]
+    [queue, setLocalMonitoring, setNativeMonitoring, setRoomMonitoring]
   );
 
-  const roomKey = room ? `${room.id ?? ""}:${room.selfId ?? ""}` : "";
+  const roomKey = room ? `${room.id ?? ""}:${room.selfId ?? ""}:${room.host ? 1 : 0}` : "";
+
   useEffect(() => {
     setRoomMonitoring(false);
-    queueMonitoring(async () => {
+    queue(async () => {
       await safe(() => setLocalMonitoring(false));
-      if (roomKey && monitoringRef.current) {
-        setNativeMonitoring(await api.stopDirectMonitoring());
-      }
+      if (room && monitoringRef.current) setNativeMonitoring(await api.stopDirectMonitoring());
     }).catch(noop);
-  }, [queueMonitoring, roomKey, setLocalMonitoring, setNativeMonitoring, setRoomMonitoring]);
+  }, [queue, roomKey, setLocalMonitoring, setNativeMonitoring, setRoomMonitoring]);
 
   useEffect(() => {
     const release = () => {
-      if (monitoringRef.current) safe(() => api.releaseDirectMonitoring());
+      safe(api.releaseDirectMonitoring);
       safe(() => setLocalMonitoring(false));
     };
     globalThis.addEventListener?.("pagehide", release);
@@ -158,14 +157,12 @@ export default function useKaraokeAudio({
 
   const onMonitoringChange = useCallback(
     (enabled) =>
-      queueMonitoring(async () => {
+      queue(async () => {
         try {
           if (mounted.current) setError(null);
 
           if (room) {
-            if (monitoringRef.current) {
-              setNativeMonitoring(await api.stopDirectMonitoring());
-            }
+            if (monitoringRef.current) setNativeMonitoring(await api.stopDirectMonitoring());
             setRoomMonitoring(
               await setLocalMonitoring(Boolean(enabled), {
                 volume: microphoneVolume,
@@ -179,44 +176,20 @@ export default function useKaraokeAudio({
           }
         } catch (cause) {
           if (mounted.current) {
-            setError(
-              t("karaoke.failedToChangeMicrophoneListening", { 0: getErrorMessage(cause) })
-            );
+            setError(t("karaoke.failedToChangeMicrophoneListening", { 0: getErrorMessage(cause) }));
           }
         }
       }),
-    [
-      microphoneEffects,
-      microphoneVolume,
-      mounted,
-      queueMonitoring,
-      room,
-      setLocalMonitoring,
-      setNativeMonitoring,
-      setRoomMonitoring
-    ]
+    [microphoneEffects, microphoneVolume, mounted, queue, room, setLocalMonitoring, setNativeMonitoring, setRoomMonitoring]
   );
 
   const saveEffects = useCallback(
     async (preset, patch) => {
-      const sequence = ++effectMutation.current;
+      const id = ++effectMutation.current;
       const updated = await updateMicrophoneEffects(patch);
-      if (updated !== null && sequence === effectMutation.current) setEffectPreset(preset);
+      if (updated !== null && id === effectMutation.current) setEffectPreset(preset);
     },
     [setEffectPreset, updateMicrophoneEffects]
-  );
-
-  const onEffectChange = useCallback(
-    (key, value) => setMicrophoneEffects((effects) => ({ ...effects, [key]: value })),
-    [setMicrophoneEffects]
-  );
-  const onEffectCommit = useCallback(
-    (key, value) => saveEffects("custom", { [key]: value }),
-    [saveEffects]
-  );
-  const onApplyEffectPreset = useCallback(
-    ({ id, echo, reverb, delay }) => saveEffects(id, { echo, reverb, delay }),
-    [saveEffects]
   );
 
   return {
@@ -226,8 +199,9 @@ export default function useKaraokeAudio({
     monitoringEnabled: room ? roomMonitoring : monitoringEnabled,
     releaseMonitoring,
     onMonitoringChange,
-    onEffectChange,
-    onEffectCommit,
-    onApplyEffectPreset
+    onEffectChange: (key, value) =>
+      setMicrophoneEffects((effects) => ({ ...effects, [key]: value })),
+    onEffectCommit: (key, value) => saveEffects("custom", { [key]: value }),
+    onApplyEffectPreset: ({ id, echo, reverb, delay }) => saveEffects(id, { echo, reverb, delay })
   };
 }

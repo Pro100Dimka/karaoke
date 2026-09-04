@@ -65,12 +65,20 @@ class ReferenceIndex:
 
     @classmethod
     def build(cls, reference_notes: list[dict[str, Any]]) -> ReferenceIndex:
-        normalized = sorted(reference_notes, key=lambda note: float(note.get("start", 0.0)))
+        # dict.get(key, default) only substitutes default when the key is
+        # MISSING, not when its value is an explicit null -- a note with
+        # "start": null (or a non-numeric start) used to crash the whole
+        # comparison via float(None), unlike _normalized_reference_notes'
+        # isinstance guard a few lines below for this exact same input (see
+        # analyze_recording). Notes with no usable start are dropped instead;
+        # an invalid/missing end still falls back to using start as before.
+        valid = [note for note in reference_notes if isinstance(note.get("start"), (int, float))]
+        normalized = sorted(valid, key=lambda note: float(note["start"]))
         return cls(
-            starts=tuple(float(note.get("start", 0.0)) for note in normalized),
+            starts=tuple(float(note["start"]) for note in normalized),
             notes=tuple(
                 (
-                    float(note.get("end", note.get("start", 0.0))),
+                    float(note["end"]) if isinstance(note.get("end"), (int, float)) else float(note["start"]),
                     _to_midi(note.get("note")),
                 )
                 for note in normalized
@@ -191,11 +199,24 @@ def _singing_metrics(
     }
 
 
+def _read_optional_structure(path) -> Any:
+    # A crash mid-write (or any other interference) can leave structure.json
+    # partially written/corrupt on disk. Its absence is already tolerated
+    # below (isinstance(structure, list)), so malformed content should
+    # degrade the same way instead of raising json.JSONDecodeError out of
+    # analyze_recording and failing the whole recording analysis over an
+    # optional, best-effort section breakdown.
+    try:
+        return read_json(path)
+    except (OSError, ValueError, TypeError):
+        return None
+
+
 def analyze_recording(recording: models.Recording, song: models.Song) -> dict[str, Any]:
     if not song.output_dir: raise ValueError("Песня ещё не обработана — нет эталонной мелодии для сравнения")
 
     output_dir = song_service.resolve_output_dir(song)
-    reference_notes, structure = ai_bridge.get_reference_notes(output_dir), read_json(output_dir / 'structure.json')
+    reference_notes, structure = ai_bridge.get_reference_notes(output_dir), _read_optional_structure(output_dir / 'structure.json')
     if not reference_notes: raise ValueError("Не найдены вокальные ноты — мелодия ещё не построена")
 
     normalized_reference = _normalized_reference_notes(reference_notes)

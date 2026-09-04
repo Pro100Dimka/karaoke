@@ -784,16 +784,29 @@ def _acquire_processing_slot(song_id: str) -> bool:
     with _processing_condition:
         if song_id not in _processing_queue:
             _processing_queue.append(song_id)
-        limit = ai_bridge.max_concurrent_jobs()
-        while len(_processing_active) >= limit or _processing_queue[0] != song_id:
-            if _is_cancelled(song_id):
+        try:
+            limit = ai_bridge.max_concurrent_jobs()
+            while len(_processing_active) >= limit or _processing_queue[0] != song_id:
+                if _is_cancelled(song_id):
+                    _processing_queue.remove(song_id)
+                    _processing_condition.notify_all()
+                    return False
+                _processing_condition.wait(timeout=0.2)
+            _processing_queue.pop(0)
+            _processing_active.add(song_id)
+            return True
+        except BaseException:
+            # song_id was appended to the shared _processing_queue above
+            # before anything here could fail (max_concurrent_jobs(),
+            # _is_cancelled(), or the wait itself). Without this, one
+            # transient failure left it stranded at the head of the queue
+            # forever -- every future call for every OTHER song loops
+            # forever on `_processing_queue[0] != song_id`, since nothing
+            # else would ever remove the stranded entry.
+            if song_id in _processing_queue:
                 _processing_queue.remove(song_id)
-                _processing_condition.notify_all()
-                return False
-            _processing_condition.wait(timeout=0.2)
-        _processing_queue.pop(0)
-        _processing_active.add(song_id)
-        return True
+            _processing_condition.notify_all()
+            raise
 
 
 def _release_processing_slot(song_id: str) -> None:
@@ -1027,6 +1040,12 @@ def _run_symbolic_job(
             _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
             _end_runtime_progress(song_id)
             cleanup_succeeded = True
+        except Exception:
+            # See the identical comment in _run_job's finally block: without
+            # this, a cleanup failure here replaces whatever the try/except
+            # above already decided and skips _finalize_processed_job below,
+            # silently stranding the song's DB row at PROCESSING forever.
+            logger.exception("Song processing cleanup failed: song_id=%s", song_id)
         finally:
             if slot_acquired and (not succeeded or not cleanup_succeeded):
                 _release_processing_slot(song_id)
@@ -1186,6 +1205,18 @@ def _run_job(song_id: str, processing_mode: str = "auto", *, reuse_vocals: bool 
             if media_process is not None:
                 media_process.close()
             cleanup_succeeded = True
+        except Exception:
+            # An exception here (e.g. capture.close() on a full disk, or a
+            # transient Windows sharing violation unlinking lyrics_path) used
+            # to propagate straight out of this finally block, which REPLACES
+            # whatever the try/except above already decided (a normal return,
+            # or a CANCELLED/ERROR status already committed to the DB). On
+            # the success path in particular, that skipped
+            # _finalize_processed_job below entirely -- the song's DB row
+            # stayed at PROCESSING forever with no terminal status and no
+            # error_message, silently, since nothing calls logger.exception
+            # for an exception escaping a finally block this way.
+            logger.exception("Song processing cleanup failed: song_id=%s", song_id)
         finally:
             if slot_acquired and (not pipeline_succeeded or not cleanup_succeeded):
                 _release_processing_slot(song_id)

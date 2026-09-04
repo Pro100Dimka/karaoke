@@ -177,6 +177,15 @@ def resume_recording(session_id: str):
 
 @router.post("/sync")
 def sync_recording(session_id: str, position_sec: float, playback_rate: float = 1):
+    # Unlike /recording/start and /player/{id}/seek, these arrive as bare
+    # query params (not a validated Pydantic body), so nothing enforced their
+    # bounds -- an arbitrary negative/out-of-range position_sec written here
+    # persists permanently in recordings.playback_segments_json.
+    if not (0 <= position_sec and 0.5 <= playback_rate <= 1.5):
+        raise HTTPException(
+            status_code=422,
+            detail="position_sec must be >= 0 and playback_rate must be between 0.5 and 1.5",
+        )
     with http_error(KeyError, 404), http_error(RuntimeError, 409):
         recording_service.sync_recording(session_id, position_sec, playback_rate)
     return {"status": "synchronized"}
@@ -278,7 +287,9 @@ async def attach_room_audio(
             start_playback_sec,
             latency_compensation_sec,
         )
-    except (OSError, RuntimeError, ValueError) as exc:
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Could not add room voices: {exc}") from exc
+    except (OSError, RuntimeError) as exc:
         raise HTTPException(status_code=500, detail=f"Could not add room voices: {exc}") from exc
     finally:
         await file.close()

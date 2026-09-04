@@ -187,6 +187,45 @@ def test_remote_failed_batch_is_retained_with_exponential_retry(monkeypatch):
     assert remote_log_service._RETRY_DELAY_SECONDS == 120.0
 
 
+def test_remote_failed_batch_prefers_the_shorter_delay_for_events_queued_mid_flight(monkeypatch):
+    # Regression test: _take_pending() clears _FLUSH_TIMER before flush_pending
+    # calls _send() (network I/O, no lock held), so a queue_log() that lands
+    # while _send() is in flight schedules its own fresh ~30s timer via
+    # _schedule_flush_locked's default delay. If that same _send() call then
+    # fails, flush_pending used to unconditionally overwrite that fresh timer
+    # with the full exponential backoff delay (here 600s) -- delaying the new
+    # event's delivery by many minutes for no reason tied to that new event.
+    schedule = Mock()
+
+    def send_and_queue_a_new_event(_payload):
+        # Simulates a queue_log() call landing on another thread while this
+        # network call is in flight.
+        remote_log_service._PENDING_EVENTS.append({"level": "ERROR", "message": "mid-flight", "timestamp": "t"})
+        return False
+
+    patch_attrs(
+        monkeypatch,
+        remote_log_service,
+        _DISABLED=False,
+        _PENDING_EVENTS=[],
+        _PENDING_HARDWARE=None,
+        _FLUSH_TIMER=None,
+        _RETRY_DELAY_SECONDS=600.0,
+        _schedule_flush_locked=schedule,
+        _persistent_device_id=lambda: "pc-stable",
+        _current_online_name=lambda: "Singer",
+        _send=Mock(side_effect=send_and_queue_a_new_event),
+        _remote_policy=lambda: {"enabled": True, "errors": True, "hardware": False, "crashes": False},
+    )
+    remote_log_service.queue_log(logging.ERROR, "original batch")
+    schedule.reset_mock()
+
+    remote_log_service.flush_pending()
+
+    assert schedule.call_args.args == (remote_log_service._FLUSH_DELAY_SECONDS,)
+    assert [event["message"] for event in remote_log_service._PENDING_EVENTS] == ["original batch", "mid-flight"]
+
+
 def test_remote_name_fallback_and_log_handler(monkeypatch):
     from app.services import app_settings_service
 

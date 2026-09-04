@@ -2,32 +2,20 @@ import { AudioLines, Cog, MousePointer2, Type } from "lucide-react";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { Button, Grid, Stack } from "../../../theme/ui";
 import { EFFECT_PRESETS } from "../constants";
-import { normalizePreset } from "./utils";
+const presets = EFFECT_PRESETS.map((preset) =>
+  Array.isArray(preset)
+    ? preset
+    : [preset.id, preset.label, preset.symbol, preset.echo, preset.reverb, preset.delay]
+);
 
-const presets = EFFECT_PRESETS.map(normalizePreset);
-
-export default function ToolsPanel({
-  showNotes,
-  showLyrics,
-  onToggleNotes,
-  onToggleLyrics,
-  onOpenAppSettings,
-  autoHideEnabled,
-  onAutoHideChange,
-  effectPreset,
-  onApplyEffectPreset
-}) {
+export default function ToolsPanel({ audio, preferences, onOpenAppSettings }) {
   const tools = [
-    [AudioLines, "karaoke.sheetMusic", showNotes, onToggleNotes],
-    [Type, "karaoke.text", showLyrics, onToggleLyrics],
-    [
-      MousePointer2,
-      "karaoke.autohide",
-      autoHideEnabled,
-      onAutoHideChange && (() => onAutoHideChange(!autoHideEnabled))
-    ],
+    [AudioLines, "karaoke.sheetMusic", preferences.showNotes, () => preferences.setShowNotes((v) => !v)],
+    [Type, "karaoke.text", preferences.showLyrics, () => preferences.setShowLyrics((v) => !v)],
+    [MousePointer2, "karaoke.autohide", preferences.autoHideConsole, () => preferences.setAutoHideConsole((v) => !v)],
     [Cog, "karaoke.settings", null, onOpenAppSettings]
   ].filter((tool) => tool[3]);
+
   return (
     <Stack justify="space-between" gap="var(--space-2)">
       <Grid columns={tools.length} gap="var(--space-1)">
@@ -48,14 +36,14 @@ export default function ToolsPanel({
         {presets.map(([id, label, symbol, echo, reverb, delay]) => (
           <Button
             key={id}
-            variant={effectPreset === id ? "contained" : "outlined"}
-            aria-pressed={effectPreset === id}
+            variant={preferences.effectPreset === id ? "contained" : "outlined"}
+            aria-pressed={preferences.effectPreset === id}
             title={t("karaoke.echoReverb", {
               0: label,
               1: Math.round(echo * 100),
               2: Math.round(reverb * 100)
             })}
-            onClick={() => onApplyEffectPreset?.({ id, label, symbol, echo, reverb, delay })}
+            onClick={() => audio.onApplyEffectPreset({ id, echo, reverb, delay })}
           >
             {symbol} {label}
           </Button>

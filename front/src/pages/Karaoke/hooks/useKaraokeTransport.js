@@ -7,12 +7,9 @@ import { finalizeRecording, formatError } from "../utils/recordingSession";
 import { clampPlaybackPosition } from "../utils/transport";
 import useKaraokeRecording from "./useKaraokeRecording";
 import useKaraokeRoomTransport from "./useKaraokeRoomTransport";
-import useOperationGate from "./useOperationGate";
 
 export { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
 
-const ROOM_PLAY_LEAD_MS = 450;
-const MASTER_PLAY_TIMEOUT_MS = 4000;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 const safe = (task, fallback = null) => Promise.resolve().then(task).catch(() => fallback);
 
@@ -22,16 +19,39 @@ function useEvent(handler) {
   return useCallback((...args) => ref.current(...args), []);
 }
 
+
+function useOperationGate() {
+  const operationRef = useRef(Symbol());
+  const waiters = useRef(new Set());
+  const beginOperation = useCallback(() => {
+    operationRef.current = Symbol();
+    waiters.current.forEach((resolve) => resolve(null));
+    waiters.current.clear();
+    return operationRef.current;
+  }, []);
+  const waitForOperation = async (pending, operation) => {
+    if (operation !== operationRef.current) return null;
+    let cancel;
+    const superseded = new Promise((resolve) => {
+      cancel = resolve;
+      waiters.current.add(resolve);
+    });
+    try {
+      return await Promise.race([pending, superseded]);
+    } finally {
+      waiters.current.delete(cancel);
+    }
+  };
+  return { operationRef, beginOperation, waitForOperation };
+}
+
 async function playMaster(media) {
   let timer;
   try {
     await Promise.race([
-      Promise.resolve(media.play()),
+      Promise.resolve().then(() => media.play()),
       new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("Master media playback timed out")),
-          MASTER_PLAY_TIMEOUT_MS
-        );
+        timer = setTimeout(() => reject(new Error("Master media playback timed out")), 4000);
       })
     ]);
   } catch (error) {
@@ -64,10 +84,14 @@ export default function useKaraokeTransport({
   playback,
   releaseMonitoring
 }) {
-  const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisState] = useState(null);
   const [recordingError, setRecordingError] = useState(null);
   const analysisRecordingIdRef = useRef(null);
+  const roomCaptureRef = useRef(null);
+  const stopVersionRef = useRef(0);
+  const stopInFlightRef = useRef(null);
+  const { operationRef, beginOperation, waitForOperation } = useOperationGate();
+
   const setAnalysisRecordingId = useCallback((value) => {
     setAnalysisState((previous) => {
       const next = typeof value === "function" ? value(previous) : value;
@@ -75,14 +99,9 @@ export default function useKaraokeTransport({
       return next;
     });
   }, []);
-  const clearAnalysis = useCallback(() => setAnalysisRecordingId(null), [setAnalysisRecordingId]);
 
-  const lifecycle = playback;
-  const { operationRef, beginOperation, waitForOperation } = useOperationGate();
-  const roomCaptureRef = useRef(null);
-  const stopVersionRef = useRef(0);
-  const stopInFlightRef = useRef(null);
   const {
+    recordingSessionId,
     sessionRef,
     pendingRecordingStartRef,
     clearSession,
@@ -99,8 +118,6 @@ export default function useKaraokeTransport({
     speed,
     microphoneVolume,
     microphoneEffects,
-    recordingSessionId,
-    setRecordingSessionId,
     setRecordingError,
     setAnalysisRecordingId,
     operationRef,
@@ -109,33 +126,27 @@ export default function useKaraokeTransport({
   });
 
   const pauseMedia = () => {
-    instrumentalRef.current?.pause();
-    vocalsRef.current?.pause();
-    videoRef.current?.pause();
+    [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach((media) => media?.pause());
     silenceMelodyGuide();
   };
 
   const startRoomCapture = async (position) => {
     if (!onlineRoom?.room) return null;
-
     if (roomCaptureRef.current) {
       await safe(() => roomCaptureRef.current.resume?.());
       return roomCaptureRef.current;
     }
-
-    const capture = await safe(
+    roomCaptureRef.current = await safe(
       () => createRoomVoiceCapture(onlineRoom.getRemoteVoiceStreams?.() || [], position),
       null
     );
-    roomCaptureRef.current = capture;
-    return capture;
+    return roomCaptureRef.current;
   };
 
   const stopRoomCapture = () => {
     const capture = roomCaptureRef.current;
     roomCaptureRef.current = null;
     if (!capture) return Promise.resolve(null);
-
     return Promise.resolve()
       .then(() => capture.stop())
       .then((blob) => ({ blob, startPlaybackSec: capture.startPlaybackSec }));
@@ -148,25 +159,25 @@ export default function useKaraokeTransport({
     const shouldPlay = forcePlaying ?? !isPlaying;
     const operation = beginOperation();
     const stopVersion = stopVersionRef.current;
+    const stale = () => operation !== operationRef.current;
 
     if (!shouldPlay) {
-      lifecycle.pause();
+      playback.pause();
       const pending = pendingRecordingStartRef.current;
       if (!sessionRef.current && pending?.songId === song.id) pending.settle = "pause";
-
       pauseMedia();
       await safe(() => roomCaptureRef.current?.pause?.());
       setCurrentTime(instrumental.currentTime);
-      lifecycle.paused();
+      playback.paused();
       if (shouldBroadcast) broadcast("pause", instrumental.currentTime);
       if (sessionRef.current) await pauseRecording(sessionRef.current).catch(() => {});
       return true;
     }
 
-    lifecycle.start();
+    playback.start();
     const scheduledAt =
       shouldBroadcast && onlineRoom?.room && typeof onlineRoom.roomClockNow === "function"
-        ? onlineRoom.roomClockNow() + ROOM_PLAY_LEAD_MS
+        ? onlineRoom.roomClockNow() + 450
         : null;
     if (scheduledAt != null) broadcast("play", instrumental.currentTime, scheduledAt);
 
@@ -178,32 +189,31 @@ export default function useKaraokeTransport({
     const recordingStart = runRecording(operation);
     try {
       await waitForOperation(recordingStart, operation);
-      if (operation !== operationRef.current) {
+      if (stale()) {
         pauseMedia();
         return false;
       }
-
       if (scheduledAt != null) {
         await wait(scheduledAt - onlineRoom.roomClockNow());
-        if (operation !== operationRef.current) {
+        if (stale()) {
           pauseMedia();
           return false;
         }
       }
 
       await startRoomCapture(instrumental.currentTime);
-      if (operation !== operationRef.current) {
+      if (stale()) {
         pauseMedia();
         await stopRoomCapture().catch(() => null);
         return false;
       }
 
-      [vocalsRef.current, videoRef.current].forEach((media) => {
+      for (const media of [vocalsRef.current, videoRef.current]) {
         if (media) safe(() => media.play());
-      });
+      }
       await playMaster(instrumental);
 
-      if (operation !== operationRef.current) {
+      if (stale()) {
         pauseMedia();
         await safe(() => roomCaptureRef.current?.pause?.());
         return stopVersionRef.current === stopVersion;
@@ -211,9 +221,9 @@ export default function useKaraokeTransport({
 
       syncSecondaryMedia(instrumental.currentTime, true);
       recordingStart.then((id) => {
-        if (!id || operation !== operationRef.current) return;
+        if (!id || stale()) return;
         syncRecording(id, instrumental.currentTime, speed).catch((error) => {
-          if (operation === operationRef.current) {
+          if (!stale()) {
             setRecordingError(formatError("karaoke.couldNotPreciselySynchronizeRecording", error));
           }
         });
@@ -225,13 +235,13 @@ export default function useKaraokeTransport({
       pauseMedia();
       await stopRoomCapture().catch(() => null);
       if (sessionRef.current) await discardSession(sessionRef.current);
-      lifecycle.fail();
+      playback.fail();
       setRecordingError(t("karaoke.failedToStartPlayback"));
       if (scheduledAt != null) broadcast("pause", instrumental.currentTime);
       return false;
     }
 
-    lifecycle.played();
+    playback.played();
     if (shouldBroadcast && scheduledAt == null) broadcast("play", instrumental.currentTime);
     return true;
   };
@@ -240,10 +250,9 @@ export default function useKaraokeTransport({
     const instrumental = instrumentalRef.current;
     if (!instrumental || !song?.id) return false;
 
-    lifecycle.stop();
+    playback.stop();
     stopVersionRef.current += 1;
     beginOperation();
-
     const pending = pendingRecordingStartRef.current;
     if (!sessionRef.current && pending?.songId === song.id) pending.settle = "stop";
 
@@ -252,14 +261,13 @@ export default function useKaraokeTransport({
     instrumental.currentTime = 0;
     syncSecondaryMedia(0, true);
     setCurrentTime(0);
-    lifecycle.stopped();
+    playback.stopped();
     if (shouldBroadcast) broadcast("stop", 0);
 
     const id = sessionRef.current;
     if (id) {
       await flushRecording();
       const { recording, error } = await finalizeRecording(id);
-
       if (error) {
         setRecordingError(formatError("karaoke.failedToSaveEntry", error));
         clearSession(id, false);
@@ -269,12 +277,7 @@ export default function useKaraokeTransport({
           if (captured?.blob?.size) {
             try {
               const latency = await safe(() => onlineRoom?.estimateRemoteVoiceLatency?.(), 0);
-              await api.attachRoomAudio(
-                recording.id,
-                captured.blob,
-                captured.startPlaybackSec,
-                latency
-              );
+              await api.attachRoomAudio(recording.id, captured.blob, captured.startPlaybackSec, latency);
             } catch (error) {
               setRecordingError(
                 formatError("karaoke.recordingSavedButTheOtherParticipantSVoiceCould", error)
@@ -288,11 +291,10 @@ export default function useKaraokeTransport({
     }
 
     try {
-      await Promise.resolve(releaseMonitoring?.());
+      await releaseMonitoring?.();
     } catch (error) {
       setRecordingError(formatError("karaoke.couldNotDisableMicrophoneMonitoring", error));
     }
-
     return true;
   };
 
@@ -308,31 +310,19 @@ export default function useKaraokeTransport({
   const seekTo = (time, { broadcast: shouldBroadcast = true } = {}) => {
     const instrumental = instrumentalRef.current;
     if (!instrumental || !song?.id) return;
-
     const position = clampPlaybackPosition(time, durationRef.current);
     instrumental.currentTime = position;
     syncSecondaryMedia(position, true);
     setCurrentTime(position);
-
-    if (isPlaying && sessionRef.current) {
-      syncRecording(sessionRef.current, position, speed).catch(() => {});
-    }
+    if (isPlaying && sessionRef.current) syncRecording(sessionRef.current, position, speed).catch(() => {});
     if (shouldBroadcast) broadcast("seek", position);
   };
 
   const skip = (delta) =>
-    seekTo(
-      clampPlaybackPosition(
-        (Number(instrumentalRef.current?.currentTime) || currentTime) + delta,
-        duration
-      )
-    );
+    seekTo(clampPlaybackPosition((Number(instrumentalRef.current?.currentTime) || currentTime) + delta, duration));
 
   const returnToLibrary = async ({ alreadyStopped = false, analysisId = null } = {}) => {
-    if (onlineRoom?.room) {
-      safe(() => onlineRoom.syncCommand?.({ type: "open-library" }));
-    }
-
+    if (onlineRoom?.room) safe(() => onlineRoom.syncCommand?.({ type: "open-library" }));
     if (!alreadyStopped) {
       try {
         await stop({ broadcast: false });
@@ -340,14 +330,10 @@ export default function useKaraokeTransport({
         setRecordingError(formatError("karaoke.failedToSaveEntry", error));
       }
     }
-
     navigate(
       "/",
       alreadyStopped
-        ? {
-            replace: true,
-            state: { fromKaraokeFade: true, analysisRecordingId: analysisId || null }
-          }
+        ? { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: analysisId || null } }
         : undefined
     );
     return true;
@@ -370,6 +356,7 @@ export default function useKaraokeTransport({
   const stableSkip = useEvent(skip);
   const stableStop = useEvent(stop);
   const stableTogglePlay = useEvent(togglePlay);
+  const clearAnalysis = useCallback(() => setAnalysisRecordingId(null), [setAnalysisRecordingId]);
 
   return {
     returnToLibrary: stableReturnToLibrary,

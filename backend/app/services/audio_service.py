@@ -705,16 +705,24 @@ def _stop_monitoring_process(expected_process=None) -> None:
         _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
     if relay is not None:
         relay.close()
-    if process is None or process.poll() is not None:
+    if process is None:
         return
     try:
-        process.terminate()
-        process.wait(timeout=1.5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=1.5)
-    except OSError as exc:
-        logger.warning("Could not stop direct monitoring worker: %s", exc)
+        # A process that already exited on its own (driver crash, hardware
+        # unplugged) needs no terminate/kill -- but the pipes below still
+        # need closing and the reader thread still needs joining either way;
+        # returning early here used to skip that whole cleanup, leaking
+        # process.stdout/stdin until the next stop happened to catch a still
+        # -running process.
+        if process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=1.5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1.5)
+            except OSError as exc:
+                logger.warning("Could not stop direct monitoring worker: %s", exc)
     finally:
         # Join the reader before closing stdout: it is still iterating
         # `for line in process.stdout`, and closing the file out from under
@@ -1160,7 +1168,7 @@ def check_signal_quality(
     duration_sec: float = 0.5,
     monitoring_expected: bool = False,
 ) -> dict:
-    global _monitor_process
+    global _monitor_process, _monitor_reader
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Аудио-бэкенд (sounddevice) недоступен")
 
@@ -1169,15 +1177,32 @@ def check_signal_quality(
     if signal is not None:
         return signal
 
+    dead_process, dead_reader = None, None
     with _monitor_lock:
         process = _monitor_process
         if process is not None and process.poll() is None:
             return dict(_monitor_signal)
         if process is not None:
+            dead_process, dead_reader = process, _monitor_reader
             _monitor_process = None
+            _monitor_reader = None
             _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
-        if monitoring_expected or monitoring_status()["state"] in {"starting", "stopping"}:
-            return dict(_monitor_signal)
+        stopping = monitoring_expected or monitoring_status()["state"] in {"starting", "stopping"}
+    if dead_process is not None:
+        # The worker exited on its own (driver crash, device unplugged) --
+        # nothing else calls _stop_monitoring_process for this case, so its
+        # pipes/reader thread need the same cleanup here, not just clearing
+        # the _monitor_process reference (see _stop_monitoring_process for
+        # the same class of leak on the ordinary stop path).
+        if dead_reader is not None and dead_reader is not threading.current_thread():
+            dead_reader.join(timeout=1.0)
+        if dead_process.stdout is not None:
+            dead_process.stdout.close()
+        if dead_process.stdin is not None:
+            with contextlib.suppress(OSError):
+                dead_process.stdin.close()
+    if stopping:
+        return dict(_monitor_signal)
 
     resolved_device = device_id
     rates: list[int] = []

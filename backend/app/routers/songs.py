@@ -52,6 +52,16 @@ from database import get_db
 router = APIRouter(prefix="/songs", tags=["songs"])
 
 
+def _upload_size(file: UploadFile, default: int) -> int:
+    # UploadFile.size is 0 until Starlette has parsed the multipart body, then
+    # holds the real (possibly genuinely 0-byte) size -- `or default` treated
+    # that real 0 as falsy and silently substituted `default` (often ~2GiB)
+    # for a storage_budget_service.reserve() call sized for a trivial upload,
+    # which could then fail with 507 for lack of ~2GiB free disk space.
+    size = getattr(file, "size", None)
+    return int(size) if size is not None else default
+
+
 def _processing_status(
     song: models.Song,
     *,
@@ -155,7 +165,7 @@ async def add_song(
         temporary_path = Path(temporary.name)
     upload_reservation = None
     try:
-        upload_size = int(getattr(file, "size", 0) or config.MAX_AUDIO_UPLOAD_BYTES)
+        upload_size = _upload_size(file, config.MAX_AUDIO_UPLOAD_BYTES)
         upload_reservation = storage_budget_service.reserve(
             "song_upload",
             config.UPLOAD_TEMP_DIR,
@@ -222,7 +232,7 @@ async def inspect_song_identity(file: UploadFile = File(...)):
         temporary_path = Path(temporary.name)
     upload_reservation = None
     try:
-        upload_size = int(getattr(file, "size", 0) or config.MAX_AUDIO_UPLOAD_BYTES)
+        upload_size = _upload_size(file, config.MAX_AUDIO_UPLOAD_BYTES)
         upload_reservation = storage_budget_service.reserve(
             "song_identity_upload",
             config.UPLOAD_TEMP_DIR,
@@ -432,7 +442,7 @@ async def import_song_package(
         temporary_path = Path(temporary.name)
     upload_reservation = None
     try:
-        upload_size = int(getattr(file, "size", 0) or song_package_service.MAX_PACKAGE_BYTES)
+        upload_size = _upload_size(file, song_package_service.MAX_PACKAGE_BYTES)
         upload_reservation = storage_budget_service.reserve(
             "song_package_upload",
             config.CACHE_DIR,
@@ -555,12 +565,13 @@ def get_processing_log(song: SongDependency):
 
 @router.get("/{song_id}/cover")
 def get_song_cover(song: SongDependency):
-    output_dir, covers = song_service.resolve_output_dir(song), (('cover.jpg', 'image/jpeg'), ('cover.png', 'image/png'), ('cover.webp', 'image/webp'))
-    for filename, media_type in covers:
-        path = output_dir / filename
-        if path.is_file(): return FileResponse(path, media_type=media_type)
+    with http_error(ValueError, 409):
+        output_dir, covers = song_service.resolve_output_dir(song), (('cover.jpg', 'image/jpeg'), ('cover.png', 'image/png'), ('cover.webp', 'image/webp'))
+        for filename, media_type in covers:
+            path = output_dir / filename
+            if path.is_file(): return FileResponse(path, media_type=media_type)
 
-    source = song_service.resolve_source_path(song)
+        source = song_service.resolve_source_path(song)
     recovered = song_service.extract_embedded_cover(source, output_dir) if source.is_file() else None
     if recovered is not None:
         media_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[recovered.suffix.lower()]
@@ -571,8 +582,9 @@ def get_song_cover(song: SongDependency):
 @router.get("/{song_id}/audio/{track}")
 def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song", "diagnostic"}: raise HTTPException(status_code=404, detail="Unknown audio track")
-    output_dir = song_service.resolve_output_dir(song)
-    candidate = song_service.resolve_source_path(song) if track == "song" else song_artifacts.resolve_audio_artifact(output_dir, track)
+    with http_error(ValueError, 409):
+        output_dir = song_service.resolve_output_dir(song)
+        candidate = song_service.resolve_source_path(song) if track == "song" else song_artifacts.resolve_audio_artifact(output_dir, track)
     # During KAR/MID/KFN processing the database source still points at the
     # symbolic file. WaveSurfer cannot decode MIDI/KFN, but the preparation
     # job writes the matched recording to original.flac well before the rest
@@ -649,10 +661,11 @@ def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
 def get_result(song: SongDependency, response: Response):
     if not song_service.is_done(song) or not song.output_dir: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
-    out_dir = song_service.resolve_output_dir(song)
-    with song_service.song_content_lock(song.id):
-        ai_bridge.recover_generated_artifacts(out_dir)
-        lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
+    with http_error(ValueError, 409):
+        out_dir = song_service.resolve_output_dir(song)
+        with song_service.song_content_lock(song.id):
+            ai_bridge.recover_generated_artifacts(out_dir)
+            lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
     if not isinstance(lyrics_sync, dict): lyrics_sync = {}
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
@@ -694,9 +707,9 @@ def _carry_forward_word_notes(previous: list[Any], words: list[dict[str, Any]]) 
 def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency, db: Session = Depends(get_db)):
     if not song_service.is_done(song) or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
-    out_dir = song_service.resolve_output_dir(song)
-    lyrics_path = out_dir / "lyricsSync.json"
     try:
+        out_dir = song_service.resolve_output_dir(song)
+        lyrics_path = out_dir / "lyricsSync.json"
         with song_service.song_content_lock(song.id), song_service.library_write_lock():
             reconcile_lyric_words = ai_bridge.reconcile_lyric_words
             lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])

@@ -16,28 +16,8 @@ export default function KaraokeConsole({
   transport,
   onOpenAppSettings,
   onTogglePlay,
-  onStop,
-  onClose
+  onStop
 }) {
-  const {
-    musicVolume,
-    setMusicVolume,
-    vocalVolume,
-    setVocalVolume,
-    melodyVolume,
-    setMelodyVolume,
-    previewPreference,
-    keyShift,
-    setKeyShift,
-    showLyrics,
-    setShowLyrics,
-    showNotes,
-    setShowNotes,
-    autoHideConsole,
-    setAutoHideConsole,
-    effectPreset
-  } = preferences;
-
   return (
     <Card
       as="aside"
@@ -66,62 +46,19 @@ export default function KaraokeConsole({
     >
       <Stack gap="var(--space-1)">
         <SongStrip {...{ song, currentTime, duration }} onSeek={transport.seekTo} />
-
         <Grid
           columns={3}
           gap="var(--space-3)"
           sx={{ padding: "var(--space-1) var(--space-3) var(--space-2)", alignItems: "center" }}
         >
-          <MixerPanel
-            microphoneLevel={audio.microphoneLevel}
-            volumes={{
-              microphone: audio.microphoneVolume,
-              music: musicVolume,
-              vocal: vocalVolume,
-              melody: melodyVolume
-            }}
-            onVolumeChange={{
-              microphone: audio.setMicrophoneVolume,
-              music: (value) => previewPreference("musicVolume", value),
-              vocal: (value) => previewPreference("vocalVolume", value),
-              melody: (value) => previewPreference("melodyVolume", value)
-            }}
-            onVolumeCommit={{
-              microphone: (value) => audio.updateMicrophone({ volume: value }),
-              music: setMusicVolume,
-              vocal: setVocalVolume,
-              melody: setMelodyVolume
-            }}
-            microphoneEffects={audio.microphoneEffects}
-            onEffectChange={audio.onEffectChange}
-            onEffectCommit={audio.onEffectCommit}
-            monitoringEnabled={audio.monitoringEnabled}
-            onMonitoringChange={audio.onMonitoringChange}
-          />
-
+          <MixerPanel audio={audio} preferences={preferences} />
           <ConsoleCenter
-            song={song}
-            currentTempo={timeline.currentTempo}
-            compactKey={timeline.compactKey}
-            keyShift={keyShift}
-            onTempoChange={timeline.changeTempo}
-            onKeyShiftChange={setKeyShift}
-            isPlaying={isPlaying}
-            onSkip={transport.skip}
-            onTogglePlay={onTogglePlay}
-            onStop={onStop}
+            {...{ song, isPlaying, timeline, preferences, transport, onTogglePlay, onStop }}
           />
-
           <ToolsPanel
-            showNotes={showNotes}
-            showLyrics={showLyrics}
-            onToggleNotes={() => setShowNotes((value) => !value)}
-            onToggleLyrics={() => setShowLyrics((value) => !value)}
+            audio={audio}
+            preferences={preferences}
             onOpenAppSettings={onOpenAppSettings}
-            autoHideEnabled={autoHideConsole}
-            onAutoHideChange={setAutoHideConsole}
-            effectPreset={effectPreset}
-            onApplyEffectPreset={audio.onApplyEffectPreset}
           />
         </Grid>
       </Stack>

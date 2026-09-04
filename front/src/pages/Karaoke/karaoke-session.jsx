@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useKaraokeAudio from "./hooks/useKaraokeAudio";
@@ -25,6 +25,7 @@ export default function KaraokeSession({
   const playbackEndedRef = useRef(null);
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
+  const mediaRefs = { instrumentalRef, vocalsRef, videoRef };
   const playback = usePlaybackMachine();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -35,10 +36,7 @@ export default function KaraokeSession({
   const preferences = useKaraokePreferences({ room, roomUi, syncUi });
   const audio = useKaraokeAudio({
     onlineRoom,
-    instrumentalRef,
-    vocalsRef,
-    videoRef,
-    effectPreset: preferences.effectPreset,
+    ...mediaRefs,
     setEffectPreset: preferences.setEffectPreset
   });
   const timeline = useKaraokeTimeline({
@@ -53,10 +51,8 @@ export default function KaraokeSession({
     currentTimeRef
   });
   const { syncSecondaryMedia } = useKaraokeMediaSync({
+    ...mediaRefs,
     currentTimeRef,
-    instrumentalRef,
-    vocalsRef,
-    videoRef,
     isPlaying: playback.isPlaying,
     keyShift: preferences.keyShift,
     melodyVolume: preferences.melodyVolume,
@@ -73,12 +69,10 @@ export default function KaraokeSession({
     vocalVolume: preferences.vocalVolume
   });
   const transport = useKaraokeTransport({
+    ...mediaRefs,
     song,
     onlineRoom,
     navigate,
-    instrumentalRef,
-    vocalsRef,
-    videoRef,
     durationRef,
     currentTime,
     duration,
@@ -95,25 +89,6 @@ export default function KaraokeSession({
     playback,
     releaseMonitoring: audio.releaseMonitoring
   });
-
-  const sceneIntro = useMemo(
-    () => ({
-      title: song.title,
-      artist: song.artist,
-      genre: song.genre,
-      key: timeline.compactKey,
-      tempo: timeline.currentTempo,
-      difficulty: song.difficulty_override
-    }),
-    [
-      song.artist,
-      song.difficulty_override,
-      song.genre,
-      song.title,
-      timeline.compactKey,
-      timeline.currentTempo
-    ]
-  );
 
   return (
     <KaraokeView
@@ -137,9 +112,7 @@ export default function KaraokeSession({
         songId: song.id
       }}
       mediaProps={{
-        instrumentalRef,
-        vocalsRef,
-        videoRef,
+        ...mediaRefs,
         isPlaying: playback.isPlaying,
         musicVolume: preferences.musicVolume,
         song,
@@ -156,7 +129,14 @@ export default function KaraokeSession({
         lyricsSync: timeline.displayLyricsSync,
         monitorInputDeviceId: audio.monitorInputDeviceId,
         notes: timeline.displayNotes,
-        sceneIntro,
+        sceneIntro: {
+          title: song.title,
+          artist: song.artist,
+          genre: song.genre,
+          key: timeline.compactKey,
+          tempo: timeline.currentTempo,
+          difficulty: song.difficulty_override
+        },
         songId: song.id,
         showLyrics: preferences.showLyrics,
         showNotes: preferences.showNotes

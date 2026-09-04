@@ -4,29 +4,30 @@ import useMountedRef from "../../../hooks/useMountedRef";
 import { setGlobalRouteBlackout } from "../../../utils/route-blackout";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const AUTO_START_POLL_MS = 120;
-const AUTO_START_TIMEOUT_MS = 30_000;
-const AUTO_START_RETRIES = 2;
-
-const waitForMedia = (element) => {
-  if (!element || element.readyState >= 3) return Promise.resolve();
-  element.load?.();
-
-  return new Promise((resolve) => {
-    let timer;
-    const done = () => {
-      clearTimeout(timer);
-      element.removeEventListener("canplay", done);
-      element.removeEventListener("error", done);
-      resolve();
-    };
-    element.addEventListener("canplay", done, { once: true });
-    element.addEventListener("error", done, { once: true });
-    timer = setTimeout(done, 2200);
-  });
+const safe = (task) => Promise.resolve().then(task).catch(() => false);
+const step = async (ms, active, action) => {
+  await wait(ms);
+  if (!active()) return false;
+  action?.();
+  return true;
 };
 
-const safe = (task) => Promise.resolve().then(task).catch(() => false);
+const waitForMedia = (media) => {
+  if (!media || media.readyState >= 3) return Promise.resolve();
+  media.load?.();
+
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      media.removeEventListener("canplay", done);
+      media.removeEventListener("error", done);
+      resolve();
+    };
+    const timer = setTimeout(done, 2200);
+    media.addEventListener("canplay", done, { once: true });
+    media.addEventListener("error", done, { once: true });
+  });
+};
 
 export default function useKaraokeSceneFlow({
   analysisRecordingIdRef,
@@ -51,141 +52,135 @@ export default function useKaraokeSceneFlow({
   const transition = useRef(0);
   const transitioning = useRef(false);
   const resumeRadio = useRef(false);
-  const hasStarted = useRef(false);
-  const stageTimer = useRef(null);
-  const autoStarted = useRef(null);
-  const autoStarting = useRef(null);
-  const roomRevealed = useRef(null);
+  const started = useRef(false);
+  const stageTimer = useRef();
+  const autoStarted = useRef();
+  const autoStarting = useRef();
+  const roomRevealed = useRef();
+  const initialTransition = autoStartRequested || roomPrepared;
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
-  const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested || roomPrepared);
+  const [sceneBlackout, setSceneBlackout] = useState(initialTransition);
   const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
-  const [sceneTransitioning, setSceneTransitioning] = useState(autoStartRequested || roomPrepared);
+  const [sceneTransitioning, setSceneTransitioning] = useState(initialTransition);
 
-  const isCurrent = useCallback(
+  const current = useCallback(
     (id) => mounted.current && transition.current === id,
     [mounted]
   );
 
+  const revealStageActions = useCallback(() => {
+    clearTimeout(stageTimer.current);
+    setStageActionsVisible(true);
+    stageTimer.current = setTimeout(() => {
+      if (mounted.current) setStageActionsVisible(false);
+    }, 1800);
+  }, [mounted]);
+
+  const restoreScene = useCallback(
+    (autoHide = true) => {
+      transitioning.current = false;
+      setSceneTransitioning(false);
+      setSceneIntroVisible(false);
+      setSceneBlackout(false);
+      showControls();
+      if (autoHide) revealStageActions();
+      else setStageActionsVisible(true);
+    },
+    [revealStageActions, showControls]
+  );
+
+  const beginTransition = useCallback(() => {
+    if (transitioning.current) return null;
+    transitioning.current = true;
+    const id = ++transition.current;
+    setSceneTransitioning(true);
+    hideControls();
+    setStageActionsVisible(false);
+    setSceneIntroVisible(false);
+    setSceneBlackout(true);
+    return () => current(id);
+  }, [current, hideControls]);
+
   useEffect(() => {
     transition.current += 1;
     transitioning.current = false;
-    hasStarted.current = false;
+    started.current = false;
     autoStarted.current = null;
     autoStarting.current = null;
     roomRevealed.current = null;
     setSceneIntroVisible(false);
-    setSceneBlackout(autoStartRequested || roomPrepared);
-    setSceneTransitioning(autoStartRequested || roomPrepared);
+    setSceneBlackout(initialTransition);
+    setSceneTransitioning(initialTransition);
   }, [autoStartRequested, roomPrepared, songId]);
 
   useEffect(() => {
-    if (!autoStartRequested && !roomPrepared) return;
+    if (!initialTransition) return;
     const timer = setTimeout(() => setGlobalRouteBlackout(false), 80);
     return () => clearTimeout(timer);
-  }, [autoStartRequested, roomPrepared]);
-
-  const revealStageActions = useCallback(() => {
-    setStageActionsVisible(true);
-    clearTimeout(stageTimer.current);
-    stageTimer.current = setTimeout(() => {
-      stageTimer.current = null;
-      if (mounted.current) setStageActionsVisible(false);
-    }, 1800);
-  }, [mounted]);
+  }, [initialTransition]);
 
   useEffect(() => {
     revealStageActions();
     return () => clearTimeout(stageTimer.current);
   }, [revealStageActions]);
 
-  const preloadMedia = useCallback(
-    () => Promise.all([instrumentalRef.current, vocalsRef.current].filter(Boolean).map(waitForMedia)),
-    [instrumentalRef, vocalsRef]
-  );
-
   const runIntroTransition = useCallback(
     async (action) => {
-      if (transitioning.current) return false;
-      transitioning.current = true;
-      const id = ++transition.current;
-      const active = () => isCurrent(id);
-      let restored = false;
-
-      const restore = () => {
-        if (restored || !active()) return;
-        restored = true;
-        transitioning.current = false;
-        setSceneTransitioning(false);
-        showControls();
-        revealStageActions();
-      };
-
-      setSceneTransitioning(true);
-      hideControls();
-      setStageActionsVisible(false);
-      setSceneIntroVisible(false);
-      setSceneBlackout(true);
-      const preparation = safe(preloadMedia);
+      const active = beginTransition();
+      if (!active) return false;
+      const preload = safe(() =>
+        Promise.all([instrumentalRef.current, vocalsRef.current].filter(Boolean).map(waitForMedia))
+      );
 
       try {
-        await wait(420);
-        if (!active()) return false;
-        setSceneIntroVisible(true);
-
-        await wait(1350);
-        if (!active()) return false;
-        setSceneIntroVisible(false);
-
-        await wait(180);
-        if (!active()) return false;
-        await preparation;
+        if (!(await step(420, active, () => setSceneIntroVisible(true)))) return false;
+        if (!(await step(1350, active, () => setSceneIntroVisible(false)))) return false;
+        if (!(await step(180, active))) return false;
+        await preload;
         if (!active()) return false;
         setSceneBlackout(false);
-
-        await wait(520);
-        if (!active()) return false;
-        restore();
+        if (!(await step(520, active))) return false;
+        restoreScene();
         return Boolean(await action());
       } catch {
         return false;
       } finally {
         if (active()) {
-          setSceneIntroVisible(false);
           setSceneBlackout(false);
           await wait(120);
-          restore();
+          if (active()) restoreScene();
         }
       }
     },
-    [hideControls, isCurrent, preloadMedia, revealStageActions, showControls]
+    [beginTransition, instrumentalRef, restoreScene, vocalsRef]
   );
 
-  const startSongWithIntro = useCallback(async () => {
+  const startSong = useCallback(async () => {
     resumeRadio.current = isRadioPlaying;
     turnOffRadio({ remember: false });
-    const started = await runIntroTransition(() => togglePlay({ forcePlaying: true }));
-    if (started) hasStarted.current = true;
+    const success = await runIntroTransition(() => togglePlay({ forcePlaying: true }));
+    if (success) started.current = true;
     else if (resumeRadio.current && mounted.current) {
       safe(() => turnOnRadio({ remember: false, fadeIn: true }));
     }
-    return started;
+    return success;
   }, [isRadioPlaying, mounted, runIntroTransition, togglePlay, turnOffRadio, turnOnRadio]);
-  const startSongRef = useLatestRef(startSongWithIntro);
+  const startSongRef = useLatestRef(startSong);
 
   const handleTogglePlay = useCallback(async () => {
-    if (isPlaying) {
-      const paused = await togglePlay({ forcePlaying: false });
-      if (paused && resumeRadio.current) {
-        setRecordingActive(false);
-        safe(() => turnOnRadio({ remember: false, fadeIn: true }));
-      }
-      return paused;
+    if (!isPlaying) {
+      if (!started.current) return startSong();
+      turnOffRadio({ remember: false });
+      return togglePlay({ forcePlaying: true });
     }
 
-    if (!hasStarted.current) return startSongWithIntro();
-    turnOffRadio({ remember: false });
-    return togglePlay({ forcePlaying: true });
-  }, [isPlaying, setRecordingActive, startSongWithIntro, togglePlay, turnOffRadio, turnOnRadio]);
+    const paused = await togglePlay({ forcePlaying: false });
+    if (paused && resumeRadio.current) {
+      setRecordingActive(false);
+      safe(() => turnOnRadio({ remember: false, fadeIn: true }));
+    }
+    return paused;
+  }, [isPlaying, setRecordingActive, startSong, togglePlay, turnOffRadio, turnOnRadio]);
 
   const navigateFromBlackout = useCallback(
     (analysisId = null) =>
@@ -197,101 +192,66 @@ export default function useKaraokeSceneFlow({
   );
 
   const handleStop = useCallback(async () => {
-    if (transitioning.current) return false;
-    transitioning.current = true;
-    const id = ++transition.current;
-    const active = () => isCurrent(id);
-    const restore = () => {
-      if (!active()) return;
-      transitioning.current = false;
-      setSceneTransitioning(false);
-      setSceneBlackout(false);
-      setStageActionsVisible(true);
-      setGlobalRouteBlackout(false);
-      showControls();
-    };
-
-    setSceneTransitioning(true);
-    hideControls();
-    setStageActionsVisible(false);
-    setSceneIntroVisible(false);
-    setSceneBlackout(true);
+    const active = beginTransition();
+    if (!active) return false;
 
     try {
-      await wait(430);
-      if (!active()) return false;
-
-      const stopped = await stop();
-      if (!active()) return false;
-      if (!stopped) {
-        restore();
+      if (!(await step(430, active))) return false;
+      if (!(await stop()) || !active()) {
+        if (active()) restoreScene(false);
         return false;
       }
 
-      hasStarted.current = false;
+      started.current = false;
       const analysisId = analysisRecordingIdRef.current;
       setGlobalRouteBlackout(true);
-      await wait(40);
-      if (!active()) return false;
+      if (!(await step(40, active))) return false;
 
       if (returnToLibrary) await returnToLibrary({ alreadyStopped: true, analysisId });
       else navigateFromBlackout(analysisId);
       return true;
     } catch {
-      restore();
+      if (active()) {
+        restoreScene(false);
+        setGlobalRouteBlackout(false);
+      }
       return false;
     }
-  }, [
-    analysisRecordingIdRef,
-    hideControls,
-    isCurrent,
-    navigateFromBlackout,
-    returnToLibrary,
-    showControls,
-    stop
-  ]);
+  }, [analysisRecordingIdRef, beginTransition, navigateFromBlackout, restoreScene, returnToLibrary, stop]);
 
   useEffect(() => {
     if (!autoStartRequested || !songId || autoStarted.current === songId) return;
 
     let cancelled = false;
-    let attempts = 0;
     let failures = 0;
     let timer;
+    const deadline = Date.now() + 30_000;
     const fail = () => {
       setSceneBlackout(false);
       setSceneTransitioning(false);
       transitioning.current = false;
       showControls();
     };
-    const schedule = (delay = AUTO_START_POLL_MS) => {
-      timer = setTimeout(tryStart, delay);
+    const schedule = (delay = 120) => {
+      timer = setTimeout(run, delay);
     };
-    const tryStart = () => {
+    const run = () => {
       if (cancelled) return;
-
-      if (instrumentalRef.current?.readyState >= 3) {
-        if (autoStarting.current === songId) return;
-        autoStarting.current = songId;
-        safe(() => startSongRef.current()).then((started) => {
-          if (autoStarting.current === songId) autoStarting.current = null;
-          if (cancelled) return;
-          if (started) {
-            autoStarted.current = songId;
-            return;
-          }
-          if (++failures <= AUTO_START_RETRIES) {
-            schedule(600);
-            return;
-          }
-          fail();
-        });
+      if (instrumentalRef.current?.readyState < 3) {
+        if (Date.now() < deadline) schedule();
+        else fail();
         return;
       }
+      if (autoStarting.current === songId) return;
 
-      attempts += 1;
-      if (attempts * AUTO_START_POLL_MS < AUTO_START_TIMEOUT_MS) schedule();
-      else fail();
+      autoStarting.current = songId;
+      safe(() => startSongRef.current()).then((success) => {
+        if (autoStarting.current === songId) autoStarting.current = null;
+        if (cancelled) return;
+        if (success) autoStarted.current = songId;
+        else if (++failures <= 2) schedule(600);
+        else fail();
+      });
     };
 
     schedule(80);
@@ -303,7 +263,6 @@ export default function useKaraokeSceneFlow({
 
   useEffect(() => {
     if (autoStartRequested || !roomPrepared || !songId || roomRevealed.current === songId) return;
-
     let cancelled = false;
     safe(() => runIntroTransition(() => !cancelled)).then((shown) => {
       if (!cancelled && shown) roomRevealed.current = songId;

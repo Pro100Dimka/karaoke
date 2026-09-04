@@ -1,109 +1,98 @@
-import { translateSaved } from "../../../i18n/runtime";
+import { translateSaved as t } from "../../../i18n/runtime";
 
-// Stryker disable next-line ArrayDeclaration: Array() and Array([]) are the same empty array.
-const EMPTY_SECTIONS = Object.freeze(Array()); // eslint-disable-line no-array-constructor
-
-const ANALYSIS_GRADES = [
-  [85, () => translateSaved("karaoke.excellentPerformance")],
-  [70, () => translateSaved("karaoke.goodResult")],
-  [50, () => translateSaved("karaoke.thereIsPotential")],
-  [-Infinity, () => translateSaved("karaoke.needToPractice")]
+const EMPTY_SECTIONS = Object.freeze([]);
+const PERCENT_FIELDS = [
+  "pitch_accuracy_percent",
+  "rhythm_accuracy_percent",
+  "note_hold_percent",
+  "note_coverage_percent",
+  "overall_score_percent"
 ];
+const GRADES = [
+  [85, "karaoke.excellentPerformance"],
+  [70, "karaoke.goodResult"],
+  [50, "karaoke.thereIsPotential"],
+  [-Infinity, "karaoke.needToPractice"]
+];
+const ADVICE = {
+  pitch: "karaoke.practiceMatchingNotePitchesStartingAtASlowTempo",
+  rhythm: "karaoke.practiceYourEntriesListenForTheDownbeatAndStart",
+  hold: "karaoke.sustainEachNoteSteadilyToItsEndAndPace",
+  coverage: "karaoke.singEveryMarkedPhraseCloserToTheMicrophoneWithout"
+};
 
-function getAnalysisGrade(accuracy) {
-  if (accuracy == null) return translateSaved("common.noData");
-  const [, getLabel] = ANALYSIS_GRADES.find(([minimum]) => accuracy >= minimum);
-  return getLabel();
-}
-
-function getAnalysisAdvice(accuracy, meanDeviation, practiceMetric) {
-  if (accuracy == null) {
-    return translateSaved("karaoke.couldnTDetermineEnoughNotesSungTrySingingCloser");
-  }
-  if (meanDeviation > 1) {
-    return translateSaved("karaoke.focusOnStartingEachPhraseAccuratelyAndMaintainingThe");
-  }
-  const advice = {
-    pitch: () => translateSaved("karaoke.practiceMatchingNotePitchesStartingAtASlowTempo"),
-    rhythm: () => translateSaved("karaoke.practiceYourEntriesListenForTheDownbeatAndStart"),
-    hold: () => translateSaved("karaoke.sustainEachNoteSteadilyToItsEndAndPace"),
-    coverage: () => translateSaved("karaoke.singEveryMarkedPhraseCloserToTheMicrophoneWithout")
-  };
-  if (practiceMetric?.key && advice[practiceMetric.key]) return advice[practiceMetric.key]();
-  return accuracy >= 70
-    ? translateSaved("karaoke.goodAccuracyTryToMakeThePhrasesMoreEven")
-    : translateSaved("karaoke.repeatDifficultPhrasesMoreSlowlyFocusingOnTheNotes");
-}
-
-function finiteOrNull(value) {
+const finite = (value) => {
   if (value == null || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
-}
-function clampPercent(value) {
-  const number = finiteOrNull(value);
+};
+const percent = (value) => {
+  const number = finite(value);
   return number == null ? null : Math.max(0, Math.min(100, number));
+};
+const extreme = (items, better) =>
+  items.reduce((best, item) => (!best || better(item, best) ? item : best), null);
+
+function getGrade(accuracy) {
+  if (accuracy == null) return t("common.noData");
+  return t(GRADES.find(([minimum]) => accuracy >= minimum)[1]);
 }
+
+function getAdvice(accuracy, deviation, metric) {
+  if (accuracy == null) return t("karaoke.couldnTDetermineEnoughNotesSungTrySingingCloser");
+  if (deviation > 1) return t("karaoke.focusOnStartingEachPhraseAccuratelyAndMaintainingThe");
+  if (ADVICE[metric?.key]) return t(ADVICE[metric.key]);
+  return t(
+    accuracy >= 70
+      ? "karaoke.goodAccuracyTryToMakeThePhrasesMoreEven"
+      : "karaoke.repeatDifficultPhrasesMoreSlowlyFocusingOnTheNotes"
+  );
+}
+
 export function normalizeAnalysisSection(section, index = 0) {
   const source = section && typeof section === "object" ? section : {};
-  const start = finiteOrNull(source.start);
-  const end = finiteOrNull(source.end);
+  const start = finite(source.start);
+  const end = finite(source.end);
   return {
     ...source,
     label: typeof source.label === "string" && source.label.trim() ? source.label.trim() : null,
     start,
     end: start == null || end >= start ? end : null,
-    accuracy_percent: clampPercent(source.accuracy_percent),
-    mean_deviation_semitones: finiteOrNull(source.mean_deviation_semitones),
+    accuracy_percent: percent(source.accuracy_percent),
+    mean_deviation_semitones: finite(source.mean_deviation_semitones),
     index
   };
 }
+
 export function normalizeAnalysisResult(result) {
   const source = result && typeof result === "object" ? result : {};
-  const sections = Array.isArray(source.sections) ? source.sections : null;
-  return {
-    ...source,
-    pitch_accuracy_percent: clampPercent(source.pitch_accuracy_percent),
-    rhythm_accuracy_percent: clampPercent(source.rhythm_accuracy_percent),
-    note_hold_percent: clampPercent(source.note_hold_percent),
-    note_coverage_percent: clampPercent(source.note_coverage_percent),
-    overall_score_percent: clampPercent(source.overall_score_percent),
-    mean_deviation_semitones: finiteOrNull(source.mean_deviation_semitones),
-    sections: sections
-      ? sections
-          .filter((section) => section && typeof section === "object")
-          .map(normalizeAnalysisSection)
-      : EMPTY_SECTIONS
-  };
+  const normalized = { ...source };
+  PERCENT_FIELDS.forEach((key) => {
+    normalized[key] = percent(source[key]);
+  });
+  normalized.mean_deviation_semitones = finite(source.mean_deviation_semitones);
+  normalized.sections = Array.isArray(source.sections)
+    ? source.sections.filter((section) => section && typeof section === "object").map(normalizeAnalysisSection)
+    : EMPTY_SECTIONS;
+  return normalized;
 }
+
 export function getAnalysisFeedback(result) {
   const normalized = normalizeAnalysisResult(result);
   const accuracy = normalized.overall_score_percent ?? normalized.pitch_accuracy_percent;
   const metrics = [
-    { key: "pitch", value: normalized.pitch_accuracy_percent },
-    { key: "rhythm", value: normalized.rhythm_accuracy_percent },
-    { key: "hold", value: normalized.note_hold_percent },
-    { key: "coverage", value: normalized.note_coverage_percent }
-  ].filter(({ value }) => value != null);
-  const practiceMetric =
-    metrics.length > 1
-      ? metrics.reduce(
-          (worst, metric) => (!worst || metric.value < worst.value ? metric : worst),
-          null
-        )
-      : null;
-  const scoredSections = normalized.sections.filter((section) => section.accuracy_percent != null);
-  const bestSection = scoredSections.reduce(
-    (best, section) => (!best || section.accuracy_percent > best.accuracy_percent ? section : best),
-    null
-  );
-  const needsPractice = scoredSections.reduce(
-    (worst, section) =>
-      !worst || section.accuracy_percent < worst.accuracy_percent ? section : worst,
-    null
-  );
-  const grade = getAnalysisGrade(accuracy);
-  const advice = getAnalysisAdvice(accuracy, normalized.mean_deviation_semitones, practiceMetric);
+    ["pitch", normalized.pitch_accuracy_percent],
+    ["rhythm", normalized.rhythm_accuracy_percent],
+    ["hold", normalized.note_hold_percent],
+    ["coverage", normalized.note_coverage_percent]
+  ]
+    .filter(([, value]) => value != null)
+    .map(([key, value]) => ({ key, value }));
+  const practiceMetric = metrics.length > 1 ? extreme(metrics, (a, b) => a.value < b.value) : null;
+  const scoredSections = normalized.sections.filter(({ accuracy_percent }) => accuracy_percent != null);
+  const bestSection = extreme(scoredSections, (a, b) => a.accuracy_percent > b.accuracy_percent);
+  const needsPractice = extreme(scoredSections, (a, b) => a.accuracy_percent < b.accuracy_percent);
+
   return {
     ...normalized,
     accuracy,
@@ -112,7 +101,7 @@ export function getAnalysisFeedback(result) {
     scoredSections,
     bestSection,
     needsPractice,
-    grade,
-    advice
+    grade: getGrade(accuracy),
+    advice: getAdvice(accuracy, normalized.mean_deviation_semitones, practiceMetric)
   };
 }

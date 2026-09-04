@@ -281,12 +281,23 @@ def flush_pending() -> None:
         _RETRY_DELAY_SECONDS = 60.0
         return
     with _BUFFER_LOCK:
+        # queue_log()/queue_hardware_snapshot() calls that arrived while
+        # _send() above was in flight already scheduled their own near-term
+        # timer (_take_pending cleared _FLUSH_TIMER before releasing the
+        # lock for the network call) -- _PENDING_EVENTS/_PENDING_HARDWARE
+        # being non-empty here means that happened. Without this, the
+        # unconditional _schedule_flush_locked(retry_delay) below silently
+        # replaces that fresh near-term timer with the full exponential
+        # backoff delay (up to an hour), even though nothing about that new
+        # event has actually failed to send yet.
+        newly_queued = bool(_PENDING_EVENTS) or _PENDING_HARDWARE is not None
         _PENDING_EVENTS[:0] = events
         del _PENDING_EVENTS[:-_MAX_PENDING_EVENTS]
         if hardware is not None: _PENDING_HARDWARE = hardware
         retry_delay = _RETRY_DELAY_SECONDS
         _RETRY_DELAY_SECONDS = min(3600.0, _RETRY_DELAY_SECONDS * 2.0)
-        _schedule_flush_locked(retry_delay)
+        delay = min(retry_delay, _FLUSH_DELAY_SECONDS) if newly_queued else retry_delay
+        _schedule_flush_locked(delay)
 
 
 def queue_hardware_snapshot(hardware: dict[str, Any]) -> None:

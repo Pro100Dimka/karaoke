@@ -36,6 +36,19 @@ def test_commit_helpers_rollback_failures_and_refresh_instances():
     raises(RuntimeError, lambda: db_utils.commit(database), match='unavailable')
     database.rollback.assert_called_once_with()
 
+    # Regression test: commit_refresh used to roll back on commit() failing
+    # but not on refresh() failing (e.g. the row was deleted by a concurrent
+    # request between the commit and the refresh) -- the commit itself had
+    # already succeeded, so there was nothing to lose, but the session was
+    # left holding an un-rolled-back transaction from refresh()'s own failed
+    # SELECT, silently corrupting every later use of that session.
+    database.reset_mock()
+    database.commit.side_effect = None
+    database.refresh.side_effect = RuntimeError("row vanished")
+    raises(RuntimeError, lambda: db_utils.commit_refresh(database, instance), match='vanished')
+    database.commit.assert_called_once_with()
+    database.rollback.assert_called_once_with()
+
 
 def test_transactional_resource_deletion_purges_after_commit(tmp_path):
     path = tmp_path / "audio.wav"

@@ -104,6 +104,23 @@ def test_acquire_processing_slot_returns_false_and_dequeues_when_cancelled_while
     pipeline_service._release_processing_slot("a")
 
 
+def test_acquire_processing_slot_does_not_strand_the_queue_when_max_concurrent_jobs_fails(monkeypatch):
+    # Regression test: song_id used to be appended to the shared
+    # _processing_queue before anything here could fail; a transient failure
+    # in max_concurrent_jobs() (or _is_cancelled(), or the wait itself) left
+    # it stranded at the head of the queue forever, so every future call for
+    # every OTHER song looped forever on `_processing_queue[0] != song_id`
+    # since nothing else would ever remove the stranded entry.
+    _reset_processing_slots(monkeypatch, limit=1)
+    monkeypatch.setattr(pipeline_service.ai_bridge, "max_concurrent_jobs", Mock(side_effect=RuntimeError("boom")))
+    raises(RuntimeError, lambda: pipeline_service._acquire_processing_slot("a"), match="boom")
+    assert "a" not in pipeline_service._processing_queue
+
+    monkeypatch.setattr(pipeline_service.ai_bridge, "max_concurrent_jobs", Mock(return_value=1))
+    assert pipeline_service._acquire_processing_slot("b") is True
+    pipeline_service._release_processing_slot("b")
+
+
 def test_load_job_paths_handles_missing_default_and_persisted_output(monkeypatch, tmp_path):
     database, lookup = mock_song_lookup(monkeypatch, pipeline_service)
     assert pipeline_service._load_job_paths("missing") is None
@@ -482,6 +499,41 @@ def test_run_job_orchestrates_success_cancel_error_and_finalization(monkeypatch,
     assert (
         pipeline_service._update_progress.call_args.kwargs["status"] == models.SongStatus.CANCELLED
     )
+
+
+def test_run_job_reaches_finalization_even_when_cleanup_itself_raises(monkeypatch, tmp_path, caplog):
+    # Regression test: an exception from the cleanup step itself (closing
+    # capture, unlinking lyrics_path, stopping the heartbeat, closing
+    # media_process) used to propagate straight out of _run_job's finally
+    # block, replacing the outcome the try/except above already decided and
+    # skipping _finalize_processed_job entirely below -- the song's DB row
+    # was silently stranded at PROCESSING forever with no error_message.
+    events = []
+    patch_attrs(monkeypatch, pipeline_service, _load_job_paths=Mock(return_value=('source', tmp_path)), _load_song_identity=Mock(return_value=('Artist', 'Title')), _load_song_genre=Mock(return_value=None), _load_ai_inputs=Mock(return_value=(None, None, None)), _is_cancelled=Mock(return_value=False), _update_progress=Mock(), _begin_runtime_progress=Mock(), _start_progress_heartbeat=Mock(return_value=(Mock(), Mock())), _acquire_processing_slot=Mock(return_value=True), _release_processing_slot=Mock(side_effect=lambda _song_id: events.append("release")), _complete_audio_media=Mock())
+    capture = Mock()
+    capture.close.side_effect = OSError("disk full")
+    patch_many(monkeypatch, (pipeline_service, "_create_progress_capture", Mock(return_value=capture)), (pipeline_service.model_install_service, "ensure_ready_sync", Mock()))
+    patch_attrs(monkeypatch, pipeline_service, _configure_ai_runtime=Mock(return_value='cpu'), format_runtime_plan=Mock(return_value=('CPU',)), _create_ai_progress_callback=Mock(return_value=Mock()))
+    process = Mock(side_effect=lambda *_args, **_kwargs: events.append("ai") or "result")
+    monkeypatch.setattr(pipeline_service.ai_bridge, "process_song", process)
+    monkeypatch.setattr(
+        pipeline_service.metadata_enrichment_service, "start_training_media_process", Mock(return_value=None),
+    )
+    patch_attrs(monkeypatch, pipeline_service, _stop_progress_heartbeat=Mock(), _end_runtime_progress=Mock())
+    finalize = Mock(side_effect=lambda *_args, **_kwargs: events.append("finalize"))
+    monkeypatch.setattr(pipeline_service, "_finalize_success", finalize)
+
+    with caplog.at_level("ERROR", logger=pipeline_service.logger.name):
+        pipeline_service._run_job("song")  # must not raise
+
+    process.assert_called_once()
+    finalize.assert_called_once_with("song", tmp_path, retain_source=True)
+    # The slot releases twice: once immediately because cleanup_succeeded is
+    # False (the pre-existing behavior for a failed cleanup), and again
+    # after finalization -- what matters for this regression is that
+    # "finalize" is reached at all instead of the exception escaping first.
+    assert events == ["ai", "release", "finalize", "release"]
+    assert any("cleanup failed" in record.getMessage() for record in caplog.records)
 
 
 def test_run_job_refuses_full_process_when_source_was_retired_to_instrumental(monkeypatch, tmp_path):

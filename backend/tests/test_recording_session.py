@@ -522,6 +522,50 @@ def test_stop_recording_persists_take_and_always_closes_resources(monkeypatch, t
     database.close.assert_called_once_with()
 
 
+def test_stop_recording_keeps_song_readable_after_the_session_closes(monkeypatch, tmp_path):
+    # Regression test: commit_refresh's db.commit() expires every object
+    # still attached to the session (SQLAlchemy's expire_on_commit default),
+    # not just the `recording` row it explicitly refreshes -- `song` is a
+    # separate object fetched earlier in the same session. stop_recording
+    # closes that session before calling _create_performance_mix_safely(...,
+    # song, ...); without an explicit db.refresh(song) first, the first
+    # attribute access on song there raises DetachedInstanceError (silently
+    # swallowed, so the performance mix is just never produced). A fully
+    # mocked `db` (see the sibling test above) can't catch this -- it never
+    # exercises real commit/expire/close semantics.
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    import database
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    database.Base.metadata.create_all(bind=engine)
+    RealSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    with RealSession() as setup:
+        setup.add(make_song(tmp_path))
+        setup.commit()
+    monkeypatch.setattr(recording_service, "SessionLocal", RealSession)
+
+    session = Mock(song_id="song", playback_offset_sec=0, music_gain=1, gain=1, effects={}, playback_segments=[])
+    session.stop_and_save.return_value = (1.0, 48_000)
+    monkeypatch.setattr(recording_service, "_sessions", {"session": session})
+    patch_attrs(monkeypatch, recording_service.song_service, resolve_output_dir=Mock(return_value=tmp_path))
+
+    accessed = {}
+
+    def capture_mix(_recording, song, *_args):
+        accessed["output_dir"] = song.output_dir  # raises DetachedInstanceError if unfixed
+
+    monkeypatch.setattr(recording_service, "_create_performance_mix_safely", capture_mix)
+
+    recording_service.stop_recording("session")
+
+    assert accessed["output_dir"] == str(tmp_path)
+
+
 def test_stop_recording_does_not_wait_for_the_shared_hardware_lock(monkeypatch, tmp_path):
     # An unrelated monitor-process (re)start can hold hardware_lock for
     # several seconds. stop_recording() must be able to pop the session and

@@ -661,7 +661,12 @@ def _validate_destination_names(members: list[zipfile.ZipInfo], final_source_nam
         if member.is_dir(): continue
         path = _member_path(member)
         destination = _final_destination(path, final_source_name)
-        if destination is None or path.parts[:1] == ("source",): continue
+        # A distinct source/ entry (see _source_member) is no longer skipped
+        # here: it now actually gets published as final_source_name too (see
+        # _prepare_publish_tree), so if a crafted/coincidental source
+        # filename collides with a required output artifact's own name, it
+        # must be rejected here rather than silently overwriting it on import.
+        if destination is None: continue
         key = _portable_destination_key(destination)
         if key in destinations: raise ValueError("Song package namespaces collide on the destination filesystem")
         destinations.add(key)
@@ -671,7 +676,6 @@ def _prepare_publish_tree(
     archive: zipfile.ZipFile, members: list[zipfile.ZipInfo], source_member: zipfile.ZipInfo,
     staging_root: Path, final_source_name: str,
 ) -> Path:
-    del source_member, final_source_name
     staged_output, publish = staging_root / "output", staging_root / "publish"
     publish.mkdir()
     _extract_output(archive, members, staged_output)
@@ -681,6 +685,16 @@ def _prepare_publish_tree(
             shutil.copytree(item, target)
         else:
             shutil.copy2(item, target)
+    # A distinct source/ entry (not deduplicated against output/instrumental
+    # .flac -- see _source_member) has to actually land on disk as
+    # final_source_name. Without this, the imported song's source_path was
+    # aliased to instrumental.flac regardless, while manifest.content_revision
+    # was computed (in _archive_revision, at export time) from the real
+    # source file's own hash -- the post-publish revision check a few lines
+    # below in _publish_imported_package then always failed, so importing a
+    # package with a genuinely distinct source file was simply impossible.
+    if _member_path(source_member).parts[:1] == ("source",):
+        _copy_archive_member(archive, source_member, publish / final_source_name)
     return publish
 
 
@@ -733,30 +747,40 @@ def _recover_import_journal(db: Session, journal_path: Path) -> None:
     if journal_path.resolve().parent != root: raise ValueError("Room import recovery journal is stored under a different library root")
     output_dir, backup_name = _safe_library_entry(journal.get('target'), root=root), journal.get('backup')
     backup_dir = _safe_library_entry(backup_name, root=root) if backup_name else None
+    staging_name = journal.get("staging")
+    staging_dir = _safe_library_entry(staging_name, root=root) if staging_name else None
 
-    if phase == "prepared":
+    # A crash between staging_root being populated and the in-process
+    # except/finally in _publish_imported_package removing it leaves that
+    # full copy of the imported output tree with no reference anywhere else
+    # -- clean it up here regardless of which branch below actually runs.
+    try:
+        if phase == "prepared":
+            journal_path.unlink(missing_ok=True)
+            return
+
+        song, committed = _fresh_song_or_none(db, song_id), False
+        if song is not None and output_dir.exists():
+            try:
+                committed = compute_content_revision(song) == revision
+            except (OSError, ValueError, TypeError, AttributeError):
+                committed = False
+
+        if committed or phase == "db-committed":
+            if not committed: raise ValueError("Room import recovery found a committed journal with mismatched DB state")
+            _preserve_local_output(backup_dir, output_dir)
+            if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
+            journal_path.unlink(missing_ok=True)
+            assert song is not None  # noqa: S101 -- committed can only be True when song was found above
+            invalidate_content_revision(song)
+            return
+
+        if output_dir.exists(): shutil.rmtree(output_dir, ignore_errors=True)
+        if backup_dir is not None and backup_dir.exists(): backup_dir.replace(output_dir)
         journal_path.unlink(missing_ok=True)
-        return
-
-    song, committed = _fresh_song_or_none(db, song_id), False
-    if song is not None and output_dir.exists():
-        try:
-            committed = compute_content_revision(song) == revision
-        except (OSError, ValueError, TypeError, AttributeError):
-            committed = False
-
-    if committed or phase == "db-committed":
-        if not committed: raise ValueError("Room import recovery found a committed journal with mismatched DB state")
-        _preserve_local_output(backup_dir, output_dir)
-        if backup_dir is not None: shutil.rmtree(backup_dir, ignore_errors=True)
-        journal_path.unlink(missing_ok=True)
-        assert song is not None  # noqa: S101 -- committed can only be True when song was found above
-        invalidate_content_revision(song)
-        return
-
-    if output_dir.exists(): shutil.rmtree(output_dir, ignore_errors=True)
-    if backup_dir is not None and backup_dir.exists(): backup_dir.replace(output_dir)
-    journal_path.unlink(missing_ok=True)
+    finally:
+        if staging_dir is not None:
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def recover_import_transactions() -> None:
@@ -807,6 +831,13 @@ def _publish_imported_package(
         "library_root": str(output_dir.resolve().parent),
         "target": output_dir.name,
         "backup": backup_dir.name if backup_dir is not None else None,
+        # Recorded so a hard crash (kill/power loss) mid-import -- before the
+        # in-process except/finally below gets a chance to remove
+        # staging_root itself -- still lets the next startup's
+        # recover_import_transactions() find and delete it; without this the
+        # staging directory (a full copy of the imported output tree) has no
+        # reference anywhere and accumulates on disk forever.
+        "staging": staging_root.name,
         "new_revision": manifest.get("content_revision"),
     }
     try:
@@ -862,7 +893,16 @@ def import_package(db: Session, package_path: Path, *, expected_revision: str | 
         revision = manifest["content_revision"]
         if expected_revision is not None and revision != expected_revision: raise ValueError("Imported package revision differs from the expected room revision")
         source_member = _source_member(members)
-        final_source_name = "instrumental.flac"
+        # _source_member returns output/instrumental.flac itself when the
+        # exporter deduplicated an identical source (see its docstring) --
+        # only a genuine source/<name> entry gets published as its own file
+        # (see _prepare_publish_tree); the aliasing to instrumental.flac
+        # stays the same as before for the dedup case.
+        final_source_name = (
+            _member_path(source_member).name
+            if _member_path(source_member).parts[:1] == ("source",)
+            else "instrumental.flac"
+        )
         _validate_destination_names(members, final_source_name)
         base_slug = song_service.slugify(str(manifest.get("slug") or title), "song")
         from app.services import pipeline_service, recording_service

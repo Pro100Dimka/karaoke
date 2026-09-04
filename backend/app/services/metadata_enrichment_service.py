@@ -805,7 +805,6 @@ def enrich_song(song_id: str) -> None:
                     revision_cache.invalidate(current)
         finally:
             db.close()
-        with _lock: _active.discard(song_id)
 
 
 def enqueue(song_id: str) -> bool:
@@ -821,8 +820,18 @@ def enqueue(song_id: str) -> bool:
 
 
 def _run_enrichment(song_id: str) -> None:
+    # enrich_song() has several early returns (song deleted, no video needed,
+    # song deleted again mid-download) that never reached its old end-of
+    # -function `_active.discard(song_id)` -- any of those, or an unexpected
+    # exception, used to leave song_id in _active forever, silently making
+    # enqueue() refuse to ever retry that song again for the rest of the
+    # process's life. Removing the admission marker here instead guarantees
+    # it always runs, regardless of how enrich_song exits.
     with _worker_slots:
-        enrich_song(song_id)
+        try:
+            enrich_song(song_id)
+        finally:
+            with _lock: _active.discard(song_id)
 
 
 def enqueue_missing(limit: int = 8) -> int:

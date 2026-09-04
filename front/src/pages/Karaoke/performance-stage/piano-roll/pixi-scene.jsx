@@ -83,7 +83,9 @@ function RollGraphics({
     [currentTime, currentTimeRef, draw]
   );
 
-  useTick(() => draw(Number(currentTimeRef?.current) || 0), Boolean(currentTimeRef));
+  useTick(() => {
+    if (currentTimeRef) draw(Number(currentTimeRef.current) || 0);
+  });
 
   return <Graphics ref={graphics} />;
 }

@@ -405,19 +405,26 @@ def _persist_song(
         folder_base = song_folder_name(artist, title, slug) if artist else slug
         output_dir = _unique_output_dir(folder_base)
         destination = output_dir / f"source{extension}"
-        write_source(destination)
-        extract_embedded_cover(destination, output_dir)
-        song = models.Song(
-            title=title,
-            artist=artist,
-            original_filename=original_filename,
-            source_path=str(destination),
-            slug=slug,
-            output_dir=str(output_dir),
-            status=models.SongStatus.PENDING,
-        )
-        db.add(song)
+        # write_source/extract_embedded_cover used to run outside this
+        # try/except, so a failure there (e.g. disk full right after writing
+        # a large source file, while extracting its cover) skipped the
+        # cleanup below entirely -- the audio file and output_dir were left
+        # orphaned on disk with no DB row, and the folder's slug stayed
+        # "taken" for every later retry of the same title (make_unique_slug/
+        # _unique_output_dir both check the filesystem).
         try:
+            write_source(destination)
+            extract_embedded_cover(destination, output_dir)
+            song = models.Song(
+                title=title,
+                artist=artist,
+                original_filename=original_filename,
+                source_path=str(destination),
+                slug=slug,
+                output_dir=str(output_dir),
+                status=models.SongStatus.PENDING,
+            )
+            db.add(song)
             saved = commit_refresh(db, song)
             revision_cache.invalidate(saved)
             return saved

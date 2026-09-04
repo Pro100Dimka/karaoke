@@ -10,6 +10,7 @@ const IDLE = {
   isPitchAttacking: false,
   pitchRestProgress: 1
 };
+const safe = (task) => Promise.resolve().then(task).catch(() => {});
 
 export default function usePitchDetection({ isPlaying, monitorInputDeviceId, getLocalVoiceStream }) {
   const suspended = useHardwareSuspended();
@@ -36,7 +37,8 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
     let restAt = 0;
     let attackUntil = 0;
     const recent = [];
-    const release = () => Promise.resolve(lease?.release?.()).catch(() => {});
+    const release = () => safe(() => lease?.release?.());
+    const patch = (next) => setPitch((state) => ({ ...state, ...next }));
 
     setPitch(IDLE);
 
@@ -45,16 +47,10 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
         const stream = getLocalVoiceStream
           ? await getLocalVoiceStream()
           : (lease = await acquireMicrophone(monitorInputDeviceId, { disabledEffects: true })).stream;
-        if (!stream || cancelled) {
-          await release();
-          return;
-        }
 
+        if (!stream || cancelled) return release();
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (!AudioContext) {
-          await release();
-          return;
-        }
+        if (!AudioContext) return release();
 
         context = new AudioContext({ latencyHint: "interactive" });
         if (context.state === "suspended") await context.resume();
@@ -88,18 +84,15 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
 
               voicedAt = now;
               restAt = 0;
-
               if (attacking) {
                 displayed = target;
                 attackUntil = now + 130;
               }
-
-              setPitch((state) => ({
-                ...state,
+              patch({
                 ...(attacking ? { sungMidi: target, isPitchAttacking: true } : {}),
                 isPitchDetected: true,
                 pitchRestProgress: 0
-              }));
+              });
             }
           }
 
@@ -107,48 +100,41 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
             target = null;
             if (!restAt && Number.isFinite(displayed)) {
               restAt = now;
-              setPitch((state) => ({
-                ...state,
-                isPitchDetected: false,
-                isPitchAttacking: false
-              }));
+              patch({ isPitchDetected: false, isPitchAttacking: false });
             }
           }
 
           if (attackUntil && now >= attackUntil) {
             attackUntil = 0;
-            setPitch((state) => ({ ...state, isPitchAttacking: false }));
+            patch({ isPitchAttacking: false });
           }
 
           if (Number.isFinite(target)) {
             const seconds = Math.min(0.05, Math.max(0.001, (now - animatedAt) / 1000));
             displayed += Math.max(-22 * seconds, Math.min(22 * seconds, target - displayed));
-
             if (now - renderedAt >= 15) {
               renderedAt = now;
-              setPitch((state) => ({ ...state, sungMidi: displayed }));
+              patch({ sungMidi: displayed });
             }
           } else if (restAt) {
             const progress = Math.min(1, (now - restAt) / 380);
-
             if (now - renderedAt >= 32) {
               renderedAt = now;
-              setPitch((state) => ({ ...state, pitchRestProgress: progress }));
+              patch({ pitchRestProgress: progress });
             }
-
             if (progress >= 1) {
               displayed = null;
               recent.length = 0;
               restAt = 0;
-              setPitch((state) => ({ ...state, sungMidi: null, pitchRestProgress: 1 }));
+              patch({ sungMidi: null, pitchRestProgress: 1 });
             }
           }
 
           animatedAt = now;
-          frame = globalThis.requestAnimationFrame(update);
+          frame = requestAnimationFrame(update);
         };
 
-        frame = globalThis.requestAnimationFrame(update);
+        frame = requestAnimationFrame(update);
       } catch {
         release();
         closeAudioContextQuietly(context);
@@ -156,15 +142,12 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
     };
 
     start();
-
     return () => {
       cancelled = true;
       globalThis.cancelAnimationFrame?.(frame);
       try {
         source?.disconnect();
-      } catch {
-        // already disconnected
-      }
+      } catch {}
       release();
       closeAudioContextQuietly(context);
     };

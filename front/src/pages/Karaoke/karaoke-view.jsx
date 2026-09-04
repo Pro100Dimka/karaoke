@@ -1,16 +1,120 @@
 import { AlertCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRadio } from "../../contexts/radio";
+import useLatestRef from "../../hooks/useLatestRef";
 import { Box, Card, Stack, Typography } from "../../theme/ui";
+import { isHotkeyScopeActive, shouldIgnoreHotkey } from "../../utils/hotkeys";
 import KaraokeStageActions from "./actions";
 import PerformanceAnalysisModal from "./analysis-modal";
 import KaraokeConsole from "./console";
-import useKaraokeControls from "./hooks/useKaraokeControls";
-import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeSceneFlow from "./hooks/useKaraokeSceneFlow";
-import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
 import KaraokeMedia from "./media";
 import KaraokePerformanceStage from "./performance-stage";
+
+
+const HOTKEYS = { ArrowLeft: -5, ArrowRight: 5 };
+
+function useHotkeys(scopeRef, { currentTime, duration, onTogglePlay, onSeek, onStop }) {
+  const handlers = useLatestRef({ currentTime, duration, onTogglePlay, onSeek, onStop });
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const scope = scopeRef.current;
+      if (event.code === "Space" && !event.defaultPrevented && !event.isComposing && !event.repeat && isHotkeyScopeActive(scope)) {
+        event.preventDefault();
+        handlers.current.onTogglePlay?.();
+        return;
+      }
+      if (shouldIgnoreHotkey(event, scope)) return;
+      if (event.code === "Escape") return handlers.current.onStop?.();
+      const delta = HOTKEYS[event.code];
+      if (!delta) return;
+      event.preventDefault();
+      const { currentTime: time, duration: length, onSeek: seek } = handlers.current;
+      seek?.(Math.min(Math.max(0, Number(length) || 0), Math.max(0, (Number(time) || 0) + delta)));
+    };
+    globalThis.addEventListener?.("keydown", onKeyDown);
+    return () => globalThis.removeEventListener?.("keydown", onKeyDown);
+  }, [handlers, scopeRef]);
+}
+
+function useControls(autoHideEnabled) {
+  const [visible, setVisible] = useState(true);
+  const activity = useRef(Date.now());
+  const pointer = useRef([NaN, NaN]);
+  const hidden = useRef(false);
+
+  const showControls = useCallback((manual = false) => {
+    if (manual) hidden.current = false;
+    if (hidden.current) return;
+    activity.current = Date.now();
+    setVisible(true);
+  }, []);
+  const hideControls = useCallback((manual = false) => {
+    if (manual) hidden.current = true;
+    setVisible(false);
+  }, []);
+  const revealControls = useCallback((event) => {
+    if (hidden.current) return false;
+    if (Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)) {
+      const [x, y] = pointer.current;
+      if (x === event.clientX && y === event.clientY) return false;
+      pointer.current = [event.clientX, event.clientY];
+    }
+    showControls();
+    return true;
+  }, [showControls]);
+
+  useEffect(() => {
+    if (!autoHideEnabled) return;
+    const timer = setInterval(() => !hidden.current && setVisible(Date.now() - activity.current < 2200), 250);
+    return () => clearInterval(timer);
+  }, [autoHideEnabled]);
+  useEffect(() => {
+    const reveal = () => showControls(true);
+    globalThis.document?.addEventListener?.("fullscreenchange", reveal);
+    return () => globalThis.document?.removeEventListener?.("fullscreenchange", reveal);
+  }, [showControls]);
+  useEffect(() => showControls(true), [autoHideEnabled, showControls]);
+
+  return { controlsVisible: visible, hideControls, revealControls, showControls };
+}
+
+function useStageLayout(ref) {
+  useEffect(() => {
+    const shell = globalThis.document?.querySelector?.(".karaoke-app-shell");
+    const stage = ref.current;
+    const main = stage?.parentElement;
+    if (!shell || !main || !stage) return;
+
+    const sync = () => {
+      const finite = (value) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? Math.max(0, number) : 0;
+      };
+      const mainWidth = finite(main.clientWidth);
+      const mainHeight = finite(main.clientHeight);
+      const stageWidth = finite(stage.clientWidth);
+      const stageHeight = finite(stage.clientHeight);
+      const nav = finite(parseFloat(globalThis.getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra")));
+      shell.style.setProperty("--karaoke-nav-extra", `${Math.max(0, mainHeight + nav - (mainWidth * 9) / 16)}px`);
+      stage.style.setProperty("--karaoke-video-width", `${Math.ceil(Math.max(stageWidth, (stageHeight * 16) / 9)) + 2}px`);
+      stage.style.setProperty("--karaoke-video-height", `${Math.ceil(Math.max(stageHeight, (stageWidth * 9) / 16)) + 2}px`);
+    };
+    const observer = globalThis.ResizeObserver ? new globalThis.ResizeObserver(sync) : null;
+    observer?.observe(main);
+    observer?.observe(stage);
+    if (!observer) globalThis.addEventListener?.("resize", sync);
+    sync();
+    return () => {
+      observer?.disconnect();
+      globalThis.removeEventListener?.("resize", sync);
+      ["--karaoke-nav-extra"].forEach((name) => shell.style.removeProperty(name));
+      ["--karaoke-video-width", "--karaoke-video-height"].forEach((name) => stage.style.removeProperty(name));
+    };
+  }, [ref]);
+}
+
 
 export default function KaraokeView({
   autoHideEnabled,
@@ -36,7 +140,7 @@ export default function KaraokeView({
     turnOff: turnOffRadio,
     turnOn: turnOnRadio
   } = useRadio();
-  const controls = useKaraokeControls({ autoHideEnabled });
+  const controls = useControls(autoHideEnabled);
   const { playbackEndedRef, ...flowOptions } = sceneOptions;
   const scene = useKaraokeSceneFlow({
     ...flowOptions,
@@ -60,15 +164,14 @@ export default function KaraokeView({
 
   useEffect(() => () => setRecordingActive(false), [setRecordingActive]);
 
-  useKaraokeHotkeys({
-    scopeRef: containerRef,
+  useHotkeys(containerRef, {
     currentTime,
     duration,
     onTogglePlay: scene.handleTogglePlay,
     onSeek: transport.seekTo,
     onStop: scene.handleStop
   });
-  useKaraokeStageLayout(containerRef);
+  useStageLayout(containerRef);
 
   const closeAnalysis = () => {
     clearAnalysis();
@@ -143,7 +246,6 @@ export default function KaraokeView({
         {...consoleProps}
         autoHideEnabled={autoHideEnabled}
         visible={controlsVisible}
-        onClose={controls.hideControls}
         onStop={scene.handleStop}
         onTogglePlay={scene.handleTogglePlay}
       />
