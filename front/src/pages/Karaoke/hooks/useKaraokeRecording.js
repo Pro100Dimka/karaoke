@@ -12,6 +12,11 @@ import {
 } from "../utils/recordingSession";
 
 const MISSING_RECORDING_ID = "karaoke.backendDidNotReturnPostId";
+const enqueue = (queue, task) => {
+  const next = queue.current.then(task, task);
+  queue.current = next.catch(() => {});
+  return next;
+};
 export default function useKaraokeRecording({
   song,
   onlineRoom,
@@ -39,30 +44,27 @@ export default function useKaraokeRecording({
   // "recording" for the rest of the take.
   const recordingRequestQueueRef = useRef(Promise.resolve());
   const recordingControlsQueueRef = useRef(Promise.resolve());
-  const recordingControlsPendingRef = useRef(0);
-  const queueRecordingRequest = useCallback((task) => {
-    const next = recordingRequestQueueRef.current.then(task, task);
-    recordingRequestQueueRef.current = next.catch(() => {});
-    return next;
-  }, []);
-  const queueRecordingControls = useCallback((task) => {
-    recordingControlsPendingRef.current += 1;
-    const next = recordingControlsQueueRef.current.then(task, task).finally(() => {
-      recordingControlsPendingRef.current -= 1;
-    });
-    recordingControlsQueueRef.current = next.catch(() => {});
-    return next;
-  }, []);
+  const queueRecordingRequest = useCallback((task) => enqueue(recordingRequestQueueRef, task), []);
+  const flushRecordingRequests = useCallback(
+    () => recordingRequestQueueRef.current.catch(() => {}),
+    []
+  );
+  const syncRecording = useCallback(
+    (id, position, rate) => queueRecordingRequest(() => api.syncRecording(id, position, rate)),
+    [queueRecordingRequest]
+  );
+  const queueRecordingControls = useCallback((task) => enqueue(recordingControlsQueueRef, task), []);
   const flushRecordingControls = useCallback(
     () => recordingControlsQueueRef.current.catch(() => {}),
     []
   );
-  const finalizeAfterControls = useCallback(
-    (id) =>
-      recordingControlsPendingRef.current
-        ? flushRecordingControls().then(() => finalizeRecording(id))
-        : finalizeRecording(id),
-    [flushRecordingControls]
+  const flushRecording = useCallback(
+    () => Promise.all([flushRecordingRequests(), flushRecordingControls()]),
+    [flushRecordingControls, flushRecordingRequests]
+  );
+  const finalizeAfterQueues = useCallback(
+    (id) => flushRecording().then(() => finalizeRecording(id)),
+    [flushRecording]
   );
   useEffect(() => {
     sessionRef.current = recordingSessionId;
@@ -73,10 +75,8 @@ export default function useKaraokeRecording({
     previousSpeedRef.current = speed;
     const instrumental = instrumentalRef.current;
     if (previous === speed || !recordingSessionId || !instrumental) return;
-    Promise.resolve(api.syncRecording(recordingSessionId, instrumental.currentTime, speed)).catch(
-      () => {}
-    );
-  }, [instrumentalRef, recordingSessionId, speed]);
+    syncRecording(recordingSessionId, instrumental.currentTime, speed).catch(() => {});
+  }, [instrumentalRef, recordingSessionId, speed, syncRecording]);
 
   useEffect(() => {
     if (!recordingSessionId) return undefined;
@@ -134,12 +134,12 @@ export default function useKaraokeRecording({
       sessionRef.current = null;
       if (id) {
         if (mounted.current) setRecordingSessionId(null);
-        Promise.resolve(finalizeAfterControls(id)).catch(() => {});
+        Promise.resolve(finalizeAfterQueues(id)).catch(() => {});
       }
     };
   }, [
     beginOperation,
-    finalizeAfterControls,
+    finalizeAfterQueues,
     mounted,
     roomCaptureRef,
     setAnalysisRecordingId,
@@ -253,6 +253,7 @@ export default function useKaraokeRecording({
     discardSession,
     runRecording,
     pauseRecording,
-    flushRecordingControls
+    syncRecording,
+    flushRecording
   };
 }

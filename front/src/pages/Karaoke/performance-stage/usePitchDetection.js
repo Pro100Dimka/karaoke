@@ -36,6 +36,7 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
     let restAt = 0;
     let attackUntil = 0;
     const recent = [];
+    const release = () => Promise.resolve(lease?.release?.()).catch(() => {});
 
     setPitch(IDLE);
 
@@ -45,20 +46,20 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
           ? await getLocalVoiceStream()
           : (lease = await acquireMicrophone(monitorInputDeviceId, { disabledEffects: true })).stream;
         if (!stream || cancelled) {
-          await lease?.release?.();
+          await release();
           return;
         }
 
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AudioContext) {
-          await lease?.release?.();
+          await release();
           return;
         }
 
         context = new AudioContext({ latencyHint: "interactive" });
         if (context.state === "suspended") await context.resume();
         if (cancelled) {
-          await lease?.release?.();
+          await release();
           await closeAudioContext(context);
           return;
         }
@@ -149,7 +150,7 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
 
         frame = globalThis.requestAnimationFrame(update);
       } catch {
-        lease?.release?.();
+        release();
         closeAudioContextQuietly(context);
       }
     };
@@ -164,7 +165,7 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, get
       } catch {
         // already disconnected
       }
-      lease?.release?.();
+      release();
       closeAudioContextQuietly(context);
     };
   }, [getLocalVoiceStream, isPlaying, monitorInputDeviceId, suspended]);

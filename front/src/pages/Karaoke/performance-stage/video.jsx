@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Box } from "../../../theme/ui";
 
+const play = (video) => Promise.resolve().then(() => video.play()).catch(() => {});
+
 export default memo(function SceneVideo({ src, isPlaying }) {
   const ref = useRef(null);
   const timer = useRef(null);
@@ -23,9 +25,12 @@ export default memo(function SceneVideo({ src, isPlaying }) {
       const current = ref.current;
       if (!current || !isPlaying) return setSwitching(false);
 
-      current.currentTime = Math.random() * Math.max(0.1, current.duration - 0.5);
-      Promise.resolve(current.play()).catch(() => {});
-      setSwitching(false);
+      try {
+        current.currentTime = Math.random() * Math.max(0.1, current.duration - 0.5);
+        play(current);
+      } finally {
+        setSwitching(false);
+      }
     }, 180);
   }, [isPlaying]);
 

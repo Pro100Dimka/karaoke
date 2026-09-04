@@ -26,7 +26,7 @@ const waitForMedia = (element) => {
   });
 };
 
-const safe = (value) => Promise.resolve(value).catch(() => false);
+const safe = (task) => Promise.resolve().then(task).catch(() => false);
 
 export default function useKaraokeSceneFlow({
   analysisRecordingIdRef,
@@ -125,7 +125,7 @@ export default function useKaraokeSceneFlow({
       setStageActionsVisible(false);
       setSceneIntroVisible(false);
       setSceneBlackout(true);
-      const preparation = safe(preloadMedia());
+      const preparation = safe(preloadMedia);
 
       try {
         await wait(420);
@@ -166,7 +166,7 @@ export default function useKaraokeSceneFlow({
     const started = await runIntroTransition(() => togglePlay({ forcePlaying: true }));
     if (started) hasStarted.current = true;
     else if (resumeRadio.current && mounted.current) {
-      safe(turnOnRadio({ remember: false, fadeIn: true }));
+      safe(() => turnOnRadio({ remember: false, fadeIn: true }));
     }
     return started;
   }, [isRadioPlaying, mounted, runIntroTransition, togglePlay, turnOffRadio, turnOnRadio]);
@@ -177,7 +177,7 @@ export default function useKaraokeSceneFlow({
       const paused = await togglePlay({ forcePlaying: false });
       if (paused && resumeRadio.current) {
         setRecordingActive(false);
-        safe(turnOnRadio({ remember: false, fadeIn: true }));
+        safe(() => turnOnRadio({ remember: false, fadeIn: true }));
       }
       return paused;
     }
@@ -201,6 +201,15 @@ export default function useKaraokeSceneFlow({
     transitioning.current = true;
     const id = ++transition.current;
     const active = () => isCurrent(id);
+    const restore = () => {
+      if (!active()) return;
+      transitioning.current = false;
+      setSceneTransitioning(false);
+      setSceneBlackout(false);
+      setStageActionsVisible(true);
+      setGlobalRouteBlackout(false);
+      showControls();
+    };
 
     setSceneTransitioning(true);
     hideControls();
@@ -215,10 +224,7 @@ export default function useKaraokeSceneFlow({
       const stopped = await stop();
       if (!active()) return false;
       if (!stopped) {
-        transitioning.current = false;
-        setSceneTransitioning(false);
-        setSceneBlackout(false);
-        setStageActionsVisible(true);
+        restore();
         return false;
       }
 
@@ -232,15 +238,18 @@ export default function useKaraokeSceneFlow({
       else navigateFromBlackout(analysisId);
       return true;
     } catch {
-      if (active()) {
-        transitioning.current = false;
-        setSceneTransitioning(false);
-        setSceneBlackout(false);
-        setStageActionsVisible(true);
-      }
+      restore();
       return false;
     }
-  }, [analysisRecordingIdRef, hideControls, isCurrent, navigateFromBlackout, returnToLibrary, stop]);
+  }, [
+    analysisRecordingIdRef,
+    hideControls,
+    isCurrent,
+    navigateFromBlackout,
+    returnToLibrary,
+    showControls,
+    stop
+  ]);
 
   useEffect(() => {
     if (!autoStartRequested || !songId || autoStarted.current === songId) return;
@@ -249,6 +258,12 @@ export default function useKaraokeSceneFlow({
     let attempts = 0;
     let failures = 0;
     let timer;
+    const fail = () => {
+      setSceneBlackout(false);
+      setSceneTransitioning(false);
+      transitioning.current = false;
+      showControls();
+    };
     const schedule = (delay = AUTO_START_POLL_MS) => {
       timer = setTimeout(tryStart, delay);
     };
@@ -258,23 +273,25 @@ export default function useKaraokeSceneFlow({
       if (instrumentalRef.current?.readyState >= 3) {
         if (autoStarting.current === songId) return;
         autoStarting.current = songId;
-        safe(startSongRef.current()).then((started) => {
+        safe(() => startSongRef.current()).then((started) => {
           if (autoStarting.current === songId) autoStarting.current = null;
           if (cancelled) return;
-          if (started) autoStarted.current = songId;
-          else if (++failures <= AUTO_START_RETRIES) schedule(600);
+          if (started) {
+            autoStarted.current = songId;
+            return;
+          }
+          if (++failures <= AUTO_START_RETRIES) {
+            schedule(600);
+            return;
+          }
+          fail();
         });
         return;
       }
 
       attempts += 1;
       if (attempts * AUTO_START_POLL_MS < AUTO_START_TIMEOUT_MS) schedule();
-      else {
-        setSceneBlackout(false);
-        setSceneTransitioning(false);
-        transitioning.current = false;
-        showControls();
-      }
+      else fail();
     };
 
     schedule(80);
@@ -288,7 +305,7 @@ export default function useKaraokeSceneFlow({
     if (autoStartRequested || !roomPrepared || !songId || roomRevealed.current === songId) return;
 
     let cancelled = false;
-    safe(runIntroTransition(() => !cancelled)).then((shown) => {
+    safe(() => runIntroTransition(() => !cancelled)).then((shown) => {
       if (!cancelled && shown) roomRevealed.current = songId;
     });
     return () => {

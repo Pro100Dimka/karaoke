@@ -14,6 +14,7 @@ export { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
 const ROOM_PLAY_LEAD_MS = 450;
 const MASTER_PLAY_TIMEOUT_MS = 4000;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+const safe = (task, fallback = null) => Promise.resolve().then(task).catch(() => fallback);
 
 function useEvent(handler) {
   const ref = useRef(handler);
@@ -88,7 +89,8 @@ export default function useKaraokeTransport({
     discardSession,
     runRecording,
     pauseRecording,
-    flushRecordingControls
+    syncRecording,
+    flushRecording
   } = useKaraokeRecording({
     song,
     onlineRoom,
@@ -117,14 +119,14 @@ export default function useKaraokeTransport({
     if (!onlineRoom?.room) return null;
 
     if (roomCaptureRef.current) {
-      await Promise.resolve(roomCaptureRef.current.resume?.()).catch(() => {});
+      await safe(() => roomCaptureRef.current.resume?.());
       return roomCaptureRef.current;
     }
 
-    const capture = await createRoomVoiceCapture(
-      onlineRoom.getRemoteVoiceStreams?.() || [],
-      position
-    ).catch(() => null);
+    const capture = await safe(
+      () => createRoomVoiceCapture(onlineRoom.getRemoteVoiceStreams?.() || [], position),
+      null
+    );
     roomCaptureRef.current = capture;
     return capture;
   };
@@ -153,7 +155,7 @@ export default function useKaraokeTransport({
       if (!sessionRef.current && pending?.songId === song.id) pending.settle = "pause";
 
       pauseMedia();
-      await Promise.resolve(roomCaptureRef.current?.pause?.()).catch(() => {});
+      await safe(() => roomCaptureRef.current?.pause?.());
       setCurrentTime(instrumental.currentTime);
       lifecycle.paused();
       if (shouldBroadcast) broadcast("pause", instrumental.currentTime);
@@ -168,7 +170,7 @@ export default function useKaraokeTransport({
         : null;
     if (scheduledAt != null) broadcast("play", instrumental.currentTime, scheduledAt);
 
-    const melodyStart = Promise.resolve(startMelodyGuide()).catch(() => {});
+    safe(startMelodyGuide);
     syncSecondaryMedia(instrumental.currentTime, true);
     instrumental.volume = playbackGain(musicVolume);
     if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);
@@ -196,24 +198,21 @@ export default function useKaraokeTransport({
         return false;
       }
 
-      const followers = [
-        vocalsRef.current && Promise.resolve(vocalsRef.current.play()),
-        videoRef.current && Promise.resolve(videoRef.current.play()),
-        melodyStart
-      ].filter(Boolean);
-      followers.forEach((promise) => Promise.resolve(promise).catch(() => {}));
+      [vocalsRef.current, videoRef.current].forEach((media) => {
+        if (media) safe(() => media.play());
+      });
       await playMaster(instrumental);
 
       if (operation !== operationRef.current) {
         pauseMedia();
-        await Promise.resolve(roomCaptureRef.current?.pause?.()).catch(() => {});
+        await safe(() => roomCaptureRef.current?.pause?.());
         return stopVersionRef.current === stopVersion;
       }
 
       syncSecondaryMedia(instrumental.currentTime, true);
       recordingStart.then((id) => {
         if (!id || operation !== operationRef.current) return;
-        Promise.resolve(api.syncRecording(id, instrumental.currentTime, speed)).catch((error) => {
+        syncRecording(id, instrumental.currentTime, speed).catch((error) => {
           if (operation === operationRef.current) {
             setRecordingError(formatError("karaoke.couldNotPreciselySynchronizeRecording", error));
           }
@@ -258,7 +257,7 @@ export default function useKaraokeTransport({
 
     const id = sessionRef.current;
     if (id) {
-      await flushRecordingControls();
+      await flushRecording();
       const { recording, error } = await finalizeRecording(id);
 
       if (error) {
@@ -269,9 +268,7 @@ export default function useKaraokeTransport({
           const captured = await roomAudio;
           if (captured?.blob?.size) {
             try {
-              const latency = await Promise.resolve(onlineRoom?.estimateRemoteVoiceLatency?.()).catch(
-                () => 0
-              );
+              const latency = await safe(() => onlineRoom?.estimateRemoteVoiceLatency?.(), 0);
               await api.attachRoomAudio(
                 recording.id,
                 captured.blob,
@@ -318,7 +315,7 @@ export default function useKaraokeTransport({
     setCurrentTime(position);
 
     if (isPlaying && sessionRef.current) {
-      Promise.resolve(api.syncRecording(sessionRef.current, position, speed)).catch(() => {});
+      syncRecording(sessionRef.current, position, speed).catch(() => {});
     }
     if (shouldBroadcast) broadcast("seek", position);
   };
@@ -333,7 +330,7 @@ export default function useKaraokeTransport({
 
   const returnToLibrary = async ({ alreadyStopped = false, analysisId = null } = {}) => {
     if (onlineRoom?.room) {
-      Promise.resolve(onlineRoom.syncCommand?.({ type: "open-library" })).catch(() => {});
+      safe(() => onlineRoom.syncCommand?.({ type: "open-library" }));
     }
 
     if (!alreadyStopped) {

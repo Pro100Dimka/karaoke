@@ -8,6 +8,7 @@ import { playbackGain } from "./utils/data";
 import { normalizePlaybackRate } from "./utils/transport";
 
 const noop = () => {};
+const cleanup = (file) => Promise.resolve().then(() => file?.cleanup?.()).catch(noop);
 
 function useTrack(songId, track) {
   const desktop = platform.isElectron();
@@ -29,7 +30,7 @@ function useTrack(songId, track) {
       .getAudioTrackBlob(songId, track)
       .then((blob) => {
         file = blob;
-        if (!active) return file?.cleanup?.();
+        if (!active) return cleanup(file);
 
         url = URL.createObjectURL(blob);
         setBlobUrl(url);
@@ -39,7 +40,7 @@ function useTrack(songId, track) {
     return () => {
       active = false;
       if (url) URL.revokeObjectURL(url);
-      file?.cleanup?.();
+      cleanup(file);
     };
   }, [desktop, songId, track]);
 
@@ -115,7 +116,7 @@ function KaraokeMedia({
     syncSecondaryMedia?.(instrumentalRef.current?.currentTime || 0, true);
     onClipAvailabilityChange(true);
 
-    if (isPlaying) Promise.resolve(video.play()).catch(noop);
+    if (isPlaying) Promise.resolve().then(() => video.play()).catch(noop);
   };
 
   return (

@@ -9,6 +9,7 @@ import {
 
 const REACT_SYNC_MS = 100;
 const SECONDARY_SYNC_MS = 450;
+const safe = (task) => Promise.resolve().then(task).catch(() => {});
 
 export default function useKaraokeMediaSync({
   currentTimeRef,
@@ -87,7 +88,7 @@ export default function useKaraokeMediaSync({
       };
       const ended = () => {
         if (onPlaybackEndedRef.current) {
-          Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
+          safe(onPlaybackEndedRef.current);
           return;
         }
         vocalsRef.current?.pause();
@@ -189,7 +190,7 @@ export default function useKaraokeMediaSync({
   }, [vocalVolume, vocalsRef]);
 
   useEffect(() => {
-    if (isPlaying && melodyVolume > 0) Promise.resolve(startMelodyGuide()).catch(() => {});
+    if (isPlaying && melodyVolume > 0) safe(startMelodyGuide);
     else silenceMelodyGuide();
   }, [isPlaying, keyShift, melodyVolume, silenceMelodyGuide, startMelodyGuide]);
 

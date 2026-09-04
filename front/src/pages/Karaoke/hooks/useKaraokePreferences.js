@@ -4,17 +4,17 @@ import { createStore } from "zustand/vanilla";
 import { api } from "../../../api/client";
 import useMountedRef from "../../../hooks/useMountedRef";
 import { getErrorMessage } from "../../../utils/errors";
-import useKaraokeRoomPreferences from "./useKaraokeRoomPreferences";
 import {
   loadKaraokePreferences,
   normalizeKaraokePreferences,
   saveKaraokePreferences
 } from "../utils/preferences";
+import useKaraokeRoomPreferences from "./useKaraokeRoomPreferences";
 
 const defaults = normalizeKaraokePreferences({});
 const keys = Object.keys(defaults);
-const setterName = (key) => `set${key[0].toUpperCase()}${key.slice(1)}`;
 const valuesOf = (state) => Object.fromEntries(keys.map((key) => [key, state[key]]));
+const setterName = (key) => `set${key[0].toUpperCase()}${key.slice(1)}`;
 
 export const createKaraokePreferencesStore = (saved = loadKaraokePreferences()) =>
   createStore((set) => ({
@@ -39,19 +39,15 @@ export default function useKaraokePreferences(roomSync = {}) {
   const mounted = useMountedRef();
   const state = useStore(store);
 
-  const applyRoomPreferences = useCallback(
-    (preferences) => {
+  const setTransient = useCallback(
+    (patch) => {
       skipPersistence.current = true;
-      store.setState(preferences);
+      store.setState(patch);
     },
     [store]
   );
 
-  useKaraokeRoomPreferences({
-    ...roomSync,
-    preferences: state,
-    onReceive: applyRoomPreferences
-  });
+  useKaraokeRoomPreferences({ ...roomSync, preferences: state, onReceive: setTransient });
 
   useEffect(
     () =>
@@ -76,12 +72,8 @@ export default function useKaraokePreferences(roomSync = {}) {
   );
 
   const previewPreference = useCallback(
-    (key, value) => {
-      if (!keys.includes(key)) return;
-      skipPersistence.current = true;
-      store.setState({ [key]: value });
-    },
-    [store]
+    (key, value) => keys.includes(key) && setTransient({ [key]: value }),
+    [setTransient]
   );
 
   return { ...state, persistenceError, previewPreference };

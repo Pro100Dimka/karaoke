@@ -23,8 +23,12 @@ export default function useAudioOutputRouting({
     const device = findDriverOutputDevice(directOutputDevices, audioSettings?.asio_driver_name);
     if (!device || String(directOutputDeviceId) === String(device.index)) return;
 
-    setDirectOutputDeviceId(device.index);
-    Promise.resolve(updateMicrophone({ output_device_id: device.index })).catch(() => {});
+    Promise.resolve()
+      .then(() => updateMicrophone({ output_device_id: device.index }))
+      .then((updated) => {
+        if (updated) setDirectOutputDeviceId(updated.output_device_id ?? device.index);
+      })
+      .catch(() => {});
   }, [
     audioDriver,
     audioSettings?.asio_driver_name,
@@ -43,7 +47,7 @@ export default function useAudioOutputRouting({
       publishRoute(deviceId);
       media().forEach((element) => {
         if (typeof element.setSinkId === "function") {
-          Promise.resolve(element.setSinkId(deviceId)).catch(() => {});
+          Promise.resolve().then(() => element.setSinkId(deviceId)).catch(() => {});
         }
       });
     };

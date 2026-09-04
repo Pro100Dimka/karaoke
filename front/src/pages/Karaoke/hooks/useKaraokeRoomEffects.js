@@ -12,7 +12,7 @@ export default function useKaraokeRoomEffects({ room, participantCount, volume, 
     if (!room || typeof syncUi !== "function") return;
     const state = { volume, ...effects };
     if (channel.current.shouldSend(state)) {
-      Promise.resolve(syncUi?.({ participantEffects: state })).catch(() => {});
+      Promise.resolve().then(() => syncUi({ participantEffects: state })).catch(() => {});
     }
   }, [effects, participantCount, room, syncUi, volume]);
 }

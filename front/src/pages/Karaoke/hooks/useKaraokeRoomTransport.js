@@ -28,9 +28,9 @@ export default function useKaraokeRoomTransport({
   const broadcast = useCallback(
     (action, position, executeAt = null) => {
       if (!room || !songId || typeof syncCommand !== "function") return;
-      Promise.resolve(syncCommand(createPlayerSyncCommand(action, songId, position, executeAt))).catch(
-        () => {}
-      );
+      Promise.resolve()
+        .then(() => syncCommand(createPlayerSyncCommand(action, songId, position, executeAt)))
+        .catch(() => {});
     },
     [room, songId, syncCommand]
   );
@@ -53,6 +53,7 @@ export default function useKaraokeRoomTransport({
     if (
       room?.host ||
       command?.type !== "karaoke-player" ||
+      !command.commandId ||
       !sameId(command.songId, songId) ||
       !instrumentalRef.current ||
       !channel.current.acceptCommand(command.commandId)
@@ -97,13 +98,15 @@ export default function useKaraokeRoomTransport({
         return stopped;
       }
     };
-    const action = actions[command.action];
+    const action = Object.hasOwn(actions, command.action) ? actions[command.action] : null;
     if (!action) return;
 
     const run = () =>
-      Promise.resolve(action()).catch((error) =>
-        setRecordingError(formatError("karaoke.failedToExecuteRoomCommand", error))
-      );
+      Promise.resolve()
+        .then(action)
+        .catch((error) =>
+          setRecordingError(formatError("karaoke.failedToExecuteRoomCommand", error))
+        );
     const delay =
       command.action === "play" && Number.isFinite(executeAt) && Number.isFinite(serverNow)
         ? Math.max(0, executeAt - serverNow)
