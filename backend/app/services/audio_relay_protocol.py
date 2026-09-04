@@ -15,8 +15,13 @@ STREAM_DRY = 0
 STREAM_WET = 1
 
 # stream_id (0=dry, 1=wet), sample_rate, sample_count -- followed by
-# sample_count * 4 bytes of little-endian float32 PCM.
-_HEADER = struct.Struct("<BfI")
+# sample_count * 4 bytes of little-endian float32 PCM. All three header
+# fields are 4 bytes (stream_id doesn't need the range, but a 1-byte field
+# left the 12-byte header un-aligned to 4 bytes) so the PCM payload always
+# starts at a 4-byte-aligned offset -- letting a receiver construct a
+# Float32Array directly over the received buffer instead of always copying
+# the payload out first just to satisfy TypedArray alignment.
+_HEADER = struct.Struct("<IfI")
 
 
 def encode_frame(stream_id: int, sample_rate: float, samples: np.ndarray) -> bytes:
@@ -36,13 +41,25 @@ class FrameReader:
 
     def pop_frames(self) -> list[tuple[int, float, np.ndarray]]:
         frames = []
+        for raw in self.pop_raw_frames():
+            stream_id, sample_rate, _sample_count = _HEADER.unpack_from(raw, 0)
+            samples = np.frombuffer(raw, dtype="<f4", offset=_HEADER.size)
+            frames.append((stream_id, sample_rate, samples))
+        return frames
+
+    def pop_raw_frames(self) -> list[bytes]:
+        """Whole encode_frame() messages (header + PCM), undecoded.
+
+        Lets a pure relay hop (audio_relay.py's AudioRelayServer) forward a
+        frame exactly as received instead of decoding it into a tuple only to
+        immediately re-encode an identical frame for the next hop.
+        """
+        frames = []
         while len(self._buffer) >= _HEADER.size:
-            stream_id, sample_rate, sample_count = _HEADER.unpack_from(self._buffer, 0)
+            _stream_id, _sample_rate, sample_count = _HEADER.unpack_from(self._buffer, 0)
             total = _HEADER.size + sample_count * 4
             if len(self._buffer) < total:
                 break
-            payload = bytes(self._buffer[_HEADER.size : total])
-            samples = np.frombuffer(payload, dtype="<f4")
-            frames.append((stream_id, sample_rate, samples))
+            frames.append(bytes(self._buffer[:total]))
             del self._buffer[:total]
         return frames

@@ -27,6 +27,12 @@ export function connectMicrophoneChannelStrip(
   highpass.type = "highpass";
   const meter = createLevelMeter(context, { smoothingTimeConstant: 0.45 });
   const analyser = meter?.analyser;
+  // Starts as a plain, always-open GainNode -- identical to "no gate" -- and
+  // is swapped in place for a real AudioWorkletNode-based gate below once
+  // its module loads (mirrors microphoneStudioQuality.js's setPitchShift,
+  // which loads its own worklet the same way). Never blocks synchronous
+  // graph construction, and an environment without AudioWorklet support
+  // keeps working via the setInterval-driven fallback further down.
   const noiseGate = assign(context.createGain(), { gain: 1 });
   // Boosting presence before the compressor makes the compressor's envelope
   // detector react harder to exactly the frequencies (~2-8kHz) where hiss and
@@ -58,11 +64,57 @@ export function connectMicrophoneChannelStrip(
   const chain = realtime
     ? [highpass, analyser, noiseGate, presence, makeup, limiter, destination]
     : [highpass, analyser, noiseGate, presence, compressor, makeup, limiter, destination];
-  chain.filter(Boolean).reduce((node, next) => node.connect(next), source);
+  const linked = chain.filter(Boolean);
+  linked.reduce((node, next) => node.connect(next), source);
+  const gateIndex = linked.indexOf(noiseGate);
+  const gatePrev = gateIndex > 0 ? linked[gateIndex - 1] : source;
+  const gateNext = linked[gateIndex + 1];
+
   let suppression = clamp01(noiseSuppression);
   let lastVoiceAt = 0;
   let timer = null;
-  if (analyser) {
+  let gateWorklet = null;
+  let closed = false;
+  const canUseWorklet =
+    Boolean(context.audioWorklet) && typeof globalThis.AudioWorkletNode === "function";
+
+  if (canUseWorklet) {
+    context.audioWorklet
+      .addModule(new URL("./noiseGateProcessor.js", import.meta.url))
+      .then(() => {
+        if (closed) return;
+        const worklet = new globalThis.AudioWorkletNode(context, "advoice-noise-gate", {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          outputChannelCount: [1]
+        });
+        worklet.port.postMessage({ suppression });
+        try {
+          gatePrev.disconnect(noiseGate);
+        } catch {
+          // Already detached (e.g. close() ran just before this resolved).
+        }
+        if (gateNext) {
+          try {
+            noiseGate.disconnect(gateNext);
+          } catch {
+            // Already detached.
+          }
+          gatePrev.connect(worklet);
+          worklet.connect(gateNext);
+        }
+        gateWorklet = worklet;
+      })
+      .catch(() => {
+        // No worklet support in practice despite the feature check (e.g. a
+        // restrictive CSP) -- the setInterval fallback below keeps working.
+      });
+  }
+  if (analyser && !canUseWorklet) {
+    // Only when a true realtime gate could not be set up at all -- the
+    // worklet above is a strict upgrade over this main-thread timer, which
+    // can run late under renderer load (heavy React work, GC pauses) and
+    // make the gate open/close late or audibly "pump".
     const updateGate = () => {
       const rms = meter.read();
       const now = Date.now();
@@ -93,7 +145,16 @@ export function connectMicrophoneChannelStrip(
     limiter,
     setNoiseSuppression: (value) => {
       suppression = clamp01(value);
+      gateWorklet?.port.postMessage({ suppression });
     },
-    close: () => timer && globalThis.clearInterval(timer)
+    close: () => {
+      closed = true;
+      if (timer) globalThis.clearInterval(timer);
+      try {
+        gateWorklet?.disconnect();
+      } catch {
+        // Already detached.
+      }
+    }
   };
 }

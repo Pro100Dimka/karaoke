@@ -45,10 +45,10 @@ class MonitorBuffer {
     std::vector<double> received_times, processed_times;
     size_t head = 0, used = 0;
     uint64_t lost = 0;
-    double ratio, phase = 0;
+    double ratio, base_ratio, phase = 0;
 public:
     MonitorBuffer(size_t capacity, double rate_ratio) : samples(capacity), timestamps(capacity),
-        received_times(capacity), processed_times(capacity), ratio(rate_ratio) {
+        received_times(capacity), processed_times(capacity), ratio(rate_ratio), base_ratio(rate_ratio) {
         if (capacity < 2 || !std::isfinite(ratio) || ratio <= 0) throw std::runtime_error("Invalid monitor queue");
     }
     size_t size() const { return used; }
@@ -62,16 +62,42 @@ public:
         return static_cast<size_t>(std::max(0.0, std::min(interpolated, advanced)));
     }
     uint64_t dropped() const { return lost; }
+    // A device-reported capture discontinuity (dropped samples between
+    // hardware and driver) makes every sample already queued here -- and the
+    // resampler's phase against them -- describe audio from before a gap
+    // that never reached us. Stitching new post-gap audio onto that stale
+    // queue is worse than the brief silence this produces instead.
+    void reset() { head = 0; used = 0; phase = 0; }
+    // Genuine long-run clock drift between two independent physical devices
+    // (no two "48kHz" clocks are ever exactly identical) is not something a
+    // fixed ratio compensates for -- left alone, the queue slowly grows or
+    // drains until it either drops samples (a click, see push() below) or
+    // underruns. A tiny proportional nudge toward a mid-fill target corrects
+    // for it continuously; the correction is capped small enough (0.02%,
+    // ratio clamped to +/-0.1% of nominal) to never be audible as pitch
+    // wobble on its own. Call once per output callback.
+    void nudge() {
+        const double target = double(samples.size()) / 2.0;
+        const double error = double(used) - target;
+        const double correction = std::clamp(error / double(samples.size()) * 0.02, -0.0002, 0.0002);
+        ratio = std::clamp(base_ratio * (1.0 + correction), base_ratio * 0.999, base_ratio * 1.001);
+    }
     void push(const float* input, size_t count, double captured_at = 0, double step = 0,
               double received_at = 0, double processed_at = 0) {
+        bool dropped_any = false;
         for (size_t i = 0; i < count; ++i) {
-            if (used == samples.size()) { head = (head + 1) % samples.size(); --used; ++lost; phase = 0; }
+            if (used == samples.size()) { head = (head + 1) % samples.size(); --used; ++lost; dropped_any = true; }
             const size_t index = (head + used++) % samples.size();
             samples[index] = input[i];
             timestamps[index] = captured_at > 0 ? captured_at + i * step : 0;
             received_times[index] = received_at;
             processed_times[index] = processed_at;
         }
+        // Reset phase once for the whole burst instead of on every dropped
+        // sample within it -- each reset is itself a small interpolation
+        // discontinuity, and a sustained overflow could otherwise repeat it
+        // count times in a single push() call.
+        if (dropped_any) phase = 0;
     }
     bool pop(float& output, double* captured_at = nullptr, double* received_at = nullptr, double* processed_at = nullptr) {
         if (captured_at) *captured_at = 0;

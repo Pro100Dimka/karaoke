@@ -267,9 +267,16 @@ def preferred_input_device(
         if (
             device_id is not None and _AUDIO_BACKEND_AVAILABLE
             and 0 <= device_id < len(sd.query_devices())
-            and _is_wdm_ks_device(sd.query_devices()[device_id])
+            and (_is_wdm_ks_device(sd.query_devices()[device_id])
+                 or not _is_asio_device(sd.query_devices()[device_id]))
         ):
-            device_id = None  # Saved id now resolves to a broken WDM-KS pin; re-match by name.
+            # Saved id now resolves to a broken WDM-KS pin, or (most commonly)
+            # to a plain WASAPI/MME device left over from a previous "auto"
+            # driver selection -- returning it here would make PortAudio-based
+            # recording open a completely different physical/logical endpoint
+            # than the one the native ASIO bridge is actually monitoring
+            # through. Re-match by name instead.
+            device_id = None
         if device_id is not None and (
             not _AUDIO_BACKEND_AVAILABLE or 0 <= device_id < len(sd.query_devices())
         ):
@@ -384,7 +391,14 @@ def preferred_output_device(
         return output_device_id
     if driver == "asio":
         if output_device_id is not None:
-            return output_device_id
+            available = sd.query_devices() if devices is None else devices
+            # Same mismatch as preferred_input_device: a saved output id left
+            # over from a non-ASIO driver selection must not be handed to
+            # PortAudio recording as if it were the interface the native ASIO
+            # bridge is actually monitoring through.
+            if 0 <= output_device_id < len(available) and _is_asio_device(available[output_device_id]):
+                return output_device_id
+            output_device_id = None
         if input_device_id is not None:
             available = sd.query_devices() if devices is None else devices
             if 0 <= input_device_id < len(available):
@@ -781,7 +795,12 @@ def subscribe_monitor_relay() -> tuple[AudioRelayServer, queue.Queue] | None:
     """
     with _monitor_lock:
         relay = _monitor_relay
-    return (relay, relay.subscribe()) if relay is not None else None
+    # 8 slots at RelayLink's ~5ms chunking is ~40ms of backlog before the
+    # server starts dropping the oldest queued frame -- live duet singing
+    # should lose a little audio to a brief stall rather than build up a
+    # queue of old voice waiting to play (the previous default of 32 could
+    # let backlog reach several hundred ms for dry+wet before that kicked in).
+    return (relay, relay.subscribe(maxsize=8)) if relay is not None else None
 
 
 def _send_live_update(payload: dict) -> None:
@@ -1095,9 +1114,16 @@ def _launch_monitor_process(
     launched_at = time.monotonic()
     _monitor_control.check()
     token = getattr(_monitor_control.local, "token", None)
-    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
-        subprocess, "HIGH_PRIORITY_CLASS", 0
-    )
+    # Deliberately plain process priority, not HIGH_PRIORITY_CLASS: that used
+    # to boost every thread in this process (NumPy/relay/JSON/stdout, all of
+    # it), not just the realtime audio path -- which already gets its own
+    # targeted boost via AvSetMmThreadCharacteristicsW("Pro Audio") on the
+    # native WASAPI engine's pump thread (see monitor.cpp), and via
+    # PortAudio's own internal WASAPI thread-priority handling for the other
+    # engines. Elevating the whole process on top of that only ever competed
+    # with Electron and everything else for CPU on a weaker machine, with no
+    # audio benefit.
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     # Registration and stop are atomic. A release response must not race a
     # just-created child that has not yet been installed in _monitor_process.
     with _monitor_lock:

@@ -23,12 +23,12 @@ def test_subscriber_receives_frames_sent_by_a_connected_client():
         try:
             subscriber = server.subscribe()
             samples = np.array([0.5, -0.5], dtype=np.float32)
-            client.sendall(encode_frame(STREAM_DRY, 48000.0, samples))
+            sent = encode_frame(STREAM_DRY, 48000.0, samples)
+            client.sendall(sent)
             assert wait_until(lambda: not subscriber.empty())
-            stream_id, sample_rate, decoded = subscriber.get(timeout=1.0)
-            assert stream_id == STREAM_DRY
-            assert sample_rate == 48000.0
-            assert np.array_equal(decoded, samples)
+            # A pure relay hop: the server forwards the exact undecoded bytes
+            # it received (see AudioRelayServer.Frame), not a decoded tuple.
+            assert subscriber.get(timeout=1.0) == sent
         finally:
             client.close()
     finally:

@@ -104,14 +104,25 @@ class RelayLink:
                     sock.close()
                 return
             self._socket = sock
-        while True:
-            item = self._queue.get()
-            if item is None:
-                return
-            try:
-                sock.sendall(item)
-            except OSError:
-                return
+        try:
+            while True:
+                item = self._queue.get()
+                if item is None:
+                    return
+                try:
+                    sock.sendall(item)
+                except OSError:
+                    return
+        finally:
+            # Without this, a send failure left self._socket set and
+            # `connected` reporting True forever after -- push() kept
+            # encoding and queueing audio for a sender thread that had
+            # already exited and would never drain it again.
+            with self._state_lock:
+                if self._socket is sock:
+                    self._socket = None
+            with contextlib.suppress(OSError):
+                sock.close()
 
     def close(self) -> None:
         with self._state_lock:

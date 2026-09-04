@@ -18,7 +18,11 @@ import { apiToken } from "../utils/platform";
 
 const RELAY_PATH = "/audio/direct-monitor/relay";
 const STREAM_WET = 1;
-const HEADER_BYTES = 9; // uint8 stream_id + float32 sample_rate + uint32 sample_count
+// Matches audio_relay_protocol.py's _HEADER = struct.Struct("<IfI"): three
+// 4-byte fields, so the PCM payload starts at a 4-byte-aligned offset and a
+// Float32Array can view it directly instead of always being copied out with
+// .slice() first just to satisfy TypedArray alignment.
+const HEADER_BYTES = 12; // uint32 stream_id + float32 sample_rate + uint32 sample_count
 const DEFAULT_CONNECT_TIMEOUT_MS = 2000;
 
 function relayWebSocketUrl() {
@@ -29,10 +33,14 @@ function relayWebSocketUrl() {
 
 function parseFrame(buffer) {
   const view = new DataView(buffer);
-  const streamId = view.getUint8(0);
-  const sampleRate = view.getFloat32(1, true);
-  const sampleCount = view.getUint32(5, true);
-  const samples = new Float32Array(buffer.slice(HEADER_BYTES, HEADER_BYTES + sampleCount * 4));
+  const streamId = view.getUint32(0, true);
+  const sampleRate = view.getFloat32(4, true);
+  const sampleCount = view.getUint32(8, true);
+  // A direct view, not a copy: the buffer is 4-byte aligned at HEADER_BYTES
+  // (see the comment above), and this ArrayBuffer is never reused for
+  // another message (it's the argument WebSocket handed this one onmessage
+  // call), so there is no aliasing risk in holding a live view over it.
+  const samples = new Float32Array(buffer, HEADER_BYTES, sampleCount);
   return { streamId, sampleRate, samples };
 }
 
@@ -89,11 +97,16 @@ function connectRelaySocket(timeoutMs) {
   });
 }
 
-async function makeVoice(context) {
+async function makeVoice(context, sourceRate) {
   const node = new globalThis.AudioWorkletNode(context, "advoice-relay-playback", {
     numberOfInputs: 0,
     numberOfOutputs: 1,
-    outputChannelCount: [1]
+    outputChannelCount: [1],
+    // Lets the processor resample correctly even when the browser could not
+    // actually honor the sampleRate this context was requested with below
+    // (previously undetectable here -- playback just ran at a slightly
+    // wrong pitch/speed with no resampling at all).
+    processorOptions: { sourceRate }
   });
   const destination = context.createMediaStreamDestination();
   node.connect(destination);
@@ -112,17 +125,18 @@ export async function createRelayVoiceGraph({ connectTimeoutMs = DEFAULT_CONNECT
   const { socket, firstFrame } = await connectRelaySocket(connectTimeoutMs);
   let context;
   try {
-    // Requesting the source rate keeps 1:1 sample playback when it matches
+    // Requesting the source rate avoids any resampling work when it matches
     // the browser's own hardware rate (commonly true -- both usually settle
     // on 48kHz). A browser that cannot honor this falls back to its own
-    // native rate, and playback then runs at a slightly wrong pitch/speed
-    // rather than failing outright; tightening this is a follow-up, not a
-    // correctness requirement for the relay to be usable.
+    // native rate; relayPlaybackProcessor.js resamples from the real source
+    // rate (passed as processorOptions.sourceRate below) to whatever rate
+    // the context actually ended up at, so playback pitch/speed stays
+    // correct either way instead of only in the common case.
     context = new AudioContextCtor({ sampleRate: firstFrame.sampleRate || undefined });
     await context.audioWorklet.addModule(new URL("./relayPlaybackProcessor.js", import.meta.url));
 
-    const dry = await makeVoice(context);
-    const wet = await makeVoice(context);
+    const dry = await makeVoice(context, firstFrame.sampleRate);
+    const wet = await makeVoice(context, firstFrame.sampleRate);
     let closed = false;
     let unavailableCallback = null;
     const deliver = (frame) => {

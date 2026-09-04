@@ -274,26 +274,41 @@ export default class OnlineVoiceMesh {
 
   async syncPeerAudioTrack(participantId, peer = this.peers.get(participantId)) {
     const selectedStream = this.getOutgoingStream(participantId);
-    const selectedTracks = selectedStream?.getAudioTracks?.() || [];
-    if (!peer || !selectedTracks.length) return false;
+    const [selectedTrack] = selectedStream?.getAudioTracks?.() || [];
+    if (!peer || !selectedTrack) return false;
     const senders = peer.getSenders?.().filter((item) => item.track?.kind === "audio") || [];
-    if (selectedTracks.length === 1 && senders.length === 1) {
-      const [selectedTrack] = selectedTracks;
-      const [sender] = senders;
-      if (sender.track === selectedTrack) return true;
-      if (typeof sender.replaceTrack === "function") {
-        await sender.replaceTrack(selectedTrack);
-        return true;
+    // Exactly one audio sender per participant. A reconnect/toggle race
+    // could previously leave more than one (e.g. one still carrying the dry
+    // track, one added later for the wet track) -- the old code only ever
+    // added a missing track and never dropped an unwanted extra one, so a
+    // stray sender just kept sending stale audio to the peer indefinitely.
+    const [primary, ...extra] = senders;
+    for (const sender of extra) {
+      if (typeof peer.removeTrack !== "function") continue;
+      try {
+        peer.removeTrack(sender);
+      } catch {
+        // Already removed, or the connection is closing.
       }
     }
-    const existingIds = new Set(senders.map((sender) => sender.track?.id).filter(Boolean));
-    let changed = false;
-    selectedTracks.forEach((track) => {
-      if (existingIds.has(track.id)) return;
-      peer.addTrack(track, selectedStream);
-      changed = true;
-    });
-    return changed;
+    if (!primary) {
+      peer.addTrack(selectedTrack, selectedStream);
+      return true;
+    }
+    if (primary.track === selectedTrack) return extra.length > 0;
+    if (typeof primary.replaceTrack === "function") {
+      await primary.replaceTrack(selectedTrack);
+      return true;
+    }
+    if (typeof peer.removeTrack === "function") {
+      try {
+        peer.removeTrack(primary);
+      } catch {
+        // Already removed, or the connection is closing.
+      }
+    }
+    peer.addTrack(selectedTrack, selectedStream);
+    return true;
   }
 
   async setPeerEffectsEnabled(participantId, enabled) {

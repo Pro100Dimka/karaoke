@@ -10,7 +10,9 @@ import numpy as np
 class Info(ct.Structure):
     _fields_ = [(name, ct.c_uint32) for name in (
         "sample_rate", "output_sample_rate", "blocksize", "input_period", "output_period", "input_buffer", "output_buffer"
-    )] + [(name, ct.c_double) for name in ("input_latency_ms", "output_latency_ms")]
+    )] + [(name, ct.c_double) for name in ("input_latency_ms", "output_latency_ms")] + [
+        (name, ct.c_uint32) for name in ("input_raw", "output_raw")
+    ]
 
 
 TIMING_FIELDS = ("capture_delivery_ms", "program_residence_ms", "queue_residence_ms", "output_clock_lead_ms",
@@ -44,7 +46,7 @@ def load_library():
     except AttributeError as error:
         raise RuntimeError("Native WASAPI library is outdated; rebuild the native audio components") from error
     version.argtypes, version.restype = [], ct.c_uint32
-    if version() != 3:
+    if version() != 4:
         raise RuntimeError("Native WASAPI library version mismatch; rebuild the native audio components")
     opening = [ct.c_wchar_p, ct.c_wchar_p, ct.c_uint32, ct.c_float, ct.POINTER(Info), ct.c_char_p, ct.c_uint32]
     dll.wm_open.argtypes, dll.wm_open.restype = opening, ct.c_void_p
@@ -121,6 +123,7 @@ class NativeWasapiStream:
     def diagnostics(self):
         return {
             "engine": "wasapi-native-shared", "host_api": "Windows WASAPI", "mode": "shared", "exclusive": False,
+            "input_raw": bool(self.info.input_raw), "output_raw": bool(self.info.output_raw),
             "blocksize": self.info.blocksize, "sample_rate": self.info.sample_rate,
             "output_sample_rate": self.info.output_sample_rate,
             "input_period_frames": self.info.input_period, "output_period_frames": self.info.output_period,

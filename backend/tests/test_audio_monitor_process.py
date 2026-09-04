@@ -108,8 +108,12 @@ def test_monitor_process_consumes_started_levels_and_invalid_output(monkeypatch,
     assert consumed.wait(2)
 
     creationflags = audio_service.subprocess.Popen.call_args.kwargs["creationflags"]
-    assert creationflags & getattr(subprocess, "HIGH_PRIORITY_CLASS", 0) == getattr(
-        subprocess, "HIGH_PRIORITY_CLASS", 0
+    # Plain process priority -- only the realtime audio thread itself should
+    # ever be boosted (MMCSS "Pro Audio" in monitor.cpp, or PortAudio's own
+    # internal handling for the other engines), never the whole process.
+    assert creationflags & getattr(subprocess, "HIGH_PRIORITY_CLASS", 0) == 0
+    assert creationflags & getattr(subprocess, "CREATE_NO_WINDOW", 0) == getattr(
+        subprocess, "CREATE_NO_WINDOW", 0
     )
 
     assert audio_service._monitor_signal == {

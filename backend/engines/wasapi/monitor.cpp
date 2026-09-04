@@ -25,6 +25,13 @@ struct Info {
     uint32_t sample_rate, output_sample_rate, blocksize, input_period, output_period;
     uint32_t input_buffer, output_buffer;
     double input_latency_ms, output_latency_ms;
+    // Whether AUDCLNT_STREAMOPTIONS_RAW actually won for each endpoint (see
+    // Endpoint::open's try_candidate) -- some capture/render drivers reject
+    // RAW and this silently falls back to a non-RAW candidate, which leaves
+    // Windows APOs (loudness/AGC/noise-suppression "enhancements") back in
+    // the path and can add their own latency. Previously invisible: the
+    // engine still opened and ran normally either way.
+    uint32_t input_raw, output_raw;
 };
 struct Statistics {
     uint64_t captured_frames = 0, rendered_frames = 0, dropped_frames = 0;
@@ -98,7 +105,7 @@ struct Endpoint {
     WAVEFORMATEX* format = nullptr;
     Handle event;
     UINT32 period = 0, buffer = 0;
-    bool started = false, floating = false;
+    bool started = false, floating = false, raw = false;
     ~Endpoint() {
         if (started) client->Stop();
         client.Reset();
@@ -157,6 +164,7 @@ struct Endpoint {
             format = candidate_format;
             floating = candidate_floating;
             period = candidate_period;
+            raw = options == AUDCLNT_STREAMOPTIONS_RAW;
             return true;
         };
         // Windows permits different AUDIO_STREAM_CATEGORY sets for capture
@@ -195,8 +203,20 @@ struct Endpoint {
         return SUCCEEDED(client->GetStreamLatency(&value)) ? value / 10000.0 : -1;
     }
     void start() { check(client->Start(), "Start shared stream"); started = true; }
-    float read(const BYTE* data) const {
-        return shared_audio::decode(data, format->wBitsPerSample, floating);
+    float read(const BYTE* frame) const {
+        // Some capture endpoints put a mono microphone's actual signal on a
+        // channel other than 0 (e.g. Right) even while still negotiating a
+        // stereo mix format -- reading only channel 0 made those mics appear
+        // silent despite being selected and opened successfully. Take
+        // whichever channel in the frame carries the strongest sample.
+        const unsigned bytes = format->wBitsPerSample / 8;
+        float best = 0.0F, best_magnitude = -1.0F;
+        for (unsigned channel = 0; channel < format->nChannels; ++channel) {
+            const float value = shared_audio::decode(frame + channel * bytes, format->wBitsPerSample, floating);
+            const float magnitude = std::abs(value);
+            if (magnitude > best_magnitude) { best = value; best_magnitude = magnitude; }
+        }
+        return best;
     }
     void write(BYTE* data, float sample) const {
         const unsigned bytes = format->wBitsPerSample / 8;
@@ -240,7 +260,8 @@ struct Engine {
         input.open(enumerator.Get(), eCapture, input_name, blocksize, initialize);
         output.open(enumerator.Get(), eRender, output_name, blocksize, initialize);
         info = {input.format->nSamplesPerSec, output.format->nSamplesPerSec, blocksize, input.period, output.period,
-                input.buffer, output.buffer, initialize ? input.latency() : -1, initialize ? output.latency() : -1};
+                input.buffer, output.buffer, initialize ? input.latency() : -1, initialize ? output.latency() : -1,
+                input.raw ? 1u : 0u, output.raw ? 1u : 0u};
         if (!initialize) return;
         check(input.client->GetService(IID_PPV_ARGS(&capture)), "Get capture service");
         check(output.client->GetService(IID_PPV_ARGS(&render)), "Get render service");
@@ -280,7 +301,14 @@ struct Engine {
             UINT64 captured_qpc = 0;
             check(capture->GetBuffer(&data, &frames, &flags, nullptr, &captured_qpc), "Capture GetBuffer");
             const double received_at = monotonic_seconds();
-            if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) ++stats.discontinuities;
+            if (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) {
+                ++stats.discontinuities;
+                // The samples already queued (and the resampler's phase
+                // against them) describe audio from before whatever gap the
+                // driver just reported -- stitching new post-gap audio onto
+                // them would keep the output timeline continuous but wrong.
+                queue->reset();
+            }
             bool ok = true;
             const bool raw = raw_active.load(std::memory_order_relaxed);
             for (uint32_t offset = 0; offset < frames; ) {
@@ -316,6 +344,7 @@ struct Engine {
         UINT32 padding = 0;
         check(output.client->GetCurrentPadding(&padding), "GetCurrentPadding");
         stats.render_padding_ms = double(padding) * 1000 / output.format->nSamplesPerSec;
+        queue->nudge();
         // Allocation capacity is NOT a target queue depth. Submit at most one
         // engine period instead of filling the entire Windows render buffer.
         const UINT32 target = std::min(output.period, output.buffer);
@@ -323,6 +352,12 @@ struct Engine {
         // microphone data that arrives a moment later. Submit only ready audio.
         const auto ready = UINT32(queue->available());
         const UINT32 count = padding < target ? std::min(target - padding, ready) : 0;
+        // Windows wants audio and the queue has none at all -- the block
+        // below (which is where underruns were counted) never runs in this
+        // case, so a fully-starved queue was previously invisible in the
+        // stats even though it is the more severe starvation than a partial
+        // shortfall.
+        if (padding < target && !count) ++stats.underruns;
         if (count) {
             double presentation = 0;
             UINT64 position = 0, qpc = 0;
@@ -378,7 +413,7 @@ struct Engine {
 
 #define API extern "C" __declspec(dllexport)
 // Bump when exported structures change; prevent mixed DLL/Python layouts.
-API uint32_t __cdecl wm_abi_version() { return 3; }
+API uint32_t __cdecl wm_abi_version() { return 4; }
 API void* __cdecl wm_open(const wchar_t* input, const wchar_t* output, uint32_t blocksize, float gain, Info* info, char* error, uint32_t size) {
     try {
         auto engine = std::make_unique<Engine>();

@@ -1,4 +1,13 @@
-export async function createRoomVoiceCapture(streams, startPlaybackSec = 0) {
+// getPositionSec is a callback, not a plain value, so the instrumental's
+// position is sampled right before recorder.start() -- as close as possible
+// to the actual first captured sample -- instead of whatever it was back
+// when the caller first invoked this function. The gap between those two
+// moments used to go unaccounted for entirely (the WebAudio setup below,
+// gated behind an async context.resume() only when there are 2+ remote
+// participants, made that gap both real and inconsistent between the 1 vs
+// 2+ participant cases), silently shifting remote vocals relative to the
+// instrumental in the final mix.
+export async function createRoomVoiceCapture(streams, getPositionSec) {
   const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
   const MediaRecorderClass = globalThis.MediaRecorder;
   const live = (Array.isArray(streams) ? streams : []).filter((stream) =>
@@ -28,9 +37,11 @@ export async function createRoomVoiceCapture(streams, startPlaybackSec = 0) {
   recorder.addEventListener("dataavailable", ({ data }) => {
     if (data?.size) chunks.push(data);
   });
+  const positionAtStart =
+    typeof getPositionSec === "function" ? getPositionSec() : Number(getPositionSec) || 0;
   recorder.start(500);
   return {
-    startPlaybackSec: Math.max(0, Number(startPlaybackSec) || 0),
+    startPlaybackSec: Math.max(0, Number(positionAtStart) || 0),
     pause: () => recorder.state === "recording" && recorder.pause(),
     resume: () => recorder.state === "paused" && recorder.resume(),
     stop: () =>

@@ -44,9 +44,6 @@ export default function useKaraokeAudio({
     POLLING_INTERVALS.devices,
     queryKeys.audioSettings
   );
-  const { data: signal } = usePoll(api.getSignalQuality, POLLING_INTERVALS.karaokeSignal, [
-    "signal-quality"
-  ]);
 
   const microphone = useMicrophoneSettings({ audioSettings, onError: setError });
   const {
@@ -61,6 +58,16 @@ export default function useKaraokeAudio({
     updateMicrophone,
     updateMicrophoneEffects
   } = microphone;
+  // With neither monitoring active, the level meter never has anything to
+  // show -- polling anyway used to make the backend open the microphone for
+  // a real capture probe (see audio_service.check_signal_quality) purely to
+  // throw the result away, the same waste the Settings screen used to have.
+  const monitoringActive = room ? roomMonitoring : monitoringEnabled;
+  const { data: signal } = usePoll(
+    monitoringActive ? api.getSignalQuality : () => Promise.resolve(null),
+    POLLING_INTERVALS.karaokeSignal,
+    ["signal-quality", monitoringActive]
+  );
   const monitoringRef = useRef(monitoringEnabled);
   monitoringRef.current = monitoringEnabled;
 

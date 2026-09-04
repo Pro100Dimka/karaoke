@@ -75,6 +75,7 @@ class RecordingSession:
     # every single realtime callback (hundreds of times a second at a small
     # buffer) is pure waste on the audio thread.
     _SIGNAL_INTERVAL_SEC = 0.08
+    _QUEUE_SECONDS = 3.0
 
     def __init__(
         self,
@@ -112,11 +113,16 @@ class RecordingSession:
         self.playback_offset_sec = max(0.0, float(playback_offset_sec))
         self._max_frames = int(round(sample_rate * config.MAX_RECORDING_DURATION_SECONDS))
         self.limit_reached = threading.Event()
-        # Bounded so a stalled/dead writer can't make the audio callback pile up
-        # unbounded RAM forever; ~2000 blocks is several seconds of headroom at
-        # the small blocksizes this session uses, generous enough to absorb a
-        # transient write hiccup without ever growing without limit.
-        self._queue: queue.Queue[Any] = queue.Queue(maxsize=2000)
+        # Bounded by audio *time*, not block count: a native PortAudio capture
+        # packet (used when this isn't an ASIO stream, see _capture_blocksize)
+        # can be ~7x larger than the small ASIO/WASAPI monitoring blocksize, so
+        # a fixed block count let the writer fall behind by nearly 20s of
+        # audio before the queue ever reported an overflow. ~3s is generous
+        # enough to absorb a transient write hiccup without hiding a stalled
+        # writer for anywhere near that long.
+        self._queue: queue.Queue[Any] = queue.Queue(
+            maxsize=max(32, round(self._QUEUE_SECONDS * sample_rate / max(1, blocksize)))
+        )
         self._writer_ready = threading.Event()
         self._writer_thread: threading.Thread | None = None
         self._writer_error: BaseException | None = None
@@ -213,6 +219,7 @@ class RecordingSession:
 
     def _enqueue(self, chunk, time_info=None) -> bool:
         if self._writer_error is not None: return False  # writer already died; stop feeding a dead consumer
+        if self.limit_reached.is_set(): return False  # writer already stopped reading at the duration cap
         if self._overflow_error is not None:
             self._mark_overflow(len(chunk))
             return False
@@ -256,9 +263,16 @@ class RecordingSession:
             "dropped_frames": self._dropped_frames,
         }
 
-    def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
+    def _callback(self, indata, frames, time_info, status):
         try:
             self._update_signal(indata)
+            # An input_overflow means the driver already dropped microphone
+            # samples before this callback ever ran -- the queue/writer below
+            # never sees the gap, so without this the take would silently
+            # keep going and look intact even though audio is missing.
+            if status and getattr(status, "input_overflow", False):
+                self._mark_overflow(frames)
+                return
             if not self._paused:
                 # Persist exactly the frames delivered by the capture driver.
                 # Monitoring/voice DSP is intentionally not part of the source
@@ -268,10 +282,13 @@ class RecordingSession:
         except BaseException as exc:
             self._capture_error = exc
 
-    def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
+    def _monitoring_callback(self, indata, outdata, frames, time_info, status):
         outdata.fill(0)
         try:
             self._update_signal(indata)
+            if status and getattr(status, "input_overflow", False):
+                self._mark_overflow(frames)
+                return
             # Save the unmodified microphone timeline before any realtime DSP.
             # Effects below are only for what the singer hears; the performance
             # mix applies the chosen settings offline to this lossless source.

@@ -147,14 +147,18 @@ export default function useKaraokeTransport({
     silenceMelodyGuide();
   };
 
-  const startRoomCapture = async (position) => {
+  const startRoomCapture = async () => {
     if (!onlineRoom?.room) return null;
     if (roomCaptureRef.current) {
       await safe(() => roomCaptureRef.current.resume?.());
       return roomCaptureRef.current;
     }
     roomCaptureRef.current = await safe(
-      () => createRoomVoiceCapture(onlineRoom.getRemoteVoiceStreams?.() || [], position),
+      () =>
+        createRoomVoiceCapture(
+          onlineRoom.getRemoteVoiceStreams?.() || [],
+          () => instrumentalRef.current?.currentTime ?? 0
+        ),
       null
     );
     return roomCaptureRef.current;
@@ -205,20 +209,25 @@ export default function useKaraokeTransport({
 
     const recordingStart = runRecording(operation);
     try {
-      await waitForOperation(recordingStart, operation);
+      // Opening the recording session (a network round trip plus a backend
+      // microphone/device open) and counting down to the broadcast schedule
+      // used to happen one after the other -- a slow recording start (mic
+      // device open taking a few hundred ms is routine) delayed the schedule
+      // countdown by exactly that much, so the host could start noticeably
+      // later than every other participant, who only wait for the schedule
+      // itself. Run both concurrently instead; recording still gates
+      // playback (a failure here still aborts below), it just no longer
+      // gates the countdown too.
+      await Promise.all([
+        waitForOperation(recordingStart, operation),
+        scheduledAt != null ? wait(scheduledAt - onlineRoom.roomClockNow()) : Promise.resolve()
+      ]);
       if (stale()) {
         pauseMedia();
         return false;
       }
-      if (scheduledAt != null) {
-        await wait(scheduledAt - onlineRoom.roomClockNow());
-        if (stale()) {
-          pauseMedia();
-          return false;
-        }
-      }
 
-      await startRoomCapture(instrumental.currentTime);
+      await startRoomCapture();
       if (stale()) {
         pauseMedia();
         await stopRoomCapture().catch(() => null);

@@ -62,6 +62,28 @@ def test_native_stream_reports_real_format_and_periods_without_changing_settings
     dll.wm_close.assert_called_once_with(42)
 
 
+def test_native_stream_reports_whether_raw_mode_actually_engaged(monkeypatch):
+    library = SimpleNamespace(
+        wm_close=Mock(), wm_start=Mock(return_value=1), wm_pump=Mock(return_value=1), wm_set_raw=Mock()
+    )
+
+    def open_stream(_input_name, _output_name, _blocksize, _gain, info, _error, _size):
+        # A driver that rejected AUDCLNT_STREAMOPTIONS_RAW on the input side
+        # (see Endpoint::open's try_candidate fallback) but accepted it for
+        # output -- both are reported independently.
+        for name, value in {"sample_rate": 44100, "output_sample_rate": 48000, "blocksize": 64,
+                            "input_raw": 0, "output_raw": 1}.items():
+            setattr(info._obj, name, value)
+        return 42
+
+    library.wm_open = Mock(side_effect=open_stream)
+    monkeypatch.setattr(native_wasapi, "load_library", lambda: library)
+    stream = native_wasapi.NativeWasapiStream(options(), {})
+    info = stream.diagnostics()
+    assert info["input_raw"] is False and info["output_raw"] is True
+    stream.close()
+
+
 def test_native_stream_threads_gain_and_toggles_raw_mode(dll):
     stream = native_wasapi.NativeWasapiStream({**options(), "gain": 2.5}, {})
     dll.wm_open.assert_called_once()
@@ -153,7 +175,7 @@ def test_invalid_stage_timings_are_unavailable(dll, value):
         stream.close()
 
 
-@pytest.mark.parametrize("version", [None, 1, 2])
+@pytest.mark.parametrize("version", [None, 1, 3])
 def test_mismatched_native_binary_rejected_before_writing_statistics(monkeypatch, version):
     library = SimpleNamespace() if version is None else SimpleNamespace(wm_abi_version=Mock(return_value=version))
     monkeypatch.setattr(native_wasapi, "library_path", lambda: SimpleNamespace(is_file=lambda: True))

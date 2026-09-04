@@ -46,6 +46,7 @@ AsioDrivers* g_drivers = nullptr;
 struct Options {
   std::string driver_name;
   long input_channel = -1;
+  long output_channel = -1;
   long output_channels = 2;
   long buffer_size = 0;
   double sample_rate = 0.0;
@@ -97,6 +98,7 @@ struct Engine {
   double pitch_phase = 0.0;
   bool output_ready = false;
   bool buffers_created = false;
+  long active_input_channel = -1;
 } g_engine;
 
 void emit(const std::string& json) { std::cout << json << std::endl; }
@@ -118,6 +120,7 @@ std::optional<Options> parse_options(int argc, char** argv) {
     if (key == "--list") options.list = true;
     else if (key == "--driver" && index + 1 < argc) options.driver_name = argv[++index];
     else if (key == "--input-channel" && index + 1 < argc) options.input_channel = std::stol(argv[++index]);
+    else if (key == "--output-channel" && index + 1 < argc) options.output_channel = std::stol(argv[++index]);
     else if (key == "--output-channels" && index + 1 < argc) options.output_channels = std::stol(argv[++index]);
     else if (key == "--buffer-size" && index + 1 < argc) options.buffer_size = std::stol(argv[++index]);
     else if (key == "--sample-rate" && index + 1 < argc) options.sample_rate = std::stod(argv[++index]);
@@ -166,6 +169,25 @@ int bytes_per_sample(ASIOSampleType type) {
   }
 }
 
+// Int24LSB is a plain 3-byte little-endian signed PCM sample -- unambiguous
+// and common on real interfaces (unlike the ASIOSTInt32LSB16/18/20/24 and
+// MSB-endian variants below, whose exact bit alignment isn't worth guessing
+// at without the hardware to verify against; those deliberately fall back to
+// the safe copy-without-gain/silence paths in copy_with_gain/process_buffer
+// instead of risking wrong sample math on real audio).
+int32_t read_int24(const uint8_t* bytes) {
+  int32_t value = (static_cast<int32_t>(bytes[0])) | (static_cast<int32_t>(bytes[1]) << 8) |
+                  (static_cast<int32_t>(bytes[2]) << 16);
+  if (value & 0x00800000) value |= static_cast<int32_t>(0xFF000000);  // sign-extend
+  return value;
+}
+
+void write_int24(uint8_t* bytes, int32_t value) {
+  bytes[0] = static_cast<uint8_t>(value & 0xFF);
+  bytes[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+  bytes[2] = static_cast<uint8_t>((value >> 16) & 0xFF);
+}
+
 float sample_peak(const void* source, ASIOSampleType type, long frames) {
   float peak = 0.0F;
   if (type == ASIOSTFloat32LSB) {
@@ -179,6 +201,10 @@ float sample_peak(const void* source, ASIOSampleType type, long frames) {
   } else if (type == ASIOSTInt16LSB) {
     const auto* values = static_cast<const int16_t*>(source);
     for (long index = 0; index < frames; ++index) peak = std::max(peak, std::abs(values[index] / 32768.0F));
+  } else if (type == ASIOSTInt24LSB) {
+    const auto* bytes = static_cast<const uint8_t*>(source);
+    for (long index = 0; index < frames; ++index)
+      peak = std::max(peak, std::abs(static_cast<float>(read_int24(bytes + index * 3) / 8388608.0)));
   }
   return peak;
 }
@@ -188,6 +214,8 @@ float decode_sample(const void* source, ASIOSampleType type, long index) {
   if (type == ASIOSTInt32LSB || type == ASIOSTInt32LSB24)
     return static_cast<float>(static_cast<const int32_t*>(source)[index] / 2147483648.0);
   if (type == ASIOSTInt16LSB) return static_cast<const int16_t*>(source)[index] / 32768.0F;
+  if (type == ASIOSTInt24LSB)
+    return static_cast<float>(read_int24(static_cast<const uint8_t*>(source) + index * 3) / 8388608.0);
   return 0.0F;
 }
 
@@ -198,15 +226,37 @@ void encode_sample(void* target, ASIOSampleType type, long index, float sample) 
     static_cast<int32_t*>(target)[index] = static_cast<int32_t>(clipped * 2147483647.0F);
   else if (type == ASIOSTInt16LSB)
     static_cast<int16_t*>(target)[index] = static_cast<int16_t>(clipped * 32767.0F);
+  else if (type == ASIOSTInt24LSB)
+    write_int24(static_cast<uint8_t*>(target) + index * 3, static_cast<int32_t>(clipped * 8388607.0F));
+}
+
+// True RMS, matching what the Python/WASAPI monitoring paths report under
+// the same "rms_db" key -- the previous implementation here was actually a
+// peak-hold envelope (see g_rms's old update in process_buffer), so this
+// engine's meter read differently from the others for the same signal.
+float sample_rms(const void* source, ASIOSampleType type, long frames) {
+  if (frames <= 0) return 0.0F;
+  double sum_squares = 0.0;
+  for (long index = 0; index < frames; ++index) {
+    const float sample = decode_sample(source, type, index);
+    sum_squares += static_cast<double>(sample) * sample;
+  }
+  return static_cast<float>(std::sqrt(sum_squares / frames));
 }
 
 bool supports_dsp(ASIOSampleType type) {
   return type == ASIOSTFloat32LSB || type == ASIOSTInt32LSB ||
-         type == ASIOSTInt32LSB24 || type == ASIOSTInt16LSB;
+         type == ASIOSTInt32LSB24 || type == ASIOSTInt16LSB || type == ASIOSTInt24LSB;
 }
 
+// Mirrors the exact thresholds process_effects() itself uses to skip
+// reverb/echo/delay/pitch -- when every one of them is a no-op, running the
+// whole per-sample chain (highpass filter, noise gate smoothing, tanh
+// saturation) just to reproduce the input is pure realtime-thread cost with
+// no audible effect. copy_with_gain still applies gain.
 bool effects_enabled() {
-  return true;
+  return g_engine.reverb > 0.001F || g_engine.echo > 0.001F || g_engine.delay > 0.001F ||
+         std::abs(g_engine.octave) > 0.005F || g_engine.noise_suppression > 0.001F;
 }
 
 float process_pitch(float sample) {
@@ -328,6 +378,7 @@ void process_buffer(long buffer_index) {
   if (g_engine.input_count < 1 || g_engine.output_count < 1) return;
   const void* input = nullptr;
   ASIOSampleType input_type = ASIOSTLastEntry;
+  long selected_channel = -1;
   float peak = -1.0F;
   // ASIO driver channel numbering is independent from Windows endpoint IDs.
   // In automatic mode retain all practical input channels and use the one
@@ -338,14 +389,34 @@ void process_buffer(long buffer_index) {
     const auto type = g_engine.channels[channel].type;
     if (!candidate || bytes_per_sample(type) == 0) continue;
     const float candidate_peak = sample_peak(candidate, type, g_engine.buffer_size);
-    if (candidate_peak > peak) { input = candidate; input_type = type; peak = candidate_peak; }
+    if (candidate_peak > peak) { input = candidate; input_type = type; peak = candidate_peak; selected_channel = channel; }
   }
   const int input_bytes = bytes_per_sample(input_type);
   if (input == nullptr || input_bytes == 0) return;
 
-  const float prior = std::pow(10.0F, g_rms.load() / 20.0F);
-  const float smoothed = std::max(peak, prior * 0.88F);
-  g_rms = smoothed > 0.0F ? 20.0F * std::log10(smoothed) : -120.0F;
+  if (selected_channel != g_engine.active_input_channel) {
+    // Automatic channel selection just switched which physical input feeds
+    // the DSP chain -- every one of these carries state built up from the
+    // PREVIOUS channel's audio (highpass/gate history, noise floor, pitch
+    // buffer, reverb/echo/delay tails). Reset them instead of processing the
+    // new channel's first blocks against another input's history, which was
+    // audible as a click/gate hiccup/stray effect tail on every auto-switch.
+    g_engine.active_input_channel = selected_channel;
+    g_engine.previous_input = 0.0F;
+    g_engine.highpass_state = 0.0F;
+    g_engine.noise_floor = 0.003F;
+    g_engine.gate_gain = 1.0F;
+    std::fill(g_engine.reverb_line_a.begin(), g_engine.reverb_line_a.end(), 0.0F);
+    std::fill(g_engine.reverb_line_b.begin(), g_engine.reverb_line_b.end(), 0.0F);
+    std::fill(g_engine.echo_line.begin(), g_engine.echo_line.end(), 0.0F);
+    std::fill(g_engine.delay_line.begin(), g_engine.delay_line.end(), 0.0F);
+    std::fill(g_engine.pitch_line.begin(), g_engine.pitch_line.end(), 0.0F);
+    g_engine.pitch_cursor = 0;
+    g_engine.pitch_phase = 0.0;
+  }
+
+  const float rms = sample_rms(input, input_type, g_engine.buffer_size);
+  g_rms = rms > 0.0F ? 20.0F * std::log10(rms) : -120.0F;
   g_clipping = peak >= 0.99F;
 
   const bool use_dsp = effects_enabled() && supports_dsp(input_type);
@@ -380,16 +451,67 @@ ASIOTime* buffer_switch_time_info(ASIOTime* time_info, long index, ASIOBool) {
   process_buffer(index);
   return time_info;
 }
-void sample_rate_changed(ASIOSampleRate) {}
+// Every DSP buffer (highpass coefficient, reverb/echo/delay lines, pitch
+// line/phase) is sized and tuned for one specific sample rate. Shared by
+// create_buffers() (first open) and sample_rate_changed() (the driver
+// switching clocks live, e.g. 44.1 <-> 48kHz) so a runtime rate change can
+// never leave DSP state computed for the old rate silently applied to audio
+// running at the new one -- that used to mean wrong delay/pitch timing until
+// a full restart. Resets in-flight reverb/echo/delay tails (a brief, far
+// less disruptive artifact than that).
+void apply_sample_rate(double rate) {
+  g_engine.sample_rate = static_cast<float>(std::max(1.0, rate));
+  g_engine.highpass_coefficient = std::exp(-2.0F * 3.14159265F * 70.0F / g_engine.sample_rate);
+  const size_t effect_size = static_cast<size_t>(std::max(1.0, rate * 0.72));
+  g_engine.reverb_line_a.assign(effect_size, 0.0F);
+  g_engine.reverb_line_b.assign(effect_size, 0.0F);
+  g_engine.echo_line.assign(effect_size, 0.0F);
+  g_engine.delay_line.assign(effect_size, 0.0F);
+  g_engine.pitch_line.assign(static_cast<size_t>(std::max(1024.0, rate * 0.032)), 0.0F);
+  const double pitch_ratio = std::pow(2.0, static_cast<double>(g_engine.octave));
+  g_engine.pitch_phase_increment = (1.0 - pitch_ratio) / static_cast<double>(g_engine.pitch_line.size());
+  g_engine.effect_cursor = 0;
+  g_engine.pitch_cursor = 0;
+  g_engine.pitch_phase = 0.0;
+}
+
+void sample_rate_changed(ASIOSampleRate new_rate) {
+  // ASIO callbacks (buffer_switch, this one) are serialized on the same
+  // driver thread, so this never races process_buffer() reading the same
+  // g_engine state.
+  if (new_rate > 0.0 && std::abs(new_rate - static_cast<double>(g_engine.sample_rate)) > 0.5)
+    apply_sample_rate(new_rate);
+}
 long asio_message(long selector, long value, void*, double*) {
   if (selector == kAsioSelectorSupported) {
-    return value == kAsioEngineVersion || value == kAsioSupportsTimeInfo || value == kAsioResetRequest;
+    return value == kAsioEngineVersion || value == kAsioSupportsTimeInfo || value == kAsioResetRequest ||
+           value == kAsioResyncRequest || value == kAsioLatenciesChanged;
   }
   if (selector == kAsioEngineVersion) return 2;
-  if (selector == kAsioResetRequest) {
+  if (selector == kAsioResetRequest || selector == kAsioResyncRequest) {
+    // kAsioResyncRequest means the driver's internal state may already be
+    // corrupted (e.g. samples lost between hardware and driver) -- this
+    // bridge has no lighter-weight internal resync, so treat it exactly like
+    // a full reset instead of silently continuing on state the driver itself
+    // flagged as suspect.
     g_reset_requested = true;
     emit("{\"event\":\"reset_requested\"}");
     g_running = false;
+    return 1;
+  }
+  if (selector == kAsioLatenciesChanged) {
+    // The driver changed something (e.g. its own control panel) that altered
+    // latency without a full reset -- re-query and tell the caller, instead
+    // of it silently keeping the stale figure from ASIOStart().
+    long input_latency = 0, output_latency = 0;
+    if (ASIOGetLatencies(&input_latency, &output_latency) == ASE_OK) {
+      g_engine.input_latency = input_latency;
+      g_engine.output_latency = output_latency;
+      std::ostringstream update;
+      update << "{\"event\":\"latency\",\"input_latency\":" << g_engine.input_latency
+             << ",\"output_latency\":" << g_engine.output_latency << "}";
+      emit(update.str());
+    }
     return 1;
   }
   return 0;
@@ -410,7 +532,9 @@ bool create_buffers(const Options& options) {
   if (options.input_channel >= available_inputs) return false;
   g_engine.input_count = options.input_channel < 0
     ? std::min(available_inputs, kMaxInputChannels) : 1;
-  g_engine.output_count = std::min({options.output_channels, available_outputs, kMaxOutputChannels});
+  const long output_base = options.output_channel < 0 ? 0 : options.output_channel;
+  if (output_base >= available_outputs) return false;
+  g_engine.output_count = std::min({options.output_channels, available_outputs - output_base, kMaxOutputChannels});
   if (ASIOGetBufferSize(&minimum, &maximum, &preferred, &granularity) != ASE_OK) return false;
   g_engine.buffer_size = resolve_buffer_size(options, minimum, maximum, preferred, granularity);
   g_engine.gain = static_cast<float>(std::clamp(options.gain, 0.0, 4.0));
@@ -420,23 +544,10 @@ bool create_buffers(const Options& options) {
   g_engine.noise_suppression = static_cast<float>(
     std::clamp(options.noise_suppression, 0.0, 1.0));
   g_engine.octave = static_cast<float>(std::clamp(options.octave, -1.0, 1.0));
+  g_engine.monitor_scratch.assign(static_cast<size_t>(g_engine.buffer_size), 0.0F);
   ASIOSampleRate rate = 44100.0;
   ASIOGetSampleRate(&rate);
-  g_engine.sample_rate = static_cast<float>(std::max(1.0, rate));
-  g_engine.highpass_coefficient = std::exp(-2.0F * 3.14159265F * 70.0F / g_engine.sample_rate);
-  const size_t effect_size = static_cast<size_t>(std::max(1.0, rate * 0.72));
-  g_engine.reverb_line_a.assign(effect_size, 0.0F);
-  g_engine.reverb_line_b.assign(effect_size, 0.0F);
-  g_engine.echo_line.assign(effect_size, 0.0F);
-  g_engine.delay_line.assign(effect_size, 0.0F);
-  g_engine.monitor_scratch.assign(static_cast<size_t>(g_engine.buffer_size), 0.0F);
-  g_engine.pitch_line.assign(
-    static_cast<size_t>(std::max(1024.0, rate * 0.032)), 0.0F);
-  const double pitch_ratio = std::pow(2.0, static_cast<double>(g_engine.octave));
-  g_engine.pitch_phase_increment = (1.0 - pitch_ratio) / static_cast<double>(g_engine.pitch_line.size());
-  g_engine.effect_cursor = 0;
-  g_engine.pitch_cursor = 0;
-  g_engine.pitch_phase = 0.0;
+  apply_sample_rate(rate);
   for (long index = 0; index < g_engine.input_count; ++index) {
     g_engine.buffers[index].isInput = ASIOTrue;
     g_engine.buffers[index].channelNum = options.input_channel < 0 ? index : options.input_channel + index;
@@ -444,7 +555,10 @@ bool create_buffers(const Options& options) {
   for (long index = 0; index < g_engine.output_count; ++index) {
     const long buffer_index = g_engine.input_count + index;
     g_engine.buffers[buffer_index].isInput = ASIOFalse;
-    g_engine.buffers[buffer_index].channelNum = index;
+    // Always channels 0/1 ignored the fact that a professional interface's
+    // headphone/monitor pair is frequently NOT its first output pair (e.g.
+    // outputs 3/4); --output-channel lets the caller pick the real base.
+    g_engine.buffers[buffer_index].channelNum = output_base + index;
   }
   g_engine.callbacks = {buffer_switch, sample_rate_changed, asio_message, buffer_switch_time_info};
   const long count = g_engine.input_count + g_engine.output_count;
@@ -508,7 +622,15 @@ int main(int argc, char** argv) {
     cleanup();
     return 1;
   }
-  if (options->sample_rate > 0.0 && ASIOCanSampleRate(options->sample_rate) == ASE_OK) ASIOSetSampleRate(options->sample_rate);
+  // Only actually change the driver's clock when it isn't already running at
+  // the requested rate -- ASIOSetSampleRate on an interface already at that
+  // rate can still cause an audible click/resync and can retune other
+  // programs sharing the same clock domain, all for no benefit.
+  ASIOSampleRate current_rate = 0.0;
+  const bool rate_known = ASIOGetSampleRate(&current_rate) == ASE_OK;
+  if (options->sample_rate > 0.0 && ASIOCanSampleRate(options->sample_rate) == ASE_OK &&
+      (!rate_known || std::abs(current_rate - options->sample_rate) > 0.5))
+    ASIOSetSampleRate(options->sample_rate);
   if (!create_buffers(*options) || ASIOStart() != ASE_OK) {
     emit("{\"event\":\"error\",\"message\":\"Could not start ASIO full-duplex stream\"}");
     cleanup();

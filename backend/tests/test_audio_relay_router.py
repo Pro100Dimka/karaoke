@@ -58,7 +58,9 @@ def test_forwards_frames_from_the_subscribed_queue_to_the_browser(monkeypatch):
     monkeypatch.setattr(audio_relay, "_API_TOKEN", "")
     relay = Mock()
     subscriber = queue.Queue()
-    subscriber.put((STREAM_DRY, 48000.0, [0.1, 0.2, 0.3]))
+    # The queue carries raw undecoded frames (see AudioRelayServer.Frame) --
+    # the router is a pure byte-pump and never decodes/re-encodes them.
+    subscriber.put(encode_frame(STREAM_DRY, 48000.0, [0.1, 0.2, 0.3]))
     monkeypatch.setattr(audio_relay.audio_service, "subscribe_monitor_relay", lambda: (relay, subscriber))
 
     with TestClient(make_app()) as client:
@@ -80,11 +82,12 @@ def test_matches_the_wire_format_used_by_relay_link(monkeypatch):
     monkeypatch.setattr(audio_relay, "_API_TOKEN", "")
     relay = Mock()
     subscriber = queue.Queue()
-    subscriber.put((STREAM_DRY, 48000.0, [1.0, -1.0]))
+    sent = encode_frame(STREAM_DRY, 48000.0, [1.0, -1.0])
+    subscriber.put(sent)
     monkeypatch.setattr(audio_relay.audio_service, "subscribe_monitor_relay", lambda: (relay, subscriber))
 
     with TestClient(make_app()) as client:
         with client.websocket_connect("/audio/direct-monitor/relay") as ws:
             payload = ws.receive_bytes()
 
-    assert payload == encode_frame(STREAM_DRY, 48000.0, [1.0, -1.0])
+    assert payload == sent

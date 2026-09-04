@@ -66,10 +66,17 @@ export default function useKaraokeRecording({
   const syncRecording = useCallback(
     (id, position, rate) => {
       const compensated = position + lastLatencySecRef.current * (Number(rate) || 1);
-      const startedAt = now();
-      return queueRequest(() => api.syncRecording(id, compensated, rate)).then((result) => {
-        lastLatencySecRef.current = Math.max(0, (now() - startedAt) / 2 / 1000);
-        return result;
+      // Measured from just before the actual network call, not from before
+      // queueRequest -- an earlier queued request still in flight ahead of
+      // this one used to count as part of this call's "latency" too, wildly
+      // overestimating it (JS queue wait time, not RTT) and pushing the next
+      // sync's compensation off by however long that wait was.
+      return queueRequest(() => {
+        const startedAt = now();
+        return api.syncRecording(id, compensated, rate).then((result) => {
+          lastLatencySecRef.current = Math.max(0, (now() - startedAt) / 2 / 1000);
+          return result;
+        });
       });
     },
     [queueRequest]
@@ -179,6 +186,10 @@ export default function useKaraokeRecording({
   ]);
 
   const startRecording = async () => {
+    // A previous take's measured RTT must never carry into a brand new
+    // recording session's first sync -- there has been no measurement for
+    // this one yet.
+    lastLatencySecRef.current = 0;
     const { recording_session_id: id } =
       (await api.startRecording(
         song.id,

@@ -107,13 +107,24 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
     };
     setPitchShift(options.octave).catch(() => {});
     let effectGraph = null;
+    let effectsKey = null;
     const clearEffects = () => {
       effectGraph?.close();
       effectGraph = null;
+      effectsKey = null;
     };
     const setEffects = (effects = {}) => {
-      clearEffects();
+      // Volume is a plain gain value, applied unconditionally -- it never
+      // needs the delay/convolver graph below rebuilt. reverb/echo/delay are
+      // the only inputs that actually change that graph's shape, so a pure
+      // volume change (or a monitoring toggle re-applying the same,
+      // already-active effects -- see setMonitoring) now costs one gain
+      // assignment instead of tearing down and reconnecting every node.
       finalOutput.gain.value = clamp(effects.volume ?? finalOutput.gain.value ?? 1, 2);
+      const key = `${effects.reverb ?? 0}|${effects.echo ?? 0}|${effects.delay ?? 0}`;
+      if (key === effectsKey && effectGraph) return true;
+      clearEffects();
+      effectsKey = key;
       effectGraph = connectVoiceEffects(context, finalOutput, effectsMix, effects);
       return true;
     };

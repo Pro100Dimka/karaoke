@@ -14,7 +14,10 @@ import threading
 
 from .audio_relay_protocol import FrameReader
 
-Frame = tuple[int, float, "object"]
+# A whole undecoded encode_frame() message: this server is a pure byte relay
+# between monitor_worker.py's RelayLink and the WebSocket route, so there is
+# nothing to decode a frame INTO here -- see FrameReader.pop_raw_frames.
+Frame = bytes
 
 
 class AudioRelayServer:
@@ -61,7 +64,7 @@ class AudioRelayServer:
                 if not chunk:
                     break
                 reader.feed(chunk)
-                for frame in reader.pop_frames():
+                for frame in reader.pop_raw_frames():
                     self._dispatch(frame)
         except OSError:
             pass

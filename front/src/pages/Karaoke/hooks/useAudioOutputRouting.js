@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 
-const safe = (task) => Promise.resolve().then(task).catch(() => {});
-const publishRoute = (deviceId = "") =>
+const safe = (task, onError) => Promise.resolve().then(task).catch((error) => onError?.(error));
+const publishRoute = (deviceId = "", matched = true) =>
   globalThis.dispatchEvent?.(
-    new CustomEvent("audio-output-route-changed", { detail: { deviceId } })
+    new CustomEvent("audio-output-route-changed", { detail: { deviceId, matched } })
   );
 
 export default function useAudioOutputRouting({
@@ -39,11 +39,21 @@ export default function useAudioOutputRouting({
 
   useEffect(() => {
     let active = true;
-    const route = (deviceId = "") => {
+    const route = (deviceId = "", matched = true) => {
       if (!active) return;
-      publishRoute(deviceId);
+      publishRoute(deviceId, matched);
       for (const media of [instrumentalRef.current, vocalsRef.current, videoRef.current]) {
-        if (typeof media?.setSinkId === "function") safe(() => media.setSinkId(deviceId));
+        if (typeof media?.setSinkId === "function") {
+          safe(
+            () => media.setSinkId(deviceId),
+            // Previously swallowed entirely -- the selected speakers could
+            // silently stay on the system default with zero signal that the
+            // switch itself failed, not just that no match was found (below).
+            (error) =>
+              // eslint-disable-next-line no-console
+              console.warn("Could not route playback to the selected output device", error)
+          );
+        }
       }
     };
 
@@ -52,15 +62,23 @@ export default function useAudioOutputRouting({
     );
     const devices = globalThis.navigator?.mediaDevices;
 
-    if (directOutputDeviceId == null || directOutputDeviceId === "" || !selected) {
-      route();
+    if (directOutputDeviceId == null || directOutputDeviceId === "") {
+      route("", true);
+    } else if (!selected) {
+      route("", false);
     } else if (typeof devices?.enumerateDevices === "function") {
       devices
         .enumerateDevices()
-        .then((entries) => route(findMatchingBrowserOutput(entries, selected)?.deviceId || ""))
-        .catch(() => route());
+        .then((entries) => {
+          const match = findMatchingBrowserOutput(entries, selected)?.deviceId || "";
+          // "" (no match) means the requested device silently falls back to
+          // the system default -- previously indistinguishable from a
+          // deliberate "use the system default" request.
+          route(match, Boolean(match));
+        })
+        .catch(() => route("", false));
     } else {
-      route();
+      route("", false);
     }
 
     return () => {

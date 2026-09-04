@@ -231,9 +231,16 @@ def test_asio_matching_and_preferred_device_fallbacks(monkeypatch):
     assert (
         (audio_service._matching_asio_device_index("Focusrite USB ASIO", "input") == 1)
         and (audio_service.preferred_input_device(None, "asio", "Focusrite USB ASIO") == 1)
-        and (audio_service.preferred_input_device(0, "asio", "Focusrite USB ASIO") == 0)
+        # A saved id (0) that is not actually on the ASIO host API -- e.g.
+        # left over from a previous "auto"/WASAPI driver selection -- must
+        # never be trusted for an ASIO session: it would make PortAudio
+        # recording open a different physical device than the one the native
+        # ASIO bridge is monitoring through. Re-matched to the real ASIO
+        # device (1) by name instead.
+        and (audio_service.preferred_input_device(0, "asio", "Focusrite USB ASIO") == 1)
         and (audio_service.preferred_output_device(1, "asio", None, "Focusrite USB ASIO") == 1)
-        and (audio_service.preferred_output_device(None, "asio", 0, None) == 0)
+        and (audio_service.preferred_output_device(None, "asio", 1, "Focusrite USB ASIO") == 1)
+        and (audio_service.preferred_output_device(None, "asio", 0, None) is None)
         and (audio_service.preferred_sample_rate(0) == 48000)
     )
 

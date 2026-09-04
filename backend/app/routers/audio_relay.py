@@ -2,8 +2,8 @@
 WebRTC room (see the DSP-unification plan, Task A). A pure byte-pump: it
 does not decode, transform, or make sense of the audio itself -- it only
 forwards whatever app.services.audio_service.subscribe_monitor_relay()
-hands it, re-encoded with the same wire format monitor_worker.py's
-RelayLink used to send it to audio_service in the first place.
+hands it, unchanged -- the exact bytes monitor_worker.py's RelayLink sent,
+never decoded and re-encoded along the way (see AudioRelayServer.Frame).
 """
 
 from __future__ import annotations
@@ -14,11 +14,11 @@ import hmac
 import logging
 import os
 import queue
+import threading
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.services import audio_service
-from app.services.audio_relay_protocol import encode_frame
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +58,40 @@ async def monitor_relay(websocket: WebSocket) -> None:
     relay, subscriber = subscription
     await websocket.accept()
 
-    async def pump_frames() -> None:
-        while True:
+    # One dedicated thread for this connection's whole lifetime, instead of
+    # asyncio.to_thread dispatching a fresh threadpool work item for every
+    # single relay frame (at RelayLink's ~5ms dry+wet chunking, hundreds of
+    # dispatches a second just to move a queued item onto the event loop).
+    # The thread only ever blocks on the plain queue.Queue and hands frames
+    # to the loop via call_soon_threadsafe; outgoing (a real asyncio.Queue)
+    # is what pump_frames() actually awaits.
+    loop = asyncio.get_running_loop()
+    outgoing: asyncio.Queue[bytes] = asyncio.Queue(maxsize=8)
+    stop_pulling = threading.Event()
+
+    def offer(frame: bytes) -> None:
+        try:
+            outgoing.put_nowait(frame)
+        except asyncio.QueueFull:
+            with contextlib.suppress(asyncio.QueueEmpty):
+                outgoing.get_nowait()
+            with contextlib.suppress(asyncio.QueueFull):
+                outgoing.put_nowait(frame)
+
+    def pull_frames() -> None:
+        while not stop_pulling.is_set():
             try:
-                stream_id, sample_rate, samples = await asyncio.to_thread(
-                    subscriber.get, True, _POLL_TIMEOUT_SECONDS
-                )
+                frame = subscriber.get(True, _POLL_TIMEOUT_SECONDS)
             except queue.Empty:
                 continue
-            await websocket.send_bytes(encode_frame(stream_id, sample_rate, samples))
+            loop.call_soon_threadsafe(offer, frame)
+
+    puller = threading.Thread(target=pull_frames, daemon=True)
+    puller.start()
+
+    async def pump_frames() -> None:
+        while True:
+            await websocket.send_bytes(await outgoing.get())
 
     async def wait_for_disconnect() -> None:
         with contextlib.suppress(WebSocketDisconnect):
@@ -78,6 +103,7 @@ async def monitor_relay(websocket: WebSocket) -> None:
     try:
         await asyncio.wait({pump_task, disconnect_task}, return_when=asyncio.FIRST_COMPLETED)
     finally:
+        stop_pulling.set()
         pump_task.cancel()
         disconnect_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):

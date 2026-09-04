@@ -361,8 +361,22 @@ function createWindow() {
     backend.suspendHardware().catch(() => {});
   });
   mainWindow.on("restore", () => {
-    mainWindow?.webContents.send("app:hardware-suspension-changed", false);
-    backend.resumeHardware().catch(() => {});
+    // The backend (native WASAPI/ASIO) and the renderer (its own independent
+    // getUserMedia, from every component that reacts to
+    // app:hardware-suspension-changed) previously both raced to reopen the
+    // same physical microphone at once with no ordering between them at
+    // all. There is no cheap way to know when every renderer-side consumer
+    // has finished reacquiring (there can be several, each async), so this
+    // cannot be a full handshake -- but backend.resumeHardware() resolving
+    // first at least means the more exclusive-prone side (ASIO drivers
+    // typically tolerate only one open stream) claims the device before the
+    // generally more tolerant shared-mode renderer capture follows.
+    backend
+      .resumeHardware()
+      .catch(() => {})
+      .finally(() => {
+        mainWindow?.webContents.send("app:hardware-suspension-changed", false);
+      });
   });
   mainWindow.on("maximize", scheduleWindowStatePersist);
   mainWindow.on("unmaximize", () => {
