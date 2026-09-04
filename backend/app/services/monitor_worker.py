@@ -136,7 +136,7 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
     quality = StudioMicrophoneProcessor(sample_rate, 1)
     pitch = RealtimePitchShifter(sample_rate)
     effects = MonitorEffectsChain(sample_rate)
-    def callback(indata, outdata, _frames, _time_info, status):
+    def callback(indata, outdata, _frames, time_info, status):
         compute_started = time.perf_counter()
         statistics["callback_frames"] = int(_frames)
         statistics["callback_count"] = statistics.get("callback_count", 0) + 1
@@ -167,11 +167,21 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
         )
         for channel in range(outdata.shape[1]): outdata[:, channel] = monitor_output
         rms, peak = float(np.sqrt(np.mean(np.square(processed)))) if len(processed) else 0.0, float(np.max(np.abs(processed))) if len(processed) else 0.0
+        # The real mic-to-speaker round trip, timestamped by the audio driver
+        # itself (ADC capture time vs. the DAC time this same block is
+        # scheduled to play at) -- covers the whole path including the DSP
+        # above, unlike the requested-buffer-size latency PortAudio reports
+        # at stream open. Not every host API fills both timestamps in, so
+        # this is None rather than a misleading 0 when they are missing.
+        adc_time = getattr(time_info, "inputBufferAdcTime", 0.0) or 0.0
+        dac_time = getattr(time_info, "outputBufferDacTime", 0.0) or 0.0
+        real_latency_ms = (dac_time - adc_time) * 1000 if adc_time and dac_time and dac_time > adc_time else None
         _level.update(
             {
                 "rms_db": round(20 * np.log10(rms) if rms > 0 else -120.0, 1),
                 "clipping": peak >= 0.99,
                 "silent": rms < 10 ** (-50 / 20),
+                "real_latency_ms": round(real_latency_ms, 3) if real_latency_ms is not None else None,
             }
         )
         statistics["dsp_compute_ms"] = round((time.perf_counter() - compute_started) * 1000, 3)

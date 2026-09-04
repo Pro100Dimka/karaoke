@@ -62,6 +62,33 @@ def test_variable_callback_frames_and_glitches_are_reported(monkeypatch):
     assert stats["dsp_compute_ms"] >= 0
 
 
+def test_real_latency_is_measured_from_driver_adc_and_dac_timestamps(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0, "echo": 0, "delay": 0, "octave": 0, "noise_suppression": 0})
+    callback = monitor_worker._audio_callback(1.0, 48000, {})
+    samples = np.full((64, 1), 0.1, dtype=np.float32)
+    output = np.empty((64, 2), dtype=np.float32)
+
+    # A real host API timestamp pair: the block was captured 12ms before "now"
+    # and is scheduled to play 3ms after "now" -- a 15ms round trip.
+    timing = SimpleNamespace(inputBufferAdcTime=100.0, currentTime=100.012, outputBufferDacTime=100.015)
+    callback(samples, output, 64, timing, None)
+    assert monitor_worker._level["real_latency_ms"] == pytest.approx(15.0, abs=0.001)
+
+
+def test_real_latency_is_unavailable_without_both_driver_timestamps(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0, "echo": 0, "delay": 0, "octave": 0, "noise_suppression": 0})
+    callback = monitor_worker._audio_callback(1.0, 48000, {})
+    samples = np.full((64, 1), 0.1, dtype=np.float32)
+    output = np.empty((64, 2), dtype=np.float32)
+
+    callback(samples, output, 64, None, None)
+    assert monitor_worker._level["real_latency_ms"] is None
+
+    # Some host APIs report only one of the two timestamps -- still unusable.
+    callback(samples, output, 64, SimpleNamespace(inputBufferAdcTime=5.0, outputBufferDacTime=0.0), None)
+    assert monitor_worker._level["real_latency_ms"] is None
+
+
 def test_each_mode_uses_only_its_selected_configuration():
     for mode in ("plain", "shared"):
         for block in (64, 128, 256, 512):

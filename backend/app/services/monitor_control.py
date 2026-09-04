@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 _STREAM_STATISTICS = ("callback_frames", "callback_count", "glitch_count", "queue_frames",
                       "queue_capacity_frames", "queue_underruns", "queue_dropped_frames",
                       "queue_contentions", "queue_ms", "queue_capacity_ms", "queue_underruns_after_start",
-                      "queue_wait_ms", "dsp_compute_ms", "stream_latency_ms",
+                      "queue_wait_ms", "dsp_compute_ms", "stream_latency_ms", "real_latency_ms",
                       "capture_delivery_ms", "program_residence_ms", "queue_residence_ms", "output_clock_lead_ms",
                       "render_submit_ms", "render_padding_ms", "capture_processing_ms", "event_wait_ms", "pump_gap_ms")
 
@@ -29,6 +29,7 @@ class MonitorControl:
         self.live = None
         self.thread = None
         self.latency_breakdown_logged_at = 0.0
+        self.real_latency_logged_at = 0.0
         self.status = {"state": "idle", "fallback_count": 0, "glitch_fallback_count": 0}
 
     def _begin(self, state, details):
@@ -98,26 +99,34 @@ class MonitorControl:
                 stream_latency = message.get("stream_latency_ms")
                 now = time.monotonic()
                 # Logged periodically (not just once) so a latency chase has an
-                # ongoing trail to compare against, not a single early sample
-                # that may not reflect steady-state behavior. Both the shared
-                # and the exclusive native engine report through this same
-                # "level" event -- match either, not just the shared name.
-                if (str(self.status.get("engine", "")).startswith("wasapi-native") and
+                # ongoing trail to compare against, not a single early sample.
+                if (self.status.get("engine") == "wasapi-native-shared" and
                         isinstance(stream_latency, (int, float)) and math.isfinite(stream_latency) and
                         stream_latency > 0 and now - self.latency_breakdown_logged_at >= 5.0):
                     logger.info(
-                        "WASAPI latency breakdown: engine=%s exclusive=%s stream_ms=%s capture_ms=%s "
-                        "program_ms=%s queue_ms=%s output_lead_ms=%s padding_ms=%s dsp_ms=%s "
-                        "input_period=%s@%s output_period=%s@%s underruns=%s discontinuities=%s",
-                        self.status.get("engine"), self.status.get("exclusive"),
+                        "WASAPI latency breakdown: stream_ms=%s capture_ms=%s program_ms=%s "
+                        "queue_ms=%s output_lead_ms=%s padding_ms=%s dsp_ms=%s "
+                        "input_period=%s@%s output_period=%s@%s",
                         stream_latency, message.get("capture_delivery_ms"), message.get("program_residence_ms"),
                         message.get("queue_residence_ms"), message.get("output_clock_lead_ms"),
                         message.get("render_padding_ms"), message.get("dsp_compute_ms"),
                         self.status.get("input_period_frames"), self.status.get("sample_rate"),
                         self.status.get("output_period_frames"), self.status.get("output_sample_rate"),
-                        message.get("queue_underruns"), message.get("glitch_count"),
                     )
                     self.latency_breakdown_logged_at = now
+                # The real, hardware-timestamped mic-to-speaker round trip
+                # (ADC capture time to DAC playback time, measured by the
+                # driver itself) -- covers every engine, not just the native
+                # WASAPI one, and reflects the full path through the DSP/
+                # effects chain instead of a requested-buffer-size estimate.
+                real_latency = message.get("real_latency_ms")
+                if (isinstance(real_latency, (int, float)) and math.isfinite(real_latency) and
+                        real_latency > 0 and now - self.real_latency_logged_at >= 5.0):
+                    logger.info(
+                        "Measured microphone-to-speaker latency: real_ms=%s engine=%s dsp_ms=%s",
+                        round(real_latency, 3), self.status.get("engine"), message.get("dsp_compute_ms"),
+                    )
+                    self.real_latency_logged_at = now
             if event == "started" and "buffer_size" in message:
                 # Normalize the existing ASIO bridge protocol without changing
                 # its command, callback, buffer selection or effects.
@@ -131,12 +140,12 @@ class MonitorControl:
                             message[f"{kind}_latency_ms"] = samples * 1000 / rate
             if event in {"started", "fallback"}:
                 for key in ("blocksize", "sample_rate", "mode", "engine", "driver", "fallback_driver", "latency", "latency_source", "input_latency_ms", "output_latency_ms",
-                            "output_sample_rate", "input_period_frames", "output_period_frames",
-                            "exclusive", "input_exclusive", "output_exclusive"):
+                            "output_sample_rate", "input_period_frames", "output_period_frames"):
                     if key in message:
                         self.status[key] = message[key]
                 if event == "started":
                     self.latency_breakdown_logged_at = 0.0
+                    self.real_latency_logged_at = 0.0
                     for key in _STREAM_STATISTICS:
                         self.status.pop(key, None)
                     self.status["state"] = "running"

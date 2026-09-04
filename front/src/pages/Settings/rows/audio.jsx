@@ -77,7 +77,27 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       )
     },
     {
-      md: 4,
+      md: 6,
+      type: "SelectField",
+      tag: "audio.asio_driver_name",
+      label: tr("settings.audio.audio_driver.label"),
+      onSave: audio.selectDriver,
+      options: audio.options?.drivers ?? []
+    },
+    {
+      md: 6,
+      type: "SelectField",
+      tag: "audio.buffer_size",
+      tooltip: tr("settings.audio.buffer_size.description"),
+      valueType: "number",
+      label: tr("settings.audio.buffer_size.label"),
+      options: [16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048].map((value) => ({
+        value,
+        label: value
+      }))
+    },
+    {
+      md: audio.wasapiExclusive ? 12 : 4,
       showFor: audio.wasapiExclusiveAvailable,
       render: () => (
         <Stack>
@@ -116,23 +136,6 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       variant: "caption",
       showFor: ["starting", "stopping"].includes(status?.state),
       text: tr(`settings.audio.monitor.status.${status?.state ?? "checking"}`)
-    },
-    {
-      md: 6,
-      type: "SelectField",
-      tag: "audio.asio_driver_name",
-      label: tr("settings.audio.audio_driver.label"),
-      onSave: audio.selectDriver,
-      options: audio.options?.drivers ?? []
-    },
-    {
-      md: 6,
-      type: "SelectField",
-      tag: "audio.buffer_size",
-      tooltip: tr("settings.audio.buffer_size.description"),
-      valueType: "number",
-      label: tr("settings.audio.buffer_size.label"),
-      options: [16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048].map((value) => ({ value, label: String(value) }))
     },
     {
       md: 12,
