@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -69,6 +70,11 @@ class RecordingOverflowError(RuntimeError):
 
 class RecordingSession:
     _WRITER_STOP = object()
+    # capture_signal() (an occasional Settings-panel poll) is the only reader
+    # of self._signal -- recomputing it with a handful of numpy reductions on
+    # every single realtime callback (hundreds of times a second at a small
+    # buffer) is pure waste on the audio thread.
+    _SIGNAL_INTERVAL_SEC = 0.08
 
     def __init__(
         self,
@@ -136,6 +142,7 @@ class RecordingSession:
         self._capture_error = None
         self._storage_reservations = storage_reservations or []
         self._signal = {"rms_db": -120.0, "clipping": False, "silent": True}
+        self._signal_reported_at = 0.0
         self.noise_suppression = clamp01(noise_suppression)
         self._quality = StudioMicrophoneProcessor(sample_rate, channels)
         self._pitch = RealtimePitchShifter(sample_rate)
@@ -293,6 +300,10 @@ class RecordingSession:
             self._capture_error = exc
 
     def _update_signal(self, samples):
+        now = time.perf_counter()
+        if now - self._signal_reported_at < self._SIGNAL_INTERVAL_SEC:
+            return
+        self._signal_reported_at = now
         import numpy as np
         rms = float(np.sqrt(np.mean(np.square(samples)))) if samples.size else 0.0
         self._signal = {"rms_db": round(20 * np.log10(rms), 1) if rms > 0 else -120.0,

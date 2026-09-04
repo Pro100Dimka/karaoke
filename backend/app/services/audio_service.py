@@ -789,7 +789,7 @@ def _send_live_update(payload: dict) -> None:
     recording_service.update_capture_controls(payload)
     if _monitor_effects_disabled:
         payload = {
-            key: (0.0 if key in {"reverb", "echo", "delay", "octave"} else value)
+            key: (0.0 if key in {"reverb", "echo", "delay", "octave", "noise_suppression"} else value)
             for key, value in payload.items()
         }
     with _monitor_lock:
@@ -869,7 +869,13 @@ def _configure_monitoring(settings, *, adopt_driver_buffer: bool = False) -> Non
                     "event": "fallback",
                     "cause": "asio-start",
                     "message": str(exc),
-                    "fallback_driver": settings.asio_driver_name,
+                    # Named for what they mean, not for the direction of the
+                    # switch: this is the driver the user asked for and that
+                    # just failed to start, not the one now running (that's
+                    # "auto"/shared -- the "started" event that follows fills
+                    # in engine/host_api/mode for whatever actually opened).
+                    "requested_driver": settings.asio_driver_name,
+                    "failed_driver": settings.asio_driver_name,
                 },
             )
             _start_shared_monitor(settings, driver="auto", relay_needed=_monitor_relay_needed)
@@ -942,9 +948,17 @@ def _start_shared_monitor(settings, *, driver: str, relay_needed: bool = False) 
         "octave": 0.0 if _monitor_effects_disabled else max(
             -1.0, min(1.0, float(getattr(settings, "octave", 0.0) or 0.0))
         ),
-        "noise_suppression": clamp01(
+        "noise_suppression": 0.0 if _monitor_effects_disabled else clamp01(
             settings.noise_suppression if settings.noise_suppression is not None else 0.35
         ),
+        # Nothing left in the DSP chain to justify the Python round-trip: a
+        # "no effects" monitoring session (the plain Settings "Мониторинг"
+        # toggle) and an explicit "listen to raw voice" check are the same
+        # request as far as the native engine is concerned, so both arm the
+        # C++ raw pass-through (Engine::raw_active) from the very first block
+        # instead of only after a later live update -- see
+        # _native_stream_target in monitor_worker.py.
+        "dry_monitor": 1.0 if (_monitor_effects_disabled or _monitor_dry_bypass) else 0.0,
         "wasapi_mode": wasapi_mode,
     }
     if wasapi:
@@ -1027,7 +1041,7 @@ def _start_asio_monitor(settings: models.AudioSettings, *, adopt_driver_buffer: 
         "--delay",
         str(0.0 if _monitor_effects_disabled else clamp01(settings.delay)),
         "--noise-suppression",
-        str(
+        str(0.0 if _monitor_effects_disabled else
             clamp01(settings.noise_suppression if settings.noise_suppression is not None else 0.35)
         ),
         "--octave",

@@ -427,7 +427,8 @@ def test_unusable_asio_driver_falls_back_to_shared_monitor(control, monkeypatch)
     shared.assert_called_once_with(current, driver="auto", relay_needed=False)
     status = control.snapshot()
     assert status["fallback_count"] == 1
-    assert status["fallback_driver"] == "Realtek ASIO"
+    assert status["requested_driver"] == "Realtek ASIO"
+    assert status["failed_driver"] == "Realtek ASIO"
     assert "full-duplex" in status["fallback_reason"]
 
 

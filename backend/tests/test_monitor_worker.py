@@ -182,7 +182,7 @@ def test_main_seeds_live_params_from_config_and_starts_reader_thread(monkeypatch
     stream = Mock()
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
 
-    assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7, 'noise_suppression': 0.35, 'octave': 0.0, 'volume': 2.0}) and (thread_started.is_set())
+    assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7, 'noise_suppression': 0.35, 'octave': 0.0, 'volume': 2.0, 'dry_monitor': 0.0}) and (thread_started.is_set())
     capsys.readouterr()
 
 
@@ -329,11 +329,16 @@ def test_main_emits_level_while_running(monkeypatch, capsys):
             return False
 
     patch_attrs(monkeypatch, monitor_worker.threading, Event=Event, Thread=Mock())
+    # Thread is mocked out above (same as the live-update reader), so the
+    # separate reporter thread never actually drains this -- it stays off
+    # the realtime pump loop deliberately, see _queue_report's docstring.
+    monkeypatch.setattr(monitor_worker, "_report_queue", monitor_worker.queue.Queue(maxsize=1))
     stream = Mock()
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
     assert monitor_worker.main() == 0
     events = [json.loads(line)["event"] for line in capsys.readouterr().out.splitlines()]
-    assert events == ["stage", "stage", "stage", "started", "level"]
+    assert events == ["stage", "stage", "stage", "started"]
+    assert monitor_worker._report_queue.get_nowait()["event"] == "level"
 
 
 def test_main_finalizer_suppresses_stream_cleanup_failure(monkeypatch, capsys):

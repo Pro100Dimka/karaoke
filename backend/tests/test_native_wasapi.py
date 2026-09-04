@@ -278,6 +278,32 @@ def test_native_raw_mode_is_armed_only_without_a_relay(monkeypatch, dll, capsys)
     capsys.readouterr()
 
 
+def test_native_raw_mode_is_armed_at_startup_when_requested_by_config(monkeypatch, dll, capsys):
+    # A "no effects" Settings monitoring session (or an already-on "listen to
+    # raw voice" check) has nothing for the Python DSP chain to do, so it
+    # should arm the native raw pass-through from the very first block --
+    # not only after a live update arrives later over stdin (which this test
+    # never even starts a thread for, via the mocked-out Thread below).
+    import json
+    import sys
+    config = {**options(), "sample_rate": 48000, "input_device_id": 1, "output_device_id": 2,
+              "output_channels": 2, "gain": 1, "wasapi_mode": "shared", "native_shared": True,
+              "dry_monitor": 1}
+    monkeypatch.setattr(sys, "argv", ["monitor_worker", "--config", json.dumps(config)])
+    monkeypatch.setattr(monitor_worker, "_running", True)
+    monkeypatch.setattr(monitor_worker.threading, "Thread", Mock())
+    monkeypatch.setattr(monitor_worker, "_audio_callback", Mock(return_value=Mock()))
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(side_effect=AssertionError("must not fall back")))
+
+    def pump(*args):
+        monitor_worker._running = False
+        return 1
+    dll.wm_pump.side_effect = pump
+    assert monitor_worker.main() == 0
+    dll.wm_set_raw.assert_called_once_with(42, 1)
+    capsys.readouterr()
+
+
 def test_native_raw_mode_is_never_armed_when_a_relay_is_attached(monkeypatch, dll, capsys):
     import json
     import sys

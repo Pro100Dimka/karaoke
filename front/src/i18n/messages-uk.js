@@ -824,5 +824,6 @@ export const ukMessages = {
   "room.effects.title": "Ефекти мікрофона",
   "room.effects.participant": "Ефекти мікрофона {0}",
   "room.effects.locked": "Користувач заборонив змінювати свої ефекти",
-  "settings.audio.monitor.status.idle": "Вимкнено"
+  "settings.audio.monitor.status.idle": "Вимкнено",
+  "settings.audio.monitor.asioFallback": "ASIO-драйвер «{0}» не запустився, використовується звичайний звук Windows: {1}"
 };

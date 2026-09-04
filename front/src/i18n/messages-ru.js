@@ -826,5 +826,6 @@ export const ruMessages = {
   "room.effects.title": "Эффекты микрофона",
   "room.effects.participant": "Эффекты микрофона {0}",
   "room.effects.locked": "Пользователь запретил изменять свои эффекты",
-  "settings.audio.monitor.status.idle": "Выключено"
+  "settings.audio.monitor.status.idle": "Выключено",
+  "settings.audio.monitor.asioFallback": "ASIO-драйвер «{0}» не запустился, используется обычный звук Windows: {1}"
 };

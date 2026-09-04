@@ -87,6 +87,32 @@ def test_analysis_filters_invalid_frames_and_calculates_sections(monkeypatch, tm
     ) == (28.6, 100.0, 100.0, 65.5)
 
 
+def test_precise_pitch_gives_real_semitone_tolerance_instead_of_exact_match(monkeypatch, tmp_path):
+    # The reference note is 61, but the frame's *displayed* midi already
+    # rounded down to 60 (Python's round-half-to-even on exactly 60.5).
+    # Comparing the rounded integers would always miss here (deviation 1,
+    # against a 0.5 ceiling) even though the singer's actual pitch was only
+    # 50 cents flat -- exactly the tolerance the constant claims to allow.
+    freq = 440 * 2 ** ((60.5 - 69) / 12)
+    recording, reference, frames = (
+        models.Recording(song_id='song', filename='take.wav', path='take.wav'),
+        [{'start': 0, 'end': 1, 'note': 61}],
+        [{'time': 0.2, 'midi': 60, 'freq': freq}],
+    )
+    patch_many(
+        monkeypatch,
+        (analysis_service.song_service, "resolve_output_dir", lambda _song: tmp_path),
+        (analysis_service.ai_bridge, "get_reference_notes", lambda _path: reference),
+        (analysis_service, "read_json", lambda _path: []),
+        (analysis_service.ai_bridge, "analyze_vocal", lambda _p: frames),
+    )
+
+    result = analysis_service.analyze_recording(recording, domain_song(str(tmp_path)))
+
+    assert result['pitch_accuracy_percent'] == 100.0
+    assert result['mean_deviation_semitones'] == pytest.approx(0.5, abs=1e-3)
+
+
 def test_analysis_tolerates_a_corrupted_structure_json(monkeypatch, tmp_path):
     # Regression test: analyze_recording used to call read_json(structure.json)
     # unguarded, unlike the equivalent read in pipeline_service.py

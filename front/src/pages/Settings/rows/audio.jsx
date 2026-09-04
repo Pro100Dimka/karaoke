@@ -120,6 +120,22 @@ export default function rows({ settings: { audio }, run, tr = translateSaved }) 
       text: status?.error
     },
     {
+      md: 12,
+      type: "Label",
+      role: "alert",
+      variant: "caption",
+      // A failed ASIO driver silently falls back to shared Windows audio
+      // (see configure_monitoring's "fallback" event) -- without this, the
+      // driver dropdown still shows the ASIO choice while the app is
+      // actually running on a completely different audio path, and any
+      // latency comparison against it is meaningless.
+      showFor: running && !!status?.failed_driver,
+      text: tr("settings.audio.monitor.asioFallback", {
+        0: status?.failed_driver,
+        1: status?.fallback_reason || ""
+      })
+    },
+    {
       type: "Label",
       role: "alert",
       variant: "caption",

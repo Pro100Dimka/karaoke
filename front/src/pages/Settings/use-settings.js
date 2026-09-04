@@ -10,6 +10,7 @@ import { AUDIO_SETTINGS_CHANGED_EVENT } from "../../utils/audioSettingsEvents";
 import { getErrorMessage } from "../../utils/errors";
 import { getLightingStatus } from "../../utils/platform";
 import { applyTheme } from "../../utils/theme";
+import { findMatchingBrowserOutput } from "../Karaoke/utils/audio-settings";
 import { createInputDeviceOptions, createOutputDeviceOptions } from "../Karaoke/utils/devices";
 
 const MME_SENTINEL = "mme";
@@ -30,11 +31,38 @@ function useQueue() {
   };
 }
 
-async function testSpeaker() {
+// Settings only knows the user's chosen output as a native device index
+// (output_device_id); the browser's own device list uses a completely
+// different id space, so the two must be matched by device name -- the same
+// approach the Karaoke screen already uses for its own output routing (see
+// useAudioOutputRouting.js).
+async function resolveOutputSinkId(outputDeviceId, outputDevices) {
+  const selected = (Array.isArray(outputDevices) ? outputDevices : []).find(
+    ({ index }) => String(index) === String(outputDeviceId)
+  );
+  const devices = globalThis.navigator?.mediaDevices;
+  if (outputDeviceId == null || outputDeviceId === "" || !selected || typeof devices?.enumerateDevices !== "function") {
+    return "";
+  }
+  try {
+    const entries = await devices.enumerateDevices();
+    return findMatchingBrowserOutput(entries, selected)?.deviceId || "";
+  } catch {
+    return "";
+  }
+}
+
+async function testSpeaker(sinkId) {
   const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!Audio) return false;
 
   const context = new Audio({ latencyHint: "interactive" });
+  // Without this, the test tone always plays on the system default output
+  // regardless of which device is actually selected here -- silently
+  // "testing" the wrong speakers whenever they differ.
+  if (sinkId && typeof context.setSinkId === "function") {
+    await context.setSinkId(sinkId).catch(() => {});
+  }
   const tone = context.createOscillator();
   const gain = context.createGain();
 
@@ -85,7 +113,6 @@ function useAudio(open) {
   const settings = useOpenPoll(open, api.getAudioSettings, POLL.settings, null);
   const inputs = useOpenPoll(open, api.listAudioDevices, POLL.devices, []);
   const outputs = useOpenPoll(open, api.listAudioOutputDevices, POLL.devices, []);
-  const signal = useOpenPoll(open, api.getSignalQuality, POLL.realtimeSignal, null);
   const monitorStatus = useOpenPoll(open, api.getDirectMonitorStatus, 750, null);
   // The ASIO driver's own control panel can change the buffer out from
   // under a running monitor (e.g. ASIO4ALL/an interface's mixer app); the
@@ -114,6 +141,11 @@ function useAudio(open) {
   // stop/restart of monitoring itself.
   const [dryMonitor, setDryMonitorState] = useState(false);
   const values = { ...settings.data, ...local };
+  // The level meter only ever renders while monitoring is on (see `level`
+  // below) -- polling this while it's off used to open the microphone for a
+  // real sd.rec()/sd.wait() capture every cycle purely to throw the result
+  // away as a hardcoded 0.
+  const signal = useOpenPoll(open && !!values.monitoring_enabled, api.getSignalQuality, POLL.realtimeSignal, null);
   const asio = useOpenPoll(open, api.listAsioDrivers, POLL.devices, []);
   const fail = (key, error) => alert(tr(key, { 0: getErrorMessage(error) }));
   const merge = (patch) => setLocal((state) => ({ ...state, ...patch }));
@@ -184,7 +216,8 @@ function useAudio(open) {
     if (busy) return;
     setBusy(true);
     try {
-      await testSpeaker();
+      const sinkId = await resolveOutputSinkId(values.output_device_id, outputs.data);
+      await testSpeaker(sinkId);
     } catch (error) {
       await fail("settings.failedToCheckSpeakers", error);
     } finally {

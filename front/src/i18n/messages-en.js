@@ -819,5 +819,6 @@ export const enMessages = {
   "room.effects.title": "Microphone effects",
   "room.effects.participant": "Microphone effects for {0}",
   "room.effects.locked": "User has disabled changes to their effects",
-  "settings.audio.monitor.status.idle": "Disabled"
+  "settings.audio.monitor.status.idle": "Disabled",
+  "settings.audio.monitor.asioFallback": "ASIO driver \"{0}\" failed to start, so shared Windows audio is being used instead: {1}"
 };

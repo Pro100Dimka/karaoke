@@ -3,7 +3,7 @@
 push() is called from the realtime PortAudio/WASAPI callback thread and must
 never block or perform network I/O itself -- samples are copied into a small
 preallocated per-stream accumulator, and only a fully accumulated chunk
-(~15ms) is ever handed off, as an already-encoded bytes object, to a bounded
+(~5ms) is ever handed off, as an already-encoded bytes object, to a bounded
 queue. All actual socket I/O (including the initial connect) runs on a
 separate thread, so a slow or unavailable relay server can never add latency
 to the audio callback or to monitor_worker.py's startup sequence.
@@ -20,7 +20,13 @@ import numpy as np
 
 from .audio_relay_protocol import encode_frame
 
-_CHUNK_SECONDS = 0.015
+# A room duet is two-way live singing, not one-way speech -- every chunk here
+# is latency the other participant hears added on top of the network/WebRTC
+# path, in both directions. 15ms (a comfortable margin for plain speech) was
+# audible as extra lag; 5ms costs more, smaller socket writes for the same
+# audio but keeps this accumulator's own contribution close to a single
+# audio block instead of a noticeable chunk of the whole budget.
+_CHUNK_SECONDS = 0.005
 _QUEUE_MAXSIZE = 8
 
 

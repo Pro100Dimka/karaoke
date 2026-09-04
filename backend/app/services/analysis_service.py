@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import bisect
 import json
+import math
 import statistics
 from dataclasses import dataclass
 from typing import Any
 
 import models
+from AI.notes import hz_to_midi
 from app.services import ai_bridge, song_service
 from app.utils.json_files import read_json
 
@@ -108,6 +110,13 @@ def _to_midi(value: object) -> int | None:
 
     accidental_offset = 1 if accidental == "#" else -1 if accidental == "b" else 0
     return (octave + 1) * 12 + _NOTE_OFFSETS[letter] + accidental_offset
+
+
+def _precise_midi(frame: dict[str, Any], fallback: int) -> float:
+    freq = frame.get("freq") if isinstance(frame.get("freq"), (int, float)) else frame.get("frequency")
+    if not isinstance(freq, (int, float)) or freq <= 0: return float(fallback)
+    midi = hz_to_midi(freq)
+    return midi if math.isfinite(midi) else float(fallback)
 
 
 def _normalized_reference_notes(reference_notes: list[dict[str, Any]]) -> list[dict[str, float | int]]:
@@ -241,9 +250,17 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict[st
         voiced_frames.append((song_time, user_midi))
         reference_midi = reference_index.note_at(song_time)
         if reference_midi is None: continue
-        deviation = abs(user_midi - reference_midi)
+        # Compare against the un-rounded pitch, not the display-rounded
+        # "midi"/"note" fields: those are already quantized to the nearest
+        # semitone, so a deviation between two rounded integers can only ever
+        # land on a whole number and _HIT_TOLERANCE_SEMITONES (0.5) becomes an
+        # exact-match-only test with no tolerance at all. The reference note
+        # itself stays quantized -- it names a discrete target note -- only
+        # the singer's actual pitch needs sub-semitone precision.
+        precise_midi = _precise_midi(frame, user_midi)
+        deviation = abs(precise_midi - reference_midi)
         deviations.append(deviation)
-        frames.append({"time": song_time, "deviation_semitones": deviation})
+        frames.append({"time": song_time, "deviation_semitones": round(deviation, 3)})
         hits += deviation <= _HIT_TOLERANCE_SEMITONES
 
     accuracy, mean_deviation, sections = round(hits / len(deviations) * 100, 1) if deviations else None, round(statistics.fmean(deviations), 3) if deviations else None, _sections_breakdown(structure, frames) if isinstance(structure, list) else None

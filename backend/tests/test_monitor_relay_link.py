@@ -29,24 +29,25 @@ def test_push_accumulates_and_flushes_a_full_chunk_once_the_threshold_is_reached
     client = None
     try:
         server.settimeout(2.0)
-        link = RelayLink(port, sample_rate=1000.0)  # chunk = round(1000 * 0.015) = 15 samples
+        link = RelayLink(port, sample_rate=1000.0)  # chunk = round(1000 * 0.005) = 5 samples
         client, _ = server.accept()
         client.settimeout(2.0)
         assert wait_until(lambda: link.connected)
 
+        # 20 samples over a 5-sample chunk flushes exactly 4 full chunks.
         link.push(STREAM_DRY, 1000.0, np.ones(20, dtype=np.float32))
 
         reader = FrameReader()
         frames: list = []
         deadline = time.monotonic() + 2.0
-        while time.monotonic() < deadline and not frames:
+        while time.monotonic() < deadline and len(frames) < 4:
             reader.feed(client.recv(4096))
-            frames = reader.pop_frames()
-        assert frames
+            frames.extend(reader.pop_frames())
+        assert len(frames) == 4
         stream_id, sample_rate, decoded = frames[0]
         assert stream_id == STREAM_DRY
         assert sample_rate == 1000.0
-        assert len(decoded) == 15
+        assert len(decoded) == 5
     finally:
         if link is not None:
             link.close()

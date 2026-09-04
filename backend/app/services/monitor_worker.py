@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import queue
 import signal
 import sys
 import threading
@@ -40,7 +41,11 @@ from app.services.wasapi_monitor_stream import WasapiMonitorStream  # noqa: E402
 
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
-_live_lock = threading.Lock()
+# Read every audio block by the realtime callback with no lock: only ever
+# replaced wholesale (never mutated in place) by the single stdin-reader
+# thread, so a lock would only ever protect the callback from a torn read
+# that CPython's atomic name rebinding already rules out -- see
+# _read_live_updates.
 _live_params = {
     "volume": 1.0, "reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35, "octave": 0.0,
     "dry_monitor": 0.0,
@@ -84,6 +89,26 @@ def _stream_candidates(options: dict) -> list[dict]:
 
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
 
+# The native WASAPI engine's pump loop runs on the same OS thread that
+# Engine::start() gave MMCSS "Pro Audio" realtime priority (see monitor.cpp)
+# -- a stdout print (JSON-encode + a flushing syscall) interleaved into that
+# loop every ~100ms runs *on* the realtime thread, right between audio
+# pumps. _queue_report hands the payload to a plain-priority thread instead;
+# put/get are pure Python object shuffling, cheap enough for the pump loop.
+_report_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1)
+
+
+def _queue_report(payload: dict) -> None:
+    with contextlib.suppress(queue.Empty):
+        _report_queue.get_nowait()  # drop a stale report rather than delay this one
+    with contextlib.suppress(queue.Full):
+        _report_queue.put_nowait(payload)
+
+
+def _report_loop() -> None:
+    while True:
+        _emit(_report_queue.get())
+
 
 def _stream_diagnostics(stream, candidate, options, mode):
     result = {
@@ -107,6 +132,7 @@ def _stop(_signum: int, _frame: object) -> None:
 
 
 def _read_live_updates() -> None:
+    global _live_params
     try:
         for line in sys.stdin:
             line = line.strip()
@@ -115,10 +141,11 @@ def _read_live_updates() -> None:
                 update = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            with _live_lock:
-                for key in ("volume", "reverb", "echo", "delay", "noise_suppression", "octave", "dry_monitor"):
-                    if key in update: _live_params[key] = float(update[key])
-                volume, dry_monitor = _live_params.get("volume", 1.0), _live_params.get("dry_monitor", 0.0) >= 0.5
+            next_params = dict(_live_params)
+            for key in ("volume", "reverb", "echo", "delay", "noise_suppression", "octave", "dry_monitor"):
+                if key in update: next_params[key] = float(update[key])
+            _live_params = next_params  # atomic rebind -- see module docstring above
+            volume, dry_monitor = next_params.get("volume", 1.0), next_params.get("dry_monitor", 0.0) >= 0.5
             target = _native_stream_target
             stream = target["stream"]
             if stream is not None:
@@ -150,16 +177,16 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
         statistics["callback_count"] = statistics.get("callback_count", 0) + 1
         if status:
             statistics["glitch_count"] = statistics.get("glitch_count", 0) + 1
-        with _live_lock:
-            live_gain, reverb, echo, delay, noise_suppression, octave, dry_monitor = (
-                _live_params.get("volume", gain),
-                _live_params["reverb"],
-                _live_params["echo"],
-                _live_params["delay"],
-                _live_params.get("noise_suppression", 0.35),
-                _live_params.get("octave", 0.0),
-                _live_params.get("dry_monitor", 0.0) >= 0.5,
-            )
+        params = _live_params  # one atomic read of the current snapshot, no lock
+        live_gain, reverb, echo, delay, noise_suppression, octave, dry_monitor = (
+            params.get("volume", gain),
+            params["reverb"],
+            params["echo"],
+            params["delay"],
+            params.get("noise_suppression", 0.35),
+            params.get("octave", 0.0),
+            params.get("dry_monitor", 0.0) >= 0.5,
+        )
         processed = quality.process(indata[:, :1], live_gain, noise_suppression)[:, 0]
         dry = pitch.process(processed, octave)
         processed = effects.process(dry, reverb, echo, delay)
@@ -205,18 +232,22 @@ def _audio_callback(gain: float, sample_rate: float = 44_100, statistics=None, r
 
 
 def main() -> int:
+    global _live_params
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     options = json.loads(parser.parse_args().config)
     gain = float(options["gain"])
-    with _live_lock:
-        _live_params["volume"] = gain
-        _live_params["reverb"] = float(options.get("reverb", 0.0))
-        _live_params["echo"] = float(options.get("echo", 0.0))
-        _live_params["delay"] = float(options.get("delay", 0.0))
-        _live_params["noise_suppression"] = float(options.get("noise_suppression", 0.35))
-        _live_params["octave"] = float(options.get("octave", 0.0))
+    _live_params = {
+        "volume": gain,
+        "reverb": float(options.get("reverb", 0.0)),
+        "echo": float(options.get("echo", 0.0)),
+        "delay": float(options.get("delay", 0.0)),
+        "noise_suppression": float(options.get("noise_suppression", 0.35)),
+        "octave": float(options.get("octave", 0.0)),
+        "dry_monitor": float(options.get("dry_monitor", 0.0)),
+    }
     threading.Thread(target=_read_live_updates, daemon=True).start()
+    threading.Thread(target=_report_loop, daemon=True).start()
 
     failed = threading.Event()
     statistics = {"glitch_count": 0}
@@ -291,6 +322,9 @@ def main() -> int:
         is_native = chosen_engine == "wasapi-native-shared"
         _native_stream_target["stream"] = stream if is_native else None
         _native_stream_target["raw_eligible"] = is_native and relay is None
+        if _native_stream_target["raw_eligible"] and _live_params.get("dry_monitor", 0.0) >= 0.5:
+            with contextlib.suppress(Exception):
+                stream.set_raw(True)
         _emit({"event": "started", **details})
         reported = time.monotonic()
         while _running and not failed.is_set():
@@ -301,7 +335,7 @@ def main() -> int:
                 reported = time.monotonic()
             elif failed.wait(.1):
                 break
-            _emit({"event": "level", **_level, **statistics})
+            _queue_report({"event": "level", **_level, **statistics})
         if failed.is_set():
             raise RuntimeError(statistics.get("callback_error", "Monitoring callback failed; selected settings were not changed"))
     except Exception as exc:  # The parent converts this into a friendly API error.

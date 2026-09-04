@@ -2,7 +2,15 @@
 // back Float32 sample chunks delivered over the microphone relay WebSocket
 // (see audio_relay_protocol.py on the backend) as they arrive via
 // port.onmessage, instead of the usual microphone-driven audio graph input.
-const MAX_QUEUED_SAMPLES = 48_000; // ~1s at 48kHz -- a generous backlog cap
+// A live duet is two people singing together, not a podcast -- letting the
+// backlog climb toward a full second (the previous 48,000-sample cap) means
+// the room partner hears the singer's voice up to ~1s late before this ever
+// starts dropping anything. Losing a little audio to a brief stall is far
+// less disruptive to live singing than that much added lag, so the cap is
+// deliberately tight and computed from the worklet's actual sample rate
+// rather than assuming 48kHz.
+const MAX_QUEUED_SECONDS = 0.1;
+const MAX_QUEUED_SAMPLES = Math.round(sampleRate * MAX_QUEUED_SECONDS);
 
 class RelayPlaybackProcessor extends AudioWorkletProcessor {
   constructor() {

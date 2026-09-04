@@ -240,6 +240,7 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
                 "delay": 0.0,
                 "octave": 0.0,
                 "noise_suppression": 0.35,
+                "dry_monitor": 0.0,
             "wasapi_mode": "shared",
             "native_shared": True,
             "input_device_name": "Selected microphone",
@@ -251,8 +252,12 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         settings(monitoring_enabled=True, reverb=0.8, echo=0.7, delay=0.6)
     )
     disabled = worker.call_args.args[0]
+    # "No effects" monitoring has nothing left for the Python DSP chain to
+    # do, so it arms the native raw pass-through from the first block
+    # instead of only after a later live update.
     assert (disabled["reverb"], disabled["echo"], disabled["delay"]) == (0.0, 0.0, 0.0)
-    assert disabled["noise_suppression"] == 0.35
+    assert disabled["noise_suppression"] == 0.0
+    assert disabled["dry_monitor"] == 1.0
 
     devices[2]["max_output_channels"] = 0
     raises(RuntimeError, lambda: audio_service.configure_monitoring(settings(monitoring_enabled=True)), match='No output')
@@ -281,9 +286,17 @@ def test_asio_monitor_validates_bridge_driver_and_clamps_command(monkeypatch, tm
     )
     command = launch.call_args.args[0]
     assert (command[command.index('--gain') + 1] == '4.0') and (command[command.index('--reverb') + 1] == '1.0') and (command[command.index('--echo') + 1] == '0.0') and (command[command.index('--octave') + 1] == '0.0')
+    assert command[command.index('--noise-suppression') + 1] == '0.35'
     assert launch.call_args.kwargs["cwd"] == tmp_path
     assert callable(launch.call_args.kwargs["on_driver_reset"])
     assert launch.call_args.kwargs["on_buffer_negotiated"] is None
+
+    monkeypatch.setattr(audio_service, "_monitor_effects_disabled", True)
+    audio_service._start_asio_monitor(
+        settings(audio_driver="asio", asio_driver_name="Studio ASIO", noise_suppression=0.8)
+    )
+    disabled_command = launch.call_args.args[0]
+    assert disabled_command[disabled_command.index('--noise-suppression') + 1] == '0.0'
 
 
 def test_asio_reset_restart_closure_holds_a_detached_snapshot_not_the_live_row(monkeypatch, tmp_path):

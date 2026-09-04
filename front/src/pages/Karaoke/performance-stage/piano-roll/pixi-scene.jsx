@@ -68,11 +68,13 @@ function RollGraphics({
 
       g.lineStyle(2.2, palette.hover).moveTo(playhead, 0).lineTo(playhead, frame.height);
 
-      if (isPitchDetected && Number.isFinite(sung) && sung >= frame.min && sung <= frame.max) {
-        g.lineStyle(2, palette.success)
-          .beginFill(palette.text)
-          .drawCircle(playhead, frame.y(sung) + rowHeight / 2, Math.max(3, rowHeight * 0.2))
-          .endFill();
+      if (isPitchDetected && Number.isFinite(sung)) {
+        const radius = Math.max(3, rowHeight * 0.2);
+        // Pin the dot to the nearest edge instead of hiding it when the singer
+        // strays outside the melody's note range -- an octave slip or a
+        // genuinely off-pitch note should still show *something*, not vanish.
+        const dotY = clamp(frame.y(sung) + rowHeight / 2, radius, frame.height - radius);
+        g.lineStyle(2, palette.success).beginFill(palette.text).drawCircle(playhead, dotY, radius).endFill();
       }
     },
     [notes, size, range, palette, sung, isPitchDetected]

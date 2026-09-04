@@ -13,8 +13,6 @@ export function drawPianoRoll(ctx, frame, palette, pitch = {}) {
     lane,
     rowHeight,
     playhead,
-    min,
-    max,
     time,
     y,
     notes = [],
@@ -81,9 +79,14 @@ export function drawPianoRoll(ctx, frame, palette, pitch = {}) {
   ctx.lineTo(playhead, height);
   ctx.stroke();
 
-  if (pitch.detected && Number.isFinite(pitch.midi) && pitch.midi >= min && pitch.midi <= max) {
+  if (pitch.detected && Number.isFinite(pitch.midi)) {
+    const radius = Math.max(3, rowHeight * 0.2);
+    // Pin the dot to the nearest edge instead of hiding it when the singer
+    // strays outside the melody's note range -- an octave slip or a genuinely
+    // off-pitch note should still show *something*, not vanish silently.
+    const dotY = clamp(y(pitch.midi) + center, radius, height - radius);
     ctx.beginPath();
-    ctx.arc(playhead, y(pitch.midi) + center, Math.max(3, rowHeight * 0.2), 0, Math.PI * 2);
+    ctx.arc(playhead, dotY, radius, 0, Math.PI * 2);
     ctx.fillStyle = palette.text;
     ctx.strokeStyle = palette.success;
     ctx.shadowColor = palette.success;
