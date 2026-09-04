@@ -97,5 +97,82 @@ function playRoomSound(direction) {
   }
 }
 
+// An unexpected drop (not a voluntary leaveRoom()) gets its own, more
+// mournful cue -- a descending "wah-wah" horn, in the spirit of the classic
+// voice-chat disconnect sound, played entirely from oscillators (no sampled
+// audio, so there is nothing here that could carry someone else's recording).
+function playDisconnectHornSound() {
+  const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AudioContext || typeof AudioContext.prototype?.createOscillator !== "function") return false;
+  let context;
+  try {
+    context = new AudioContext({ latencyHint: "interactive" });
+    const master = context.createGain();
+    master.gain.setValueAtTime(0.09, context.currentTime);
+    master.connect(context.destination);
+
+    const wave = context.createPeriodicWave?.(
+      new Float32Array(6),
+      new Float32Array([0, 1, 0.46, 0.27, 0.14, 0.06])
+    );
+    // Two brassy "wah" swoops, the second lower and slower -- the descending
+    // pair reads as sadder than either one alone.
+    const swoops = [
+      { start: 311.13, end: 220.0, at: 0, duration: 0.34 },
+      { start: 246.94, end: 146.83, at: 0.32, duration: 0.55 }
+    ];
+    const tones = [];
+    for (const { start, end, at, duration } of swoops) {
+      const beginAt = context.currentTime + at;
+      const endAt = beginAt + duration;
+
+      const tone = context.createOscillator();
+      if (wave && typeof tone.setPeriodicWave === "function") tone.setPeriodicWave(wave);
+      else tone.type = "sawtooth";
+      setAudioParam(tone.frequency, start, beginAt);
+      bendAudioParam(tone.frequency, end, endAt);
+
+      const filter = context.createBiquadFilter?.();
+      const envelope = context.createGain();
+      envelope.gain.setValueAtTime(0.0001, beginAt);
+      envelope.gain.exponentialRampToValueAtTime(1, beginAt + 0.04);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, endAt);
+
+      if (filter) {
+        filter.type = "lowpass";
+        setAudioParam(filter.frequency, 1400, beginAt);
+        bendAudioParam(filter.frequency, 420, endAt);
+        setAudioParam(filter.Q, 2.2, beginAt);
+        tone.connect(filter);
+        filter.connect(envelope);
+      } else {
+        tone.connect(envelope);
+      }
+      envelope.connect(master);
+
+      tone.start(beginAt);
+      tone.stop(endAt + 0.05);
+      tones.push(tone);
+    }
+    Promise.all(
+      tones.map(
+        (tone) =>
+          new Promise((resolve) => {
+            tone.onended = () => {
+              tone.onended = null;
+              resolve();
+            };
+          })
+      )
+    ).then(() => context.close?.()).catch(() => undefined);
+    context.resume?.()?.catch?.(() => undefined);
+    return true;
+  } catch {
+    Promise.resolve(context?.close?.()).catch(() => undefined);
+    return false;
+  }
+}
+
 export const playParticipantJoinedSound = () => playRoomSound("join");
 export const playParticipantLeftSound = () => playRoomSound("leave");
+export const playConnectionLostSound = () => playDisconnectHornSound();

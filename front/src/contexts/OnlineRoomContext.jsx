@@ -25,7 +25,11 @@ import useOnlineRoomParticipantControls from "./hooks/useOnlineRoomParticipantCo
 import useOnlineRoomValue from "./hooks/useOnlineRoomValue";
 import useSpeakingLevels from "./hooks/useSpeakingLevels";
 import { requestSongSync as requestLibrarySong } from "./onlineRoomActions";
-import { playParticipantJoinedSound, playParticipantLeftSound } from "./onlineRoomChime";
+import {
+  playConnectionLostSound,
+  playParticipantJoinedSound,
+  playParticipantLeftSound
+} from "./onlineRoomChime";
 import { normalizeParticipantEffects, normalizeParticipantEffectPatch } from "./onlineRoomEffects";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 import { createVoiceMeshHandlers } from "./onlineRoomVoiceHandlers";
@@ -384,7 +388,7 @@ export function OnlineRoomProvider({ children }) {
               });
           },
           onConnectionClosed: (message = translateSaved("room.theConnectionToTheRoomIsLost")) => {
-            if (roomRef.current && !roomSoundMutedRef.current) playParticipantLeftSound();
+            if (roomRef.current && !roomSoundMutedRef.current) playConnectionLostSound();
             connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
             cleanupConnection();

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import useLatestRef from "../../../hooks/useLatestRef";
 import { createRoomSyncChannel } from "../../../services/roomSyncChannel";
-import { createPlayerSyncCommand } from "../utils/transport";
+import {
+  classifyDrift,
+  createPlayerSyncCommand,
+  driftCorrectedRate,
+  normalizePlaybackRate
+} from "../utils/transport";
 import { formatError } from "../utils/recordingSession";
 
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);

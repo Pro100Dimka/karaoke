@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { translateSaved as t } from "../../../i18n/runtime";
 import { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
@@ -12,6 +12,12 @@ export { createRoomVoiceCapture } from "../../../services/roomVoiceCapture";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 const safe = (task, fallback = null) => Promise.resolve().then(task).catch(() => fallback);
+// The capture device's sample clock and the instrumental's playback clock are
+// independent hardware clocks that drift apart over a take -- a single sync
+// anchor at the start isn't enough. Periodic re-anchoring bounds that drift
+// to whatever accumulates within one interval, using the same multi-segment
+// mechanism already applied on speed changes and seeks.
+const RESYNC_INTERVAL_MS = 5000;
 
 function useEvent(handler) {
   const ref = useRef(handler);
@@ -124,6 +130,17 @@ export default function useKaraokeTransport({
     beginOperation,
     roomCaptureRef
   });
+
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    const interval = setInterval(() => {
+      const id = sessionRef.current;
+      const instrumental = instrumentalRef.current;
+      if (!id || !instrumental) return;
+      syncRecording(id, instrumental.currentTime, speed).catch(() => {});
+    }, RESYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [instrumentalRef, isPlaying, sessionRef, speed, syncRecording]);
 
   const pauseMedia = () => {
     [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach((media) => media?.pause());

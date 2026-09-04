@@ -13,6 +13,7 @@ import {
 
 const MISSING_ID = "karaoke.backendDidNotReturnPostId";
 const noop = () => {};
+const now = () => globalThis.performance?.now?.() ?? Date.now();
 
 function useQueue() {
   const queue = useRef(Promise.resolve());
@@ -55,8 +56,22 @@ export default function useKaraokeRecording({
     [mounted]
   );
 
+  // position is read on the frontend before this request is even queued, let
+  // alone before the backend anchors the recording to it -- by the time
+  // sync_playback() actually runs, the instrumental has moved on by however
+  // long that round trip took. Pre-compensate using the previous call's own
+  // measured round trip (halved, as a one-way estimate) so each anchor lands
+  // closer to the position the backend will see at the moment it processes it.
+  const lastLatencySecRef = useRef(0);
   const syncRecording = useCallback(
-    (id, position, rate) => queueRequest(() => api.syncRecording(id, position, rate)),
+    (id, position, rate) => {
+      const compensated = position + lastLatencySecRef.current * (Number(rate) || 1);
+      const startedAt = now();
+      return queueRequest(() => api.syncRecording(id, compensated, rate)).then((result) => {
+        lastLatencySecRef.current = Math.max(0, (now() - startedAt) / 2 / 1000);
+        return result;
+      });
+    },
     [queueRequest]
   );
   const flushRecording = useCallback(
